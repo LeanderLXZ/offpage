@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/relationship_core.schema.json",
+  "title": "Relationship Core",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "user_id",
+    "character_id",
+    "status"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "character_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived"
+      ]
+    },
+    "current_relation_summary": {
+      "type": "string"
+    },
+    "relationship_label": {
+      "type": "string"
+    },
+    "trust_level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "intimacy_level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "dependence_level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "merged_context_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "pinned_memories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memory_id",
+          "summary"
+        ],
+        "properties": {
+          "memory_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "source_context_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "importance": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "permanence_reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "personalized_voice_shift": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nicknames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "softened_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "triggered_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "personalized_behavior_shift": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "comfort_triggers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "defense_triggers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "attachment_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  }
+}

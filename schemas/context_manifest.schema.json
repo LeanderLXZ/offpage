@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/context_manifest.schema.json",
+  "title": "Context Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "context_id",
+    "user_id",
+    "character_id",
+    "stage_id",
+    "lifecycle"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "context_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "character_id": {
+      "type": "string"
+    },
+    "stage_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "premise_summary": {
+      "type": "string"
+    },
+    "lifecycle": {
+      "type": "string",
+      "enum": [
+        "ephemeral",
+        "persistent",
+        "merged",
+        "archived"
+      ]
+    },
+    "origin_type": {
+      "type": "string",
+      "enum": [
+        "new",
+        "branch",
+        "imported",
+        "merged"
+      ]
+    },
+    "origin_context_id": {
+      "type": "string"
+    },
+    "active_session_id": {
+      "type": "string"
+    },
+    "session_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "merge_policy": {
+      "type": "string",
+      "enum": [
+        "manual_only",
+        "allow_memory_pins",
+        "allow_full_merge"
+      ]
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  }
+}

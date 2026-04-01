@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/session_manifest.schema.json",
+  "title": "Session Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "session_id",
+    "user_id",
+    "character_id",
+    "context_id",
+    "terminal"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "character_id": {
+      "type": "string"
+    },
+    "context_id": {
+      "type": "string"
+    },
+    "stage_id": {
+      "type": "string"
+    },
+    "terminal": {
+      "type": "string",
+      "enum": [
+        "agent",
+        "app",
+        "mcp",
+        "other"
+      ]
+    },
+    "persona_id": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "ended_at": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "closed",
+        "abandoned"
+      ]
+    }
+  }
+}

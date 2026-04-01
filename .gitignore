@@ -1,0 +1,42 @@
+# Large novel corpus and derived source data
+sources/raw/*
+!sources/raw/.gitkeep
+sources/works/*/raw/
+sources/works/*/normalized/
+sources/works/*/chapters/
+sources/works/*/scenes/
+sources/works/*/chunks/
+sources/works/*/metadata/
+sources/works/*/rag/
+
+# Incremental analysis outputs and evidence artifacts
+analysis/incremental/*
+!analysis/incremental/.gitkeep
+analysis/evidence/*
+!analysis/evidence/.gitkeep
+
+# User data, relationship memory, and session artifacts
+users/*
+!users/README.md
+sessions/*
+!sessions/README.md
+
+# Runtime outputs
+runtime/compiled_context/*
+!runtime/compiled_context/.gitkeep
+
+# Common local data / database / index artifacts
+*.db
+*.sqlite
+*.sqlite3
+*.duckdb
+*.parquet
+*.faiss
+*.ann
+*.bin
+*.npy
+*.npz
+
+# Local environment noise
+.DS_Store
+Thumbs.db

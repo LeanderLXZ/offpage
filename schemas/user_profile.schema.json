@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/user_profile.schema.json",
+  "title": "User Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "user_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "default_persona_id": {
+      "type": "string"
+    },
+    "preferences": {
+      "type": "object"
+    },
+    "boundaries": {
+      "type": "object"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  }
+}

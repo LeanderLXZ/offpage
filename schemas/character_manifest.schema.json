@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/character_manifest.schema.json",
+  "title": "Character Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "character_id",
+    "work_id",
+    "canonical_name",
+    "build_status"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "character_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "work_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "canonical_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "role_labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "build_status": {
+      "type": "string",
+      "enum": [
+        "planned",
+        "extracting",
+        "draft",
+        "review_needed",
+        "active"
+      ]
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "canon_root": {
+          "type": "string"
+        },
+        "stage_catalog_path": {
+          "type": "string"
+        },
+        "stage_snapshot_root": {
+          "type": "string"
+        },
+        "evidence_root": {
+          "type": "string"
+        }
+      }
+    },
+    "source_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "included_chapters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  }
+}

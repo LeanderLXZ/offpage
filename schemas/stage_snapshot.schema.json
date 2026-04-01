@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/stage_snapshot.schema.json",
+  "title": "Stage Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "character_id",
+    "stage_id",
+    "title",
+    "snapshot_summary"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "character_id": {
+      "type": "string"
+    },
+    "stage_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "timeline_anchor": {
+      "type": "string"
+    },
+    "snapshot_summary": {
+      "type": "string"
+    },
+    "knowledge_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "knows": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "does_not_know": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "uncertain": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "emotional_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dominant_traits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "active_desires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "active_fears": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "active_wounds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "voice_overrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tone_summary": {
+          "type": "string"
+        },
+        "speech_habits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "taboo_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "behavior_overrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "under_stress": {
+          "type": "string"
+        },
+        "with_strangers": {
+          "type": "string"
+        },
+        "with_intimates": {
+          "type": "string"
+        },
+        "conflict_style": {
+          "type": "string"
+        }
+      }
+    },
+    "relationship_overrides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target_label",
+          "summary"
+        ],
+        "properties": {
+          "target_character_id": {
+            "type": "string"
+          },
+          "target_label": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "trust": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "guardedness": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      }
+    },
+    "memory_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

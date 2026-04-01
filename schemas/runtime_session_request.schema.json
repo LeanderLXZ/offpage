@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/runtime_session_request.schema.json",
+  "title": "Runtime Session Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mode",
+    "terminal",
+    "user_id",
+    "character_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "list_stages",
+        "create_context",
+        "resume_context",
+        "send_message"
+      ]
+    },
+    "terminal": {
+      "type": "string",
+      "enum": [
+        "agent",
+        "app",
+        "mcp",
+        "other"
+      ]
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "character_id": {
+      "type": "string"
+    },
+    "persona_id": {
+      "type": "string"
+    },
+    "stage_id": {
+      "type": "string"
+    },
+    "context_id": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "context_options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "lifecycle": {
+          "type": "string",
+          "enum": [
+            "ephemeral",
+            "persistent"
+          ]
+        },
+        "merge_policy": {
+          "type": "string",
+          "enum": [
+            "manual_only",
+            "allow_memory_pins",
+            "allow_full_merge"
+          ]
+        }
+      }
+    },
+    "response_preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stream": {
+          "type": "boolean"
+        },
+        "language": {
+          "type": "string"
+        },
+        "detail_level": {
+          "type": "string",
+          "enum": [
+            "minimal",
+            "normal",
+            "rich"
+          ]
+        }
+      }
+    }
+  }
+}
