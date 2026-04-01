@@ -2,21 +2,20 @@
 
 ## Active Structure
 
-The repository now has a first-pass architecture scaffold. The active top-level
-structure includes:
+The repository now uses a work-scoped canon package direction in the actual
+filesystem, with top-level `users/` acting as the root for all user-specific
+state.
+
+Preferred top-level structure going forward:
 
 - `sources/`
-  - raw novel inputs, normalized text, chapters, scenes
-- `analysis/`
-  - incremental analysis outputs, evidence, conflict notes
-- `characters/`
-  - long-lived packages for individual characters
+  - raw novel inputs and normalized source work packages
+- `works/`
+  - preferred home for source-grounded work canon packages
 - `users/`
-  - long-lived user and relationship data
-- `sessions/`
-  - session records, turn summaries, memory updates
-- `runtime/`
-  - compiled runtime context
+  - all user-specific state, grouped by `user_id`
+- `analysis/`
+  - extraction scratch space, experiments, and transitional analysis storage
 - `interfaces/`
   - external adapters and terminal integration entry points
 - `schemas/`
@@ -26,7 +25,48 @@ structure includes:
 - `ai_context/`
   - compressed handoff context for future AI sessions
 
+New persistent source-grounded work data should prefer `works/{work_id}/`.
+
 ## System Layers
+
+### Work Scope Layer
+
+Role:
+
+- treat each novel as an independent namespace identified by `work_id`
+- prevent character, world, relationship, and runtime data from different
+  books from bleeding into one another
+- ensure the user selects a work before selecting characters, contexts, or
+  runtime state
+
+Recommended scope rule:
+
+- source ingestion remains under `sources/works/{work_id}/`
+- persistent source-grounded work data should prefer `works/{work_id}/`
+- all user-specific mutable state should live under `users/{user_id}/`
+- work-scoped generated content should default to the language declared by the
+  selected work
+
+### Canonical Work Package Layer
+
+Location:
+
+- preferred under `works/{work_id}/`
+
+Role:
+
+- keep the source-grounded canon information for one work in one place
+- make indexing, loading, and work-level retrieval simpler
+- reduce cross-directory scattering of world, character, analysis, and index
+  assets
+
+Suggested structure:
+
+- `works/{work_id}/manifest.json`
+- `works/{work_id}/world/`
+- `works/{work_id}/characters/`
+- `works/{work_id}/analysis/`
+- `works/{work_id}/indexes/`
 
 ### Source Layer
 
@@ -44,25 +84,94 @@ Role:
 
 Location:
 
-- planned under `analysis/`
+- extraction scratch under top-level `analysis/`
+- persistent simulation-relevant work analysis under
+  `works/{work_id}/analysis/`
 
 Role:
 
 - process new text incrementally
 - extract objective plot facts
+- extract world facts and world-state changes
+- extract historical events and timeline anchors
+- extract major work-level event records
+- extract locations, regions, routes, and map hypotheses
+- extract factions, institutions, and power structures
 - extract character-related facts
 - extract character-memory points
+- extract character knowledge or ignorance about major events
 - extract voice samples
 - extract behavior samples
 - extract relationship changes
 - identify candidate characters and aliases from the novel
+- emit update packets that may touch the world layer and multiple character
+  packages from one source-reading batch
 - record contradictions and uncertainty
+- record world-level contradictions, revisions, and unresolved questions
+
+### Canonical World Layer
+
+Location:
+
+- recommended under `works/{work_id}/world/`
+
+Role:
+
+- store the stable world foundation for one work
+- store historical events and timeline anchors
+- store major work-level events that matter across character simulations
+- store dynamic world-state changes
+- store location dossiers and location-state changes
+- store faction and institution records
+- store map structure, route hypotheses, and unresolved geography questions
+- store concise character-event knowledge views for runtime retrieval
+
+Suggested structure:
+
+- `works/{work_id}/world/manifest.json`
+- `works/{work_id}/world/foundation/`
+- `works/{work_id}/world/history/`
+- `works/{work_id}/world/events/`
+- `works/{work_id}/world/state/`
+- `works/{work_id}/world/locations/{location_id}/`
+- `works/{work_id}/world/factions/{faction_id}/`
+- `works/{work_id}/world/maps/`
+- `works/{work_id}/world/knowledge/`
+  - concise character awareness / ignorance about major events
+- `works/{work_id}/world/cast/`
+  - work-level character index and brief summaries
+- `works/{work_id}/world/social/`
+  - relationship graph and relationship timeline views
+
+Key boundary:
+
+- keep stable world rules separate from changing world state
+- keep historical events separate from present-state assumptions
+- keep location identity separate from temporary location conditions
+- keep explicit map facts separate from inferred or still-uncertain geography
+- keep world-content language aligned with the selected work language by
+  default
+- treat world materials as incrementally revisable assets rather than
+  one-pass summaries
+- preserve correction history when later chapters change prior world
+  understanding
+- only source-text evidence may revise canonical world materials
+- user conversation and runtime interaction must not rewrite canonical world
+  foundation, history, or world-state facts
+- world may expose cast, event, and relationship views for indexing
+  convenience
+- world may store concise character knowledge-state summaries about major
+  events
+- detailed character psyche, memory, voice, behavior, and stage data should
+  stay under `characters/`
+- detailed character-side event interpretation and memory detail should stay
+  under `characters/`
 
 ### Canonical Character Layer
 
 Location:
 
-- planned under `characters/{character_id}/`
+- recommended under `works/{work_id}/characters/{character_id}/`
 
 Role:
 
@@ -83,12 +192,15 @@ Key boundary:
 - stages must be explicit snapshots, not vague prose like "early" or "late"
 - stage-selection data should be part of character assets, not handwritten
   externally at runtime
+- content text should default to the work language, while field names may
+  remain English
 
 ### User Layer
 
 Location:
 
-- planned under `users/{user_id}/`
+- rooted under `users/{user_id}/`
+- work-specific state nested under `users/{user_id}/works/{work_id}/`
 
 Role:
 
@@ -102,32 +214,51 @@ Role:
 
 Suggested structure:
 
-- `users/{user_id}/characters/{character_id}/relationship_core/`
+- `users/{user_id}/`
+  - reusable user profile and optional cross-work preferences
+- `users/{user_id}/works/{work_id}/characters/{character_id}/role_binding.json`
+  - selected character reference and loading preferences for this user
+- `users/{user_id}/works/{work_id}/characters/{character_id}/relationship_core/`
   - long-lived relation state and pinned memory for this user-character pair
-- `users/{user_id}/characters/{character_id}/contexts/{context_id}/`
+- `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/`
   - one specific branch context and its state, memory, and sessions
 
 Key boundary:
 
+- a reusable user identity may exist across works
 - the user layer is where "what this character became in relation to this user"
   is stored
+- work-specific relationship and memory state must not leak across different
+  novels
+- the user layer should reference canonical base packages in `works/{work_id}/`
+  instead of duplicating them
 - these changes do not pollute character canon by default
 - only explicitly retained or merged content should flow into
   `relationship_core`
+- work-scoped user / relationship materials should default to the selected
+  work language
 
 ### Runtime Compilation Layer
 
 Location:
 
-- planned under `runtime/compiled_context/`
+- if persisted, prefer user-scoped context trees under
+  `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/`
 
 Role:
 
+- dynamically choose the relevant work first
+- retrieve the needed world baseline and world state
+- retrieve the relevant shared work-level events
 - dynamically choose the relevant character stage
 - retrieve the needed memory and relationship state
 - inject behavior constraints and voice constraints
 - compile the minimum useful context for one roleplay turn
 - combine:
+  - world baseline
+  - relevant world-level event summaries
+  - relevant world-state snapshot
+  - relevant location-state snapshot if needed
   - character baseline
   - selected stage snapshot
   - user-to-character relationship core
@@ -136,6 +267,8 @@ Role:
 Key boundary:
 
 - do not push the entire character package into the model every turn
+- do not push the entire world bible or full map history every turn
+- do not treat compiled runtime state as canonical work truth
 - prefer selection and compilation over full-context dumping
 
 ### Interface And Adapter Layer
@@ -172,7 +305,8 @@ Key boundary:
 
 Location:
 
-- planned under `sessions/`
+- recommended inside work-scoped user context trees under:
+  - `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/sessions/`
 
 Role:
 
@@ -213,8 +347,18 @@ Core principle:
 The stable model above the data layers is a unified character service with at
 least these capabilities:
 
+- `list_available_works`
+- `load_work_manifest`
+- `load_work_canon_package`
+- `build_world_package`
+- `load_world_context`
+- `get_work_cast_index`
+- `get_work_relationship_timeline`
+- `list_world_locations`
+- `get_world_state_snapshot`
 - `list_detected_characters`
 - `build_character_package`
+- `apply_source_batch_updates`
 - `load_character_context`
 - `load_user_context`
 - `list_character_stages`
@@ -232,31 +376,92 @@ least these capabilities:
 
 All terminals should use this same service surface.
 
+## Incremental Source-Reading Flow
+
+The recommended extraction order for one work is:
+
+1. `Work Selection`
+   - choose the source work first
+
+2. `Candidate Identification`
+   - identify candidate characters from metadata, headings, and targeted reads
+
+3. `World-First Batch Extraction`
+   - read the source in batches to build:
+     - world foundation
+     - history and major events
+     - world-state changes
+     - locations, factions, and geography
+     - concise character-event awareness summaries where relevant
+
+4. `Selected-Character Batch Extraction`
+   - after the shared world layer has a usable base, read the source in
+     batches for one specified character
+   - keep using the agreed 7-part structure for the target-character output
+
+Important update rule:
+
+- every source-reading batch may add, supplement, or revise existing data
+- this applies not only to the current target character, but also to:
+  - world materials
+  - other character packages
+- later source evidence should be allowed to propagate across the whole work
+  package as long as the update remains source-grounded
+
 ## Character Selection Model
 
 This is not a heroine-only system. It is a system for arbitrary user-selected
 characters.
 
-The recommended flow separates character generation into two stages:
+The recommended flow separates character generation into three stages:
 
-1. `Character Identification`
+1. `Work Selection`
+   - choose the source novel or work first
+   - bind downstream analysis, world state, user relationship data, and
+     runtime compilation to that work
+
+2. `Character Identification`
    - collect names, aliases, appearance evidence, and candidate-character lists
      from the source text
 
-2. `Character Construction`
+3. `World-First Extraction`
+   - build the shared world layer in batches before deep character packaging
+
+4. `Character Construction`
    - let the user explicitly choose which character or characters to build
-   - generate an independent package for each selected character
+   - generate an independent package for each selected character through
+     additional source batches
+
+5. `User Role Binding`
+   - let one user choose which canonical character package to load
+   - store that user's mutable relationship, context, and session state under
+     `users/{user_id}/`
 
 This avoids:
 
+- mixing data across different novels
 - silently focusing on only one default character
 - mixing multiple characters into one package
 - leaving future AI sessions unclear about which character is being handled
+- forcing deep character extraction before the shared world context exists
+
+After a user selects a role, the runtime should load:
+
+- canonical base data from `works/{work_id}/characters/{character_id}/`
+- user-specific state from
+  `users/{user_id}/works/{work_id}/characters/{character_id}/`
 
 ## Stage Selection Model
 
 When creating a new dialogue context, the user should choose which source
 timeline stage the target character is in.
+
+Additional rule:
+
+- character stage selection should remain compatible with the relevant world
+  state for that work
+- if the system later supports deliberate alternate-world branching, that
+  branch should be explicit rather than implicit drift
 
 That choice directly affects:
 

@@ -17,10 +17,10 @@ Unless the task clearly requires something else, read these first:
 
 - `ai_context/`
 - once created and relevant:
-  - `characters/`
-  - `users/`
-  - `runtime/`
   - `analysis/`
+  - `works/{work_id}/world/`
+  - `works/{work_id}/characters/`
+  - `users/{user_id}/`
   - specific files under `sources/` that the task directly names
 
 ## Default Do-Not-Read Areas
@@ -28,7 +28,8 @@ Unless the task clearly requires something else, read these first:
 Do not proactively scan these areas unless the task directly requires them:
 
 - large raw corpus under `sources/`
-- full conversation history under `sessions/`
+- full work-scoped conversation history under
+  `users/{user_id}/works/{work_id}/.../sessions/`
 - full evidence material under `analysis/evidence/`
 - full history under `docs/logs/`
 - future embeddings, caches, indexes, or intermediate artifact directories

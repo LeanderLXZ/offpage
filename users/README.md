@@ -1,35 +1,42 @@
-# User Packages
+# Users
 
-Each user lives under `users/{user_id}/`.
+This top-level directory is the home for all user-specific state.
 
 Recommended layout:
 
 ```text
 users/
   {user_id}/
-    profile.json
-    personas/
-      {persona_id}.json
-    characters/
-      {character_id}/
-        relationship_core/
+      profile.json
+      personas/
+        {persona_id}.json
+      works/
+        {work_id}/
           manifest.json
-          pinned_memories.jsonl
-        contexts/
-          {context_id}/
-            manifest.json
-            relationship_state.json
-            shared_memory.jsonl
-            sessions/
-              {session_id}/
+          characters/
+            {character_id}/
+              role_binding.json
+              relationship_core/
                 manifest.json
-                transcript.jsonl
-                turn_summaries.jsonl
-                memory_updates.jsonl
+                pinned_memories.jsonl
+              contexts/
+                {context_id}/
+                  manifest.json
+                  relationship_state.json
+                  shared_memory.jsonl
+                  sessions/
+                    {session_id}/
+                      manifest.json
+                      transcript.jsonl
+                      turn_summaries.jsonl
+                      memory_updates.jsonl
 ```
 
-Key rule:
+Important boundary:
 
-- user packages store branch-specific and relationship-specific evolution
-
-This layer is allowed to change frequently.
+- keep canonical source-grounded world and character data under
+  `works/{work_id}/`
+- keep every user-specific change, memory, event, and conversation history
+  under `users/{user_id}/`
+- when the user selects a character, load the base package from
+  `works/{work_id}/characters/{character_id}/` and then layer user state on top
