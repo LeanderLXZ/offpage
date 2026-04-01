@@ -1,6 +1,8 @@
 # Large novel corpus and derived source data
 sources/raw/*
 !sources/raw/.gitkeep
+sources/works/*
+!sources/works/.gitkeep
 sources/works/*/raw/
 sources/works/*/normalized/
 sources/works/*/chapters/
@@ -14,16 +16,14 @@ analysis/incremental/*
 !analysis/incremental/.gitkeep
 analysis/evidence/*
 !analysis/evidence/.gitkeep
+works/*/analysis/evidence/*
+!works/*/analysis/evidence/.gitkeep
+works/*/indexes/*
+!works/*/indexes/.gitkeep
 
 # User data, relationship memory, and session artifacts
 users/*
 !users/README.md
-sessions/*
-!sessions/README.md
-
-# Runtime outputs
-runtime/compiled_context/*
-!runtime/compiled_context/.gitkeep
 
 # Common local data / database / index artifacts
 *.db

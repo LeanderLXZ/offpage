@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "work_id": "wo-he-nvdi-de-jiushi-nieyuan",
+  "title": "我和女帝的九世孽缘",
+  "language": "zh",
+  "source_types": [
+    "epub"
+  ],
+  "ingestion_status": "active",
+  "notes": "Initial work-scoped canonical package scaffold. Canonical source corpus remains under sources/works/wo-he-nvdi-de-jiushi-nieyuan/.",
+  "created_at": "2026-04-01T17:40:47-0400",
+  "updated_at": "2026-04-01T17:40:47-0400"
+}

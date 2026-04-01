@@ -97,7 +97,8 @@ Update:
   `ai_context/`.
 - Do not proactively read the full `sources/` corpus unless the user asks or
   the task truly depends on it.
-- Do not proactively read full `sessions/` history unless needed.
+- Do not proactively read full work-scoped session history under
+  `users/{user_id}/works/{work_id}/.../sessions/` unless needed.
 - Unless the user explicitly asks for it, do not paste large source text,
   database contents, or index contents into answers, logs, or docs.
 
