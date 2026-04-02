@@ -319,18 +319,40 @@ package onboarded, early extraction artifacts beginning to appear" stage.
 - No service-layer code or interface stubs exist yet.
 - No final roleplay prompt has been produced yet.
 
+## Recent Additions
+
+- World social layer now splits relationships into two categories:
+  - `social/fixed_relationships/` for immutable structural bonds (e.g.
+    parent-child, sibling)
+  - `social/stage_relationships/` for dynamic bonds that evolve over time
+    (e.g. romantic involvement, alliances, rivalries)
+- Source work package construction specification has been added to
+  `docs/architecture/data_model.md` (not a schema, but a step-by-step guide
+  for building well-formed source packages).
+- A user package template now exists at `users/_template/` with placeholder
+  files for the full user directory structure.
+- `prompts/README.md` now includes a naming language explanation (Chinese
+  prompts for maintainer readability, English for `ai_context/`).
+- `docs/logs/` reading restriction has been added to
+  `ai_context/instructions.md` — AI agents should not proactively read logs
+  unless the user asks or rollback is needed.
+- `.gitignore` no longer excludes `works/*/analysis/incremental/` or
+  `works/*/indexes/`.
+
 ## Current Data And Commit Rules
 
 - Full novel bodies, databases, indexes, full user histories, and large runtime
   artifacts should not be committed by default.
 - Those artifacts should stay local and be excluded through `.gitignore`.
 - Real `users/{user_id}/...` packages should remain local-only by default.
-  - The repo should normally track only `users/README.md`, not actual user
-    state.
+  - The repo should normally track only `users/README.md` and
+    `users/_template/`, not actual user state.
 - User conversation archives and full transcripts should also remain local-only
   under `users/`.
 - `docs/logs/` is now defined as a historical-summary layer, not a bulk-data
   archive.
+- `works/*/analysis/incremental/` and `works/*/indexes/` are now tracked by
+  git as canonical work assets.
 
 ## Most Important Current Fact
 

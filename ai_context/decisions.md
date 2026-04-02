@@ -434,3 +434,34 @@
     - Account-level archive recall should route through archive indexes,
       scoped archive refs, archive summaries, and key moments before loading
       archived transcripts.
+
+72. World relationships should be split into fixed and dynamic categories.
+    - Fixed relationships are immutable structural bonds that do not change
+      across stages, such as parent-child, sibling, or blood-relative ties.
+    - Dynamic (stage) relationships evolve over time, such as romantic
+      involvement, alliances, rivalries, or status-dependent roles.
+    - Fixed relationships should be stored under
+      `social/fixed_relationships/`.
+    - Dynamic relationships should continue using
+      `social/stage_relationships/{stage_id}.json`.
+    - Runtime should load all fixed relationships at startup plus the
+      selected stage's dynamic relationship file.
+
+73. Source work packages do not need a formal JSON schema.
+    - Instead, the source package construction process should be documented
+      as a step-by-step specification in `docs/architecture/data_model.md`.
+    - Source packages are the input layer and should not be modified by
+      downstream processes.
+
+74. `docs/logs/` should not be proactively read by AI agents.
+    - Logs are a write-mostly historical archive.
+    - AI agents should only read log entries when the user explicitly asks,
+      when rollback is needed, or when decision provenance must be verified.
+    - In all other cases, `ai_context/` is the authoritative compressed
+      current truth.
+
+75. `works/*/analysis/incremental/` and `works/*/indexes/` should be tracked
+    by git as canonical work assets.
+    - These are not large ephemeral artifacts but structured extraction
+      outputs and retrieval indexes that form part of the canonical work
+      package.

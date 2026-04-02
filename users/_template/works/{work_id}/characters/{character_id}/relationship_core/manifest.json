@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "user_id": "{user_id}",
+  "work_id": "{work_id}",
+  "character_id": "{character_id}",
+  "status": "active",
+  "relationship_labels": [],
+  "trust_level": 0,
+  "intimacy_level": 0,
+  "dependence_level": 0,
+  "personalized_voice_shifts": [],
+  "personalized_behavior_shifts": [],
+  "notes": ""
+}

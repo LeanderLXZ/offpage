@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "context_id": "{context_id}",
+  "user_id": "{user_id}",
+  "work_id": "{work_id}",
+  "character_id": "{character_id}",
+  "stage_id": "{stage_id}",
+  "lifecycle": "ephemeral",
+  "origin": "",
+  "sessions": [],
+  "notes": ""
+}

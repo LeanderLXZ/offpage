@@ -82,6 +82,58 @@ Recommended contents:
 - `metadata/`
 - `rag/`
 
+### Source Package Construction Specification
+
+A well-formed source work package should be built through the following steps:
+
+1. **Create the package directory** at `sources/works/{work_id}/`.
+   - For Chinese works, `{work_id}` should use the original Chinese title.
+
+2. **Place raw source files** under `raw/`.
+   - Accepted formats: `epub`, `txt`, web-crawled HTML, or user-provided
+     excerpts.
+   - Keep original files unmodified.
+
+3. **Create `manifest.json`** at the package root with at least:
+   - `work_id` — must match the directory name
+   - `title` — display title in the source language
+   - `language` — ISO 639-1 code (e.g. `"zh"`, `"en"`)
+   - `source_types` — array of source format labels (e.g. `["epub"]`)
+   - `ingestion_status` — one of `"pending"`, `"active"`, `"complete"`
+
+4. **Normalize the text** into `normalized/`.
+   - Strip formatting artifacts, fix encoding issues, and produce clean
+     plain-text content suitable for chapter splitting.
+
+5. **Split into per-chapter files** under `chapters/`.
+   - One file per chapter, named `{chapter_number}.txt` with zero-padded
+     numbering (e.g. `0001.txt`, `0002.txt`).
+   - Each file should contain the full text of one chapter.
+
+6. **Create metadata** under `metadata/`.
+   - `book_metadata.json` — title, author, chapter count, source info.
+   - `chapter_index.json` — ordered list of chapters with titles and file
+     paths.
+
+7. **(Optional)** Split chapters into scenes under `scenes/` when the source
+   text has clear scene breaks within chapters.
+
+8. **(Optional)** Create retrieval-oriented chunks under `chunks/` for future
+   RAG or embedding workflows.
+
+9. **(Optional)** Create RAG-ready indexes under `rag/` for future vector
+   retrieval.
+
+### Source Package Boundaries
+
+- Source packages should contain only raw and normalized source material.
+- Analysis, extraction, and canonical outputs belong under
+  `works/{work_id}/`, not under `sources/`.
+- Source packages should be excluded from git by default (handled by
+  `.gitignore`). Only `manifest.json` may be tracked if desired.
+- The source package is the input layer. It should not be modified by
+  downstream extraction or runtime processes.
+
 ## Canonical Work Package
 
 Persistent source-grounded canonical data for one work should live under:
@@ -148,6 +200,7 @@ Recommended contents:
 - `maps/map_notes.md`
 - `cast/character_index.json`
 - `cast/character_summaries.json`
+- `social/fixed_relationships/{relationship_id}.json`
 - `social/stage_relationships/{stage_id}.json`
 
 World packages are expected to grow and be revised incrementally as later text
@@ -187,15 +240,23 @@ Unless the user explicitly wants one, those uncertainties should stay in:
 - revision notes
 - or stage / event files where the uncertainty is directly relevant
 
-Relationship files in `world/social/` should be stage-scoped snapshots rather
-than one global timeless graph.
+Relationship files in `world/social/` should be split into two categories:
+
+- **fixed relationships** are immutable structural bonds that do not change
+  across stages, such as parent-child, sibling, or blood-relative ties
+- **stage relationships** are dynamic bonds that evolve over time, such as
+  romantic involvement, alliances, rivalries, or status-dependent roles
 
 Recommended semantics:
 
-- `social/stage_relationships/{stage_id}.json` stores the relationship view
-  that is current at that selected stage
-- runtime should normally load only the selected stage's relationship file
-- earlier relationship states remain available for on-demand historical lookup
+- `social/fixed_relationships/{relationship_id}.json` stores one named
+  immutable bond (e.g. a parent-child link) that holds across all stages
+- `social/stage_relationships/{stage_id}.json` stores the dynamic relationship
+  view that is current at that selected stage
+- runtime should load all relevant fixed relationships at startup plus the
+  selected stage's dynamic relationship file
+- earlier dynamic relationship states remain available for on-demand historical
+  lookup
 
 ## Runtime Load Tiers
 
@@ -204,6 +265,7 @@ Recommended startup-required world load:
 - `world/manifest.json`
 - `world/stage_catalog.json`
 - selected `world/stage_snapshots/{stage_id}.json`
+- all `world/social/fixed_relationships/*.json`
 - selected `world/social/stage_relationships/{stage_id}.json`
 - lightweight `world/foundation/` files needed for global rules
 

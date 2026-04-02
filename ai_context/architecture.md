@@ -147,8 +147,12 @@ Suggested structure:
 - `works/{work_id}/world/cast/`
   - work-level character index and brief summaries
 - `works/{work_id}/world/social/`
-  - stage-scoped relationship files such as
-    `stage_relationships/{stage_id}.json`
+  - `fixed_relationships/{relationship_id}.json`
+    - immutable structural bonds that hold across all stages (e.g. parent-child,
+      sibling, blood-relative ties)
+  - `stage_relationships/{stage_id}.json`
+    - dynamic relationship views that evolve over time (e.g. romantic
+      involvement, alliances, rivalries)
 
 Key boundary:
 

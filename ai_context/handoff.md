@@ -175,7 +175,13 @@ pipeline or finished character data in the repo.
 - World packages may include work-level cast and social views.
   - brief character summaries for the main cast and high-frequency supporting
     characters are fine there
-  - stage-scoped relationship files are fine there
+  - social layer has two sublayers:
+    - `fixed_relationships/` for immutable structural bonds (parent-child,
+      sibling, etc.) that hold across all stages
+    - `stage_relationships/` for dynamic bonds (romantic, alliance, rivalry,
+      etc.) that evolve over time
+  - runtime should load all fixed relationships at startup plus the selected
+    stage's dynamic file
   - do not promote one-off minor roles into `world/` unless later source
     evidence makes them structurally important
   - detailed character psyche, memory, voice, and stage data still belong
@@ -267,5 +273,12 @@ In short:
 - once the user selects a target character, continue with the agreed 7-part
   batch-analysis structure for that target while still propagating justified
   world or other-character corrections
+- do not proactively read `docs/logs/` — it is a write-mostly historical
+  archive; only read when the user asks, rollback is needed, or decision
+  provenance must be verified
+- when creating new user packages, reference the template at
+  `users/_template/` for the expected directory structure and file formats
+- `works/*/analysis/incremental/` and `works/*/indexes/` are tracked by git
+  as canonical work assets
 - after each meaningful milestone, update `current_status.md`,
   `next_steps.md`, and this file

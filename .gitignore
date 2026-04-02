@@ -11,15 +11,11 @@ sources/works/*/chunks/
 sources/works/*/metadata/
 sources/works/*/rag/
 
-# Incremental analysis outputs and evidence artifacts
-analysis/incremental/*
-!analysis/incremental/.gitkeep
+# Evidence artifacts (large intermediate outputs)
 analysis/evidence/*
 !analysis/evidence/.gitkeep
 works/*/analysis/evidence/*
 !works/*/analysis/evidence/.gitkeep
-works/*/indexes/*
-!works/*/indexes/.gitkeep
 
 # Local historical logs
 docs/logs/*.md
@@ -29,6 +25,7 @@ docs/logs/*.md
 # Keep real user packages local; only the structural README stays tracked.
 users/*
 !users/README.md
+!users/_template
 
 # Common local data / database / index artifacts
 *.db
