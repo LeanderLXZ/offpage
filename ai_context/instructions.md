@@ -91,6 +91,13 @@ Update:
 - `ai_context/` stores compressed current truth.
 - `docs/architecture/` stores formal architecture documentation.
 - `docs/logs/` stores timestamped historical change records.
+- **Do not proactively read `docs/logs/`.**
+  - Logs are a write-mostly historical archive, not a regular context source.
+  - Only read log entries when:
+    - the user explicitly asks to review or reference a log
+    - a rollback or historical comparison is needed
+    - provenance of a specific decision needs verification
+  - In all other cases, rely on `ai_context/` as the compressed current truth.
 - Do not create `ai_context/` or `docs/logs/` churn for routine runtime-state
   or extraction-progress updates that are already captured in work-local
   progress files.

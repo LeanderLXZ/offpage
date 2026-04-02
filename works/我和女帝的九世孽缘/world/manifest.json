@@ -23,6 +23,7 @@
     "locations/",
     "factions/",
     "cast/",
+    "social/fixed_relationships/",
     "social/stage_relationships/"
   ],
   "notes": "首个 world-first batch extraction 已覆盖 chapters/0001.txt 至 0010.txt。当前 world 层只保留共享世界信息、阶段快照、cast 视图与按阶段存储的关系文件，不再单独维护 mysteries 或 character knowledge 子层。",

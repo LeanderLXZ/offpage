@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "user_id": "{user_id}",
+  "work_id": "{work_id}",
+  "character_id": "{character_id}",
+  "stage_id": "{stage_id}",
+  "counterpart_mode": "custom",
+  "counterpart_custom_label": "",
+  "status": "draft",
+  "setup_locked": false,
+  "notes": ""
+}
