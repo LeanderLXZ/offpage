@@ -118,8 +118,6 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - `works/<work_id>/analysis/incremental/source_batch_plan.md`
 - A first real world-batch tracker now exists under:
   - `works/<work_id>/analysis/incremental/world_batch_progress.md`
-- A first real world-batch extraction report now exists under:
-  - `works/<work_id>/analysis/incremental/world_batch_001.md`
 - The first populated world package now exists under:
   - `works/<work_id>/world/`
   - including:
@@ -270,7 +268,6 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - `works/<work_id>/analysis/incremental/candidate_characters_initial.md`
   - `works/<work_id>/analysis/incremental/source_batch_plan.md`
   - `works/<work_id>/analysis/incremental/world_batch_progress.md`
-  - `works/<work_id>/analysis/incremental/world_batch_001.md`
   - `works/<work_id>/world/stage_catalog.json`
 
 ## Current Gaps
