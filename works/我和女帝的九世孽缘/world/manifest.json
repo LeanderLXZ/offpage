@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "work_id": "我和女帝的九世孽缘",
+  "title": "我和女帝的九世孽缘 世界包",
+  "language": "zh",
+  "world_version": "0.1.0",
+  "source_authority": {
+    "mode": "source_text_only",
+    "notes": "世界包只能被原文证据补充或修订，用户对话与运行时分支不得改写 canon。"
+  },
+  "extraction_policy": {
+    "default_batch_size": 10,
+    "batch_to_stage": true,
+    "stage_is_cumulative": true,
+    "last_completed_batch_id": "batch_001",
+    "last_completed_stage_id": "阶段1_南林初遇"
+  },
+  "directories": [
+    "stage_snapshots/",
+    "foundation/",
+    "history/",
+    "events/",
+    "locations/",
+    "factions/",
+    "cast/",
+    "social/stage_relationships/"
+  ],
+  "notes": "首个 world-first batch extraction 已覆盖 chapters/0001.txt 至 0010.txt。当前 world 层只保留共享世界信息、阶段快照、cast 视图与按阶段存储的关系文件，不再单独维护 mysteries 或 character knowledge 子层。",
+  "created_at": "2026-04-02T02:39:20-0400",
+  "updated_at": "2026-04-02T03:42:11-0400"
+}

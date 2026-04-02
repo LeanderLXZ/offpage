@@ -16,6 +16,9 @@ Preferred top-level structure going forward:
   - all user-specific state, grouped by `user_id`
 - `interfaces/`
   - external adapters and terminal integration entry points
+- `simulation/`
+  - dedicated home for runtime-engine lifecycle, retrieval strategy,
+    service contracts, and future core implementation
 - `prompts/`
   - reusable prompt templates for fresh agents and user-facing flows
 - `schemas/`
@@ -129,7 +132,7 @@ Role:
 - store location dossiers and location-state changes
 - store faction and institution records
 - store map structure, route hypotheses, and unresolved geography questions
-- store concise character-event knowledge views for runtime retrieval
+- store stage-scoped relationship views for runtime retrieval
 
 Suggested structure:
 
@@ -141,12 +144,11 @@ Suggested structure:
 - `works/{work_id}/world/locations/{location_id}/`
 - `works/{work_id}/world/factions/{faction_id}/`
 - `works/{work_id}/world/maps/`
-- `works/{work_id}/world/knowledge/`
-  - concise character awareness / ignorance about major events
 - `works/{work_id}/world/cast/`
   - work-level character index and brief summaries
 - `works/{work_id}/world/social/`
-  - relationship graph and relationship timeline views
+  - stage-scoped relationship files such as
+    `stage_relationships/{stage_id}.json`
 
 Key boundary:
 
@@ -167,18 +169,14 @@ Key boundary:
 - only source-text evidence may revise canonical world materials
 - user conversation and runtime interaction must not rewrite canonical world
   foundation, history, or world-state facts
-- world may expose cast, event, and relationship views for indexing
-  convenience
-- world may store concise character knowledge-state summaries about major
-  events
+- world may expose cast, event, and stage-scoped relationship views for
+  indexing convenience
 - world event records should prefer major shared work-level events rather than
   small scene beats already covered by character-layer material
 - world cast views should focus on the main cast and high-frequency
   supporting characters rather than one-off minor roles
-- detailed character psyche, memory, voice, behavior, and stage data should
-  stay under `characters/`
-- detailed character-side event interpretation and memory detail should stay
-  under `characters/`
+- detailed character psyche, memory, voice, behavior, stage data, and
+  character-specific knowledge boundaries should stay under `characters/`
 
 ### Canonical Character Layer
 
@@ -247,6 +245,8 @@ Suggested structure:
     updated only when a context is explicitly merged
 - `users/{user_id}/works/{work_id}/characters/{character_id}/relationship_core/`
   - long-lived relation state and pinned memory for this user-character pair
+- `users/{user_id}/conversation_library/`
+  - account-level archive library for merged conversation records
 - `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/`
   - one specific branch context and its state, memory, and sessions
 
@@ -270,16 +270,26 @@ Key boundary:
   `relationship_core`
 - work-scoped user / relationship materials should default to the selected
   work language
+- full session transcripts may be persisted locally under `users/`, but
+  startup should prefer summary-layer user files and retrieve full transcript
+  history on demand through context/session indexes
+- merged contexts may promote full conversation bundles into an account-level
+  archive library and leave lightweight archive refs in the source context
+- real user packages under `users/` should stay local and not be committed by
+  default
 
-### Runtime Compilation Layer
+### Simulation Engine Layer
 
 Location:
 
+- repo-level engine contracts and future implementation under `simulation/`
 - if persisted, prefer user-scoped context trees under
   `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/`
 
 Role:
 
+- own bootstrap, startup load, retrieval routing, continuous writeback, and
+  explicit close / merge flow
 - dynamically choose the relevant work first
 - retrieve the needed world baseline and world stage snapshot
 - retrieve the relevant shared work-level events
@@ -311,6 +321,9 @@ Key boundary:
 - do not push the entire world bible or full map history every turn
 - do not treat compiled runtime state as canonical work truth
 - prefer selection and compilation over full-context dumping
+- keep work-specific load profiles and retrieval hints in
+  `works/{work_id}/indexes/` rather than hardcoding them inside repo-level
+  engine docs
 
 ### Interface And Adapter Layer
 
@@ -394,7 +407,7 @@ least these capabilities:
 - `build_world_package`
 - `load_world_context`
 - `get_work_cast_index`
-- `get_work_relationship_timeline`
+- `get_stage_relationship_snapshot`
 - `list_world_locations`
 - `get_world_state_snapshot`
 - `list_detected_characters`
@@ -427,18 +440,25 @@ The recommended extraction order for one work is:
 2. `Candidate Identification`
    - identify candidate characters from metadata, headings, and targeted reads
 
-3. `World-First Batch Extraction`
-   - read the source in batches to build:
+3. `Active Character Set Confirmation`
+   - confirm one or more active target characters as early as practical once
+     candidate identification has produced a usable set
+
+4. `Coordinated Batch Extraction`
+   - read the source in batches once and co-produce:
      - world foundation
      - history and major events
      - world-state changes
      - locations, factions, and geography
-     - concise character-event awareness summaries where relevant
+     - relevant character-package updates for the active set
+   - if no active character set exists yet, or a batch is almost entirely
+     shared-world material, temporary world-only output is acceptable
 
-4. `Selected-Character Batch Extraction`
-   - after the shared world layer has a usable base, read the source in
-     batches for one specified character
-   - keep using the agreed 7-part structure for the target-character output
+5. `Targeted Character Supplement`
+   - if coordinated batches still leave one character package clearly
+     incomplete, run targeted supplement passes for that character
+   - keep using the agreed 7-part structure for target-character output when
+     doing those supplement passes
 
 Important update rule:
 
@@ -454,7 +474,7 @@ Important update rule:
 This is not a heroine-only system. It is a system for arbitrary user-selected
 characters.
 
-The recommended flow separates character generation into three stages:
+The recommended flow separates character generation into six stages:
 
 1. `Work Selection`
    - choose the source novel or work first
@@ -465,15 +485,22 @@ The recommended flow separates character generation into three stages:
    - collect names, aliases, appearance evidence, and candidate-character lists
      from the source text
 
-3. `World-First Extraction`
-   - build the shared world layer in batches before deep character packaging
+3. `Active Character Set Confirmation`
+   - confirm which one or more characters should be grown in the current
+     extraction line
+   - allow temporary world-only batches only while the active set is still
+     unresolved or the current batch is overwhelmingly shared-world material
 
-4. `Character Construction`
-   - let the user explicitly choose which character or characters to build
-   - generate an independent package for each selected character through
-     additional source batches
+4. `Coordinated Batch Extraction`
+   - read each source batch once
+   - update the shared world layer and all relevant active character packages
+     from that same read
 
-5. `User Role Binding`
+5. `Targeted Character Supplement`
+   - let the system or user request extra character-focused passes only when
+     coordinated batches still leave clear gaps
+
+6. `User Role Binding`
    - let one user choose which canonical character package to load
    - store that user's mutable relationship, context, and session state under
      `users/{user_id}/`
@@ -484,7 +511,8 @@ This avoids:
 - silently focusing on only one default character
 - mixing multiple characters into one package
 - leaving future AI sessions unclear about which character is being handled
-- forcing deep character extraction before the shared world context exists
+- forcing the whole world line to finish before any character package can grow
+- rereading the same source batches separately for world and character output
 
 After a user selects a role, the runtime should load:
 
@@ -627,15 +655,23 @@ Recommended runtime load order:
 
 1. world baseline
 2. selected world-stage snapshot
-3. target-character baseline
-4. selected target-stage projection
-5. user persona or user-side role binding
-6. if the user-side role is also a canonical character, that side's aligned
+3. selected stage relationship snapshot
+4. target-character baseline
+5. selected target-stage projection
+6. user persona or user-side role binding
+7. if the user-side role is also a canonical character, that side's aligned
    stage projection
-7. `long_term_profile`
-8. `relationship_core`
-9. current `context_id` branch
-10. recent session state
+8. `long_term_profile`
+9. `relationship_core`
+10. current `context_id` branch summaries
+11. recent session summaries
+
+Recommended user loading rule:
+
+- startup may load summary-layer user state, relationship state, shared-memory
+  summaries, recent session summaries, and scoped account-archive refs
+- full `transcript.jsonl` history should be opened only on demand when exact
+  prior dialogue recall is needed
 
 ## Roleplay Logic Chain
 
@@ -670,6 +706,22 @@ The better model is:
 - handoff to the model for execution
 - outer terminal adapters handling agent/app/MCP integration
 
+Recommended retrieval split:
+
+- startup-required:
+  - world baseline
+  - selected world-stage snapshot
+  - selected stage relationship snapshot
+  - target stage portrayal
+  - user relationship state
+- on-demand:
+  - event files
+  - location / faction files
+  - deeper history slices
+  - role-specific memory details
+  - raw source chapters only when evidence verification or high-depth output
+    requires them
+
 More concretely, the current target load formula is:
 
-`character baseline + stage snapshot + user persona or user-side role binding + optional user-side canonical stage reference + user relationship core + current context branch + recent session state`
+`world baseline + world stage snapshot + stage relationship snapshot + character baseline + character stage snapshot + user persona or user-side role binding + optional user-side canonical stage reference + user relationship core + current context branch + recent session state`

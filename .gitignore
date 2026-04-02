@@ -26,6 +26,7 @@ docs/logs/*.md
 !docs/logs/README.md
 
 # User data, relationship memory, and session artifacts
+# Keep real user packages local; only the structural README stays tracked.
 users/*
 !users/README.md
 

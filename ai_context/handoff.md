@@ -31,8 +31,23 @@ pipeline or finished character data in the repo.
 - The first-pass candidate-character identification result for that work now
   exists at:
   - `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
+- A first real source-batch plan now exists at:
+  - `works/我和女帝的九世孽缘/analysis/incremental/source_batch_plan.md`
+- A first real world-batch tracker now exists at:
+  - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_progress.md`
+- A first real world-batch report now exists at:
+  - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_001.md`
+- The first populated world package for that work now exists at:
+  - `works/我和女帝的九世孽缘/world/`
+  - currently through:
+    - `stage_catalog.json`
+    - `stage_snapshots/阶段1_南林初遇.json`
+    - first-pass foundation, event, location, faction, cast, and stage-scoped
+      social files
 - World data is now part of the intended canonical model, not optional side
   commentary.
+- A dedicated runtime-engine design directory now exists under:
+  - `simulation/`
 - The preferred architecture direction is now work-scoped:
   - enter `user_id` first
   - determine whether the user is new or existing
@@ -99,17 +114,29 @@ pipeline or finished character data in the repo.
   continuously rather than waiting for a separate manual writeback step.
 - Long-term self-profile and relationship-core updates should happen only after
   explicit merge confirmation.
+- User summaries may be loaded at startup, but full session transcripts should
+  be recalled on demand rather than loaded by default.
+- Merged contexts may archive full conversation bundles into an account-level
+  `conversation_library/` under `users/{user_id}/`.
+- Exact prior dialogue recall should route through current-context indexes or
+  archive indexes before loading full transcript files.
 - Runtime requests and persisted user-scoped manifests should carry explicit
   `work_id`, not rely only on path position.
 - `docs/logs/` is the historical-summary layer and should not be read by
   default.
 - Keep the repo lightweight. Do not treat full novel bodies, databases,
   indexes, or large runtime artifacts as normal commit content.
+- Treat real `users/{user_id}/...` packages as local runtime state rather than
+  normal commit content.
 - Do not reread the full normalized novel by default when continuing current
   source-work tasks. Start from:
   - work metadata
   - chapter index
   - the current candidate-character identification file
+  - the current source-batch plan
+  - the current world-batch tracker
+  - the latest world-batch report
+  - the existing early-stage world package files
   - targeted chapter reads only when needed
 - Keep world layers separate:
   - stable world foundation
@@ -126,13 +153,18 @@ pipeline or finished character data in the repo.
 - Only source-text evidence may revise canonical world materials.
 - User conversations and runtime branches must not rewrite canonical world
   facts.
-- Preferred extraction order for one work:
+- Preferred extraction flow for one work:
   - candidate identification first
-  - world-first batch extraction next
-  - selected-character batch extraction after the shared world base exists
+  - confirm the active character set as early as practical
+  - once the active set exists, use shared source batches to co-produce world
+    updates and relevant character-package updates
+  - if the active set is not ready yet, or a batch is almost entirely shared
+    world material, temporary world-only output is acceptable
+  - use targeted character supplement only when coordinated batches still
+    leave clear gaps
 - Default extraction planning now assumes:
   - configurable batch size per work
-  - default `5` chapters when not overridden
+  - default `10` chapters when not overridden
   - batch `N` as the default stage `N` candidate
   - stage `N` extraction as cumulative through `1..N`
 - World packages should include major work-level events, not only static
@@ -140,17 +172,16 @@ pipeline or finished character data in the repo.
 - World packages should not record small scene-level incidents by default.
   - Those should usually remain in character-layer canon, memory, or batch
     analysis.
-- World packages may include concise character knowledge summaries about major
-  events.
-  - Keep detailed event memory and interpretation under `characters/`.
 - World packages may include work-level cast and social views.
   - brief character summaries for the main cast and high-frequency supporting
     characters are fine there
-  - relationship graph / timeline views are fine there
+  - stage-scoped relationship files are fine there
   - do not promote one-off minor roles into `world/` unless later source
     evidence makes them structurally important
   - detailed character psyche, memory, voice, and stage data still belong
     under `characters/`
+  - detailed character knowledge boundaries should also stay under
+    `characters/`
 
 ## The Roleplay Logic You Should Preserve
 
@@ -199,8 +230,11 @@ In short:
 - there is no longer a repo-level `analysis/` directory
 - keep persistent and scratch extraction artifacts under the relevant
   `works/{work_id}/analysis/` path
-- for source extraction, prefer building the shared world layer in batches
-  before deep extraction for one selected character
+- for source extraction, prefer confirming the active character set early and
+  then using shared batches to co-produce world and character updates
+- for `我和女帝的九世孽缘`, the automatic continuation point is now:
+  - `next_batch_id = batch_002`
+  - cumulative scope through `0011-0020`
 - when handling roleplay state, load canonical base packages from
   `works/{work_id}/` and mutable user state from `users/{user_id}/`
 - if a task is unrelated to the current source work, prioritize schemas and
@@ -211,10 +245,14 @@ In short:
   for mutable user state
 - read `docs/architecture/system_overview.md` and
   `docs/architecture/data_model.md`
+- read `simulation/README.md` when the task is about runtime orchestration,
+  startup loading, retrieval, session updates, or close flow
+- read `simulation/retrieval/load_strategy.md` when the task is specifically
+  about startup-required vs. on-demand loading
 - define the unified character-service interface and terminal-adapter boundary
   early
 - define the canonical construction flow:
-  `work selection -> character identification -> world-first extraction -> character selection -> character-package generation`
+  `work selection -> character identification -> active character set confirmation -> coordinated batch extraction -> targeted supplement when needed -> character-package generation`
 - define the user/runtime flow:
   `user selection -> new/existing detection -> if new: work selection -> target role binding -> target stage selection -> user-side role binding -> setup lock -> context creation or recovery -> continuous session/context writeback -> explicit close -> merge confirmation`
 - define the world package and work-scoped directory rules early

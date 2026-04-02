@@ -7,7 +7,12 @@
     "epub"
   ],
   "ingestion_status": "active",
+  "extraction": {
+    "default_batch_size": 10,
+    "batch_to_stage": true,
+    "stage_is_cumulative": true
+  },
   "notes": "当前是这个作品的第一版按作品划分的基础包骨架。源文本仍保留在 sources/works/我和女帝的九世孽缘/ 下。",
   "created_at": "2026-04-01T17:40:47-0400",
-  "updated_at": "2026-04-01T17:40:47-0400"
+  "updated_at": "2026-04-02T02:27:23-0400"
 }

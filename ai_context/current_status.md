@@ -49,7 +49,7 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - `Canonical World Layer`
   - `Canonical Character Layer`
   - `User Layer`
-  - `Runtime Compiler`
+  - `Simulation Engine`
   - `Session Runtime`
 - Future multi-terminal support has been confirmed:
   - direct AI-agent loading
@@ -64,6 +64,7 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - `works/`
   - `users/`
   - `interfaces/`
+  - `simulation/`
   - `prompts/`
   - `schemas/`
   - `docs/architecture/`
@@ -72,6 +73,8 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - `README.md`
   - `docs/architecture/system_overview.md`
   - `docs/architecture/data_model.md`
+  - `simulation/README.md`
+  - `simulation/flows/conversation_records.md`
 - Project-level log and git rules have been added:
   - `docs/logs/README.md`
   - `.gitignore`
@@ -111,10 +114,26 @@ package onboarded, early extraction artifacts beginning to appear" stage.
     - `indexes/`
 - The first-pass candidate-character identification result now exists under:
   - `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
+- A first real source-batch plan now exists under:
+  - `works/我和女帝的九世孽缘/analysis/incremental/source_batch_plan.md`
+- A first real world-batch tracker now exists under:
+  - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_progress.md`
+- A first real world-batch extraction report now exists under:
+  - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_001.md`
+- The first populated world package now exists under:
+  - `works/我和女帝的九世孽缘/world/`
+  - including:
+    - `manifest.json`
+    - `stage_catalog.json`
+    - `stage_snapshots/阶段1_南林初遇.json`
+    - first-pass `foundation/`, `history/`, `events/`, `locations/`,
+      `factions/`, `cast/`, and stage-scoped `social/`
 - The old repo-level `analysis/` directory has now been retired.
   - Work-related analysis should stay under `works/{work_id}/analysis/`.
 - Old top-level scaffold directories for `characters/`, `worlds/`, `runtime/`,
   and `sessions/` have now been retired from the intended repo layout.
+- A dedicated top-level `simulation/` directory now exists for runtime-engine
+  lifecycle docs and future implementation work.
 - Top-level `users/` is now intended to hold full user packages directly under
   `users/{user_id}/`.
 - The architecture has now been extended in docs to treat world data as a
@@ -144,7 +163,7 @@ package onboarded, early extraction artifacts beginning to appear" stage.
 - The world package is now allowed to expose:
   - cast index
   - brief character summaries
-  - relationship graph / timeline views
+  - stage-scoped relationship views
   - while detailed character canon stays under `characters/`
 - The content-language rule is now:
   - work-scoped generated content defaults to the selected work language
@@ -162,25 +181,32 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - they should be incrementally expanded, corrected, and revised
   - later source reading may revise them
   - user conversations must not rewrite canonical world data
-  - world events and character event-awareness summaries belong in the world
-    layer
   - world events should focus on major shared events rather than small
     scene-level incidents
   - world cast views should focus on the main cast and high-frequency
     supporting characters rather than one-off minor roles
+  - world relationships should be stored as stage-scoped snapshots
+  - runtime should normally load only the selected stage relationship file
+  - detailed character-side knowledge boundaries should remain under
+    `characters/`
   - world conflicts and uncertainty should be recorded explicitly
 - The runtime stage model is now being documented as a unified work-stage axis:
   - the world layer exposes selectable stage catalog data
   - the selected `stage_id` is treated as a work-level timeline checkpoint
   - character stage snapshots project that same `stage_id` into
     character-specific state
-- The preferred extraction order is now:
+- The preferred extraction flow is now:
   - candidate identification first
-  - world-first batch extraction next
-  - selected-character batch extraction after that
+  - confirm or refresh the active character set as early as practical
+  - once the active set exists, use coordinated source batches to update
+    shared world canon and relevant character packages together
+  - if no active character set exists yet, or a batch is almost entirely
+    shared-world material, temporary world-only output is acceptable
+  - use targeted character supplement passes only when coordinated batches
+    still leave clear package gaps
 - The default extraction planning direction now assumes:
   - configurable batch size per work
-  - default batch size `5` when not overridden
+  - default batch size `10` when not overridden
   - batch `N` as the default stage `N` candidate
   - stage `N` extraction as cumulative through `1..N`
 - The source-batch update rule is now:
@@ -193,6 +219,11 @@ package onboarded, early extraction artifacts beginning to appear" stage.
     live roleplay rather than waiting for a separate manual writeback request
   - long-term profile and relationship-core updates should happen only after
     explicit merge confirmation
+  - startup should load summary-layer user state
+  - full user transcripts should be recalled on demand rather than loaded by
+    default
+  - merged contexts may archive full conversation bundles into an
+    account-level conversation library
   - `users状态回写` acts both as an internal writeback subflow and as a
     standalone repair / merge prompt when needed
 - Fresh agents launched through the prompt library are now expected to read a
@@ -218,6 +249,10 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - exit keywords or equivalent close intents end the session
   - the system then asks whether to merge the current context into long-term
     user-owned history
+- Repo-level runtime-engine guidance is now being split cleanly from static
+  architecture docs:
+  - `docs/architecture/` keeps structural and data-model truth
+  - `simulation/` keeps lifecycle, loading, retrieval, and close-flow rules
 
 ## Current Entry Points
 
@@ -230,18 +265,23 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - `ai_context/decisions.md`
   - `ai_context/next_steps.md`
   - `ai_context/handoff.md`
+  - `simulation/README.md`
 - Current source-analysis entry:
   - `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
+  - `works/我和女帝的九世孽缘/analysis/incremental/source_batch_plan.md`
+  - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_progress.md`
+  - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_001.md`
+  - `works/我和女帝的九世孽缘/world/stage_catalog.json`
 
 ## Current Gaps
 
 - No reusable automated chapter-ingestion workflow has been implemented yet.
 - No reusable automated incremental extraction workflow has been implemented
-  yet.
-- Only an initial candidate-character identification result exists so far.
-  There is not yet a stable batch-extraction packet format or any finished
-  character package.
-- No populated world package has been created yet for the first real work.
+  yet in code or scripts.
+- A first manual batch-extraction packet format now exists for world work, but
+  no reusable machine-written pipeline exists yet.
+- Only the first world batch is complete so far.
+  - There is still no finished character package.
 - The world-stage schemas now exist, but no full world schema set exists yet
   for:
   - world foundation
@@ -250,7 +290,7 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - world-state snapshots
   - location-state snapshots
   - map graph
-  - character event-awareness summaries
+  - stage relationship snapshots
 - The repository has now started migrating to the preferred user-rooted state
   layout, but no real user package has been created yet.
 - The new bootstrap-lock, explicit close, and merge-confirmation runtime model
@@ -260,13 +300,13 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   field.
 - No real character package has been created yet.
 - No real user package has been created yet.
-- No runtime compiler implementation exists yet.
+- No simulation-engine service implementation exists yet.
 - The unified service interface and terminal-adapter boundary are not yet
   implemented.
 - The current schemas are first-pass only and still need to be refined into
   directly writable instance formats.
-- The full execution workflow for character identification, character
-  selection, world-first extraction, and batch character-package generation is
+- The full execution workflow for character identification, active character
+  selection, coordinated batch extraction, and targeted character supplement is
   not yet fully defined.
 - The first-pass runtime schemas now cover:
   - setup lock
@@ -284,6 +324,11 @@ package onboarded, early extraction artifacts beginning to appear" stage.
 - Full novel bodies, databases, indexes, full user histories, and large runtime
   artifacts should not be committed by default.
 - Those artifacts should stay local and be excluded through `.gitignore`.
+- Real `users/{user_id}/...` packages should remain local-only by default.
+  - The repo should normally track only `users/README.md`, not actual user
+    state.
+- User conversation archives and full transcripts should also remain local-only
+  under `users/`.
 - `docs/logs/` is now defined as a historical-summary layer, not a bulk-data
   archive.
 

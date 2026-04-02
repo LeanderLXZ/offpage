@@ -3,8 +3,10 @@
 ## Highest Priority
 
 1. Implement the unified work-stage model end to end.
-   - Define the first real `works/{work_id}/world/stage_catalog.json`
-   - Define the first real `works/{work_id}/world/stage_snapshots/{stage_id}.json`
+   - Extend the first real `works/{work_id}/world/stage_catalog.json`
+     and `world/stage_snapshots/{stage_id}.json` that now exist for:
+     - `我和女帝的九世孽缘`
+     - currently through `阶段1_南林初遇`
    - Define how character stage snapshots project the same work-level `stage_id`
    - Enforce the runtime rule that world state and character state stay aligned
      to the same selected stage by default
@@ -22,6 +24,7 @@
    - Define what counts as an explicit migration rather than an ordinary edit
 
 3. Implement the explicit close-and-merge runtime lifecycle.
+   - Use `simulation/flows/close_and_merge.md` as the current contract
    - Define exit keywords or equivalent close intents
    - Define the question shown after session close
    - Define how merge acceptance versus decline changes writeback behavior
@@ -29,27 +32,44 @@
      after merge confirmation
    - Keep `session / context` updates continuous during live roleplay
 
-4. Use the first real work package to move into shared world-first extraction.
-   - Start the first world-focused batch extraction using default `5`-chapter
-     batches unless work config overrides it
-   - Treat batch `N` as the default stage `N` candidate
-   - Define how stage `N` extraction accumulates `1..N`
-   - Define how each batch updates:
+4. Use the first real work package to move into coordinated world-plus-
+   character batch extraction.
+   - Continue from the current extraction base for:
+     - `works/我和女帝的九世孽缘/analysis/incremental/source_batch_plan.md`
+     - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_progress.md`
+     - `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
+     - `works/我和女帝的九世孽缘/world/stage_catalog.json`
+   - Next recommended target:
+     - `batch_002`
+     - cumulative through `0011-0020`
+   - Keep treating batch `N` as the default stage `N` candidate
+   - Keep stage `N` extraction cumulative through `1..N`
+   - Once active characters are confirmed, continue using each shared batch to
+     update:
      - world canon
      - world stage snapshots
      - world events
-     - character event-awareness views
+     - stage-scoped relationship views
+     - relevant character packages
+     - work-level retrieval indexes when needed
+   - If no active character set is confirmed yet, or a batch is almost
+     entirely shared-world material, temporary world-only output is
+     acceptable.
    - Allow later batches to revise already-written world conclusions when the
      source justifies it
 
-5. After a usable world base exists, use the first real work package to move
-   into selected character construction.
+5. After active characters are confirmed, use the first real work package to
+   move into stable character construction through coordinated batches and
+   targeted supplement when needed.
    - The current candidate list exists for:
      - `我和女帝的九世孽缘`
      - `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
    - Let the user choose one or two target characters
-   - Start the first character extraction using default `5`-chapter batches
-     unless work config overrides it
+   - Prefer growing character packages from the same shared batch reads rather
+     than rereading the same material in a separate character-only pass
+   - Use targeted supplement passes only when coordinated batch output still
+     leaves clear gaps
+   - Keep using default `10`-chapter batches unless work config overrides it
    - Keep the fixed 7-part per-batch structure
    - Ensure each stage yields:
      - one-line selection summary
@@ -114,7 +134,8 @@
         cross-linkable
       - how world corrections and world-state revisions are persisted
 
-10. Define the unified character-service interface.
+10. Implement the unified character-service interface from the current
+    simulation contracts.
    - It should support:
      - AI agents
      - frontend apps
@@ -123,11 +144,14 @@
      stacks.
 
 11. Formalize the full workflow for:
-   `work selection -> character identification -> world-first extraction -> character selection -> character construction`
+   `work selection -> character identification -> active character set confirmation -> coordinated batch extraction -> targeted supplement when needed -> character construction`
    - At minimum:
      - how work selection happens first
      - how candidate characters are collected from source text
-     - how world-first batches are chosen and persisted
+     - how active characters are confirmed and refreshed
+     - how coordinated batches are chosen and persisted
+     - when temporary world-only batches are acceptable
+     - when targeted supplement is actually needed
      - how the user specifies which characters to build
      - how a user binds to one selected canonical character package
      - how single-character and multi-character generation should be organized
@@ -150,6 +174,10 @@
      - how relationship-core writeback works
      - how long-term-profile writeback works
      - how context merging works
+     - which summary-layer user files are startup-required
+     - how full transcript recall routes through session indexes
+     - how archived conversation bundles enter the account library
+     - how source contexts retain `archive_ref` after promotion
      - which memories can be pinned permanently
 
 13. Define the stage-catalog display and selection format.
@@ -163,25 +191,29 @@
 
 ## Medium Priority
 
-14. Write first-pass code stubs or a more explicit contract document for the
-   unified character service.
+14. Write first-pass code stubs from `simulation/contracts/` and
+   `simulation/flows/`.
 15. Define the evidence-record format for traceable canon support.
-16. Define the runtime character-compilation format in more detail.
+16. Refine the runtime packet format in
+   `simulation/contracts/runtime_packets.md` as implementation gets closer.
 17. Define request and response formats for terminal adapters.
-18. Promote the current ad hoc candidate-identification file into a stable,
+18. Define user-context and session indexes for on-demand transcript recall.
+19. Define account-level conversation archive indexes and archive bundle
+    manifests.
+20. Promote the current ad hoc candidate-identification file into a stable,
     machine-writable packet format once the schema is ready.
-19. Define how world-stage selection and character-stage selection interact.
-20. Define how world event records and character knowledge-state views interact
-    at runtime.
-21. Add explicit world-source-authority notes to the first writable package
+21. Define how world-stage selection and character-stage selection interact.
+22. Define how stage-scoped world relationships and character-side knowledge
+    boundaries interact at runtime.
+23. Add explicit world-source-authority notes to the first writable package
     templates.
-22. Add explicit language-policy notes to the first writable package templates.
-23. Decide which prompt-library workflows under `prompts/` should later be
+24. Add explicit language-policy notes to the first writable package templates.
+25. Decide which prompt-library workflows under `prompts/` should later be
     upgraded into real skills or scripted tools.
 
 ## Later
 
-24. Improve batch construction for multiple character packages.
-25. Support richer stage slicing and relationship-stage slicing.
-26. Add automatic evaluation for roleplay consistency.
-27. Add more complete crawling and import support.
+26. Improve batch construction for multiple character packages.
+27. Support richer stage slicing and relationship-stage slicing.
+28. Add automatic evaluation for roleplay consistency.
+29. Add more complete crawling and import support.

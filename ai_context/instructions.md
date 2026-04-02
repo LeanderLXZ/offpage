@@ -26,6 +26,34 @@ prompt execution.
 After a meaningful project change, update `ai_context/` deliberately instead of
 leaving the latest state only in chat history.
 
+### For Routine Runtime-State Or Extraction-Progress Updates
+
+If the change is only a local runtime-state movement or a work-local extraction
+progress update, do not update `ai_context/` or `docs/logs/` by default.
+
+Typical examples:
+
+- advancing `world_batch_progress.md`
+- advancing `character_batch_progress/...`
+- updating a work-local `extraction_status.md`
+- refreshing local batch cursors, next-batch markers, or stage completion notes
+- ordinary user/runtime state changes that do not change repo rules,
+  architecture, prompts, schemas, or durable project guidance
+
+In those cases, update the nearest work-local or user-local progress/state file
+instead of treating it as a project-level handoff change.
+
+Only promote those changes into `ai_context/` or `docs/logs/` when they also
+change durable repository truth such as:
+
+- instructions
+- prompts
+- schemas
+- architecture
+- directory rules
+- data-model conventions
+- retrieval / runtime loading strategy
+
 ### For Important Structure Or Documentation Changes
 
 Update:
@@ -63,6 +91,9 @@ Update:
 - `ai_context/` stores compressed current truth.
 - `docs/architecture/` stores formal architecture documentation.
 - `docs/logs/` stores timestamped historical change records.
+- Do not create `ai_context/` or `docs/logs/` churn for routine runtime-state
+  or extraction-progress updates that are already captured in work-local
+  progress files.
 - Do not leave the latest state only in code or chat history.
 - Use the real local time when creating log entries.
 - Use the `America/New_York` timezone.

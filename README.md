@@ -8,6 +8,7 @@ The project is designed around two work-scoped package families:
 - source work packages under `sources/works/{work_id}/`
 - canonical work packages under `works/{work_id}/`
 - user state packages under `users/{user_id}/`
+- simulation-engine contracts and future core logic under `simulation/`
 
 The work package is where source-grounded base information should converge for
 one work, including:
@@ -25,17 +26,22 @@ make canon harder to read.
 
 The intended user flow is:
 
-1. choose work
-2. choose target character
-3. choose the target character stage
-4. choose the user's current role or counterpart identity
-5. if that user-side role is also a canonical character, choose its stage too
-6. create or resume context
+1. enter or create `user_id`
+2. choose work for a new setup
+3. choose target character
+4. choose the active work stage
+5. choose the user's current role or counterpart identity
+6. if that user-side role is also a canonical character, bind it to the same
+   stage by default
+7. create or resume context
 
 During live roleplay, the runtime should continuously maintain user-scoped
 session and context state under `users/{user_id}/` rather than waiting for a
 separate manual writeback step. Promotion into `relationship_core`,
 `pinned_memories`, or a merged context remains selective and policy-driven.
+Full user transcripts and account-level conversation archives under `users/`
+should remain local-only by default, with startup preferring summary-layer
+user state and exact dialogue recall handled through on-demand retrieval.
 
 The current repository state is an architecture scaffold. The first goal is to
 make the data model stable enough that future AI sessions, scripts, and product
@@ -55,6 +61,7 @@ Start here:
 - `ai_context/`
 - `docs/architecture/system_overview.md`
 - `docs/architecture/data_model.md`
+- `simulation/README.md`
 - `prompts/`
 - `works/README.md`
 - `schemas/`

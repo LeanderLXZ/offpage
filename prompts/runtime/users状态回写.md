@@ -52,8 +52,13 @@
 5. `contexts/{context_id}/manifest.json`
 6. `contexts/{context_id}/relationship_state.json`
 7. `contexts/{context_id}/shared_memory.jsonl`
-8. `sessions/{session_id}/turn_summaries.jsonl`
-9. `sessions/{session_id}/memory_updates.jsonl`
+8. `contexts/{context_id}/session_index.json`
+9. `sessions/{session_id}/transcript.jsonl`
+10. `sessions/{session_id}/turn_journal.jsonl`
+11. `sessions/{session_id}/turn_summaries.jsonl`
+12. `sessions/{session_id}/memory_updates.jsonl`
+13. `users/{user_id}/conversation_library/archive_index.jsonl`
+14. 当前 scope 的 `users/{user_id}/conversation_library/scopes/{work_id}/{character_id}/archive_refs.json`
 
 `role_binding.json` 至少应能承接这些信息：
 
@@ -72,27 +77,34 @@
    - 用户侧角色漂移
    - 用户和角色之间的新事件
    - context / session / transcript / memory updates
-2. 区分：
+2. 完整 `transcript.jsonl` 可以作为本地完整对话历史持续保存。
+3. 但运行时启动默认应优先读取摘要层，而不是全量重读 transcript。
+4. 每轮输入和输出都应先进入本地 transcript / turn journal，再考虑后续摘要与长期写回。
+5. 区分：
    - 短期上下文状态
    - 应进入 `long_term_profile` 的长期变化
    - 应进入 `relationship_core` 的长期变化
-3. 连续写回默认先做轻量层：
+6. 连续写回默认先做轻量层：
    - `sessions/{session_id}/...`
    - `contexts/{context_id}/...`
-4. 在对话仍在进行时，不要把长期画像和长期关系核心当成每轮都要更新的默认落点。
-5. 只有在以下条件成立时，才进入长期层：
+7. 在对话仍在进行时，不要把长期画像和长期关系核心当成每轮都要更新的默认落点。
+8. 只有在以下条件成立时，才进入长期层：
    - 用户明确要求“记住这段关系变化”或“把这个 context 合并进去”
    - 会话已经结束，且用户明确同意并入长期历史
-6. 执行长期合并时，优先采用追加而不是覆盖：
+9. 执行长期合并时，优先采用追加而不是覆盖：
    - 事件历史追加
    - 记忆点追加
    - 画像变化记录追加
-7. 如果执行 context 合并，应至少考虑：
+10. 如果执行 context 合并，应至少考虑：
    - 更新 `long_term_profile.json`
    - 更新 `relationship_core`
    - 更新 `merged_context_ids`
    - 提升必要的 `pinned_memories`
    - 更新当前 context 的 `lifecycle`
+   - 生成 `archive_id`
+   - 把完整对话记录归档进 `users/{user_id}/conversation_library/archives/{archive_id}/`
+   - 更新 `users/{user_id}/conversation_library/archive_index.jsonl`
+   - 更新当前 scope 的 `users/{user_id}/conversation_library/scopes/{work_id}/{character_id}/archive_refs.json`
 
 输出要求：
 
