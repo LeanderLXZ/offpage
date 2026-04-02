@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "work_id": "<work_id>",
+  "default_stage_id": "阶段1_<stage_title>初遇",
+  "stages": [
+    {
+      "stage_id": "阶段1_<stage_title>初遇",
+      "order": 1,
+      "title": "阶段1：<stage_title>初遇",
+      "timeline_anchor": "Character B第九世复生，并在<stage_title>确认Character A并未陨落而是破境重修。",
+      "short_summary": "第九世复生的Character B在<stage_title>柳村落脚，确认Character A未死而是重修；柳村仍被饥荒与夜祟包围。",
+      "chapter_scope": {
+        "from": "0001",
+        "to": "0010"
+      },
+      "current_world_summary": "Character B与重修中的Character A暂时同处<stage_title>柳村，柳神结界仍在苦撑村落生存，狩猎队失踪与夜祟威胁尚未真正解除。",
+      "history_summary": "在本阶段之前，Character B已历经前八世并于第八世与Character A爆发大帝大战；大战后的上万年断层与重修选择共同构成当前阶段的前史。",
+      "snapshot_path": "stage_snapshots/阶段1_<stage_title>初遇.json"
+    }
+  ]
+}

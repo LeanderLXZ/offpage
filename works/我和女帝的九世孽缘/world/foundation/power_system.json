@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0.0",
+  "work_id": "<work_id>",
+  "stage_id": "阶段1_<stage_title>初遇",
+  "cultivation_sequence": [
+    "淬体",
+    "聚灵",
+    "结灵",
+    "扩灵",
+    "化灵",
+    "合元",
+    "破元",
+    "天元",
+    "圣王",
+    "准帝",
+    "帝"
+  ],
+  "known_high_tier_mechanics": [
+    "大帝级战斗足以影响虚空与大陆安全。",
+    "帝器寒剑在封印后仍可对低阶修士形成压制。",
+    "帝级功法与大帝重修会显著影响角色重新起步的上限和节奏。"
+  ],
+  "known_techniques_and_artifacts": [
+    {
+      "name": "混沌霸体诀",
+      "holder": "Character B",
+      "status": "已明确存在",
+      "note": "Character B确认自己依靠此功法在第八世踏入大帝境。"
+    },
+    {
+      "name": "<technique>",
+      "holder": "Character A",
+      "status": "已明确存在",
+      "note": "Character A在重修后仍以此为核心修炼法。"
+    },
+    {
+      "name": "帝器寒剑",
+      "holder": "Character A",
+      "status": "封印中仍可使用部分力量",
+      "note": "即使Character A修为低落，寒剑仍能对当前阶段的低阶战斗形成决定性影响。"
+    }
+  ],
+  "warnings": [
+    "系统任务中的“无敌境界”目前只出现于系统奖励文本，尚不能直接当作已证实的世界统一境界。"
+  ],
+  "evidence_refs": [
+    "0002",
+    "0004",
+    "0006",
+    "0008"
+  ]
+}

@@ -23,6 +23,23 @@ The system should support:
   closed context into long-term user-owned history
 - loading the same core logic through agent, app, and MCP terminals
 
+## Simulation Engine Home
+
+Repo-level runtime orchestration should live under:
+
+- `simulation/`
+
+Recommended split:
+
+- `docs/architecture/`
+  - static repo structure and data-model boundaries
+- `simulation/`
+  - bootstrap, startup loading, retrieval routing, continuous writeback,
+    explicit close / merge, and service contracts
+- `works/{work_id}/indexes/`
+  - work-specific load profiles and retrieval hints consumed by the simulation
+    engine
+
 ## Two Work Packages
 
 Each work should have two distinct package roots:
@@ -152,14 +169,13 @@ Each package may include:
 - map graph and geography notes
 - work-level cast index and brief summaries for the main cast and
   high-frequency supporting characters
-- concise per-character event knowledge summaries
-- work-level relationship graph / timeline views
+- stage-scoped relationship views
 
 These assets should be maintained incrementally.
 
 New text may:
 
-- expand prior world knowledge
+- expand prior world understanding
 - correct earlier assumptions
 - clarify uncertain geography
 - revise the apparent state of cities, factions, or institutions
@@ -175,8 +191,8 @@ Important boundary:
   history, world-state facts, or event records
 - world packages should prefer major shared events over small scene-level beats
   that are already better carried by character packages
-- world packages may keep concise character knowledge summaries about major
-  events
+- world packages should not duplicate a separate character-knowledge layer by
+  default
 - world packages should not be cluttered with one-off minor roles unless they
   later become structurally important
 - detailed character-side event memory and interpretation should remain in the
@@ -238,7 +254,11 @@ A first-pass dedicated schema for this file now exists at:
 runtime request payloads should all include `work_id` explicitly so these
 objects remain self-describing outside their path context.
 
-### 6. Runtime Compilation
+### 6. Simulation Engine
+
+Recommended repo-level home:
+
+- `simulation/`
 
 Compiles:
 
@@ -269,11 +289,15 @@ During live conversation, runtime persistence should happen continuously at
 the user layer:
 
 - `sessions/` and `contexts/` should receive lightweight ongoing updates
+- each active session should append to a transcript backup and turn journal on
+  every input / output cycle
 - `relationship_core` and `pinned_memories` should be updated more selectively
 - a work-character-scoped long-term profile should be updated only when the
   user confirms a merge
 - contexts may later be partially or fully merged into long-term user-owned
   history when policy and evidence allow
+- merged contexts may also promote full transcript bundles into an
+  account-level conversation archive library
 
 ### 7. Interfaces
 
@@ -283,11 +307,39 @@ Expose the same core roleplay engine to:
 - frontend applications
 - mobile chat MCP-style adapters
 
+These adapters should target the engine contracts under `simulation/contracts/`
+rather than reading repo files directly.
+
 ## Runtime Load Formula
 
 At conversation start, the system should load:
 
-`world baseline + selected world-stage snapshot + relevant world events + target character baseline + target stage projection + user persona or user-side role binding + optional aligned user-side canonical stage projection + long-term profile + relationship core + current context + recent session state`
+`world baseline + selected world-stage snapshot + selected stage relationship snapshot + target character baseline + target stage projection + user persona or user-side role binding + optional aligned user-side canonical stage projection + long-term profile + relationship core + current context + recent session state`
+
+Recommended load split:
+
+- startup-required:
+  - world baseline
+  - selected world-stage snapshot
+  - selected stage relationship snapshot
+  - target character baseline
+  - target stage projection
+  - user summary-layer state
+  - current context summaries
+  - current scope archive refs
+  - recent session summaries
+- on-demand:
+  - specific world events
+  - location / faction records
+  - historical ranges
+  - character memory detail
+  - detailed user-context history
+  - account archive summaries
+  - full session transcripts
+  - original chapter evidence when verification is needed
+
+When present, `works/{work_id}/indexes/load_profiles.json` should refine this
+split for that work.
 
 ## Stage Selection
 
@@ -337,6 +389,8 @@ User-specific memory is split into:
   - long-lived retained memory
 - `contexts/{context_id}`
   - branch-specific continuity
+- `conversation_library`
+  - account-level immutable archive store for merged conversation records
 
 Contexts can later be:
 
@@ -356,6 +410,13 @@ Recommended writeback rhythm:
   `long_term_profile` and `relationship_core`
 - support explicit context promotion or full merge into user-owned long-term
   state when the user requests it or policy allows it
+
+Runtime loading should keep a summary/detail split:
+
+- startup may load user summaries, relationship summaries, context summaries,
+  recent session summaries, and scoped archive refs
+- full `transcript.jsonl` files should remain local under `users/` and be
+  opened only through on-demand retrieval when exact dialogue recall is needed
 
 Recommended location:
 

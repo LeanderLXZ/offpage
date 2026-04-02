@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "work_id": "<work_id>",
+  "location_id": "<stage_title>",
+  "name": "<stage_title>",
+  "type": "森林险地",
+  "parent_location": "东阳皇朝·南域",
+  "stage_id": "阶段1_<stage_title>初遇",
+  "identity_summary": "Character B第九世复生后的首个活动区域，也是Character A破境重修时因虚空错乱而降生的地点。阶段1 的大部分共享世界事实都被压缩在这片森林里。",
+  "explicit_facts": [
+    "<stage_title>位于东阳皇朝境内。",
+    "夜晚存在骷髅怪物与邪祟活动风险。",
+    "凡人把“三天未归”视作<stage_title>狩猎的危险分界。"
+  ],
+  "current_state": [
+    "Character B与Character A目前都在<stage_title>活动。",
+    "柳村仍处于<stage_title>内部的封闭求生状态。"
+  ],
+  "uncertainties": [
+    "<stage_title>外出路线与边界条件仍不明朗。",
+    "夜祟是否遍布全林，还是只集中在柳村周边，尚未明确。"
+  ],
+  "evidence_refs": [
+    "0001",
+    "0002",
+    "0009"
+  ]
+}
