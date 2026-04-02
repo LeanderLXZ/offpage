@@ -23,20 +23,25 @@ pipeline or finished character data in the repo.
 - The repository already contains a first-pass directory scaffold, architecture
   docs, and schemas, but no real business implementation yet.
 - One real work package now exists under:
-  - `sources/works/wo-he-nvdi-de-jiushi-nieyuan/`
+  - `sources/works/我和女帝的九世孽缘/`
   - it is normalized from a local `epub`
   - it contains `537` normalized chapters
 - A matching work-scoped canonical package scaffold now exists at:
-  - `works/wo-he-nvdi-de-jiushi-nieyuan/`
+  - `works/我和女帝的九世孽缘/`
 - The first-pass candidate-character identification result for that work now
   exists at:
-  - `works/wo-he-nvdi-de-jiushi-nieyuan/analysis/incremental/candidate_characters_initial.md`
+  - `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
 - World data is now part of the intended canonical model, not optional side
   commentary.
 - The preferred architecture direction is now work-scoped:
-  - choose work first
-  - then choose character
-  - then choose stage
+  - enter `user_id` first
+  - determine whether the user is new or existing
+  - if new: choose work first
+  - then choose the target character
+  - then choose the active work-stage
+  - then choose the user-side role or counterpart identity
+  - if that side is also canon-backed, bind it to the same stage by default
+  - then lock the setup
 - The preferred persistent package root for source-grounded canonical work data
   is now:
   - `works/{work_id}/`
@@ -49,9 +54,24 @@ pipeline or finished character data in the repo.
 - The content-language rule is now:
   - work-scoped generated content should follow the selected work language by
     default
+  - work titles and display names should stay in the original work language by
+    default
+  - for Chinese works, `work_id` itself may be Chinese, and work-scoped canon
+    names and identifier values should also stay in Chinese by default
+  - generated work-scoped folder names and identifier-derived path segments
+    should follow those same Chinese labels by default
   - English may still be used for JSON keys and schema field names
   - `ai_context/` remains English as the AI-facing handoff layer
 - `ai_context/` is the primary compressed truth source for future AI sessions.
+- On the first follow-up after handoff, do not proactively route yourself
+  through `prompts/` unless the user explicitly asks for prompt use, names a
+  prompt file, or the task is itself prompt-related.
+- A reusable prompt library now exists under:
+  - `prompts/`
+  - these templates are written so a fresh agent with no prior project context
+    can still start the right workflow
+  - but the shared prompt-entry rules should still read a minimal `ai_context`
+    subset before relying only on prompt-local instructions
 - The long-term goal is that another AI can load a character package and
   stably roleplay a user-specified character.
 - Do not assume the project is only about one heroine. Characters are selected
@@ -61,14 +81,26 @@ pipeline or finished character data in the repo.
   - frontend app integration
   - mobile-chat MCP or similar message terminals
 - Therefore the core roleplay engine must remain terminal-agnostic.
-- New user contexts should choose a character stage.
-- Stage options should come from the character package itself, not from
-  user-written ad hoc labels.
+- New user contexts should choose an active work-stage that then projects onto
+  the target character.
+- Stage options should come from persistent canon data, not from user-written
+  ad hoc labels.
+- The world layer should expose the selectable work-stage axis.
 - Before a conversation starts, the system should display multiple summarized
-  timeline nodes from the character's stage catalog.
+  timeline nodes from the work-stage catalog.
+- If the user-side role is also a canonical character, that side should also
+  align to the same selected stage by default.
+- After the first setup is completed, the account binding should be treated as
+  locked during ordinary runtime use.
 - One user and one character should support multiple context branches.
 - Some contexts or memory points should be permanently retained or merged into
   the long-term relationship core.
+- Live runtime should keep user-scoped `session` and `context` state updated
+  continuously rather than waiting for a separate manual writeback step.
+- Long-term self-profile and relationship-core updates should happen only after
+  explicit merge confirmation.
+- Runtime requests and persisted user-scoped manifests should carry explicit
+  `work_id`, not rely only on path position.
 - `docs/logs/` is the historical-summary layer and should not be read by
   default.
 - Keep the repo lightweight. Do not treat full novel bodies, databases,
@@ -90,22 +122,33 @@ pipeline or finished character data in the repo.
 - Treat world materials as living canon.
   - Later chapters may expand, correct, or partially overturn earlier world
     understanding.
-  - Preserve those revisions and uncertainty explicitly.
-  - Only source-text evidence may revise canonical world materials.
-  - User conversations and runtime branches must not rewrite canonical world
-    facts.
+- Preserve those revisions and uncertainty explicitly.
+- Only source-text evidence may revise canonical world materials.
+- User conversations and runtime branches must not rewrite canonical world
+  facts.
 - Preferred extraction order for one work:
   - candidate identification first
   - world-first batch extraction next
   - selected-character batch extraction after the shared world base exists
+- Default extraction planning now assumes:
+  - configurable batch size per work
+  - default `5` chapters when not overridden
+  - batch `N` as the default stage `N` candidate
+  - stage `N` extraction as cumulative through `1..N`
 - World packages should include major work-level events, not only static
   setting.
+- World packages should not record small scene-level incidents by default.
+  - Those should usually remain in character-layer canon, memory, or batch
+    analysis.
 - World packages may include concise character knowledge summaries about major
   events.
   - Keep detailed event memory and interpretation under `characters/`.
 - World packages may include work-level cast and social views.
-  - brief character summaries are fine there
+  - brief character summaries for the main cast and high-frequency supporting
+    characters are fine there
   - relationship graph / timeline views are fine there
+  - do not promote one-off minor roles into `world/` unless later source
+    evidence makes them structurally important
   - detailed character psyche, memory, voice, and stage data still belong
     under `characters/`
 
@@ -117,6 +160,7 @@ character."
 The intended logic is:
 
 - reconstruct the character's current time stage
+- reconstruct the current world stage that the character is living in
 - reconstruct the character's knowledge boundary
 - reconstruct the character's relationship to the conversation partner
 - determine what the input triggers emotionally
@@ -133,6 +177,7 @@ In short:
 - avoid generic AI tone
 - do not reduce new chapter analysis to ordinary literary summary
 - preserve time-stage differences
+- preserve current-state versus historical-state distinctions
 - do not leak memory across unrelated contexts
 - do not write the target character as omniscient
 - do not blur explicit canon and inference without labeling
@@ -146,10 +191,14 @@ In short:
 ## Practical Starting Advice
 
 - read all of `ai_context/` first
+- on the first follow-up after handoff, continue from `ai_context/` and the
+  live user request before consulting `prompts/` unless prompt use is
+  explicitly requested
 - for current source-work tasks, begin with the existing work metadata and
   candidate-character analysis before opening raw chapter files widely
-- the persistent candidate-character analysis file now lives under the work
-  package rather than top-level `analysis/`
+- there is no longer a repo-level `analysis/` directory
+- keep persistent and scratch extraction artifacts under the relevant
+  `works/{work_id}/analysis/` path
 - for source extraction, prefer building the shared world layer in batches
   before deep extraction for one selected character
 - when handling roleplay state, load canonical base packages from
@@ -167,8 +216,11 @@ In short:
 - define the canonical construction flow:
   `work selection -> character identification -> world-first extraction -> character selection -> character-package generation`
 - define the user/runtime flow:
-  `user selection -> work selection -> role binding -> stage selection -> context creation`
+  `user selection -> new/existing detection -> if new: work selection -> target role binding -> target stage selection -> user-side role binding -> setup lock -> context creation or recovery -> continuous session/context writeback -> explicit close -> merge confirmation`
 - define the world package and work-scoped directory rules early
+- define the work-stage catalog and world-stage snapshots early
+- keep work-specific long-term profile changes in work-scoped user data rather
+  than the global root profile
 - preserve the source work language in generated canonical content
 - define `stage_catalog`, `stage_id`, `context_id`, `relationship_core`, and
   context-merge rules early

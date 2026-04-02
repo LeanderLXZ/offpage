@@ -245,3 +245,131 @@
       canonical base from `works/{work_id}/characters/{character_id}/`.
     - User-specific relationship state, drift, and history should then be
       layered from `users/{user_id}/works/{work_id}/characters/{character_id}/`.
+
+50. For Chinese works, work-scoped canon below `work_id` should keep Chinese
+    names and Chinese identifier values by default.
+    - Work titles and display names should also stay in the original Chinese
+      by default.
+    - `work_id` itself may also be Chinese when the work root is derived from
+      the original title.
+    - This applies to work-scoped entities such as characters, locations,
+      factions, events, and stages.
+    - Generated work-scoped folder names and identifier-derived path segments
+      should follow the same Chinese labels by default.
+    - Do not replace source labels with pinyin-only ids when that would make
+      canon inspection less readable.
+
+51. `ai_context/` remains the first-follow-up authority for ordinary project
+    continuation.
+    - When a new AI resumes work from handoff, it should first follow
+      `ai_context/` and the current user request.
+    - It should not proactively treat `prompts/` as binding instructions on
+      the first follow-up unless the user explicitly asks to use a prompt, a
+      prompt file is directly named, or the task itself is prompt work.
+    - The prompt library remains available as reusable workflow tooling, but
+      it is not the default authority for ordinary continuation after handoff.
+    - Structural field names may still remain English.
+
+51. The world package should record major shared events, not small scene-level
+    incidents by default.
+    - Minor interactions, local beats, and character-specific moment-to-moment
+      developments should normally stay in character-layer canon, memory, or
+      batch analysis.
+
+52. The world package should track only the main cast and high-frequency
+    supporting characters by default.
+    - One-off minor roles and low-importance extras do not need to be promoted
+      into work-level world views unless later source evidence makes them
+      structurally important.
+
+53. User-scoped runtime writeback should be continuous during live roleplay.
+    - `sessions/` and current `contexts/` should be maintained as the
+      conversation progresses.
+    - The system should not require a separate manual "writeback now" step
+      before user-scoped state can be updated.
+    - Long-term promotion into `relationship_core` remains selective.
+
+54. Stage selection should apply to every canon-backed role slot in a context.
+    - The primary target character must always select a stage from character
+      data.
+    - If the user-side role is also a canonical character, that side should
+      also select a stage from character data.
+    - Free-form user personas or custom identities do not require a canon
+      stage.
+
+55. Context content may be promoted or fully merged into user-owned long-term
+    state.
+    - Users should be able to retain selected context material as
+      `pinned_memories`.
+    - Users should also be able to partially or fully merge a context into the
+      long-term `relationship_core` when policy and evidence justify it.
+    - Such promotion must remain inside `users/{user_id}/...` and must not
+      rewrite canonical work data.
+
+56. Runtime request objects and persisted user-scoped manifests should carry
+    explicit `work_id`.
+    - Do not rely only on directory paths to recover the active work scope.
+    - At minimum, runtime requests, relationship-core manifests, context
+      manifests, and session manifests should all include `work_id`.
+
+57. Prompt-library entry should still respect project handoff memory.
+    - A fresh agent launched from a prompt template does not need to read the
+      full repo or the full `ai_context/`.
+    - But it should still read a minimal `ai_context` subset before acting, so
+      prompt-local instructions do not drift away from durable project rules.
+
+58. Runtime stage loading should use a unified work-scoped stage axis.
+    - A selected `stage_id` should first identify one work-level timeline
+      checkpoint for the selected work.
+    - The world layer should expose stage choices and stage snapshots for that
+      same work-level checkpoint.
+    - Character packages may still store character-specific stage projections,
+      but those projections should align to the chosen work-level `stage_id`
+      rather than silently drifting onto separate implicit timelines.
+
+59. User bootstrap selections should be locked after initial setup.
+    - At initial setup, the user chooses or confirms:
+      - `user_id`
+      - `work_id`
+      - target `character_id`
+      - active `stage_id`
+      - user-side role mode
+      - if needed, the user-side canon-backed counterpart reference
+    - Those bootstrap choices should not be casually edited during ordinary
+      runtime use.
+    - If a user truly needs a different binding, treat that as an explicit new
+      scoped setup or migration action rather than an in-place runtime tweak.
+
+60. Canon-backed user-side roles should inherit the target stage by default.
+    - If the user-side identity is also a canonical character, that side should
+      normally use the same selected work-stage as the target role.
+    - Explicit cross-stage pairings are a future branch feature, not the
+      default runtime behavior.
+
+61. Session exit and long-term merge should be explicit.
+    - Runtime should support user-provided exit keywords or equivalent close
+      intents that end the current dialogue session.
+    - After session close, the system should explicitly ask whether to merge the
+      current context into user-owned long-term history.
+    - `session` and `context` data should still be updated continuously during
+      live roleplay.
+    - Long-term self-profile or relationship-profile updates should happen only
+      after explicit merge confirmation.
+
+62. User-owned long-term history should be append-first and scope-safe.
+    - Promoted events and memory points should be appended rather than silently
+      overwriting older records.
+    - Work- and character-scoped long-term profile changes should stay under
+      `users/{user_id}/works/{work_id}/characters/{character_id}/...`.
+    - Do not dump work-specific emotional drift, event memory, or relationship
+      state into the global root `users/{user_id}/profile.json` by default.
+
+63. Source extraction should expose configurable batch size and default stage
+    cadence.
+    - The default extraction batch size should be `5` chapters unless work
+      config explicitly overrides it.
+    - In the default workflow, batch `N` forms the `N`th stage candidate for
+      that extraction line.
+    - Stage `N` material should be cumulative through stages `1..N`, while the
+      most recent stage state is treated as the active present and earlier
+      stages remain historical background.

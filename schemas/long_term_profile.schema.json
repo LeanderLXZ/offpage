@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/long_term_profile.schema.json",
+  "title": "用户长期画像",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "user_id",
+    "work_id",
+    "character_id",
+    "status"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "work_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "character_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived"
+      ]
+    },
+    "current_self_summary": {
+      "type": "string"
+    },
+    "current_persona_summary": {
+      "type": "string"
+    },
+    "merged_context_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "event_history": {
+      "type": "array",
+      "description": "长期事件历史，推荐采用只增不删的追加写入策略。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "event_id",
+          "summary"
+        ],
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "source_context_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "memory_history": {
+      "type": "array",
+      "description": "长期记忆点历史，推荐采用只增不删的追加写入策略。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memory_id",
+          "summary"
+        ],
+        "properties": {
+          "memory_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "source_context_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "persona_shift_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "shift_id",
+          "summary"
+        ],
+        "properties": {
+          "shift_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "source_context_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  }
+}

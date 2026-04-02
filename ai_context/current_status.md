@@ -25,11 +25,12 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - memory consistency
   - language-style consistency
   - relationship-logic consistency
-- New contexts must choose a character stage.
-- Stage information must live inside character data as summarized key timeline
-  nodes.
-- At conversation start, the system should present the character's available
-  stage catalog for user selection.
+- New contexts must choose an active work-stage.
+- Stage information must now be modeled as:
+  - work-level stage selection in the world layer
+  - aligned character-side stage projections
+- At conversation start, the system should present the work's available stage
+  catalog, then load matching character-side stage projections.
 - For one user and one character, the system must support:
   - multiple context branches
   - permanently retained memories
@@ -61,9 +62,9 @@ package onboarded, early extraction artifacts beginning to appear" stage.
 - The current top-level repo structure has been narrowed to:
   - `sources/`
   - `works/`
-  - `analysis/`
   - `users/`
   - `interfaces/`
+  - `prompts/`
   - `schemas/`
   - `docs/architecture/`
   - `docs/logs/`
@@ -74,12 +75,19 @@ package onboarded, early extraction artifacts beginning to appear" stage.
 - Project-level log and git rules have been added:
   - `docs/logs/README.md`
   - `.gitignore`
+- A reusable prompt library for fresh agents and user-facing flows now exists:
+  - `prompts/`
+  - including ingestion, analysis, runtime, and review templates
 - The first-pass schema set has been created:
   - `schemas/work_manifest.schema.json`
   - `schemas/character_manifest.schema.json`
+  - `schemas/world_stage_catalog.schema.json`
+  - `schemas/world_stage_snapshot.schema.json`
   - `schemas/stage_catalog.schema.json`
   - `schemas/stage_snapshot.schema.json`
   - `schemas/user_profile.schema.json`
+  - `schemas/long_term_profile.schema.json`
+  - `schemas/role_binding.schema.json`
   - `schemas/relationship_core.schema.json`
   - `schemas/context_manifest.schema.json`
   - `schemas/session_manifest.schema.json`
@@ -87,7 +95,7 @@ package onboarded, early extraction artifacts beginning to appear" stage.
 - The `ai_context/` docs are now maintained in English as the default AI-facing
   language.
 - The first real source work package has now been onboarded:
-  - `sources/works/wo-he-nvdi-de-jiushi-nieyuan/`
+  - `sources/works/我和女帝的九世孽缘/`
   - source format normalized from a local `epub`
   - `537` normalized chapters are available under `chapters/`
   - source metadata exists in:
@@ -95,14 +103,16 @@ package onboarded, early extraction artifacts beginning to appear" stage.
     - `metadata/book_metadata.json`
     - `metadata/chapter_index.json`
 - The first real work-scoped canonical package scaffold now exists:
-  - `works/wo-he-nvdi-de-jiushi-nieyuan/`
+  - `works/我和女帝的九世孽缘/`
   - with:
     - `world/`
     - `characters/`
     - `analysis/`
     - `indexes/`
 - The first-pass candidate-character identification result now exists under:
-  - `works/wo-he-nvdi-de-jiushi-nieyuan/analysis/incremental/candidate_characters_initial.md`
+  - `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
+- The old repo-level `analysis/` directory has now been retired.
+  - Work-related analysis should stay under `works/{work_id}/analysis/`.
 - Old top-level scaffold directories for `characters/`, `worlds/`, `runtime/`,
   and `sessions/` have now been retired from the intended repo layout.
 - Top-level `users/` is now intended to hold full user packages directly under
@@ -112,13 +122,22 @@ package onboarded, early extraction artifacts beginning to appear" stage.
 - The architecture has now been extended in docs to scope canonical assets by
   `work_id`.
 - The preferred user-flow direction is now:
-  - choose work
-  - choose character
-  - choose stage
+  - enter `user_id`
+  - determine new or existing setup
+  - if new: choose work
+  - choose target character
+  - choose the active work-stage
+  - choose the user-side role or counterpart identity
+  - if that side is canon-backed, inherit the same stage by default
+  - lock the setup
 - The preferred user-data direction is now user-rooted:
   - all user-specific state should live under `users/{user_id}/`
   - work-specific relationship, context, and session state should live under
     `users/{user_id}/works/{work_id}/`
+- The user package direction now includes a work-character-scoped
+  `long_term_profile.json` for merged long-term self-profile changes.
+- The root `users/{user_id}/profile.json` is now treated as a global user
+  profile rather than the default sink for one branch's relationship drift.
 - The preferred work-package direction is now:
   - `sources/works/{work_id}/` for source ingestion
   - `works/{work_id}/` for source-grounded canon and analysis
@@ -129,6 +148,13 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - while detailed character canon stays under `characters/`
 - The content-language rule is now:
   - work-scoped generated content defaults to the selected work language
+  - work titles and display names should stay in the original work language by
+    default
+  - for Chinese works, `work_id` itself may be Chinese, and work-scoped canon
+    names and identifier values should also default to Chinese rather than
+    pinyin-only forms
+  - generated work-scoped folder names and identifier-derived path segments
+    should follow those same Chinese labels by default
   - structural field names may remain English
   - `ai_context/` remains English as the AI handoff layer
 - The world-data rule is now:
@@ -138,15 +164,60 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - user conversations must not rewrite canonical world data
   - world events and character event-awareness summaries belong in the world
     layer
+  - world events should focus on major shared events rather than small
+    scene-level incidents
+  - world cast views should focus on the main cast and high-frequency
+    supporting characters rather than one-off minor roles
   - world conflicts and uncertainty should be recorded explicitly
+- The runtime stage model is now being documented as a unified work-stage axis:
+  - the world layer exposes selectable stage catalog data
+  - the selected `stage_id` is treated as a work-level timeline checkpoint
+  - character stage snapshots project that same `stage_id` into
+    character-specific state
 - The preferred extraction order is now:
   - candidate identification first
   - world-first batch extraction next
   - selected-character batch extraction after that
+- The default extraction planning direction now assumes:
+  - configurable batch size per work
+  - default batch size `5` when not overridden
+  - batch `N` as the default stage `N` candidate
+  - stage `N` extraction as cumulative through `1..N`
 - The source-batch update rule is now:
   - any one source-reading batch may supplement or revise world data and any
     already-known character package
   - batch focus does not limit correction scope
+- The runtime prompt direction is now:
+  - `用户入口与上下文装载` acts as the user-side runtime orchestrator
+  - user-scoped `session` / `context` updates should happen continuously during
+    live roleplay rather than waiting for a separate manual writeback request
+  - long-term profile and relationship-core updates should happen only after
+    explicit merge confirmation
+  - `users状态回写` acts both as an internal writeback subflow and as a
+    standalone repair / merge prompt when needed
+- Fresh agents launched through the prompt library are now expected to read a
+  minimal `ai_context` subset before relying only on prompt-local rules.
+- The first ordinary follow-up after handoff should now default to
+  `ai_context/` plus the live user request, not to `prompts/`.
+  - Prompt files should only become the active instruction source when the
+    user explicitly asks for them, names one, or the task is directly about
+    prompt work.
+- The runtime/user-state schema direction is now:
+  - runtime request objects should carry explicit `work_id`
+  - persisted `relationship_core`, `context`, and `session` manifests should
+    also carry explicit `work_id`
+  - runtime scope should not rely only on directory paths
+- Stage selection is now intended to apply to every canon-backed role slot in
+  a context, not only the primary target character.
+  - If the user-side identity is also a canonical character, that side should
+    normally inherit the same active stage by default.
+- Context content is now explicitly expected to support promotion or full
+  merge into user-owned long-term state under `relationship_core` when the
+  merge policy and evidence justify it.
+- Session close is now being documented as an explicit lifecycle point:
+  - exit keywords or equivalent close intents end the session
+  - the system then asks whether to merge the current context into long-term
+    user-owned history
 
 ## Current Entry Points
 
@@ -160,7 +231,7 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - `ai_context/next_steps.md`
   - `ai_context/handoff.md`
 - Current source-analysis entry:
-  - `works/wo-he-nvdi-de-jiushi-nieyuan/analysis/incremental/candidate_characters_initial.md`
+  - `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
 
 ## Current Gaps
 
@@ -171,7 +242,8 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   There is not yet a stable batch-extraction packet format or any finished
   character package.
 - No populated world package has been created yet for the first real work.
-- No world schema set exists yet for:
+- The world-stage schemas now exist, but no full world schema set exists yet
+  for:
   - world foundation
   - world timeline
   - world event records
@@ -181,6 +253,8 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - character event-awareness summaries
 - The repository has now started migrating to the preferred user-rooted state
   layout, but no real user package has been created yet.
+- The new bootstrap-lock, explicit close, and merge-confirmation runtime model
+  is documented, but not yet implemented in service code.
 - The package schemas do not yet explicitly document inheritance or override
   behavior for content language beyond the current work-level `language`
   field.
@@ -194,6 +268,12 @@ package onboarded, early extraction artifacts beginning to appear" stage.
 - The full execution workflow for character identification, character
   selection, world-first extraction, and batch character-package generation is
   not yet fully defined.
+- The first-pass runtime schemas now cover:
+  - setup lock
+  - long-term profile
+  - explicit close / merge request modes
+  - but they may still need refinement as runtime service behavior becomes
+    more concrete.
 - The formal schema for incremental update packets and evidence records is not
   yet defined.
 - No service-layer code or interface stubs exist yet.

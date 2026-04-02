@@ -1,23 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/stage_catalog.schema.json",
-  "title": "阶段目录",
+  "$id": "persona-engine/world_stage_catalog.schema.json",
+  "title": "世界阶段目录",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
-    "character_id",
     "work_id",
     "stages"
   ],
   "properties": {
     "schema_version": {
       "type": "string"
-    },
-    "character_id": {
-      "type": "string",
-      "minLength": 1,
-      "description": "作品级基础角色标识。对于中文作品，优先直接使用原始中文标识。"
     },
     "work_id": {
       "type": "string",
@@ -26,8 +20,7 @@
     },
     "default_stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "默认阶段标识。对于中文作品，这个值可以直接是中文。"
+      "minLength": 1
     },
     "stages": {
       "type": "array",
@@ -45,8 +38,7 @@
         "properties": {
           "stage_id": {
             "type": "string",
-            "minLength": 1,
-            "description": "作品级阶段标识。对于中文作品，优先直接使用原始中文标识，而不是拼音 id。"
+            "minLength": 1
           },
           "order": {
             "type": "integer",
@@ -61,28 +53,7 @@
           "short_summary": {
             "type": "string",
             "minLength": 1,
-            "description": "供用户在运行时选择阶段时展示的一句话摘要。"
-          },
-          "experience_summary": {
-            "type": "string"
-          },
-          "relationship_summary": {
-            "type": "string"
-          },
-          "personality_summary": {
-            "type": "string"
-          },
-          "current_status_summary": {
-            "type": "string"
-          },
-          "current_mood_summary": {
-            "type": "string"
-          },
-          "voice_shift_summary": {
-            "type": "string"
-          },
-          "knowledge_boundary_summary": {
-            "type": "string"
+            "description": "供用户选择阶段时展示的一句话摘要。"
           },
           "chapter_scope": {
             "type": "object",
@@ -96,9 +67,14 @@
               }
             }
           },
+          "current_world_summary": {
+            "type": "string"
+          },
+          "history_summary": {
+            "type": "string"
+          },
           "snapshot_path": {
-            "type": "string",
-            "description": "该阶段对应的快照路径。如果 stage_id 为中文，则由它派生出来的路径段也应使用中文。"
+            "type": "string"
           }
         }
       }

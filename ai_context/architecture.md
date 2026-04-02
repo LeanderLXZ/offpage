@@ -14,10 +14,10 @@ Preferred top-level structure going forward:
   - preferred home for source-grounded work canon packages
 - `users/`
   - all user-specific state, grouped by `user_id`
-- `analysis/`
-  - extraction scratch space, experiments, and transitional analysis storage
 - `interfaces/`
   - external adapters and terminal integration entry points
+- `prompts/`
+  - reusable prompt templates for fresh agents and user-facing flows
 - `schemas/`
   - first-pass persistence and runtime-request schemas
 - `docs/architecture/`
@@ -46,6 +46,11 @@ Recommended scope rule:
 - all user-specific mutable state should live under `users/{user_id}/`
 - work-scoped generated content should default to the language declared by the
   selected work
+- for Chinese works, `work_id` itself may be Chinese, and work-scoped canon
+  should keep Chinese names and Chinese identifier values by default rather
+  than pinyin-only ids
+- generated work-scoped folder names and identifier-derived path segments
+  should follow those Chinese identifiers by default
 
 ### Canonical Work Package Layer
 
@@ -84,9 +89,7 @@ Role:
 
 Location:
 
-- extraction scratch under top-level `analysis/`
-- persistent simulation-relevant work analysis under
-  `works/{work_id}/analysis/`
+- `works/{work_id}/analysis/`
 
 Role:
 
@@ -108,6 +111,8 @@ Role:
   packages from one source-reading batch
 - record contradictions and uncertainty
 - record world-level contradictions, revisions, and unresolved questions
+- keep extraction scratch, incremental packets, and persistent analysis inside
+  the relevant work package rather than a repo-level `analysis/` directory
 
 ### Canonical World Layer
 
@@ -151,6 +156,10 @@ Key boundary:
 - keep explicit map facts separate from inferred or still-uncertain geography
 - keep world-content language aligned with the selected work language by
   default
+- keep work-scoped entity names and identifier values aligned with the source
+  work language by default
+- keep identifier-derived path segments under `works/{work_id}/` aligned with
+  those same work-scoped identifiers by default
 - treat world materials as incrementally revisable assets rather than
   one-pass summaries
 - preserve correction history when later chapters change prior world
@@ -162,6 +171,10 @@ Key boundary:
   convenience
 - world may store concise character knowledge-state summaries about major
   events
+- world event records should prefer major shared work-level events rather than
+  small scene beats already covered by character-layer material
+- world cast views should focus on the main cast and high-frequency
+  supporting characters rather than one-off minor roles
 - detailed character psyche, memory, voice, behavior, and stage data should
   stay under `characters/`
 - detailed character-side event interpretation and memory detail should stay
@@ -194,6 +207,11 @@ Key boundary:
   externally at runtime
 - content text should default to the work language, while field names may
   remain English
+- for Chinese works, character-side names and identifier values such as
+  `character_id` and `stage_id` should default to Chinese labels if they are
+  work-scoped canon identifiers
+- character package folders and stage-snapshot path segments derived from
+  those identifiers should use the same Chinese labels by default
 
 ### User Layer
 
@@ -205,19 +223,28 @@ Location:
 Role:
 
 - store user identity and persona
+- store bootstrap selections and setup-lock state for one user-scoped binding
 - store user-to-character relationship settings
+- store the active user-side role binding for the current target relationship
 - store long-term interaction memory
+- store user-owned long-term self-profile changes that are scoped to one work
+  and one target relationship
 - store user preferences and boundaries
 - store the long-lived relationship core for one user and one character
 - store multiple branchable contexts
 - store pinned or merged shared memories
+- support continuous session/context writeback during live roleplay
 
 Suggested structure:
 
 - `users/{user_id}/`
   - reusable user profile and optional cross-work preferences
 - `users/{user_id}/works/{work_id}/characters/{character_id}/role_binding.json`
-  - selected character reference and loading preferences for this user
+  - selected target-character reference, stage binding, user-side role binding,
+    setup-lock state, and loading / writeback preferences for this user
+- `users/{user_id}/works/{work_id}/characters/{character_id}/long_term_profile.json`
+  - user-owned long-term self profile for this work-character relationship,
+    updated only when a context is explicitly merged
 - `users/{user_id}/works/{work_id}/characters/{character_id}/relationship_core/`
   - long-lived relation state and pinned memory for this user-character pair
 - `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/`
@@ -228,11 +255,17 @@ Key boundary:
 - a reusable user identity may exist across works
 - the user layer is where "what this character became in relation to this user"
   is stored
+- ordinary runtime should not casually mutate the bootstrap binding once it has
+  been locked
 - work-specific relationship and memory state must not leak across different
   novels
 - the user layer should reference canonical base packages in `works/{work_id}/`
   instead of duplicating them
 - these changes do not pollute character canon by default
+- user-scoped manifests such as `relationship_core`, `context`, and `session`
+  records should carry explicit `work_id` in file content rather than relying
+  only on the directory path
+- session and context state may be updated continuously during live roleplay
 - only explicitly retained or merged content should flow into
   `relationship_core`
 - work-scoped user / relationship materials should default to the selected
@@ -248,19 +281,27 @@ Location:
 Role:
 
 - dynamically choose the relevant work first
-- retrieve the needed world baseline and world state
+- retrieve the needed world baseline and world stage snapshot
 - retrieve the relevant shared work-level events
-- dynamically choose the relevant character stage
+- dynamically choose the relevant work-stage
+- retrieve the target character's projection for that same selected work-stage
+- dynamically resolve the user-side role or counterpart identity
+- if that user-side role is also a canonical character, retrieve its selected
+  stage projection for the same work-stage unless an explicit branch override
+  exists
 - retrieve the needed memory and relationship state
 - inject behavior constraints and voice constraints
 - compile the minimum useful context for one roleplay turn
 - combine:
   - world baseline
   - relevant world-level event summaries
-  - relevant world-state snapshot
+  - relevant world-stage snapshot
   - relevant location-state snapshot if needed
   - character baseline
-  - selected stage snapshot
+  - selected target-stage projection
+  - user persona or user-side role binding
+  - if needed, user-side canonical role stage projection
+  - user-owned long-term self profile
   - user-to-character relationship core
   - current context-branch state
 
@@ -453,18 +494,20 @@ After a user selects a role, the runtime should load:
 
 ## Stage Selection Model
 
-When creating a new dialogue context, the user should choose which source
-timeline stage the target character is in.
+When creating runtime state, the system should first choose which work-scoped
+timeline stage is active for the selected work.
 
 Additional rule:
 
-- character stage selection should remain compatible with the relevant world
-  state for that work
+- world stage, target-character state, and any canon-backed user-side role
+  should remain aligned to the same selected work-stage by default
 - if the system later supports deliberate alternate-world branching, that
   branch should be explicit rather than implicit drift
 
 That choice directly affects:
 
+- the active world state
+- what major work events are now history versus current state
 - what the character knows and does not know
 - what the character has and has not experienced yet
 - the current priority of values and emotional maturity
@@ -473,16 +516,18 @@ That choice directly affects:
 
 Recommended model:
 
-- maintain an explicit `stage_catalog` in the character package
-- include multiple summarized key timeline nodes in that catalog
-- each stage entry should contain at least:
+- maintain an explicit work-scoped stage catalog for the world layer
+- maintain work-stage snapshots for world state
+- maintain character-side stage projections that align to that same work-stage
+- each selectable stage entry should contain at least:
   - `stage_id`
   - a stage title
-  - a short summary
-  - a summary of experience, relationships, and personality at that stage
-- maintain explicit `stage_snapshots`
-- require `stage_id` when creating a new context
-- always load character baseline first and then the selected stage snapshot
+  - a one-line selection summary
+  - a summary of world, experience, relationships, and personality at that
+    stage
+- require the selected work-stage before creating a new context
+- always load world baseline and world stage first, then load character
+  baseline and the matching character-stage projection
 
 ## Conversation-Start Stage Selection
 
@@ -491,18 +536,34 @@ stage names.
 
 Preferred flow:
 
-1. the user selects a target character
-2. the system reads that character's `stage_catalog`
-3. the system presents multiple key timeline nodes and summaries
-4. the user selects one `stage_id`
-5. a new context is created and the conversation begins
+1. the user enters `user_id`
+2. the system determines whether this is a new or existing scoped setup
+3. for a new setup, the user selects:
+   - `work_id`
+   - target `character_id`
+   - active work `stage_id`
+   - user-side role mode
+   - if needed, user-side canon counterpart reference
+4. if the user-side role is canon-backed, it inherits that same work-stage by
+   default
+5. the system locks the bootstrap setup
+6. the system either resumes an existing context or creates a new one
+7. conversation begins
+
+For existing setups:
+
+1. the user enters `user_id`
+2. the system shows the current locked account binding
+3. the system offers recoverable contexts
+4. the user resumes one or creates a new context within the same locked setup
 
 Benefits:
 
-- stage options come from character data itself
+- stage options come from persistent canon data rather than ad hoc user memory
 - every terminal can show the same stage choices
 - the user does not need to memorize the full original timeline
 - runtime never loads a stage setting with unclear provenance
+- long-running accounts do not silently mutate their identity binding midstream
 
 ## Context Lifecycle Model
 
@@ -526,6 +587,17 @@ Suggested context states:
    - used when "this character should permanently remember certain things about
      this user"
 
+Continuous writeback rule:
+
+- live runtime should keep `sessions/` and current `contexts/` updated as the
+  conversation progresses
+- long-term promotion remains selective rather than automatic for every turn
+- when a merge policy allows it or the user explicitly requests it, a context
+  may be partially or fully promoted into long-term relationship state
+- session close should support exit keywords or equivalent close intents
+- after close, the system should ask whether to merge the current context into
+  long-term user-owned history before updating long-term profiles
+
 Also support a pinned-memory mechanism:
 
 - specific shared memories can be marked as long-term retained memories
@@ -538,35 +610,45 @@ To support "the character should permanently remember some things about this
 user," the user layer should contain a stable long-term relationship core:
 
 - `relationship_core`
+- `long_term_profile`
 
 It should include at least:
 
 - current relationship labels
 - long-term trust and dependence changes
 - permanently retained key shared memories
+- append-only promoted event history
+- append-only promoted user memory history
 - user-specific nickname shifts, voice shifts, and behavior shifts
 - major merged turning points such as conflict, reconciliation, promises, or
   shared milestones
 
 Recommended runtime load order:
 
-1. target-character baseline
-2. selected stage snapshot
-3. user persona
-4. `relationship_core`
-5. current `context_id` branch
-6. recent session state
+1. world baseline
+2. selected world-stage snapshot
+3. target-character baseline
+4. selected target-stage projection
+5. user persona or user-side role binding
+6. if the user-side role is also a canonical character, that side's aligned
+   stage projection
+7. `long_term_profile`
+8. `relationship_core`
+9. current `context_id` branch
+10. recent session state
 
 ## Roleplay Logic Chain
 
 The intended internal roleplay order is:
 
 1. determine the current stage of the target character
-2. determine what the character knows and does not know
-3. determine the character's current relationship state toward the user
-4. determine what emotion, defense, or desire the user's input activates
-5. infer the character's likely behavior tendency
-6. render the response in the character's voice
+2. if the user-side role is also canon-backed, determine that side's current
+   stage as well
+3. determine what the character knows and does not know
+4. determine the character's current relationship state toward the user
+5. determine what emotion, defense, or desire the user's input activates
+6. infer the character's likely behavior tendency
+7. render the response in the character's voice
 
 So the core chain is:
 
@@ -590,4 +672,4 @@ The better model is:
 
 More concretely, the current target load formula is:
 
-`character baseline + stage snapshot + user relationship core + current context branch + recent session state`
+`character baseline + stage snapshot + user persona or user-side role binding + optional user-side canonical stage reference + user relationship core + current context branch + recent session state`
