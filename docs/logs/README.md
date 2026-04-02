@@ -43,3 +43,13 @@ Use timestamped filenames in local New York time, for example:
 If a log entry would require pasting large source text or binary-like data, do
 not put that content here. Summarize it and point to the canonical source
 location instead.
+
+## Git Rule
+
+Timestamped log entries under `docs/logs/` are local working notes and should
+not be committed into git history by default.
+
+Keep tracked only:
+
+- `docs/logs/README.md`
+- `docs/logs/.gitkeep`

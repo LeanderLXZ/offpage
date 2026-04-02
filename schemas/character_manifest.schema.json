@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/character_manifest.schema.json",
-  "title": "Character Manifest",
+  "title": "角色清单",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,11 +17,13 @@
     },
     "character_id": {
       "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      "minLength": 1,
+      "description": "作品级基础角色标识。对于中文作品，优先直接使用原始中文角色名，而不是拼音 id。"
     },
     "work_id": {
       "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      "minLength": 1,
+      "description": "作品包命名空间键。对于中文作品，这个值本身也可以直接是中文。"
     },
     "canonical_name": {
       "type": "string",
@@ -55,13 +57,16 @@
       "additionalProperties": false,
       "properties": {
         "canon_root": {
-          "type": "string"
+          "type": "string",
+          "description": "角色包根路径。当 character_id 为中文时，这条路径里由它派生出来的文件夹段也应使用相同中文标识。"
         },
         "stage_catalog_path": {
-          "type": "string"
+          "type": "string",
+          "description": "角色包内的阶段目录路径。repo 级结构段可以保持稳定，但由标识值派生出来的路径段应跟随基础角色标识。"
         },
         "stage_snapshot_root": {
-          "type": "string"
+          "type": "string",
+          "description": "阶段快照根路径。当 stage_id 为中文时，该根路径下派生出来的路径段也应使用对应中文标识。"
         },
         "evidence_root": {
           "type": "string"

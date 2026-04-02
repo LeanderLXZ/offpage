@@ -17,11 +17,18 @@ Unless the task clearly requires something else, read these first:
 
 - `ai_context/`
 - once created and relevant:
-  - `analysis/`
+  - `works/{work_id}/analysis/`
   - `works/{work_id}/world/`
   - `works/{work_id}/characters/`
   - `users/{user_id}/`
   - specific files under `sources/` that the task directly names
+
+On the first follow-up after handoff, do not proactively read `prompts/`
+unless one of these is true:
+
+- the user explicitly asks to use a prompt
+- the user names a prompt file
+- the current task is prompt design, prompt revision, or prompt execution
 
 ## Default Do-Not-Read Areas
 
@@ -30,7 +37,7 @@ Do not proactively scan these areas unless the task directly requires them:
 - large raw corpus under `sources/`
 - full work-scoped conversation history under
   `users/{user_id}/works/{work_id}/.../sessions/`
-- full evidence material under `analysis/evidence/`
+- full evidence material under `works/{work_id}/analysis/evidence/`
 - full history under `docs/logs/`
 - future embeddings, caches, indexes, or intermediate artifact directories
 - database files, vector stores, and other large local data
@@ -70,6 +77,8 @@ Avoid:
 - loading all evidence files by default
 - reading database or index bodies by default
 - loading all intermediate artifacts without a direct need
+- treating `prompts/` as the default first-stop context source for ordinary
+  follow-up work
 
 ## Large-File And Source-Handling Rule
 
