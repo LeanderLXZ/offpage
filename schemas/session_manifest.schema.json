@@ -1,14 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/session_manifest.schema.json",
-  "title": "Session Manifest",
+  "title": "会话清单",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "session_id",
     "user_id",
+    "work_id",
     "character_id",
+    "stage_id",
     "context_id",
     "terminal"
   ],
@@ -23,14 +25,53 @@
     "user_id": {
       "type": "string"
     },
+    "work_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "当前会话所属的作品命名空间标识。该值必须与 `users/{user_id}/works/{work_id}/` 的路径一致。对于中文作品，这个值可以直接是中文。"
+    },
     "character_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "description": "当前会话绑定的基础角色标识。对于中文作品，这个值可以直接是中文。"
     },
     "context_id": {
       "type": "string"
     },
     "stage_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "当前会话选定的作品级活动阶段标识。对于中文作品，这个值可以直接是中文。"
+    },
+    "counterpart_mode": {
+      "type": "string",
+      "enum": [
+        "user_self",
+        "user_persona",
+        "canon_character",
+        "custom_role"
+      ]
+    },
+    "counterpart_persona_id": {
       "type": "string"
+    },
+    "counterpart_character_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "当用户侧身份模式为 canon_character 时，该值表示用户侧角色绑定的基础角色标识。对于中文作品，这个值可以直接是中文。"
+    },
+    "counterpart_stage_mode": {
+      "type": "string",
+      "enum": [
+        "inherit_target_stage",
+        "explicit_override"
+      ],
+      "description": "当用户侧身份模式为 canon_character 时，该值表示用户侧角色是继承目标阶段，还是显式覆盖为另一个阶段。"
+    },
+    "counterpart_stage_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "当用户侧身份模式为 canon_character 且存在显式跨阶段 branch override 时，该值表示用户侧角色选定的阶段标识。"
     },
     "terminal": {
       "type": "string",
@@ -44,11 +85,35 @@
     "persona_id": {
       "type": "string"
     },
+    "writeback_policy": {
+      "type": "string",
+      "enum": [
+        "continuous",
+        "review_only",
+        "manual_only"
+      ]
+    },
     "started_at": {
       "type": "string"
     },
     "ended_at": {
       "type": "string"
+    },
+    "close_trigger": {
+      "type": "string",
+      "description": "结束会话的触发来源，例如 exit keyword、用户显式结束、系统关闭。"
+    },
+    "merge_prompt_shown": {
+      "type": "boolean"
+    },
+    "merge_decision": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "declined",
+        "not_offered"
+      ]
     },
     "status": {
       "type": "string",
@@ -58,5 +123,118 @@
         "abandoned"
       ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "counterpart_mode": {
+            "const": "user_persona"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "counterpart_persona_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "counterpart_persona_id"
+        ]
+      },
+      "then": {
+        "required": [
+          "counterpart_mode"
+        ],
+        "properties": {
+          "counterpart_mode": {
+            "const": "user_persona"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "counterpart_mode": {
+            "const": "canon_character"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "counterpart_character_id",
+          "counterpart_stage_mode"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "counterpart_character_id"
+        ]
+      },
+      "then": {
+        "required": [
+          "counterpart_mode"
+        ],
+        "properties": {
+          "counterpart_mode": {
+            "const": "canon_character"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "counterpart_stage_mode"
+        ]
+      },
+      "then": {
+        "required": [
+          "counterpart_mode"
+        ],
+        "properties": {
+          "counterpart_mode": {
+            "const": "canon_character"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "counterpart_stage_mode": {
+            "const": "explicit_override"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "counterpart_stage_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "counterpart_stage_id"
+        ]
+      },
+      "then": {
+        "required": [
+          "counterpart_stage_mode"
+        ],
+        "properties": {
+          "counterpart_stage_mode": {
+            "const": "explicit_override"
+          }
+        }
+      }
+    }
+  ]
 }

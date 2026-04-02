@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/work_manifest.schema.json",
-  "title": "Work Manifest",
+  "title": "作品清单",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,7 +17,8 @@
     },
     "work_id": {
       "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+      "minLength": 1,
+      "description": "作品包命名空间键。对于中文作品，这个值本身可以直接是中文，`sources/works/` 与 `works/` 下的根目录也应与之保持一致。"
     },
     "title": {
       "type": "string",
@@ -73,6 +74,25 @@
         },
         "rag_root": {
           "type": "string"
+        }
+      }
+    },
+    "extraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default_batch_size": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "默认抽取批次大小，单位为章节数。若未显式覆盖，推荐默认值为 5。"
+        },
+        "batch_to_stage": {
+          "type": "boolean",
+          "description": "若为 true，则默认把第 N 个 batch 视为第 N 个阶段候选。"
+        },
+        "stage_is_cumulative": {
+          "type": "boolean",
+          "description": "若为 true，则阶段 N 的抽取范围默认为累计到 1..N。"
         }
       }
     },

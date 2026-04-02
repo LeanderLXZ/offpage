@@ -1,15 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/runtime_session_request.schema.json",
-  "title": "Runtime Session Request",
+  "title": "运行时会话请求",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "mode",
     "terminal",
-    "user_id",
-    "character_id"
+    "user_id"
   ],
   "properties": {
     "schema_version": {
@@ -18,10 +17,15 @@
     "mode": {
       "type": "string",
       "enum": [
+        "bootstrap_user",
+        "load_user_account",
         "list_stages",
         "create_context",
         "resume_context",
-        "send_message"
+        "send_message",
+        "merge_context",
+        "close_session",
+        "confirm_merge"
       ]
     },
     "terminal": {
@@ -36,14 +40,63 @@
     "user_id": {
       "type": "string"
     },
+    "work_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "当前运行时请求所处的作品命名空间标识。对于 bootstrap_user 之后的模式，该值必须与 `works/{work_id}/` 以及 `users/{user_id}/works/{work_id}/` 对齐。对于中文作品，这个值可以直接是中文。"
+    },
     "character_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "description": "运行时请求中的基础角色标识。对于中文作品，这个值可以直接是中文。对于 load_user_account 模式，这个值可以暂时缺省并由系统从锁定绑定中恢复。"
     },
     "persona_id": {
       "type": "string"
     },
+    "counterpart_mode": {
+      "type": "string",
+      "enum": [
+        "user_self",
+        "user_persona",
+        "canon_character",
+        "custom_role"
+      ],
+      "description": "用户侧当前身份模式。可以是用户本人、已有人设、作品中的另一个 canon 角色，或自定义身份。"
+    },
+    "counterpart_persona_id": {
+      "type": "string",
+      "description": "当用户侧身份模式为 user_persona 时，可在这里指向对应 persona。"
+    },
+    "counterpart_character_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "当用户侧身份模式为 canon_character 时，该值表示用户侧角色所绑定的基础角色标识。对于中文作品，这个值可以直接是中文。"
+    },
+    "counterpart_stage_mode": {
+      "type": "string",
+      "enum": [
+        "inherit_target_stage",
+        "explicit_override"
+      ],
+      "description": "canon 用户侧角色的阶段绑定模式。默认推荐 inherit_target_stage。"
+    },
+    "counterpart_stage_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "当 counterpart_stage_mode 为 explicit_override 时，该值表示用户侧角色选定的阶段标识。默认不应要求单独输入。"
+    },
+    "counterpart_label": {
+      "type": "string",
+      "description": "用户侧身份在当前上下文中的显示标签。"
+    },
+    "counterpart_summary": {
+      "type": "string",
+      "description": "用户侧身份的简短说明，可用于自定义身份或运行时装载摘要。"
+    },
     "stage_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "description": "当前选定的作品级活动阶段标识。world 与角色都应围绕该值装载。对于中文作品，这个值可以直接是中文。"
     },
     "context_id": {
       "type": "string"
@@ -53,6 +106,16 @@
     },
     "message": {
       "type": "string"
+    },
+    "bootstrap_options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lock_setup": {
+          "type": "boolean",
+          "description": "是否在初始设定完成后立即锁定账号绑定。默认建议 true。"
+        }
+      }
     },
     "context_options": {
       "type": "object",
@@ -75,6 +138,55 @@
             "allow_memory_pins",
             "allow_full_merge"
           ]
+        },
+        "ask_merge_on_close": {
+          "type": "boolean"
+        }
+      }
+    },
+    "writeback_policy": {
+      "type": "string",
+      "enum": [
+        "continuous",
+        "review_only",
+        "manual_only"
+      ],
+      "description": "运行时写回策略。默认建议 continuous，即持续维护 session/context 状态，再按需提升长期状态。"
+    },
+    "merge_options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "merge_scope": {
+          "type": "string",
+          "enum": [
+            "selected_memories",
+            "context_summary",
+            "full_context"
+          ]
+        },
+        "append_only": {
+          "type": "boolean",
+          "description": "若为 true，则提升到长期状态时应采用追加而不是覆盖策略。"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "close_options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exit_signal": {
+          "type": "string",
+          "description": "触发结束会话的关键词或显式结束信号。"
+        },
+        "close_reason": {
+          "type": "string"
+        },
+        "offer_merge": {
+          "type": "boolean"
         }
       }
     },
@@ -98,5 +210,250 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "bootstrap_user"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "work_id",
+          "character_id",
+          "stage_id",
+          "counterpart_mode"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "counterpart_mode": {
+            "const": "user_persona"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "counterpart_persona_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "counterpart_persona_id"
+        ]
+      },
+      "then": {
+        "required": [
+          "counterpart_mode"
+        ],
+        "properties": {
+          "counterpart_mode": {
+            "const": "user_persona"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "counterpart_mode": {
+            "const": "canon_character"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "counterpart_character_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "counterpart_character_id"
+        ]
+      },
+      "then": {
+        "required": [
+          "counterpart_mode"
+        ],
+        "properties": {
+          "counterpart_mode": {
+            "const": "canon_character"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "counterpart_stage_mode"
+        ]
+      },
+      "then": {
+        "required": [
+          "counterpart_mode"
+        ],
+        "properties": {
+          "counterpart_mode": {
+            "const": "canon_character"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "counterpart_stage_mode": {
+            "const": "explicit_override"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "counterpart_stage_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "counterpart_stage_id"
+        ]
+      },
+      "then": {
+        "required": [
+          "counterpart_stage_mode"
+        ],
+        "properties": {
+          "counterpart_stage_mode": {
+            "const": "explicit_override"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "list_stages"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "work_id",
+          "character_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "create_context"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "work_id",
+          "character_id",
+          "stage_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "resume_context"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "work_id",
+          "character_id",
+          "context_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "send_message"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "work_id",
+          "character_id",
+          "context_id",
+          "session_id",
+          "message"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "merge_context"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "work_id",
+          "character_id",
+          "context_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "close_session"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "work_id",
+          "character_id",
+          "context_id",
+          "session_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "confirm_merge"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "work_id",
+          "character_id",
+          "context_id",
+          "session_id",
+          "merge_options"
+        ]
+      }
+    }
+  ]
 }

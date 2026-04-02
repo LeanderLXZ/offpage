@@ -1,12 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/relationship_core.schema.json",
-  "title": "Relationship Core",
+  "title": "关系核心",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "user_id",
+    "work_id",
     "character_id",
     "status"
   ],
@@ -17,8 +18,15 @@
     "user_id": {
       "type": "string"
     },
+    "work_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "该关系核心所属的作品命名空间标识。该值必须与 `users/{user_id}/works/{work_id}/` 的路径一致。对于中文作品，这个值可以直接是中文。"
+    },
     "character_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "description": "该关系核心所引用的基础角色标识。对于中文作品，这个值可以直接是中文。"
     },
     "status": {
       "type": "string",
@@ -84,6 +92,58 @@
           },
           "permanence_reason": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "event_refs": {
+      "type": "array",
+      "description": "被提升为长期关系历史的事件引用。推荐采用只增不删的追加写入策略。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "event_id",
+          "summary"
+        ],
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "source_context_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "profile_shift_refs": {
+      "type": "array",
+      "description": "指向长期画像变化记录的引用。推荐追加而不是覆盖。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "shift_id",
+          "summary"
+        ],
+        "properties": {
+          "shift_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "source_context_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

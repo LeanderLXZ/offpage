@@ -1,25 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/context_manifest.schema.json",
-  "title": "上下文清单",
+  "$id": "persona-engine/role_binding.schema.json",
+  "title": "角色绑定",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
-    "context_id",
     "user_id",
     "work_id",
     "character_id",
     "stage_id",
-    "lifecycle"
+    "counterpart_mode",
+    "status"
   ],
   "properties": {
     "schema_version": {
       "type": "string"
-    },
-    "context_id": {
-      "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9_-]*$"
     },
     "user_id": {
       "type": "string"
@@ -27,17 +23,24 @@
     "work_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当前上下文所属的作品命名空间标识。该值必须与 `users/{user_id}/works/{work_id}/` 的路径一致。对于中文作品，这个值可以直接是中文。"
+      "description": "当前角色绑定所属的作品命名空间标识。该值必须与 `users/{user_id}/works/{work_id}/` 的路径一致。对于中文作品，这个值可以直接是中文。"
     },
     "character_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当前上下文加载的基础角色标识。对于中文作品，这个值可以直接是中文。"
+      "description": "当前绑定的目标基础角色标识。对于中文作品，这个值可以直接是中文。"
     },
     "stage_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当前上下文选定的作品级活动阶段标识。world 与目标角色默认都应围绕该阶段装载。对于中文作品，这个值可以直接是中文。"
+      "description": "当前绑定的作品级活动阶段标识。该阶段先作为 work-level timeline checkpoint 选定，再投影到目标角色。对于中文作品，这个值可以直接是中文。"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived"
+      ]
     },
     "counterpart_mode": {
       "type": "string",
@@ -47,7 +50,7 @@
         "canon_character",
         "custom_role"
       ],
-      "description": "当前上下文中用户侧身份模式。"
+      "description": "当前用户侧身份模式。可以是用户本人、已有 persona、作品中的另一个 canon 角色，或自定义身份。"
     },
     "counterpart_persona_id": {
       "type": "string"
@@ -55,7 +58,7 @@
     "counterpart_character_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当用户侧身份模式为 canon_character 时，该值表示用户侧角色绑定的基础角色标识。对于中文作品，这个值可以直接是中文。"
+      "description": "当用户侧身份模式为 canon_character 时，该值表示用户侧角色所绑定的基础角色标识。对于中文作品，这个值可以直接是中文。"
     },
     "counterpart_stage_mode": {
       "type": "string",
@@ -63,12 +66,12 @@
         "inherit_target_stage",
         "explicit_override"
       ],
-      "description": "当用户侧身份模式为 canon_character 时，该值表示用户侧角色是继承目标阶段，还是显式覆盖为另一个阶段。"
+      "description": "canon 用户侧角色的阶段绑定模式。默认推荐 inherit_target_stage。"
     },
     "counterpart_stage_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当用户侧身份模式为 canon_character 且存在显式跨阶段 branch override 时，该值表示用户侧角色选定的阶段标识。默认运行时不应要求单独设置。"
+      "description": "当 counterpart_stage_mode 为 explicit_override 时，该值表示用户侧角色显式覆盖后的阶段标识。默认运行时不应要求用户单独选择该值。"
     },
     "counterpart_label": {
       "type": "string"
@@ -76,43 +79,14 @@
     "counterpart_summary": {
       "type": "string"
     },
-    "title": {
-      "type": "string"
-    },
-    "premise_summary": {
-      "type": "string"
-    },
-    "lifecycle": {
+    "default_context_lifecycle": {
       "type": "string",
       "enum": [
         "ephemeral",
-        "persistent",
-        "merged",
-        "archived"
+        "persistent"
       ]
     },
-    "origin_type": {
-      "type": "string",
-      "enum": [
-        "new",
-        "branch",
-        "imported",
-        "merged"
-      ]
-    },
-    "origin_context_id": {
-      "type": "string"
-    },
-    "active_session_id": {
-      "type": "string"
-    },
-    "session_ids": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "merge_policy": {
+    "default_merge_policy": {
       "type": "string",
       "enum": [
         "manual_only",
@@ -120,7 +94,7 @@
         "allow_full_merge"
       ]
     },
-    "writeback_policy": {
+    "default_writeback_policy": {
       "type": "string",
       "enum": [
         "continuous",
@@ -128,49 +102,41 @@
         "manual_only"
       ]
     },
-    "load_snapshot_refs": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "world_stage_snapshot_path": {
-          "type": "string"
-        },
-        "target_stage_snapshot_path": {
-          "type": "string"
-        },
-        "counterpart_stage_snapshot_path": {
-          "type": "string"
-        }
-      }
+    "auto_resume_last_context": {
+      "type": "boolean"
+    },
+    "preferred_context_id": {
+      "type": "string"
+    },
+    "last_context_id": {
+      "type": "string"
+    },
+    "last_session_id": {
+      "type": "string"
+    },
+    "preferred_terminal": {
+      "type": "string",
+      "enum": [
+        "agent",
+        "app",
+        "mcp",
+        "other"
+      ]
+    },
+    "setup_locked": {
+      "type": "boolean",
+      "description": "是否已经完成首次设定并锁定账号绑定。锁定后，普通 runtime 不应随意修改 work / 角色 / 阶段 / 身份模式。"
+    },
+    "bootstrap_completed_at": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
     },
     "created_at": {
       "type": "string"
     },
     "updated_at": {
-      "type": "string"
-    },
-    "ended_by": {
-      "type": "string",
-      "enum": [
-        "user",
-        "system",
-        "timeout",
-        "other"
-      ]
-    },
-    "end_reason": {
-      "type": "string"
-    },
-    "merge_decision": {
-      "type": "string",
-      "enum": [
-        "pending",
-        "accepted",
-        "declined",
-        "not_offered"
-      ]
-    },
-    "last_merged_at": {
       "type": "string"
     }
   },

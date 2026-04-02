@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/world_stage_snapshot.schema.json",
+  "title": "世界阶段快照",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_id",
+    "stage_id",
+    "title",
+    "snapshot_summary"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "work_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stage_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string"
+    },
+    "timeline_anchor": {
+      "type": "string"
+    },
+    "snapshot_summary": {
+      "type": "string"
+    },
+    "chapter_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      }
+    },
+    "historical_events": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "current_world_state": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "relationship_shifts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "character_status_changes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "location_changes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "map_changes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unresolved_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

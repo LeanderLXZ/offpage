@@ -1,11 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/stage_snapshot.schema.json",
-  "title": "Stage Snapshot",
+  "title": "阶段快照",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
+    "work_id",
     "character_id",
     "stage_id",
     "title",
@@ -15,11 +16,20 @@
     "schema_version": {
       "type": "string"
     },
+    "work_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "作品包命名空间键。对于中文作品，这个值本身也可以直接是中文。"
+    },
     "character_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "description": "作品级基础角色标识。对于中文作品，这个值可以直接是中文。"
     },
     "stage_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "description": "作品级阶段标识。对于中文作品，这个值可以直接是中文。"
     },
     "title": {
       "type": "string"
@@ -29,6 +39,46 @@
     },
     "snapshot_summary": {
       "type": "string"
+    },
+    "chapter_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      }
+    },
+    "experienced_events": {
+      "type": "array",
+      "description": "截至当前阶段，角色已经历过的关键事件。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "current_status": {
+      "type": "array",
+      "description": "当前阶段角色的状态信息，例如生死、关系、等级、位置等。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "current_personality": {
+      "type": "array",
+      "description": "当前阶段下已经稳定显现的人格与处事倾向。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "current_mood": {
+      "type": "array",
+      "description": "当前阶段下更接近现在进行时的情绪背景。",
+      "items": {
+        "type": "string"
+      }
     },
     "knowledge_scope": {
       "type": "object",
@@ -91,6 +141,9 @@
         "tone_summary": {
           "type": "string"
         },
+        "current_voice_state": {
+          "type": "string"
+        },
         "speech_habits": {
           "type": "array",
           "items": {
@@ -123,6 +176,9 @@
         }
       }
     },
+    "relationship_state_summary": {
+      "type": "string"
+    },
     "relationship_overrides": {
       "type": "array",
       "items": {
@@ -134,7 +190,9 @@
         ],
         "properties": {
           "target_character_id": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "description": "被引用的基础角色标识。对于中文作品，这个值可以直接是中文。"
           },
           "target_label": {
             "type": "string"

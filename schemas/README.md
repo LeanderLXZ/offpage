@@ -1,18 +1,29 @@
-# Schemas
+# 模式定义
 
-This directory stores the first-pass JSON schemas for persistent files and
-runtime requests.
+这个目录用于存放持久化文件与运行时请求的第一版 JSON Schema。
 
-Current focus:
+当前重点：
 
-- source work manifests
-- character manifests
-- stage catalogs and snapshots
-- user profiles
-- user relationship cores
-- context manifests
-- session manifests
-- runtime session requests
+- 源作品清单
+- 角色清单
+- 世界阶段目录
+- 世界阶段快照
+- 阶段目录与阶段快照
+- 用户画像
+- 用户长期画像
+- 角色绑定
+- 用户关系核心
+- 上下文清单
+- 会话清单
+- 运行时会话请求
 
-The schemas are intentionally conservative. They define stable structure first,
-while leaving room for richer extraction details later.
+这些 schema 当前采取保守设计，优先固定结构，再为后续更丰富的抽取细节预留空间。
+
+命名规则提醒：
+
+- `work_id` 是作品包命名空间键
+- 对中文作品，`work_id` 本身可以直接使用原始中文书名或中文作品标识，`sources/works/` 与 `works/` 下的根目录应与其保持一致
+- 对中文作品，`character_id`、`stage_id` 等作品级基础标识也可以直接使用中文
+- `user_id`、`context_id`、`session_id` 等用户侧 id 可以继续采用各自的运行时约定
+- 对运行时请求以及 `users/` 下的持久化清单，`work_id` 也应在 JSON 文件内容中显式出现，不要只依赖目录路径表达作品作用域
+- 全局 `users/{user_id}/profile.json` 应保持为用户根画像；作品或关系特有的长期变化应进入 work-scoped 的长期画像或关系核心，而不是直接污染根画像
