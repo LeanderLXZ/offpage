@@ -1,9 +1,8 @@
-# Works
+# 作品包
 
-This directory is the preferred home for source-grounded, work-scoped canon
-packages.
+这个目录是按作品划分、由原文支撑的基础设定包的首选存放位置。
 
-Recommended layout:
+推荐结构：
 
 ```text
 works/{work_id}/
@@ -14,33 +13,34 @@ works/{work_id}/
   indexes/
 ```
 
-Design rule:
+设计规则：
 
-- `sources/works/{work_id}/` stores source and normalized text
-- `works/{work_id}/` stores the canonical base package for that work
-- user-specific state should live under `users/{user_id}/`
+- `sources/works/{work_id}/` 存放源文本与标准化正文
+- `works/{work_id}/` 存放该作品的基础 canon 包
+- 与作品相关的分析产物统一放在 `works/{work_id}/analysis/`，不再单独维护仓库顶层 `analysis/`
+- 用户侧状态应存放在 `users/{user_id}/`
+- 对中文作品，`work_id` 本身可以直接使用中文，`works/` 下生成的根目录应与之保持一致
+- 对中文作品，`works/{work_id}/` 以下的作品级 canon 默认应保留中文名称和中文标识值，而不是转成拼音
+- 对中文作品，`works/{work_id}/` 以下由这些标识派生出来的文件夹名也应保持中文
 
-Recommended meaning of each subtree:
+各子目录的推荐含义：
 
 - `world/`
-  - world foundation, history, major events, state, locations, factions, maps
-  - plus work-level cast, event-knowledge, and social views
+  - 世界基础设定、历史、大事件、状态、地点、势力、地图
+  - 以及作品级角色索引、事件认知、关系视图
 - `characters/`
-  - detailed character packages
+  - 详细角色包
 - `analysis/`
-  - work-relevant analysis artifacts and evidence grounded in the source text
+  - 与该作品相关、且由原文支撑的分析产物与证据
 - `indexes/`
-  - cross-cutting indexes such as character, location, event, and relation
-    lookup views
+  - 角色、地点、事件、关系等跨目录查询索引
 
-Important boundary:
+重要边界：
 
-- `world/` may include brief cast summaries and relationship graph / timeline
-  views for indexing convenience
-- `world/` may also include concise character knowledge summaries about major
-  events
-- detailed character psyche, memory, voice, behavior, and stage data should
-  still live under `characters/`
-- user dialogue must not rewrite canonical world facts or major event records
-- user-specific character drift, relationship changes, and conversation history
-  belong under `users/{user_id}/`
+- `world/` 可以为了索引和检索方便，包含简短的角色摘要和关系图 / 时间线视图
+- `world/` 应记录作品级共享大事件，而不是那些更适合放进角色包的小场景、小桥段
+- `world/` 也可以包含角色对大事件的简洁认知摘要
+- `world/` 中的 cast 视图应聚焦主角团和高频配角，不默认收录一次性龙套
+- 角色的详细心理、记忆、语气、行为和阶段信息仍应保留在 `characters/` 下
+- 用户对话不得改写作品级世界事实或大事件记录
+- 用户侧角色漂移、关系变化和对话历史应归入 `users/{user_id}/`

@@ -21,6 +21,10 @@ works/*/analysis/evidence/*
 works/*/indexes/*
 !works/*/indexes/.gitkeep
 
+# Local historical logs
+docs/logs/*.md
+!docs/logs/README.md
+
 # User data, relationship memory, and session artifacts
 users/*
 !users/README.md

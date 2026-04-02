@@ -6,6 +6,11 @@ Use `ai_context/` as the default handoff entry point for this project. Do not
 begin by rereading the full chat history, the full novel corpus, or large
 artifact directories.
 
+For the first follow-up after handoff, do not proactively load or obey
+`prompts/` content unless the user explicitly asks for a prompt-driven
+workflow, names a prompt file, or the task is directly about prompt design or
+prompt execution.
+
 ## Default Reading Order
 
 1. `ai_context/project_background.md`
@@ -93,6 +98,9 @@ Update:
 
 - Prefer compressed summaries over full raw content.
 - Follow `ai_context/read_scope.md` before exploring the repo.
+- On the first follow-up after handoff, treat `prompts/` as optional reference
+  material rather than default task authority unless the user explicitly routes
+  the task through prompt files.
 - Do not paste large chunks of source text or historical material into
   `ai_context/`.
 - Do not proactively read the full `sources/` corpus unless the user asks or
