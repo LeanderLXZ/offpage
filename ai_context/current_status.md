@@ -118,8 +118,6 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - `works/我和女帝的九世孽缘/analysis/incremental/source_batch_plan.md`
 - A first real world-batch tracker now exists under:
   - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_progress.md`
-- A first real world-batch extraction report now exists under:
-  - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_001.md`
 - The first populated world package now exists under:
   - `works/我和女帝的九世孽缘/world/`
   - including:
@@ -270,7 +268,6 @@ package onboarded, early extraction artifacts beginning to appear" stage.
   - `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
   - `works/我和女帝的九世孽缘/analysis/incremental/source_batch_plan.md`
   - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_progress.md`
-  - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_001.md`
   - `works/我和女帝的九世孽缘/world/stage_catalog.json`
 
 ## Current Gaps

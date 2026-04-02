@@ -465,3 +465,13 @@
     - These are not large ephemeral artifacts but structured extraction
       outputs and retrieval indexes that form part of the canonical work
       package.
+
+76. Do not generate per-batch report files.
+    - Batch handoff information should be written directly into progress files
+      (e.g. `world_batch_progress.md`, `character_batch_progress/{character_id}.md`).
+    - Do not create files like `world_batch_001.md`, `world_batch_002.md`, etc.
+    - The `extraction_status.md` and progress files are sufficient to track
+      what happened in each batch.
+    - The `prompts/shared/批次交接模板.md` template defines the fields to
+      record, but those fields should be updated in-place in progress files
+      rather than spawning separate report files.

@@ -35,8 +35,6 @@ pipeline or finished character data in the repo.
   - `works/我和女帝的九世孽缘/analysis/incremental/source_batch_plan.md`
 - A first real world-batch tracker now exists at:
   - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_progress.md`
-- A first real world-batch report now exists at:
-  - `works/我和女帝的九世孽缘/analysis/incremental/world_batch_001.md`
 - The first populated world package for that work now exists at:
   - `works/我和女帝的九世孽缘/world/`
   - currently through:

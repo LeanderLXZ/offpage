@@ -20,7 +20,6 @@ works/{work_id}/analysis/incremental/
   extraction_status.md
   source_batch_plan.md
   world_batch_progress.md
-  world_batch_*.md
   character_batch_progress/{character_id}.md
 ```
 
@@ -45,10 +44,11 @@ works/{work_id}/analysis/incremental/
 - `analysis/`
   - 与该作品相关、且由原文支撑的分析产物与证据
   - 其中 `analysis/incremental/` 适合放：
-    - 当前提取总状态
-    - source / world / character 的批次规划
-    - 自动连续模式的进度文件
-    - 每批交接摘要
+    - 当前提取总状态（`extraction_status.md`）
+    - source batch 规划（`source_batch_plan.md`）
+    - 自动连续模式的进度文件（`world_batch_progress.md` 等）
+    - 角色批次进度（`character_batch_progress/{character_id}.md`）
+  - 不要为每个 batch 单独生成报告文件，交接信息应直接写入 progress 文件
 - `indexes/`
   - 角色、地点、事件、关系等跨目录查询索引
   - 也承接该作品给 simulation engine 用的按需加载与检索提示
@@ -56,9 +56,12 @@ works/{work_id}/analysis/incremental/
 重要边界：
 
 - `world/` 可以为了索引和检索方便，包含简短的角色摘要与按阶段存储的关系视图
-- `world/` 里的关系文件建议按阶段存储，例如：
+- `world/` 里的关系文件分为两类：
+  - `world/social/fixed_relationships/{relationship_id}.json`
+    — 不可变的结构性关系（如亲子、兄弟姐妹），跨所有阶段
   - `world/social/stage_relationships/{stage_id}.json`
-- 运行时默认只加载当前所选 `stage_id` 对应的关系文件
+    — 随时间变化的动态关系（如暧昧、情侣、联盟、对立）
+- 运行时应加载所有 fixed_relationships 加上当前所选 `stage_id` 对应的 stage_relationships
 - `world/` 应记录作品级共享大事件，而不是那些更适合放进角色包的小场景、小桥段
 - `world/` 中的 cast 视图应聚焦主角团和高频配角，不默认收录一次性龙套
 - 当前 `world/` 结构不包含单独的：

@@ -156,4 +156,4 @@ batch_id / 阶段标识：规划阶段
 下一步建议：
 - `next_batch_id`：`batch_002`
 - 下一批最推荐从哪里继续：累计读取 `0011-0020`，先判断柳村危机与南林转场是否结束
-- 下一批开始前应先读哪些文件：`source_batch_plan.md`、`world_batch_progress.md`、`world_batch_001.md`、`world/stage_catalog.json`
+- 下一批开始前应先读哪些文件：`source_batch_plan.md`、`world_batch_progress.md`、`world/stage_catalog.json`
