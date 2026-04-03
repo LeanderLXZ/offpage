@@ -39,9 +39,13 @@
 
 ### 3. 源文件分批规划
 
-- 制定 batch plan：每批默认 10 章，可按作品 config 调整
-- 尽量按自然剧情边界切分
-- 输出：`works/{work_id}/analysis/incremental/source_batch_plan.md`
+分批规划是分析阶段**最核心的产出**——每个 batch 边界直接成为系统的 stage 边界，
+世界快照、角色快照、记忆时间线、运行时阶段选择全部建立在此切分之上。
+
+- 制定 batch plan：按自然剧情边界切分（默认目标 10 章，最小 5 章，最大 20 章）
+- 剧情边界的准确性优先于章节数量均匀
+- 每个 batch 的章节数可因剧情节点而不同
+- 输出：`works/{work_id}/analysis/incremental/source_batch_plan.json`
 
 **对应提示词**：`prompts/analysis/源文件分批规划.md`
 
@@ -148,4 +152,35 @@ hard_boundaries 和所选阶段的自包含快照。
 - 每个批次可以修订任何已有资产（不仅限于当前阶段）
 - 如果本批原文推翻了之前的结论，应更新 baseline 和受影响的阶段快照
 - 矛盾和修订必须在 source_notes 中显式记录
-- 进度追踪：`works/{work_id}/analysis/incremental/extraction_status.md`
+- 进度追踪：`works/{work_id}/analysis/incremental/extraction_progress.json`
+
+## 自动化编排
+
+手动提取流程可通过 `automation/` 目录下的编排脚本自动化。
+
+详见 `automation/README.md` 和 `docs/requirements.md` §十一。
+
+编排架构：
+
+```
+orchestrator (Python)
+    │
+    ├── 分析阶段 → claude -p (分析 prompt)
+    │
+    ├── 用户确认 → 交互式选择角色、确认批次规划、设定提取范围
+    │
+    └── 提取循环 → 每个 batch:
+            ├── git preflight
+            ├── claude -p (协同提取 prompt)
+            ├── 程序化校验 (Python/jsonschema)
+            ├── claude -p (语义审校 prompt)
+            └── git commit 或 rollback + retry
+```
+
+关键设计决策：
+
+- 每个 batch 是独立的 `claude -p` 调用，不共享 session 内存
+- 批次间上下文通过文件系统传递（progress 文件、前批输出、schema）
+- 两层质量检查：程序化校验（免费）+ 语义审校（LLM）
+- 提取在独立 git 分支进行，完成后合并
+- 支持 Claude CLI 和 Codex CLI 两种后端

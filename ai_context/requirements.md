@@ -10,7 +10,12 @@ Arbitrary characters, stage-based state, long-term memory, multiple terminals.
 
 ## §2 Stage Model
 
-- Batch N = Stage N. Default 10 chapters (configurable). Cumulative through 1..N.
+- Batch N = Stage N. Batch splitting is the **most critical output** of the
+  analysis phase — every batch boundary becomes a stage boundary that all
+  downstream structures (world snapshots, character snapshots, memory timelines,
+  runtime stage selection) depend on. Accuracy of story boundaries matters more
+  than even chapter counts. Target 10 chapters, min 5, max 20; variable per
+  batch. Cumulative through 1..N.
 - Selected stage = "now"; prior stages = history. Current-stage personality/voice only.
 - World info architecture: foundation layer (setting, power system, cosmology) +
   entity tracking (events, locations, factions, main cast) + fixed vs dynamic
@@ -100,3 +105,12 @@ cross-session continuity via progress files + previous output.
 
 See `docs/requirements.md` §10 for detailed risk descriptions and required
 capabilities.
+
+## §11 Automated Extraction Pipeline
+
+Python orchestrator in `automation/` drives multi-batch extraction via CLI.
+Analysis → user confirmation → extraction loop (per batch: git preflight →
+coordinated extraction agent → programmatic validation → semantic review →
+git commit or rollback+retry). Each batch is a fresh agent; context is
+file-based. Two-layer quality check (programmatic + semantic). Supports
+Claude CLI and Codex CLI backends. See `docs/requirements.md` §11.

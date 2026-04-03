@@ -37,8 +37,9 @@ that a new AI should know beyond what the architecture docs already say.
 
 ## Extraction
 
-12. Source reading uses configurable batch size (default 10). Batch N = stage N
-    candidate. Stage N is cumulative through 1..N.
+12. Batches are split by natural story boundaries during the analysis phase.
+    Each batch may have a different chapter count (target 10, min 5, max 20).
+    Batch N = stage N candidate. Stage N is cumulative through 1..N.
 13. Once active characters are confirmed, coordinated batches co-produce world
     + character updates. Targeted character supplement only when gaps remain.
 14. Any batch may revise any already-written asset across the whole work
@@ -60,12 +61,28 @@ that a new AI should know beyond what the architecture docs already say.
     about merge.
 22. Full transcripts stay local; startup loads summary layer only.
 
+## Automated Extraction
+
+23. Each batch agent is a fresh `claude -p` call with no shared session memory.
+    Context between batches is entirely file-based.
+24. Two-layer quality check: programmatic (jsonschema, free) + semantic
+    (independent LLM reviewer). Only semantic errors cause FAIL.
+25. Extraction runs on a dedicated git branch. Each passing batch is committed.
+    Rollback on failure = git reset.
+26. Batch boundaries should follow natural story arcs (min 5, max 20, default
+    10 chapters). stage_id should be a meaningful Chinese name.
+27. The orchestrator pre-computes the file read list for each batch agent.
+    Agents should not explore freely.
+
 ## Repository
 
-23. Keep the repo lightweight. Do not commit novels, databases, indexes, large
+28. Keep the repo lightweight. Do not commit novels, databases, indexes, large
     artifacts, or real user packages.
-24. `works/*/analysis/incremental/` and `works/*/indexes/` are git-tracked as
+29. `works/*/analysis/incremental/` and `works/*/indexes/` are git-tracked as
     canonical work assets.
-25. `docs/logs/` is write-mostly historical. Do not proactively read.
-26. `prompts/` is available as workflow tooling but is not the default
+30. `docs/logs/` is write-mostly historical. Do not proactively read.
+31. `prompts/` is available as workflow tooling but is not the default
     authority for ordinary continuation after handoff — `ai_context/` is.
+32. `automation/` contains the extraction orchestrator. `prompt_templates/`
+    under it are the automated pipeline's own prompts, separate from
+    `prompts/` which is for interactive use.

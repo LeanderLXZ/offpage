@@ -2,17 +2,12 @@
 
 ## Highest Priority
 
-1. **Continue batch extraction for 我和女帝的九世孽缘.**
-   - Next: `batch_002` (chapters 0011-0020)
-   - Keep batch N = stage N, cumulative through 1..N
-   - Once active characters are confirmed, coordinated batches update world +
-     character packages together
-
-2. **Confirm the active character set.**
-   - Current candidates:
-     `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
-   - Let the user choose one or two target characters
-   - Then grow character packages from shared batch reads
+1. **Run automated extraction for 我和女帝的九世孽缘.**
+   - Run: `cd automation && python -m persona_extraction "我和女帝的九世孽缘" -r ..`
+   - This is a fresh start (`works/` is empty, no progress file exists)
+   - The pipeline will interactively ask for character selection and parameters
+   - Monitor the first 2-3 batches for output quality, tune prompt templates
+     in `automation/prompt_templates/` if needed
 
 3. **Refine schemas into directly writable instance formats.**
    - Character package schemas (bible, memory, voice, behavior, stage)
@@ -23,10 +18,6 @@
    - Blank canonical work-package template
    - Blank character-package template
    - Blank world-package template
-
-5. **Define the full extraction workflow end-to-end.**
-   - Work selection → candidate identification → active set confirmation →
-     coordinated batch extraction → targeted supplement → package generation
 
 ## Medium Priority
 

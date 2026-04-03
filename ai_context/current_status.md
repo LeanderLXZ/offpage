@@ -2,8 +2,9 @@
 
 ## Project Stage
 
-Architecture scaffold created. First real work package onboarded. Early
-extraction artifacts exist. No implementation code yet.
+Architecture scaffold created. First real work package onboarded. Automated
+extraction orchestrator built but not yet tested end-to-end. No runtime
+implementation code yet.
 
 ## What Exists
 
@@ -30,16 +31,26 @@ extraction artifacts exist. No implementation code yet.
 ### First Work Package: 我和女帝的九世孽缘
 
 - Source: `sources/works/我和女帝的九世孽缘/` — 537 normalized chapters from epub
-- Canon: `works/我和女帝的九世孽缘/` — world, analysis, indexes
-- Candidate characters identified:
-  `works/我和女帝的九世孽缘/analysis/incremental/candidate_characters_initial.md`
-- Batch plan:
-  `works/我和女帝的九世孽缘/analysis/incremental/source_batch_plan.md`
-- World batch 1 complete (阶段1_南林初遇):
-  - `world/stage_catalog.json`
-  - `world/stage_snapshots/阶段1_南林初遇.json`
-  - First-pass foundation, events, locations, factions, cast, social files
-- Next batch: `batch_002` (chapters 0011-0020)
+- Canon directory: `works/我和女帝的九世孽缘/` — **currently empty** (previous
+  extraction products were cleaned from git history)
+- No `extraction_progress.json` exists — next run must start fresh
+- Previous batch 1 world extraction existed but needs to be re-done
+
+### Automated Extraction Orchestrator
+
+- `automation/` directory with Python package `persona_extraction`
+- CLI entry point: `persona-extract` command
+- LLM backend abstraction supporting Claude CLI and Codex CLI
+- Progress tracking with state machine (pending → committed)
+- Two-layer quality check: programmatic (jsonschema) + semantic (LLM reviewer)
+- Git integration: extraction branch, per-batch commits, auto-rollback
+- Prompt templates: analysis, coordinated extraction, semantic review
+- Breakpoint recovery via progress file
+
+### Schema Documentation
+
+- `docs/architecture/schema_reference.md` — complete index of all schemas
+  with usage, locations, and runtime loading rules
 
 ## Current Gaps
 
@@ -47,12 +58,11 @@ extraction artifacts exist. No implementation code yet.
 - No real user package yet (only template)
 - No simulation-engine service implementation
 - No terminal adapter implementation
-- No automated ingestion or extraction pipeline
 - World schemas incomplete (no formal schema for foundation, timeline, events,
   locations, maps, state snapshots)
 - Character baseline files (relationships.json, bible.md) still lack schemas
-- Full extraction workflow not yet formally defined end-to-end
 - No final roleplay prompt produced
+- Automated extraction pipeline exists but not yet tested end-to-end
 
 ## Rules In Effect
 
@@ -63,4 +73,4 @@ extraction artifacts exist. No implementation code yet.
 - `works/*/analysis/incremental/` and `works/*/indexes/` are git-tracked
 - `docs/logs/` is write-mostly; do not proactively read
 - No per-batch report files; use progress files in-place
-- Default batch size: 10 chapters (configurable per work)
+- Batches split by natural story boundaries (target 10 ch, min 5, max 20)

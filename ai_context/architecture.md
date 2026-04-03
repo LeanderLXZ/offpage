@@ -13,7 +13,8 @@ For full details see `docs/architecture/system_overview.md` and
 - `prompts/` — reusable prompt templates for agents and user-facing flows
 - `schemas/` — persistence and runtime-request schemas
 - `interfaces/` — future terminal adapters (agent, app, MCP)
-- `docs/architecture/` — formal architecture docs
+- `automation/` — automated batch extraction orchestrator (Python)
+- `docs/architecture/` — formal architecture docs (incl. schema reference)
 - `ai_context/` — compressed handoff for future AI sessions
 
 ## System Layers
@@ -115,3 +116,22 @@ See `simulation/contracts/baseline_merge.md` for the full model description.
 `memory and relationship → psychological reaction → behavior decision → language realization`
 
 Not: `surface tone imitation → generic reply`
+
+## Automated Extraction Pipeline
+
+The `automation/` directory contains a Python orchestrator that drives
+multi-batch extraction via CLI calls (`claude -p` or `codex`).
+
+Key design:
+
+- Each batch is a fresh `claude -p` call (no shared session memory)
+- Context between batches is entirely file-based (progress files, previous
+  batch output, schemas)
+- Two-layer quality check: programmatic validation (free, deterministic) +
+  semantic review (independent LLM agent)
+- Extraction runs on a dedicated git branch; each passing batch is committed
+- Rollback on failure = `git reset` to last committed batch
+- Supports Claude CLI and Codex CLI backends
+
+See `automation/README.md` and `docs/requirements.md` §11 for details.
+See `docs/architecture/schema_reference.md` for schema documentation.
