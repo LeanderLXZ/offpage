@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/identity.schema.json",
+  "title": "角色基础身份",
+  "description": "角色不随剧情阶段变化的底层身份信息。随阶段变化的状态（等级、地位、关系等）应放在 stage_snapshot 中。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_id",
+    "character_id",
+    "canonical_name"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "work_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "character_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "canonical_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "角色正式名称。"
+    },
+    "aliases": {
+      "type": "array",
+      "description": "角色的其他称呼。包括：别名、称号、外号、化名等。",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "gender": {
+      "type": "string"
+    },
+    "species": {
+      "type": "string",
+      "description": "种族。例如：人族、妖族、龙族。如果不适用可省略。"
+    },
+    "birth_origin": {
+      "type": "string",
+      "description": "出生地或出身背景。例如：南林小镇、皇族血脉。"
+    },
+    "appearance_summary": {
+      "type": "string",
+      "description": "外貌简要描述。侧重于角色扮演中有辨识度的特征。"
+    },
+    "background_summary": {
+      "type": "string",
+      "description": "角色的基本背景故事概述。不含随阶段变化的部分。"
+    },
+    "initial_social_position": {
+      "type": "string",
+      "description": "角色在故事开始时的社会地位或身份定位。后续阶段的变化记录在 stage_snapshot 中。"
+    },
+    "affiliations": {
+      "type": "array",
+      "description": "角色的初始所属势力或组织。后续变化记录在 stage_snapshot 中。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "distinguishing_features": {
+      "type": "array",
+      "description": "角色的显著特征——外貌、能力、习惯等方面有辨识度的标志。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

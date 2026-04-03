@@ -15,8 +15,13 @@ Load before the first reply:
 - selected world stage snapshot
 - selected stage relationship snapshot
 - minimum world foundation rules
-- target character baseline
-- target character selected-stage snapshot
+- target character identity (`identity.json`)
+- target character failure modes (`failure_modes.json`)
+- target character hard boundaries (`boundaries.json` → `hard_boundaries` only)
+- target character selected-stage snapshot (self-contained: voice, behavior,
+  boundaries, relationships, personality, mood, knowledge — no baseline merge)
+- target character memory timeline (`memory_timeline/{stage_id}.jsonl` for
+  stages 1..N of selected stage N)
 - user profile summary
 - active persona summary when used
 - user role binding
@@ -24,6 +29,9 @@ Load before the first reply:
 - long-term relationship summary
 - pinned-memory summaries
 - current context manifest and relationship summary
+- current context character state (emotional state, personality drift, voice
+  drift, mutual agreements, relationship delta, context events, context
+  memories)
 - current context shared-memory summary
 - current context session-index summary
 - conversation-library manifest
@@ -39,10 +47,11 @@ Load only if the turn needs it:
 - `world/factions/{faction_id}.json`
 - `world/history/timeline.jsonl`
 - older `world/social/stage_relationships/{stage_id}.json`
-- character memory slices
-- `users/{user_id}/works/{work_id}/characters/{character_id}/relationship_core/pinned_memories.jsonl`
+- past stage snapshots (`canon/stage_snapshots/{past_stage_id}.json` — for
+  deep historical recall of past-stage voice, behavior, or relationship details)
+- `users/{user_id}/relationship_core/pinned_memories.jsonl`
 - older context manifests or older session summaries
-- `users/{user_id}/conversation_library/scopes/{work_id}/{character_id}/archive_refs.json`
+- `users/{user_id}/conversation_library/archive_refs.json`
 - `users/{user_id}/conversation_library/archives/{archive_id}/context_summary.json`
 - `users/{user_id}/conversation_library/archives/{archive_id}/key_moments.jsonl`
 
@@ -50,12 +59,15 @@ Recommended trigger mapping:
 
 - world fact question
   - event, location, or faction files
-- historical recall
-  - timeline plus older stage snapshots or relationship snapshots
+- historical recall (past events, timeline)
+  - timeline plus older world stage snapshots or relationship snapshots
+- past-stage behavioral detail (past voice, speech habits, reactions)
+  - load past `stage_snapshots/{past_stage_id}.json` on demand
+  - see `prompts/runtime/历史回忆处理规则.md` for when this is needed
 - relationship clarification
   - current stage relationship first, then older stage files if needed
 - character memory
-  - character memory or stage-specific canon slices
+  - memory_timeline already loaded at startup; use loaded memories first
 - user shared-memory recall
   - pinned memories, current context shared memory, or older context summaries
 - archived conversation recall
@@ -66,10 +78,10 @@ Recommended trigger mapping:
 
 Load full dialogue history only when the turn needs exact conversation recall:
 
-- `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/session_index.json`
-- `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/sessions/{session_id}/turn_summaries.jsonl`
-- `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/sessions/{session_id}/transcript.jsonl`
-- `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/sessions/{session_id}/memory_updates.jsonl`
+- `users/{user_id}/contexts/{context_id}/session_index.json`
+- `users/{user_id}/contexts/{context_id}/sessions/{session_id}/turn_summaries.jsonl`
+- `users/{user_id}/contexts/{context_id}/sessions/{session_id}/transcript.jsonl`
+- `users/{user_id}/contexts/{context_id}/sessions/{session_id}/memory_updates.jsonl`
 - `users/{user_id}/conversation_library/archives/{archive_id}/session_index.json`
 - `users/{user_id}/conversation_library/archives/{archive_id}/sessions/{session_id}/turn_summaries.jsonl`
 - `users/{user_id}/conversation_library/archives/{archive_id}/sessions/{session_id}/transcript.jsonl`

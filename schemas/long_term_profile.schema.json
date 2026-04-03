@@ -123,6 +123,35 @@
         }
       }
     },
+    "character_drift_history": {
+      "type": "array",
+      "description": "模拟角色因与用户长期互动而产生的累积变化记录。从 context 合并时提炼写入，推荐追加不覆盖。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["drift_id", "summary"],
+        "properties": {
+          "drift_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["emotional", "personality", "voice", "behavior"],
+            "description": "变化类别：情绪倾向、性格微调、口癖语气、行为模式。"
+          },
+          "summary": {
+            "type": "string",
+            "description": "变化描述，如：对用户的态度从冷淡转为主动关心。"
+          },
+          "source_context_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
     "created_at": {
       "type": "string"
     },

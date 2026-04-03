@@ -1,423 +1,364 @@
-# System Overview
+# 系统概览
 
-## Goal
+## 目标
 
-Build a reusable, multi-terminal character roleplay engine for long-form
-novels.
+构建一个可复用的、多终端的长篇小说角色扮演引擎。
 
-The system should support:
+系统应支持：
 
-- entering or creating a `user_id` before downstream runtime choices
-- selecting a source work before loading downstream assets
-- extracting and preserving world state in addition to character state
-- extracting one or many characters from a novel
-- preserving canon-grounded world packages
-- preserving canon-grounded character packages
-- preserving user-specific relationship growth separately
-- choosing a work-scoped stage at conversation start
-- projecting that same stage onto the target character and any canon-backed
-  user-side role slot by default
-- locking bootstrap setup choices after initial account creation
-- continuously writing user-scoped session/context state during live roleplay
-- closing a session via explicit exit intent and asking whether to merge the
-  closed context into long-term user-owned history
-- loading the same core logic through agent, app, and MCP terminals
+- 在进入下游运行时选择之前，输入或创建 `user_id`
+- 在加载下游资产之前选择源作品
+- 除角色状态外，还能提取并保存世界状态
+- 从小说中提取一个或多个角色
+- 保存基于原作的世界资产包
+- 保存基于原作的角色资产包
+- 将用户特有的关系成长数据独立保存
+- 在对话开始时选择作品级别的阶段（stage）
+- 默认将该阶段投射到目标角色及任何基于原作的用户侧角色槽位
+- 在初始账户创建后锁定引导设置选项
+- 在实时角色扮演过程中持续写入用户级 session/context 状态
+- 通过明确的退出意图关闭 session，并询问是否将已关闭的 context 合并到用户持有的长期历史记录中
+- 通过 agent、应用程序和 MCP 终端加载同一套核心逻辑
 
-## Simulation Engine Home
+## 仿真引擎主目录
 
-Repo-level runtime orchestration should live under:
+仓库级别的运行时编排应位于：
 
 - `simulation/`
 
-Recommended split:
+推荐拆分方式：
 
 - `docs/architecture/`
-  - static repo structure and data-model boundaries
+  - 静态的仓库结构与数据模型边界
 - `simulation/`
-  - bootstrap, startup loading, retrieval routing, continuous writeback,
-    explicit close / merge, and service contracts
+  - 引导流程、启动加载、检索路由、持续回写、
+    显式关闭/合并，以及服务契约
 - `works/{work_id}/indexes/`
-  - work-specific load profiles and retrieval hints consumed by the simulation
-    engine
+  - 作品特有的加载配置和检索提示，供仿真引擎使用
 
-## Two Work Packages
+## 两个作品资产包
 
-Each work should have two distinct package roots:
+每部作品应有两个独立的资产包根目录：
 
 1. `sources/works/{work_id}/`
-   - raw and normalized source material
-   - chapter text and source metadata
+   - 原始及规范化的源材料
+   - 章节文本与源数据元信息
 
 2. `works/{work_id}/`
-   - the persistent source-grounded canonical package for that work
-   - world, characters, analysis, and indexes
+   - 该作品的持久化、基于原作的规范资产包
+   - 世界、角色、分析和索引
 
-## Work Namespace
+## 作品命名空间
 
-Each novel should act as its own namespace identified by `work_id`.
+每部小说应作为独立的命名空间，以 `work_id` 标识。
 
-That namespace should scope:
+该命名空间应涵盖：
 
-- source corpus
-- canonical work package
-- work-scoped analysis outputs
-- world package
-- character packages
-- work-specific user relationship data
-- user-scoped runtime compilation inputs
+- 源语料库
+- 规范作品资产包
+- 作品级分析输出
+- 世界资产包
+- 角色资产包
+- 作品级用户关系数据
+- 用户级运行时编译输入
 
-Runtime requests and persisted user-state manifests should also carry
-`work_id` explicitly, not only rely on directory position, so multi-work
-runtime state remains unambiguous.
+运行时请求和持久化的用户状态 manifest 也应显式携带 `work_id`，而不仅仅依赖目录位置，以确保多作品运行时状态不会产生歧义。
 
-The user-facing flow should therefore begin with:
+因此，面向用户的流程应从以下步骤开始：
 
-1. enter `user_id`
-2. determine whether this is a new or existing scoped setup
-3. if new:
-   - choose work
-   - choose the target character
-   - choose the active work-stage
-   - choose the user-side role or counterpart identity
-   - if the user-side role is canon-backed, bind that side to the same active
-     work-stage by default
-   - lock the setup
-4. if existing:
-   - display the locked account information
-   - list recoverable contexts
-5. create or resume a context
+1. 输入 `user_id`
+2. 判断这是新设置还是已有设置
+3. 如果是新设置：
+   - 选择作品
+   - 选择目标角色
+   - 选择当前活跃的作品阶段（stage）
+   - 选择用户侧角色或对应身份
+   - 如果用户侧角色基于原作，则默认将该侧绑定到与目标相同的活跃作品阶段
+   - 锁定设置
+4. 如果是已有设置：
+   - 显示已锁定的账户信息
+   - 列出可恢复的 context
+5. 创建或恢复 context
 
-## Content Language Policy
+## 内容语言策略
 
-For work-scoped generated materials, content text should default to the source
-work language.
+对于作品级生成材料，内容文本应默认使用源作品的语言。
 
-Examples:
+示例：
 
-- a Chinese work should keep its original Chinese title
-- a Chinese work may use a Chinese `work_id`
-- a Chinese work should produce Chinese character packages
-- a Chinese work should produce Chinese world packages
-- a Chinese work should produce Chinese work-scoped user / relationship
-  materials
-- a Chinese work should also keep work-scoped entity names and identifier
-  values in Chinese by default
-- generated work-scoped folder names derived from those identifiers should
-  also stay in Chinese by default
+- 中文作品应保留其原始中文标题
+- 中文作品可以使用中文 `work_id`
+- 中文作品应生成中文角色资产包
+- 中文作品应生成中文世界资产包
+- 中文作品应生成中文的作品级用户/关系材料
+- 中文作品也应默认保留作品级实体名称和标识符值为中文
+- 由这些标识符派生的作品级文件夹名称也应默认保持中文
 
-Field names may remain English for structural consistency:
+字段名称可保持英文以保证结构一致性：
 
-- JSON keys
-- schema property names
-- repo-level structural identifiers
+- JSON 键名
+- schema 属性名
+- 仓库级结构标识符
 
-But identifier values inside work-scoped canon do not need to be English.
-Avoid replacing source labels with pinyin-only ids when that makes the canon
-harder to inspect.
+但作品级规范中的标识符值不必是英文。当使用拼音替代会使原作数据更难以检查时，应避免用纯拼音 ID 替换源标签。
 
-Likewise, identifier-derived path segments under `works/{work_id}/` do not
-need to be English. If a canonical identifier is Chinese, the generated folder
-or file segment should follow it.
+同样，`works/{work_id}/` 下由标识符派生的路径段也不必是英文。如果规范标识符是中文，生成的文件夹或文件路径段应沿用中文。
 
-The same applies to the work package root itself. If `work_id` is Chinese, the
-root folders under `sources/works/` and `works/` should use that Chinese path
-segment directly.
+这同样适用于作品资产包根目录本身。如果 `work_id` 是中文，则 `sources/works/` 和 `works/` 下的根文件夹应直接使用该中文路径段。
 
-## Core Layers
+## 核心层
 
-### 1. Source Corpus
+### 1. 源语料库
 
-Stores raw and normalized novel text plus future retrieval artifacts.
+存储原始和规范化的小说文本以及未来的检索工件。
 
-### 2. Analysis
+### 2. 分析层
 
-Stores incremental extraction results, evidence references, and conflict notes.
+存储增量提取结果、证据引用和冲突记录。
 
-Recommended location:
+推荐位置：
 
-- `works/{work_id}/analysis/` for persistent and incremental work-scoped
-  analysis
-- if scratch notes are needed, keep them under the same work package rather
-  than reviving a repo-level `analysis/` directory
+- `works/{work_id}/analysis/` 用于持久化和增量的作品级分析
+- 如需草稿笔记，应保留在同一作品资产包下，而非恢复仓库级 `analysis/` 目录
 
-Recommended extraction order:
+推荐提取顺序：
 
-1. identify candidate characters
-2. read the source in batches for shared world extraction
-3. read the source in batches for one selected character at a time
+1. 识别候选角色
+2. 按批次阅读源文本，进行共享世界信息提取
+3. 按批次阅读源文本，逐个提取选定角色
 
-Any one source-reading batch may still revise or supplement multiple
-downstream assets, including the world layer and multiple character packages.
+任何一个源阅读批次仍可能修订或补充多个下游资产，包括世界层和多个角色资产包。
 
-### 3. World Packages
+### 3. 世界资产包
 
-Stores canon-grounded, user-independent world assets.
+存储基于原作的、与用户无关的世界资产。
 
-Each package may include:
+每个资产包可能包含：
 
-- world manifest
-- world stage catalog
-- world foundation
-- power-system rules
-- history timeline
-- major shared event registry and event summaries
-- work-stage snapshots
-- world-state snapshots
-- location records
-- location-state snapshots
-- faction records
-- map graph and geography notes
-- work-level cast index and brief summaries for the main cast and
-  high-frequency supporting characters
-- stage-scoped relationship views
+- 世界 manifest
+- 世界阶段目录
+- 世界基础设定
+- 力量体系规则
+- 历史时间线
+- 重大共享事件注册表及事件摘要
+- 作品阶段快照（stage snapshot）
+- 世界状态快照
+- 地点记录
+- 地点状态快照
+- 势力/阵营记录
+- 地图图谱与地理注记
+- 作品级角色索引及主要角色和高频配角的简要介绍
+- 阶段级关系视图
 
-These assets should be maintained incrementally.
+这些资产应以增量方式维护。
 
-New text may:
+新文本可能会：
 
-- expand prior world understanding
-- correct earlier assumptions
-- clarify uncertain geography
-- revise the apparent state of cities, factions, or institutions
-- refine the chronology, scope, or meaning of major events
+- 扩展先前的世界理解
+- 修正早期的假设
+- 澄清不确定的地理信息
+- 修订城市、势力或机构的明显状态
+- 细化重大事件的时间线、范围或含义
 
-Those revisions should be traceable and source-driven rather than silently
-overwriting earlier understanding.
+这些修订应具有可追溯性，基于源文本驱动，而非静默覆盖先前的理解。
 
-Important boundary:
+重要边界：
 
-- canonical world assets may be revised by later source reading
-- user conversations and runtime branches must not rewrite canonical world
-  history, world-state facts, or event records
-- world packages should prefer major shared events over small scene-level beats
-  that are already better carried by character packages
-- world packages should not duplicate a separate character-knowledge layer by
-  default
-- world packages should not be cluttered with one-off minor roles unless they
-  later become structurally important
-- detailed character-side event memory and interpretation should remain in the
-  character package
+- 规范世界资产可被后续的源文本阅读所修订
+- 用户对话和运行时分支不得重写规范世界历史、世界状态事实或事件记录
+- 世界资产包应优先记录重大共享事件，而非已由角色资产包更好承载的小场景级细节
+- 世界资产包默认不应复制独立的角色知识层
+- 世界资产包不应被一次性的次要角色杂乱填充，除非这些角色后来在结构上变得重要
+- 详细的角色侧事件记忆和解读应保留在角色资产包中
 
-### 4. Character Packages
+### 4. 角色资产包
 
-Stores canon-grounded, user-independent character assets.
+存储基于原作的、与用户无关的角色资产。
 
-Each package includes:
+每个资产包包含：
 
-- character manifest
-- character bible
-- memory timeline
-- voice and behavior rules
-- stage catalog keyed to the work timeline
-- stage projections or stage snapshots keyed to the same work-level `stage_id`
+- 角色 manifest
+- 角色圣经（character bible）
+- 记忆时间线
+- 语音与行为规则
+- 与作品时间线对应的阶段目录
+- 与作品级 `stage_id` 对应的阶段投射或阶段快照
 
-Character construction should normally happen after an initial world-first
-batch pass has established the shared world context for the work.
+角色构建通常应在初始的世界优先批次处理建立了该作品的共享世界背景之后进行。
 
-### 5. User Packages
+### 5. 用户资产包
 
-Stores user identity, persona, relationship cores, context branches, and
-session history.
+存储用户身份、人设、关系核心（relationship core）、context 分支和 session 历史。
 
-This is where long-term relationship memory and user-specific character drift
-belong.
+这是长期关系记忆和用户特有的角色偏移所属之处。
 
-Recommended split:
+推荐拆分方式：
 
-- `users/{user_id}/` as the user root
-- work-scoped user / relationship data inside
-  `users/{user_id}/works/{work_id}/`
+- `users/{user_id}/` 作为用户根目录
+- 每个 `user_id` 对应一个已锁定的作品-目标-对应角色绑定
 
-Work-scoped user / relationship materials should default to the selected work
-language.
+作品级用户/关系材料应默认使用所选作品的语言。
 
-When the user selects a target character, the runtime should load the
-canonical base from `works/{work_id}/characters/{character_id}/` and then
-layer user-specific state from
-`users/{user_id}/works/{work_id}/characters/{character_id}/`.
+当用户选择目标角色时，运行时应从 `works/{work_id}/characters/{character_id}/` 加载规范基线，然后叠加来自 `users/{user_id}/` 的用户特定状态。
 
-`role_binding.json` should be able to store:
+`role_binding.json` 应能存储：
 
-- the selected target character and `stage_id`
-- the current user-side role mode
-- if the user-side role is another canonical character, that role's
-  `character_id`
-- whether the user-side canon role inherits the target `stage_id`
-- whether the initial setup has been locked
-- loading and writeback preferences for this user-character pair
+- 选定的目标角色和 `stage_id`
+- 当前用户侧角色模式
+- 如果用户侧角色是另一个规范角色，则为该角色的 `character_id`
+- 用户侧规范角色是否继承目标 `stage_id`
+- 初始设置是否已锁定
+- 该用户-角色对的加载和回写偏好
 
-A first-pass dedicated schema for this file now exists at:
+该文件的首版专用 schema 现位于：
 
 - `schemas/role_binding.schema.json`
 
-`relationship_core` manifests, `context` manifests, `session` manifests, and
-runtime request payloads should all include `work_id` explicitly so these
-objects remain self-describing outside their path context.
+`relationship_core` manifest、`context` manifest、`session` manifest 和运行时请求载荷都应显式包含 `work_id`，以使这些对象在其路径上下文之外仍然是自描述的。
 
-### 6. Simulation Engine
+### 6. 仿真引擎
 
-Recommended repo-level home:
+推荐的仓库级主目录：
 
 - `simulation/`
 
-Compiles:
+编译内容包括：
 
-- world baseline
-- selected world-stage snapshot
-- relevant work-level event summaries
-- current world-state view derived for that selected stage
-- relevant location state if needed
-- character canon
-- selected target character stage projection
-- user persona or user-side role binding
-- if the user-side role is also a canonical character, that role's selected
-  aligned stage projection
-- user-owned long-term self profile for this work-character pair
-- relationship core
-- current context branch
-- recent session state
+- 世界基线
+- 选定的世界阶段快照
+- 相关的作品级事件摘要
+- 基于选定阶段推导的当前世界状态视图
+- 如有需要，相关的地点状态
+- 角色规范数据
+- 选定的目标角色阶段投射
+- 用户人设或用户侧角色绑定
+- 如果用户侧角色也是规范角色，则为该角色选定的对齐阶段投射
+- 用户持有的该作品-角色对的长期自我档案
+- 关系核心（relationship core）
+- 当前 context 分支
+- 近期 session 状态
 
-into a minimal runtime context for the model.
+以上内容编译为模型所需的最小运行时上下文。
 
-That runtime context may depend on facts first discovered during world-first
-batch extraction and later refined during targeted character extraction.
+该运行时上下文可能依赖于在世界优先批次提取中首次发现、并在后续针对性角色提取中进一步精化的事实。
 
-If runtime state is persisted, it should prefer user-scoped context trees
-rather than `works/{work_id}/`.
+如果运行时状态需要持久化，应优先使用用户级 context 树，而非 `works/{work_id}/`。
 
-During live conversation, runtime persistence should happen continuously at
-the user layer:
+在实时对话中，运行时持久化应在用户层持续进行：
 
-- `sessions/` and `contexts/` should receive lightweight ongoing updates
-- each active session should append to a transcript backup and turn journal on
-  every input / output cycle
-- `relationship_core` and `pinned_memories` should be updated more selectively
-- a work-character-scoped long-term profile should be updated only when the
-  user confirms a merge
-- contexts may later be partially or fully merged into long-term user-owned
-  history when policy and evidence allow
-- merged contexts may also promote full transcript bundles into an
-  account-level conversation archive library
+- `sessions/`、`contexts/` 和 `contexts/{context_id}/character_state.json` 应接收轻量级的持续更新
+- 每个活跃 session 应在每个输入/输出周期追加到转录备份和回合日志中
+- `relationship_core` 和 `pinned_memories` 应更有选择性地更新
+- 作品-角色级的长期档案仅在用户确认合并时才更新
+- context 在策略和证据允许时，可在后续部分或全部合并到用户持有的长期历史记录中
+- 已合并的 context 还可将完整的转录包提升到账户级对话存档库中
 
-### 7. Interfaces
+### 7. 接口层
 
-Expose the same core roleplay engine to:
+将同一核心角色扮演引擎暴露给：
 
-- direct AI agents
-- frontend applications
-- mobile chat MCP-style adapters
+- 直接 AI agent
+- 前端应用程序
+- 移动端聊天 MCP 风格适配器
 
-These adapters should target the engine contracts under `simulation/contracts/`
-rather than reading repo files directly.
+这些适配器应面向 `simulation/contracts/` 下的引擎契约，而非直接读取仓库文件。
 
-## Runtime Load Formula
+## 运行时加载公式
 
-At conversation start, the system should load:
+在对话开始时，系统应加载：
 
-`world baseline + selected world-stage snapshot + selected stage relationship snapshot + target character baseline + target stage projection + user persona or user-side role binding + optional aligned user-side canonical stage projection + long-term profile + relationship core + current context + recent session state`
+`世界基线 + 选定的世界阶段快照 + 选定阶段的关系快照 + 目标角色基线 + 目标阶段投射 + 用户人设或用户侧角色绑定 + 可选的对齐用户侧规范阶段投射 + 长期档案 + 关系核心 + 当前 context + 近期 session 状态`
 
-Recommended load split:
+推荐的加载拆分：
 
-- startup-required:
-  - world baseline
-  - selected world-stage snapshot
-  - selected stage relationship snapshot
-  - target character baseline
-  - target stage projection
-  - user summary-layer state
-  - current context summaries
-  - current scope archive refs
-  - recent session summaries
-- on-demand:
-  - specific world events
-  - location / faction records
-  - historical ranges
-  - character memory detail
-  - detailed user-context history
-  - account archive summaries
-  - full session transcripts
-  - original chapter evidence when verification is needed
+- 启动必需：
+  - 世界基线
+  - 选定的世界阶段快照
+  - 选定阶段的关系快照
+  - 目标角色基线
+  - 目标阶段投射
+  - 用户摘要层状态
+  - 当前 context 摘要
+  - 当前范围的存档引用
+  - 近期 session 摘要
+- 按需加载：
+  - 特定世界事件
+  - 地点/势力记录
+  - 历史范围
+  - 角色记忆详情
+  - 详细的用户 context 历史
+  - 账户存档摘要
+  - 完整 session 转录
+  - 需要验证时的原始章节证据
 
-When present, `works/{work_id}/indexes/load_profiles.json` should refine this
-split for that work.
+当存在时，`works/{work_id}/indexes/load_profiles.json` 应为该作品细化此加载拆分。
 
-## Stage Selection
+## 阶段选择
 
-Stage selection should be grounded in one work-scoped stage axis rather than
-in disconnected per-role free-form labels.
+阶段选择应基于一个作品级的阶段轴，而非各角色独立的自由格式标签。
 
-The world package should expose a work-scoped `stage_catalog.json`
-containing:
+世界资产包应暴露一个作品级的 `stage_catalog.json`，包含：
 
-- stage ids
-- stage titles
-- one-line user-facing summaries
-- cumulative chapter scope or equivalent source coverage
-- hints about the active world situation at that stage
+- 阶段 ID
+- 阶段标题
+- 面向用户的单行摘要
+- 累计章节范围或等效的源覆盖范围
+- 该阶段活跃世界状况的提示
 
-Character packages should expose projections for those same `stage_id` values,
-including:
+角色资产包应为这些相同的 `stage_id` 值暴露投射，包括：
 
-- experience and memory state by that stage
-- relationship state by that stage
-- current personality, mood, and voice by that stage
-- current status and constraints by that stage
+- 截至该阶段的经历和记忆状态
+- 截至该阶段的关系状态
+- 截至该阶段的当前性格、情绪和语音
+- 截至该阶段的当前状态和约束
 
-At the beginning of a new conversation:
+在新对话开始时：
 
-1. the terminal accepts or creates `user_id`
-2. the system determines whether this is a new or existing setup
-3. for a new setup, the system displays the work's available stages
-4. the user chooses one active work-stage
-5. the system binds the target character to that stage
-6. if the user-side role is also canonical, that side inherits the same stage
-   by default
-7. the setup is locked
-8. a context is created or resumed with that stage binding
+1. 终端接受或创建 `user_id`
+2. 系统判断这是新设置还是已有设置
+3. 对于新设置，系统显示作品的可用阶段
+4. 用户选择一个活跃的作品阶段
+5. 系统将目标角色绑定到该阶段
+6. 如果用户侧角色也是规范角色，该侧默认继承相同阶段
+7. 锁定设置
+8. 使用该阶段绑定创建或恢复 context
 
-Any selected canonical stage should remain compatible with the world state for
-the chosen work unless the system is explicitly modeling a branch or alternate
-setup.
+任何选定的规范阶段应与所选作品的世界状态保持兼容，除非系统明确在建模分支或替代设置。
 
-## Relationship Memory
+## 关系记忆
 
-User-specific memory is split into:
+用户特有的记忆拆分为：
 
 - `long_term_profile`
-  - user-owned long-term self-profile changes for one work-character pair
+  - 用户持有的、针对单个作品-角色对的长期自我档案变更
 - `relationship_core`
-  - long-lived retained memory
+  - 长期保留的记忆
 - `contexts/{context_id}`
-  - branch-specific continuity
+  - 分支特有的连续性
 - `conversation_library`
-  - account-level immutable archive store for merged conversation records
+  - 账户级不可变存档，用于存储已合并的对话记录
 
-Contexts can later be:
+Context 后续可以是：
 
-- temporary
-- persistent
-- merged into the relationship core
+- 临时的
+- 持久的
+- 合并到关系核心中
 
-Live roleplay should not wait for a separate manual writeback step before user
-state is updated.
+实时角色扮演不应在用户状态更新前等待单独的手动回写步骤。
 
-Recommended writeback rhythm:
+推荐的回写节奏：
 
-- continuously update `sessions/` and current `contexts/`
-- selectively pin or promote long-term memories
-- support explicit session close via exit keywords or equivalent close intent
-- after close, ask whether the current context should be merged into
-  `long_term_profile` and `relationship_core`
-- support explicit context promotion or full merge into user-owned long-term
-  state when the user requests it or policy allows it
+- 持续更新 `sessions/` 和当前 `contexts/`
+- 有选择性地固定或提升长期记忆
+- 支持通过退出关键词或等效关闭意图显式关闭 session
+- 关闭后，询问当前 context 是否应合并到 `long_term_profile` 和 `relationship_core` 中
+- 当用户请求或策略允许时，支持显式的 context 提升或完全合并到用户持有的长期状态中
 
-Runtime loading should keep a summary/detail split:
+运行时加载应保持摘要/详情分离：
 
-- startup may load user summaries, relationship summaries, context summaries,
-  recent session summaries, and scoped archive refs
-- full `transcript.jsonl` files should remain local under `users/` and be
-  opened only through on-demand retrieval when exact dialogue recall is needed
+- 启动时可加载用户摘要、关系摘要、context 摘要、近期 session 摘要和范围内的存档引用
+- 完整的 `transcript.jsonl` 文件应保留在 `users/` 下的本地位置，仅在需要精确对话回溯时通过按需检索打开
 
-Recommended location:
+推荐位置：
 
-- `users/{user_id}/works/{work_id}/characters/{character_id}/`
+- `users/{user_id}/`

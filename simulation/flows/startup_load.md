@@ -22,8 +22,9 @@ Compile the minimum useful packet for the first reply.
 14. Read `relationship_core/manifest.json`.
 15. Read `relationship_core/pinned_memories.jsonl` when present.
 16. Read current context summary files.
-17. Read current context `session_index.json`.
-18. Read recent session summaries.
+17. Read current context `character_state.json`.
+18. Read current context `session_index.json`.
+19. Read recent session summaries.
 19. Read `users/{user_id}/conversation_library/manifest.json` when present.
 20. Read scoped archive refs for the current `work_id` and `character_id`
     when present.

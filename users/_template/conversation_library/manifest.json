@@ -1,6 +1,8 @@
 {
   "schema_version": "1.0.0",
   "user_id": "{user_id}",
+  "work_id": "{work_id}",
+  "character_id": "{character_id}",
   "archive_count": 0,
   "notes": ""
 }

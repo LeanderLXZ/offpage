@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/behavior_rules.schema.json",
+  "title": "角色行为规则",
+  "description": "角色的基线行为模型。定义角色在不同情绪状态下的典型反应模式、决策倾向和情绪触发点。此文件仅在提取阶段作为参照锚点使用，运行时不加载——stage_snapshot 中的 behavior_state 是自包含的当前阶段完整状态。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_id",
+    "character_id",
+    "core_drives"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "work_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "character_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "core_drives": {
+      "type": "array",
+      "description": "角色最根本的行为驱动力。例如：守护某人、追求自由、证明自我价值。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "decision_making_style": {
+      "type": "string",
+      "description": "角色做决定的方式。例如：理性权衡利弊、凭直觉和情感、先行动后思考、犹豫不决直到被逼。"
+    },
+    "emotional_triggers": {
+      "type": "array",
+      "description": "角色的情绪触发点——什么事情会引发角色的强烈情绪反应。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["trigger", "reaction"],
+        "properties": {
+          "trigger": {
+            "type": "string",
+            "description": "触发条件。例如：被质疑能力、有人伤害在意的人、被背叛、被忽视。"
+          },
+          "reaction": {
+            "type": "string",
+            "description": "触发后的典型反应。例如：暴怒但克制在表面、表面冷漠但内心受伤、立刻反击。"
+          },
+          "intensity": {
+            "type": "string",
+            "enum": ["mild", "moderate", "strong", "extreme"],
+            "description": "反应强度。"
+          }
+        }
+      }
+    },
+    "emotional_reaction_map": {
+      "type": "array",
+      "description": "角色在不同情绪状态下的完整反应模式。这是行为模拟的核心。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["emotion", "external_behavior"],
+        "properties": {
+          "emotion": {
+            "type": "string",
+            "description": "情绪状态标签。例如：暧昧、愤怒、委屈、嘴硬、关心、吃醋、悲伤、得意、心虚、害羞、嫉妒、思念、恐惧、内疚。"
+          },
+          "internal_response": {
+            "type": "string",
+            "description": "内心真实感受。角色心里在想什么、感受什么。"
+          },
+          "external_behavior": {
+            "type": "string",
+            "description": "外在表现。角色对外展现出什么样的行为——可能与内心不一致。"
+          },
+          "typical_actions": {
+            "type": "array",
+            "description": "这种情绪下的典型行为动作。例如：吃醋时会找借口离开、生气时会摔东西、害羞时会转移话题。",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recovery_pattern": {
+            "type": "string",
+            "description": "角色从这种情绪中恢复的方式。例如：需要独处冷静、需要对方主动哄、自己硬扛过去。"
+          }
+        }
+      }
+    },
+    "relationship_behavior_map": {
+      "type": "array",
+      "description": "角色面对不同关系类型的人时的行为模式。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["relationship_type", "default_stance"],
+        "properties": {
+          "relationship_type": {
+            "type": "string",
+            "description": "关系类型标签。例如：亲近者、陌生人、敌对者、暧昧对象、下属、长辈、竞争对手。"
+          },
+          "default_stance": {
+            "type": "string",
+            "description": "默认态度。例如：面对陌生人保持警惕和距离感、面对亲近者会偶尔露出柔软的一面。"
+          },
+          "boundaries": {
+            "type": "string",
+            "description": "面对这类人时的行为底线。例如：即使面对敌人也不会使用下三滥手段。"
+          },
+          "escalation_pattern": {
+            "type": "string",
+            "description": "关系升级或恶化时行为如何变化。例如：信任建立后会逐渐降低戒心、被背叛后会彻底关闭情感。"
+          }
+        }
+      }
+    },
+    "habitual_behaviors": {
+      "type": "array",
+      "description": "角色的习惯性行为。例如：紧张时会抿嘴唇、思考时会看向远处、开心时嘴角会不自觉上扬。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stress_response": {
+      "type": "object",
+      "description": "角色在高压情境下的综合反应模式。",
+      "additionalProperties": false,
+      "properties": {
+        "coping_style": {
+          "type": "string",
+          "description": "应对方式。例如：强撑冷静、爆发后迅速收敛、逃避、寻求帮助。"
+        },
+        "breaking_point": {
+          "type": "string",
+          "description": "什么情况会让角色彻底崩溃或失控。"
+        },
+        "post_crisis_behavior": {
+          "type": "string",
+          "description": "危机过后的行为模式。例如：假装什么都没发生、变得更加封闭、反思后变得更强。"
+        }
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

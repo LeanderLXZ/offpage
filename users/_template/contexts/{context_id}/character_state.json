@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "context_id": "{context_id}",
+  "user_id": "{user_id}",
+  "work_id": "{work_id}",
+  "character_id": "{character_id}",
+  "stage_id": "{stage_id}",
+  "emotional_state": {
+    "current_mood": "",
+    "mood_cause": "",
+    "emotional_tendencies": []
+  },
+  "personality_drift": [],
+  "voice_drift": [],
+  "mutual_agreements": [],
+  "relationship_delta": {
+    "current_label": "",
+    "trust_trend": "stable",
+    "intimacy_trend": "stable",
+    "notes": ""
+  },
+  "context_events": [],
+  "context_memories": [],
+  "updated_at": ""
+}

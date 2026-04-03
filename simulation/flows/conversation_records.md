@@ -17,7 +17,7 @@ Design one stable model for:
 
 Writable conversation state should live under:
 
-- `users/{user_id}/works/{work_id}/characters/{character_id}/contexts/{context_id}/`
+- `users/{user_id}/contexts/{context_id}/`
 
 Use this zone for:
 
@@ -138,7 +138,7 @@ When the user chooses to merge a context into long-term account state:
 4. move or copy the selected session transcripts into the archive bundle
 5. update:
    - `archive_index.jsonl`
-   - scoped `archive_refs.json`
+   - binding-level `archive_refs.json`
    - `long_term_profile.json`
    - `relationship_core`
 6. mark the source context as:
@@ -157,7 +157,7 @@ Recommended account-level files:
 
 - `conversation_library/manifest.json`
 - `conversation_library/archive_index.jsonl`
-- `conversation_library/scopes/{work_id}/{character_id}/archive_refs.json`
+- `conversation_library/archive_refs.json`
 
 Recommended per-archive files:
 

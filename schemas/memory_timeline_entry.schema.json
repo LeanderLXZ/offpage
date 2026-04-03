@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/memory_timeline_entry.schema.json",
+  "title": "角色记忆时间线条目",
+  "description": "memory_timeline/{stage_id}.jsonl 中每一行的 schema。记忆按阶段拆分存储，每个阶段一个文件。每条记忆是角色视角的主观记忆，不是客观剧情摘要。记忆应反映角色知道什么、感受什么、误解什么、隐瞒什么。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "memory_id",
+    "stage_id",
+    "event_summary",
+    "subjective_experience"
+  ],
+  "properties": {
+    "memory_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "记忆条目唯一标识。"
+    },
+    "stage_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "这条记忆属于哪个剧情阶段。"
+    },
+    "event_summary": {
+      "type": "string",
+      "description": "客观层面发生了什么事。用第三人称简要描述。"
+    },
+    "subjective_experience": {
+      "type": "string",
+      "description": "角色对这件事的主观体验和理解。用角色视角描述——角色认为发生了什么，角色如何理解这件事。这可能与客观事实不同。"
+    },
+    "emotional_impact": {
+      "type": "string",
+      "description": "这件事对角色的情感影响。例如：深受打击、如释重负、心生愧疚、动摇了信念。"
+    },
+    "knowledge_gained": {
+      "type": "array",
+      "description": "角色通过这件事获得了哪些新的认知或信息。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "misunderstanding": {
+      "type": "object",
+      "description": "如果角色在这件事中产生了误解，记录在此。",
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "角色误以为的内容。"
+        },
+        "truth": {
+          "type": "string",
+          "description": "实际真相。"
+        }
+      }
+    },
+    "concealment": {
+      "type": "object",
+      "description": "如果角色因为这件事而选择隐瞒某些信息，记录在此。",
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "角色隐瞒的内容。"
+        },
+        "target": {
+          "type": "string",
+          "description": "对谁隐瞒。"
+        },
+        "reason": {
+          "type": "string",
+          "description": "隐瞒的原因。"
+        }
+      }
+    },
+    "relationship_impact": {
+      "type": "array",
+      "description": "这件事如何影响了角色与他人的关系。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target", "change"],
+        "properties": {
+          "target": {
+            "type": "string",
+            "description": "关系对象。"
+          },
+          "change": {
+            "type": "string",
+            "description": "关系变化描述。例如：开始信任、产生敌意、关系破裂、暗生情愫。"
+          }
+        }
+      }
+    },
+    "memory_importance": {
+      "type": "string",
+      "enum": ["trivial", "minor", "significant", "critical", "defining"],
+      "description": "这条记忆对角色的重要程度。defining = 塑造角色人生的关键事件。"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": ["canon", "inference", "ambiguous"],
+      "description": "信息来源类型。canon = 原文明确描述；inference = 基于原文的合理推断；ambiguous = 原文存在多义性，当前解读可能有误。"
+    },
+    "source_note": {
+      "type": "string",
+      "description": "当 source_type 为 inference 或 ambiguous 时，简要说明推断依据或多义性所在。"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
