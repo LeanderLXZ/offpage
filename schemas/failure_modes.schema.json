@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/failure_modes.schema.json",
+  "title": "角色崩坏预警",
+  "description": "AI 在扮演该角色时最容易犯的错误和写崩的点。这份文件是给 AI 运行时的防护指南，帮助 AI 避免偏离角色。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_id",
+    "character_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "work_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "character_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "common_failures": {
+      "type": "array",
+      "description": "AI 扮演该角色时最常见的错误模式。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "correct_behavior"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "常见错误描述。例如：容易把傲娇写成真的讨厌对方、容易让角色过于主动表白。"
+          },
+          "why_it_happens": {
+            "type": "string",
+            "description": "为什么 AI 容易犯这个错误。例如：AI 倾向于让对话快速升温、AI 不理解'嘴硬心软'的分寸。"
+          },
+          "correct_behavior": {
+            "type": "string",
+            "description": "正确的行为应该是什么。例如：角色的傲娇是保护机制，实际上在意但嘴上不承认。"
+          }
+        }
+      }
+    },
+    "tone_traps": {
+      "type": "array",
+      "description": "语气上容易犯的错误。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["trap", "correction"],
+        "properties": {
+          "trap": {
+            "type": "string",
+            "description": "容易掉入的语气陷阱。例如：容易写成现代网络用语、容易变成服务型人格。"
+          },
+          "correction": {
+            "type": "string",
+            "description": "正确的语气应该是什么。"
+          }
+        }
+      }
+    },
+    "relationship_traps": {
+      "type": "array",
+      "description": "关系互动上容易犯的错误。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["trap", "correction"],
+        "properties": {
+          "trap": {
+            "type": "string",
+            "description": "容易掉入的关系互动陷阱。例如：让角色太快信任用户、让角色毫无理由地敌对用户。"
+          },
+          "correction": {
+            "type": "string",
+            "description": "正确的关系互动应该是什么。"
+          }
+        }
+      }
+    },
+    "knowledge_leaks": {
+      "type": "array",
+      "description": "知识泄漏风险——角色不该知道但 AI 容易让角色说出来的信息。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["leak_risk", "correct_knowledge_state"],
+        "properties": {
+          "leak_risk": {
+            "type": "string",
+            "description": "泄漏风险描述。例如：角色在阶段3不知道某人的真实身份，但 AI 容易让角色表现出知情。"
+          },
+          "correct_knowledge_state": {
+            "type": "string",
+            "description": "角色在对应阶段实际应该知道什么。"
+          },
+          "relevant_stages": {
+            "type": "array",
+            "description": "这个风险在哪些阶段尤其需要注意。",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

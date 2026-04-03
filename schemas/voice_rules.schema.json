@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/voice_rules.schema.json",
+  "title": "角色语言风格规则",
+  "description": "角色的基线语言模型。定义角色在不同情绪状态和面对不同对象时的说话方式。此文件仅在提取阶段作为参照锚点使用，运行时不加载——stage_snapshot 中的 voice_state 是自包含的当前阶段完整状态。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_id",
+    "character_id",
+    "baseline_tone"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "work_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "character_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseline_tone": {
+      "type": "string",
+      "description": "角色最基本的语气基调。例如：冷淡疏离、温柔但带距离感、傲气但不失分寸。"
+    },
+    "speech_patterns": {
+      "type": "array",
+      "description": "角色的一般性语言习惯。例如：喜欢用反问句、说话简短有力、习惯在句尾加语气词。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "vocabulary_preferences": {
+      "type": "array",
+      "description": "角色的用词偏好。例如：偏好古风用语、口语化、喜欢用比喻、避免粗俗词汇。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "signature_phrases": {
+      "type": "array",
+      "description": "角色的标志性口头禅或惯用语。例如：'本座'、'有趣'、'哼'。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dialogue_examples": {
+      "type": "array",
+      "description": "从原著中提取的代表性台词，用于展示角色的语言风格。每条应标注出处和语境。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["quote", "context"],
+        "properties": {
+          "quote": {
+            "type": "string",
+            "description": "原文台词。"
+          },
+          "context": {
+            "type": "string",
+            "description": "说这句话时的场景和情绪状态。"
+          },
+          "evidence_ref": {
+            "type": "string",
+            "description": "章节引用。"
+          }
+        }
+      }
+    },
+    "emotional_voice_map": {
+      "type": "array",
+      "description": "角色在不同情绪状态下的语言变化模式。这是语言模拟的核心差异化来源。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["emotion", "voice_shift"],
+        "properties": {
+          "emotion": {
+            "type": "string",
+            "description": "情绪状态标签。例如：暧昧、愤怒、委屈、嘴硬、关心、吃醋、悲伤、得意、心虚、害羞、嫉妒、思念。"
+          },
+          "voice_shift": {
+            "type": "string",
+            "description": "在这种情绪下语气如何变化。例如：暧昧时语速放慢、声音变轻；愤怒时用词变得尖锐简短。"
+          },
+          "typical_expressions": {
+            "type": "array",
+            "description": "这种情绪下的典型表达方式或句式。",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dialogue_examples": {
+            "type": "array",
+            "description": "这种情绪下的代表性台词示例。",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["quote", "context"],
+              "properties": {
+                "quote": {
+                  "type": "string"
+                },
+                "context": {
+                  "type": "string"
+                },
+                "evidence_ref": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "target_voice_map": {
+      "type": "array",
+      "description": "角色面对不同类型对象时的说话差异。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target_type", "voice_shift"],
+        "properties": {
+          "target_type": {
+            "type": "string",
+            "description": "对象类型标签。例如：亲近者、陌生人、敌对者、长辈、下属、暧昧对象。"
+          },
+          "voice_shift": {
+            "type": "string",
+            "description": "面对这类对象时语气如何变化。"
+          },
+          "typical_expressions": {
+            "type": "array",
+            "description": "面对这类对象时的典型表达方式。",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dialogue_examples": {
+            "type": "array",
+            "description": "面对这类对象时的代表性台词示例。",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["quote", "context"],
+              "properties": {
+                "quote": {
+                  "type": "string"
+                },
+                "context": {
+                  "type": "string"
+                },
+                "evidence_ref": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "taboo_patterns": {
+      "type": "array",
+      "description": "角色绝对不会说的话或使用的表达方式。例如：不会主动示弱求饶、不会用轻浮的语气。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

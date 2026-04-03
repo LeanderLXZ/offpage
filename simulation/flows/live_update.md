@@ -37,6 +37,9 @@ Update continuously:
 
 - `sessions/`
 - current `contexts/`
+- `contexts/{context_id}/character_state.json`
+  - emotional state, personality drift, voice drift, mutual agreements,
+    relationship delta, context events, context memories
 - `transcript.jsonl`
 - `turn_journal.jsonl`
 - `session_index.json`

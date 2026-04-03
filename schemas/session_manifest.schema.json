@@ -28,7 +28,7 @@
     "work_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当前会话所属的作品命名空间标识。该值必须与 `users/{user_id}/works/{work_id}/` 的路径一致。对于中文作品，这个值可以直接是中文。"
+      "description": "当前会话所属的作品命名空间标识。该值必须与当前 `users/{user_id}/` 锁定绑定一致。对于中文作品，这个值可以直接是中文。"
     },
     "character_id": {
       "type": "string",

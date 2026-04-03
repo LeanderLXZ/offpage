@@ -21,7 +21,7 @@
     "work_id": {
       "type": "string",
       "minLength": 1,
-      "description": "该关系核心所属的作品命名空间标识。该值必须与 `users/{user_id}/works/{work_id}/` 的路径一致。对于中文作品，这个值可以直接是中文。"
+      "description": "该关系核心所属的作品命名空间标识。该值必须与当前 `users/{user_id}/` 锁定绑定一致。对于中文作品，这个值可以直接是中文。"
     },
     "character_id": {
       "type": "string",
@@ -138,6 +138,34 @@
           },
           "summary": {
             "type": "string"
+          },
+          "source_context_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "mutual_agreements": {
+      "type": "array",
+      "description": "从 context 合并提炼出的长期有效的双方约定或承诺。推荐追加写入。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["agreement_id", "summary"],
+        "properties": {
+          "agreement_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string",
+            "description": "约定内容，如：答应不再隐瞒身份、约定每天见面。"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "broken", "fulfilled", "withdrawn"]
           },
           "source_context_ids": {
             "type": "array",

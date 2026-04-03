@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/stage_snapshot.schema.json",
   "title": "阶段快照",
+  "description": "自包含的角色阶段快照。每个快照包含该阶段的完整角色状态，运行时直接加载无需与 baseline 合并。baseline 文件（voice_rules、behavior_rules、boundaries）仅在提取阶段作为参照锚点使用。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -44,41 +45,29 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "from": {
-          "type": "string"
-        },
-        "to": {
-          "type": "string"
-        }
+        "from": { "type": "string" },
+        "to": { "type": "string" }
       }
     },
     "experienced_events": {
       "type": "array",
       "description": "截至当前阶段，角色已经历过的关键事件。",
-      "items": {
-        "type": "string"
-      }
+      "items": { "type": "string" }
     },
     "current_status": {
       "type": "array",
       "description": "当前阶段角色的状态信息，例如生死、关系、等级、位置等。",
-      "items": {
-        "type": "string"
-      }
+      "items": { "type": "string" }
     },
     "current_personality": {
       "type": "array",
       "description": "当前阶段下已经稳定显现的人格与处事倾向。",
-      "items": {
-        "type": "string"
-      }
+      "items": { "type": "string" }
     },
     "current_mood": {
       "type": "array",
       "description": "当前阶段下更接近现在进行时的情绪背景。",
-      "items": {
-        "type": "string"
-      }
+      "items": { "type": "string" }
     },
     "knowledge_scope": {
       "type": "object",
@@ -86,21 +75,15 @@
       "properties": {
         "knows": {
           "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "items": { "type": "string" }
         },
         "does_not_know": {
           "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "items": { "type": "string" }
         },
         "uncertain": {
           "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "items": { "type": "string" }
         }
       }
     },
@@ -110,83 +93,266 @@
       "properties": {
         "dominant_traits": {
           "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "items": { "type": "string" }
         },
         "active_desires": {
           "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "items": { "type": "string" }
         },
         "active_fears": {
           "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "items": { "type": "string" }
         },
         "active_wounds": {
           "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "items": { "type": "string" }
         }
       }
     },
-    "voice_overrides": {
+
+    "voice_state": {
       "type": "object",
+      "description": "当前阶段的完整语言风格状态。自包含，无需与 baseline voice_rules 合并。",
       "additionalProperties": false,
       "properties": {
         "tone_summary": {
-          "type": "string"
+          "type": "string",
+          "description": "当前阶段的整体语气基调。"
         },
-        "current_voice_state": {
-          "type": "string"
-        },
-        "speech_habits": {
+        "speech_patterns": {
           "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "description": "当前阶段的语言习惯。",
+          "items": { "type": "string" }
+        },
+        "vocabulary_preferences": {
+          "type": "array",
+          "description": "当前阶段的用词偏好。",
+          "items": { "type": "string" }
+        },
+        "signature_phrases": {
+          "type": "array",
+          "description": "当前阶段的口头禅和标志性表达。",
+          "items": { "type": "string" }
         },
         "taboo_patterns": {
           "type": "array",
+          "description": "当前阶段绝不会说的话。",
+          "items": { "type": "string" }
+        },
+        "dialogue_examples": {
+          "type": "array",
+          "description": "当前阶段的典型对话示例。",
           "items": {
-            "type": "string"
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "quote": { "type": "string" },
+              "context": { "type": "string" },
+              "evidence_ref": { "type": "string" }
+            }
+          }
+        },
+        "emotional_voice_map": {
+          "type": "array",
+          "description": "当前阶段下不同情绪的语气变化。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["emotion"],
+            "properties": {
+              "emotion": {
+                "type": "string",
+                "description": "情绪标签。例如：暧昧、愤怒、委屈、嘴硬、关心、吃醋。"
+              },
+              "voice_shift": { "type": "string" },
+              "typical_expressions": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "dialogue_examples": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "quote": { "type": "string" },
+                    "context": { "type": "string" },
+                    "evidence_ref": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "target_voice_map": {
+          "type": "array",
+          "description": "当前阶段下面对不同对象类型的语气变化。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["target_type"],
+            "properties": {
+              "target_type": {
+                "type": "string",
+                "description": "对象类型。例如：亲近者、陌生人、敌对者、长辈、下属、暧昧对象。"
+              },
+              "voice_shift": { "type": "string" },
+              "typical_expressions": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "dialogue_examples": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "quote": { "type": "string" },
+                    "context": { "type": "string" },
+                    "evidence_ref": { "type": "string" }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
-    "behavior_overrides": {
+
+    "behavior_state": {
       "type": "object",
+      "description": "当前阶段的完整行为规则状态。自包含，无需与 baseline behavior_rules 合并。",
       "additionalProperties": false,
       "properties": {
-        "under_stress": {
-          "type": "string"
+        "core_drives": {
+          "type": "array",
+          "description": "当前阶段的核心驱动力。",
+          "items": { "type": "string" }
         },
-        "with_strangers": {
-          "type": "string"
+        "decision_making_style": {
+          "type": "string",
+          "description": "当前阶段的决策风格。"
         },
-        "with_intimates": {
-          "type": "string"
+        "emotional_triggers": {
+          "type": "array",
+          "description": "当前阶段的情绪触发器。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["trigger"],
+            "properties": {
+              "trigger": { "type": "string" },
+              "reaction": { "type": "string" },
+              "intensity": {
+                "type": "string",
+                "enum": ["mild", "moderate", "strong", "extreme"]
+              }
+            }
+          }
         },
-        "conflict_style": {
-          "type": "string"
+        "emotional_reaction_map": {
+          "type": "array",
+          "description": "当前阶段下不同情绪的行为反应模式。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["emotion"],
+            "properties": {
+              "emotion": { "type": "string" },
+              "internal_response": { "type": "string" },
+              "external_behavior": { "type": "string" },
+              "typical_actions": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "recovery_pattern": { "type": "string" }
+            }
+          }
+        },
+        "relationship_behavior_map": {
+          "type": "array",
+          "description": "当前阶段下面对不同关系类型的行为模式。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["relationship_type"],
+            "properties": {
+              "relationship_type": { "type": "string" },
+              "default_stance": { "type": "string" },
+              "boundaries": { "type": "string" },
+              "escalation_pattern": { "type": "string" }
+            }
+          }
+        },
+        "habitual_behaviors": {
+          "type": "array",
+          "description": "当前阶段的习惯性行为。",
+          "items": { "type": "string" }
+        },
+        "stress_response": {
+          "type": "object",
+          "description": "当前阶段的压力应对方式。",
+          "additionalProperties": false,
+          "properties": {
+            "coping_style": { "type": "string" },
+            "breaking_point": { "type": "string" },
+            "post_crisis_behavior": { "type": "string" }
+          }
         }
       }
     },
+
+    "boundary_state": {
+      "type": "object",
+      "description": "当前阶段的完整边界状态。hard_boundaries 从 baseline boundaries.json 继承不变，soft_boundaries 为当前阶段的有效状态。",
+      "additionalProperties": false,
+      "properties": {
+        "soft_boundaries": {
+          "type": "array",
+          "description": "当前阶段有效的软边界。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["rule"],
+            "properties": {
+              "rule": { "type": "string" },
+              "exception_condition": { "type": "string" },
+              "stage_note": {
+                "type": "string",
+                "description": "如果此边界相比初始状态有变化，说明原因。"
+              }
+            }
+          }
+        },
+        "common_misconceptions": {
+          "type": "array",
+          "description": "当前阶段容易被误判的点。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["misconception"],
+            "properties": {
+              "misconception": { "type": "string" },
+              "reality": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
     "relationship_state_summary": {
       "type": "string"
     },
-    "relationship_overrides": {
+    "relationships": {
       "type": "array",
+      "description": "当前阶段角色对每个重要角色的完整关系状态。",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "target_label",
-          "summary"
+          "summary",
+          "attitude"
         ],
         "properties": {
           "target_character_id": {
@@ -195,34 +361,210 @@
             "description": "被引用的基础角色标识。对于中文作品，这个值可以直接是中文。"
           },
           "target_label": {
-            "type": "string"
+            "type": "string",
+            "description": "当前阶段的关系标签。例如：仇人、挚爱、师父、盟友。"
           },
           "summary": {
-            "type": "string"
+            "type": "string",
+            "description": "当前阶段关系的简要描述。"
+          },
+          "attitude": {
+            "type": "string",
+            "description": "当前阶段对该角色的态度。例如：深爱且极度担忧、敌意但有所动摇、悲痛欲绝。"
           },
           "trust": {
             "type": "integer",
             "minimum": 0,
             "maximum": 100
           },
+          "intimacy": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "亲密度。0 = 陌生，100 = 至亲至爱。"
+          },
           "guardedness": {
             "type": "integer",
             "minimum": 0,
             "maximum": 100
+          },
+          "voice_shift": {
+            "type": "string",
+            "description": "面对该角色时的语气变化。例如：语气变得温柔，偶尔撒娇；或：冷淡疏离，以敬语保持距离。"
+          },
+          "behavior_shift": {
+            "type": "string",
+            "description": "面对该角色时的行为模式变化。例如：愿意主动示弱，会流泪；或：绝不露出破绽，保持高压。"
+          },
+          "driving_events": {
+            "type": "array",
+            "description": "驱动当前关系状态的关键事件。",
+            "items": { "type": "string" }
+          },
+          "target_known_status": {
+            "type": "string",
+            "description": "角色认为该对象的当前状态。例如：alive、dead、missing、unknown。注意这是角色的认知，不一定是客观事实。"
+          },
+          "relationship_history_summary": {
+            "type": "string",
+            "description": "从阶段 1 到当前阶段，这对关系的演变轨迹概述。应包含关键行为标记（称呼变化、态度转折点、知识揭露时点等）。"
           }
         }
       }
     },
+
+    "misunderstandings": {
+      "type": "array",
+      "description": "角色在当前阶段持有的误解。角色主观认为是对的，但客观上是错误的认知。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "误解的内容，用角色的主观视角描述。例如：认为某人已死、认为某人背叛了自己。"
+          },
+          "truth": {
+            "type": "string",
+            "description": "客观事实是什么。"
+          },
+          "cause": {
+            "type": "string",
+            "description": "产生误解的原因。例如：被人欺骗、信息不全、亲眼所见但被误导。"
+          },
+          "resolved_at_stage": {
+            "type": "string",
+            "description": "如果已知误解在哪个阶段被解开，填写对应 stage_id。空值表示截至当前阶段仍未解开。"
+          }
+        }
+      }
+    },
+    "concealments": {
+      "type": "array",
+      "description": "角色在当前阶段主动隐瞒的事情。角色知道真相但选择不说。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "隐瞒的内容。例如：隐瞒自己的真实身份、隐瞒对某人的感情。"
+          },
+          "target": {
+            "type": "string",
+            "description": "对谁隐瞒。可以是特定角色名或'所有人'。"
+          },
+          "reason": {
+            "type": "string",
+            "description": "隐瞒的原因。例如：保护对方、自我保护、羞耻、还没准备好。"
+          },
+          "revealed_at_stage": {
+            "type": "string",
+            "description": "如果已知在哪个阶段被揭露或主动坦白，填写对应 stage_id。空值表示截至当前阶段仍在隐瞒。"
+          }
+        }
+      }
+    },
+
+    "stage_delta": {
+      "type": "object",
+      "description": "从上一个阶段到当前阶段的关键变化摘要。第一个阶段此字段可省略。",
+      "additionalProperties": false,
+      "properties": {
+        "trigger_events": {
+          "type": "array",
+          "description": "驱动本阶段变化的关键事件。",
+          "items": { "type": "string" }
+        },
+        "personality_changes": {
+          "type": "array",
+          "description": "性格上的变化（相比上一阶段）。每条应标注影响来源。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["change"],
+            "properties": {
+              "change": {
+                "type": "string",
+                "description": "性格变化描述。例如：开始相信人间有真情，不再认为所有人都会背叛。"
+              },
+              "influenced_by": {
+                "type": "string",
+                "description": "导致此变化的角色或事件。例如：受萧尘为她挡剑影响。"
+              }
+            }
+          }
+        },
+        "relationship_changes": {
+          "type": "array",
+          "description": "关系上的变化（相比上一阶段）。每条应标注驱动事件。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["change"],
+            "properties": {
+              "change": {
+                "type": "string",
+                "description": "关系变化描述。例如：对萧尘从戒备转为信任。"
+              },
+              "driving_event": {
+                "type": "string",
+                "description": "驱动此关系变化的事件。例如：萧尘放弃帝位陪她渡劫。"
+              }
+            }
+          }
+        },
+        "status_changes": {
+          "type": "array",
+          "description": "状态上的变化（等级、地位、生死等）。",
+          "items": { "type": "string" }
+        },
+        "mood_shift": {
+          "type": "string",
+          "description": "情绪基调的变化。例如：从迷茫转为坚定、从信任转为戒备。"
+        },
+        "voice_shift": {
+          "type": "string",
+          "description": "口吻的变化。例如：变得更冷漠、开始用敬语、不再掩饰情绪。"
+        }
+      }
+    },
+
     "memory_refs": {
       "type": "array",
-      "items": {
-        "type": "string"
-      }
+      "items": { "type": "string" }
     },
     "evidence_refs": {
       "type": "array",
+      "items": { "type": "string" }
+    },
+    "source_notes": {
+      "type": "array",
+      "description": "提取过程中的推断和不确定性记录。用于标注快照中哪些内容是推断或多义性解读。",
       "items": {
-        "type": "string"
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "source_type"],
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "涉及的字段路径。例如：current_personality[2]、relationships[0].attitude、voice_state.emotional_voice_map[3]。"
+          },
+          "source_type": {
+            "type": "string",
+            "enum": ["inference", "ambiguous"],
+            "description": "inference = 基于原文的合理推断；ambiguous = 原文存在多义性。"
+          },
+          "note": {
+            "type": "string",
+            "description": "推断依据或多义性说明。"
+          },
+          "evidence_ref": {
+            "type": "string"
+          }
+        }
       }
     }
   }

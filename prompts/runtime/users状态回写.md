@@ -32,7 +32,7 @@
    - `README.md`
    - `users/README.md`
    - 如果本轮需要对照基础 canon：`works/README.md`
-3. 如果存在：`users/{user_id}/works/{work_id}/manifest.json`
+3. 如果存在：`users/{user_id}/role_binding.json`
 4. 如果你准备读取或写入结构化 JSON / JSONL，再补读 `schemas/README.md` 与对应 schema
 5. 如果你仍不确定哪些变化该留在 `context / session / relationship_core`，再补读 `docs/architecture/data_model.md`
 
@@ -50,15 +50,16 @@
 3. `relationship_core/manifest.json`
 4. `relationship_core/pinned_memories.jsonl`
 5. `contexts/{context_id}/manifest.json`
-6. `contexts/{context_id}/relationship_state.json`
-7. `contexts/{context_id}/shared_memory.jsonl`
+6. `contexts/{context_id}/character_state.json`
+7. `contexts/{context_id}/relationship_state.json`
+8. `contexts/{context_id}/shared_memory.jsonl`
 8. `contexts/{context_id}/session_index.json`
 9. `sessions/{session_id}/transcript.jsonl`
 10. `sessions/{session_id}/turn_journal.jsonl`
 11. `sessions/{session_id}/turn_summaries.jsonl`
 12. `sessions/{session_id}/memory_updates.jsonl`
 13. `users/{user_id}/conversation_library/archive_index.jsonl`
-14. 当前 scope 的 `users/{user_id}/conversation_library/scopes/{work_id}/{character_id}/archive_refs.json`
+14. 当前锁定绑定的 `users/{user_id}/conversation_library/archive_refs.json`
 
 `role_binding.json` 至少应能承接这些信息：
 
@@ -87,6 +88,10 @@
 6. 连续写回默认先做轻量层：
    - `sessions/{session_id}/...`
    - `contexts/{context_id}/...`
+   - 特别是 `contexts/{context_id}/character_state.json`：
+     - 每轮都应评估模拟角色的情绪、性格、口癖、与用户的约定是否发生了变化
+     - 如果发生了变化，实时更新 `character_state.json`
+     - 这些是 context 级的实时变化，不需要等合并
 7. 在对话仍在进行时，不要把长期画像和长期关系核心当成每轮都要更新的默认落点。
 8. 只有在以下条件成立时，才进入长期层：
    - 用户明确要求“记住这段关系变化”或“把这个 context 合并进去”
@@ -96,15 +101,18 @@
    - 记忆点追加
    - 画像变化记录追加
 10. 如果执行 context 合并，应至少考虑：
-   - 更新 `long_term_profile.json`
-   - 更新 `relationship_core`
+   - 从 `character_state.json` 提炼模拟角色的累积变化，追加写入 `long_term_profile.json` 的 `character_drift_history`
+   - 从 `character_state.json` 提炼持久的口癖/行为变化，更新 `relationship_core` 的 `personalized_voice_shift` 和 `personalized_behavior_shift`
+   - 从 `character_state.json` 提炼持久有效的双方约定，追加写入 `relationship_core` 的 `mutual_agreements`
+   - 更新 `long_term_profile.json` 的事件和记忆历史
+   - 更新 `relationship_core` 的关系标签和数值
    - 更新 `merged_context_ids`
    - 提升必要的 `pinned_memories`
    - 更新当前 context 的 `lifecycle`
    - 生成 `archive_id`
    - 把完整对话记录归档进 `users/{user_id}/conversation_library/archives/{archive_id}/`
    - 更新 `users/{user_id}/conversation_library/archive_index.jsonl`
-   - 更新当前 scope 的 `users/{user_id}/conversation_library/scopes/{work_id}/{character_id}/archive_refs.json`
+   - 更新当前锁定绑定的 `users/{user_id}/conversation_library/archive_refs.json`
 
 输出要求：
 

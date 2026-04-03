@@ -43,7 +43,7 @@
     "work_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当前运行时请求所处的作品命名空间标识。对于 bootstrap_user 之后的模式，该值必须与 `works/{work_id}/` 以及 `users/{user_id}/works/{work_id}/` 对齐。对于中文作品，这个值可以直接是中文。"
+      "description": "当前运行时请求所处的作品命名空间标识。对于 bootstrap_user 之后的模式，该值必须与 `works/{work_id}/` 以及 `users/{user_id}/` 中的锁定绑定对齐。对于中文作品，这个值可以直接是中文。"
     },
     "character_id": {
       "type": "string",

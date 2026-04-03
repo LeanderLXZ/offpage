@@ -44,38 +44,51 @@
         }
       }
     },
+    "foundation_corrections": {
+      "type": "array",
+      "description": "对基础设定（foundation）的修正与补充。随着剧情推进，原始设定可能被补充或推翻。",
+      "items": {
+        "type": "string"
+      }
+    },
     "historical_events": {
       "type": "array",
+      "description": "截至当前阶段的累积历史事件。",
       "items": {
         "type": "string"
       }
     },
     "current_world_state": {
       "type": "array",
+      "description": "当前阶段的世界总体状态。",
       "items": {
         "type": "string"
       }
     },
     "relationship_shifts": {
       "type": "array",
+      "description": "关注的人物关系的转变。",
       "items": {
         "type": "string"
       }
     },
     "character_status_changes": {
       "type": "array",
+      "description": "人物的状态变化（生死、恋爱、等级等随时间变化的状态）。",
       "items": {
         "type": "string"
       }
     },
     "location_changes": {
       "type": "array",
+      "description": "地点的变化（新地点出现、旧地点毁灭等）。",
       "items": {
         "type": "string"
       }
     },
     "map_changes": {
       "type": "array",
+      "description": "地图的变化（势力范围、领土变动等）。",
       "items": {
         "type": "string"
       }

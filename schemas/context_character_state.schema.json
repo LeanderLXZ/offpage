@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/context_character_state.schema.json",
+  "title": "上下文级角色运行时状态",
+  "description": "记录当前 context 中模拟角色因与用户互动而产生的实时变化。这些变化在 context 内实时更新，仅在合并确认后提炼写入长期层。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "context_id",
+    "user_id",
+    "work_id",
+    "character_id",
+    "stage_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "context_id": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "work_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "character_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stage_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "emotional_state": {
+      "type": "object",
+      "description": "模拟角色在当前 context 中的情绪状态。",
+      "additionalProperties": false,
+      "properties": {
+        "current_mood": {
+          "type": "string",
+          "description": "当前主导情绪，如：愉悦、别扭、警惕、思念、愧疚等。"
+        },
+        "mood_cause": {
+          "type": "string",
+          "description": "导致当前情绪的原因摘要。"
+        },
+        "emotional_tendencies": {
+          "type": "array",
+          "description": "当前 context 内积累的情绪倾向，如：对用户逐渐放下戒心、开始在意用户的看法等。",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "personality_drift": {
+      "type": "array",
+      "description": "模拟角色因与用户互动而产生的性格微调。每条记录一个变化点。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["summary"],
+        "properties": {
+          "summary": {
+            "type": "string",
+            "description": "性格变化描述，如：变得更愿意表达脆弱的一面。"
+          },
+          "trigger": {
+            "type": "string",
+            "description": "引发这个变化的事件或对话。"
+          }
+        }
+      }
+    },
+    "voice_drift": {
+      "type": "array",
+      "description": "模拟角色在当前 context 中口癖、称呼、语气的变化。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["summary"],
+        "properties": {
+          "summary": {
+            "type": "string",
+            "description": "口癖/称呼/语气变化描述，如：开始用昵称称呼用户、语气变得更柔和。"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "mutual_agreements": {
+      "type": "array",
+      "description": "用户与模拟角色之间达成的约定或承诺。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["summary"],
+        "properties": {
+          "agreement_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string",
+            "description": "约定内容，如：答应不再隐瞒身份、约定每天见面。"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "broken", "fulfilled", "withdrawn"],
+            "description": "约定当前状态。"
+          },
+          "made_at_session": {
+            "type": "string",
+            "description": "达成约定时的 session_id。"
+          }
+        }
+      }
+    },
+    "relationship_delta": {
+      "type": "object",
+      "description": "当前 context 内关系状态的变化追踪。",
+      "additionalProperties": false,
+      "properties": {
+        "current_label": {
+          "type": "string",
+          "description": "当前 context 内的关系标签，如：暧昧期、冷战中、互相信任。"
+        },
+        "trust_trend": {
+          "type": "string",
+          "enum": ["rising", "stable", "falling"],
+          "description": "信任变化趋势。"
+        },
+        "intimacy_trend": {
+          "type": "string",
+          "enum": ["rising", "stable", "falling"],
+          "description": "亲密度变化趋势。"
+        },
+        "notes": {
+          "type": "string",
+          "description": "关系变化的补充说明。"
+        }
+      }
+    },
+    "context_events": {
+      "type": "array",
+      "description": "当前 context 内发生的重要事件，实时追加。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["summary"],
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "context_memories": {
+      "type": "array",
+      "description": "当前 context 内产生的重要记忆点，实时追加。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["summary"],
+        "properties": {
+          "memory_id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  }
+}
