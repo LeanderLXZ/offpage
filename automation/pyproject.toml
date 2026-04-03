@@ -1,0 +1,9 @@
+[project]
+name = "persona-extraction"
+version = "0.1.0"
+description = "Automated batch extraction orchestrator for persona-engine"
+requires-python = ">=3.11"
+
+# jsonschema is the only external dependency.
+# Install it once: pip install jsonschema
+# The validator works without it (skips schema checks) so it's optional.

@@ -1,0 +1,96 @@
+# 语义审校
+
+你现在接手本地项目 `persona-engine`，你没有任何额外背景知识。
+
+## 目标
+
+对 `{work_id}` 的 `{batch_id}`（阶段 `{stage_id}`，章节 `{chapters}`）的提取产出做语义审校。
+你的重点不是写漂亮总结，而是找出真正有风险的问题。
+
+## 审校范围
+
+- 作品目录: `{work_dir}`
+- 目标角色: {target_characters}
+- 本批 stage_id: `{stage_id}`
+- 前一批 stage_id: `{prev_stage_id}`
+
+## 程序化校验结果（第一层已完成）
+
+以下是自动程序化校验的结果。请不要重复检查这些已通过的项目，专注于语义层面：
+
+```
+{programmatic_report}
+```
+
+## 读取顺序
+
+1. 先读 `schemas/README.md`
+2. 读取本批产出的世界快照：`{work_dir}/world/stage_snapshots/{stage_id}.json`
+3. 读取本批产出的角色快照和记忆文件
+4. 如果存在前一批的快照（`{prev_stage_id}`），读取用于对比
+
+## 审校检查清单
+
+### A. 风格与详细度一致性
+
+如果前一批有输出（`{prev_stage_id}`），对比：
+
+1. emotional_voice_map 条目数是否相近（允许±2）
+2. relationships 条目的 driving_events 是否同等详细
+3. evidence_refs 引用密度是否相近
+4. dialogue_examples 数量和质量是否相近
+5. memory_timeline 条目的 subjective_experience 长度和深度是否一致
+6. 如果任何维度出现明显退化（比前一批减少 50% 以上），标记为 FAIL
+
+### B. 数据边界正确性
+
+7. 世界层是否只记录了大事件？是否有小场景、个人经历误入世界层？
+8. 角色包是否有世界层的大事件直接复制？
+9. 角色的 knowledge_scope 是否合理？是否泄漏了角色不该知道的信息？
+10. 用户状态是否污染了 canonical 数据？
+11. 是否有 inference 被标为 canon？
+
+### C. 信息充分性
+
+12. voice_state 是否有足够的 emotional_voice_map（至少 3 种情绪）？
+13. behavior_state 是否有足够的 emotional_reaction_map（至少 3 种情绪）？
+14. relationships 是否覆盖了本批出现的所有重要角色？
+15. memory_timeline 是否覆盖了本批的关键事件？
+16. 有没有明显的重大遗漏？
+
+### D. 世界-角色交叉一致性
+
+17. 世界快照和角色快照使用的 stage_id 是否一致？
+18. 世界快照中的重大事件是否在相关角色的 experienced_events 中有体现？
+19. 角色 relationships 中引用的事件是否在世界事件中有对应？
+
+### E. 时间性
+
+20. 当前阶段的内容是否写成了"现在时"？
+21. 历史事件是否正确标注为已发生？
+22. 是否有"未来阶段"的信息提前泄漏？
+
+## 输出格式
+
+你必须输出一个结构化的审校结果。格式如下：
+
+```
+VERDICT: PASS 或 FAIL
+
+FINDINGS:
+1. [severity: error/warning] [file] 具体问题描述
+2. ...
+
+STYLE_CONSISTENCY:
+- emotional_voice_map: 前批 N 条 vs 本批 M 条 → OK/退化
+- relationships detail: OK/退化
+- evidence_refs density: OK/退化
+- dialogue_examples: OK/退化
+
+SUMMARY:
+一句话总结。
+```
+
+如果 VERDICT 为 FAIL，必须在 FINDINGS 中说明具体哪些问题必须修复。
+只有存在 severity=error 的 finding 时才应判定 FAIL。
+Warning 级别的问题不导致 FAIL，但应记录供参考。
