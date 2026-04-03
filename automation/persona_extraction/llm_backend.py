@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import glob as _glob
 import json
 import logging
+import os
+import shutil
 import subprocess
 import time
 from abc import ABC, abstractmethod
@@ -12,6 +15,45 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _find_claude_binary() -> str:
+    """Locate the claude CLI binary.
+
+    Search order:
+      1. CLAUDE_PATH environment variable
+      2. System PATH (``shutil.which``)
+      3. VS Code / Cursor extension directories (common install locations)
+    """
+    env_path = os.environ.get("CLAUDE_PATH")
+    if env_path and Path(env_path).is_file():
+        return env_path
+
+    which_path = shutil.which("claude")
+    if which_path:
+        return which_path
+
+    # Search in VS Code and Cursor extension dirs
+    home = Path.home()
+    patterns = [
+        str(home / ".vscode" / "extensions" / "anthropic.claude-code-*" /
+            "resources" / "native-binary" / "claude"),
+        str(home / ".cursor-server" / "extensions" / "anthropic.claude-code-*" /
+            "resources" / "native-binary" / "claude"),
+        str(home / ".vscode-server" / "extensions" / "anthropic.claude-code-*" /
+            "resources" / "native-binary" / "claude"),
+    ]
+    for pattern in patterns:
+        matches = sorted(_glob.glob(pattern), reverse=True)  # newest first
+        for m in matches:
+            if os.path.isfile(m) and os.access(m, os.X_OK):
+                logger.info("Auto-discovered claude binary: %s", m)
+                return m
+
+    raise FileNotFoundError(
+        "claude CLI binary not found. Install Claude Code, add it to PATH, "
+        "or set CLAUDE_PATH environment variable."
+    )
 
 # ---------------------------------------------------------------------------
 # Result
@@ -61,9 +103,11 @@ class ClaudeBackend(LLMBackend):
     """Invoke `claude -p` using an existing Claude Code subscription."""
 
     def __init__(self, project_root: Path, max_turns: int = 50,
-                 model: str | None = None):
+                 model: str | None = None, effort: str | None = None):
         super().__init__(project_root, max_turns)
         self.model = model  # e.g. "opus", "sonnet"
+        self.effort = effort  # e.g. "low", "medium", "high", "max"
+        self._claude_bin = _find_claude_binary()
 
     def name(self) -> str:
         return "claude"
@@ -73,7 +117,7 @@ class ClaudeBackend(LLMBackend):
         tools = allowed_tools or CLAUDE_DEFAULT_TOOLS
 
         cmd: list[str] = [
-            "claude", "-p", prompt,
+            self._claude_bin, "-p", prompt,
             "--output-format", "json",
             "--max-turns", str(self.max_turns),
             "--dangerously-skip-permissions",
@@ -81,6 +125,8 @@ class ClaudeBackend(LLMBackend):
         ]
         if self.model:
             cmd.extend(["--model", self.model])
+        if self.effort:
+            cmd.extend(["--effort", self.effort])
 
         logger.info("Running claude -p  (max_turns=%d, timeout=%ds)",
                      self.max_turns, timeout_seconds)
@@ -168,10 +214,11 @@ class CodexBackend(LLMBackend):
 
 def create_backend(name: str, project_root: Path, *,
                    max_turns: int = 50,
-                   model: str | None = None) -> LLMBackend:
+                   model: str | None = None,
+                   effort: str | None = None) -> LLMBackend:
     """Create a backend by name ('claude' or 'codex')."""
     if name == "claude":
-        return ClaudeBackend(project_root, max_turns, model)
+        return ClaudeBackend(project_root, max_turns, model, effort=effort)
     if name == "codex":
         return CodexBackend(project_root, max_turns, model)
     raise ValueError(f"Unknown backend: {name!r}  (choices: claude, codex)")

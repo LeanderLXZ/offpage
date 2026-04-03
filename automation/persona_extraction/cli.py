@@ -41,8 +41,14 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--model", "-m",
-        default=None,
-        help="Model override (e.g. 'opus', 'sonnet')",
+        default="claude-opus-4-6",
+        help="Model for extraction (default: claude-opus-4-6)",
+    )
+    parser.add_argument(
+        "--effort",
+        choices=["low", "medium", "high", "max"],
+        default="max",
+        help="Effort level for LLM reasoning (default: max)",
     )
     parser.add_argument(
         "--max-turns",
@@ -90,13 +96,15 @@ def main(argv: list[str] | None = None) -> None:
     # Create backends
     backend = create_backend(
         args.backend, project_root,
-        max_turns=args.max_turns, model=args.model)
+        max_turns=args.max_turns, model=args.model,
+        effort=args.effort)
 
     reviewer_backend = None
     if args.reviewer_backend:
         reviewer_backend = create_backend(
             args.reviewer_backend, project_root,
-            max_turns=30, model=args.model)
+            max_turns=30, model=args.model,
+            effort=args.effort)
 
     orch = ExtractionOrchestrator(
         project_root=project_root,

@@ -45,7 +45,10 @@ def build_analysis_prompt(project_root: Path, work_id: str) -> str:
 
     chapter_count = 0
     if chapter_index:
-        chapter_count = len(chapter_index.get("chapters", []))
+        if isinstance(chapter_index, list):
+            chapter_count = len(chapter_index)
+        else:
+            chapter_count = len(chapter_index.get("chapters", []))
 
     context = {
         "work_id": work_id,
