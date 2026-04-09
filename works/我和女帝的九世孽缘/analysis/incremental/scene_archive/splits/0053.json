@@ -1,0 +1,70 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 12,
+    "time_in_story": "比试开始前",
+    "location": "擂台（观众视角）",
+    "characters_present": [
+      "楚妍儿",
+      "王枫",
+      "擂台上的修士们"
+    ],
+    "summary": "楚妍儿意识到王枫在压制境界欺负人，擂台上的对手们感受到他强大的气场后心生退意，但决定留在角落近距离观战以积累战斗经验。"
+  },
+  {
+    "scene_start_line": 13,
+    "scene_end_line": 34,
+    "time_in_story": "比试开始",
+    "location": "王枫所在的擂台（结界内）",
+    "characters_present": [
+      "王枫",
+      "擂台对手们",
+      "围观者"
+    ],
+    "summary": "钟声响起、结界结出，多名对手立刻认输躺到角落，只剩一位聚灵境九层修士。王枫率九人给他竖大拇指，荒诞场面引来大批人围观。"
+  },
+  {
+    "scene_start_line": 35,
+    "scene_end_line": 41,
+    "time_in_story": "同一时间",
+    "location": "擂台上空",
+    "characters_present": [
+      "姜寒汐"
+    ],
+    "summary": "姜寒汐踩飞剑在天空观战，注意到王枫的擂台并疑惑他为何出现在此。她以敛息秘法隐藏真实修为，连宗主都看不穿。"
+  },
+  {
+    "scene_start_line": 42,
+    "scene_end_line": 65,
+    "time_in_story": "紧接上文",
+    "location": "王枫所在的擂台（结界内）",
+    "characters_present": [
+      "王枫",
+      "聚灵境九层修士",
+      "判官",
+      "其余认输的修士"
+    ],
+    "summary": "最后一名修士大怒出拳攻向王枫，被一拳打飞撞上结界吐血。判官震惊于这一拳不亚于结灵境一层的力量，随即打开结界，战斗结束。"
+  },
+  {
+    "scene_start_line": 66,
+    "scene_end_line": 79,
+    "time_in_story": "紧接上文",
+    "location": "擂台上空",
+    "characters_present": [
+      "姜寒汐"
+    ],
+    "summary": "姜寒汐意识到王枫骗了她两次修为，心中涌起怒意后惊觉自己几万年未变的心境因王枫而产生了各种情绪波动，困惑不解。"
+  },
+  {
+    "scene_start_line": 80,
+    "scene_end_line": 90,
+    "time_in_story": "紧接上文",
+    "location": "擂台",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "王枫突然感到八世以来熟悉的寒意，警惕扫视四周未发现姜寒汐后松了口气。姜寒汐在天上默默移开目光，王枫跑下擂台去观看徒弟萧浩的比赛。"
+  }
+]

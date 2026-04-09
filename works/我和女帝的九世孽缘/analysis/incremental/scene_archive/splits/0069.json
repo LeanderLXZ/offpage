@@ -1,0 +1,48 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 12,
+    "time_in_story": "夜间",
+    "location": "皇宫·王枫房间外",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "王枫与姜寒汐换上夜行衣，压低声音悄悄离开房间，准备夜间行动。"
+  },
+  {
+    "scene_start_line": 13,
+    "scene_end_line": 36,
+    "time_in_story": "夜间",
+    "location": "皇宫殿顶",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "二人飞踏上殿顶，姜寒汐察觉王枫意图是偷兵器而非取东西。王枫拒绝姜寒汐去北境的提议，以先前约定压制她的反对，带她朝储兵殿前进。"
+  },
+  {
+    "scene_start_line": 37,
+    "scene_end_line": 68,
+    "time_in_story": "夜间",
+    "location": "储兵殿",
+    "characters_present": [
+      "王枫",
+      "姜寒汐",
+      "守殿老者"
+    ],
+    "summary": "二人潜入储兵殿，击晕门口守卫后遭遇守殿老者，但老者仅结灵境一层，被姜寒汐瞬间制服。王枫将殿内兵器大量装入储物袋，姜寒汐负责放哨，并质疑王枫手法过于娴熟。"
+  },
+  {
+    "scene_start_line": 69,
+    "scene_end_line": 103,
+    "time_in_story": "夜间",
+    "location": "储兵殿",
+    "characters_present": [
+      "王枫",
+      "姜寒汐",
+      "秦风"
+    ],
+    "summary": "姜寒汐发现有人来，二人躲入角落。来者秦风同为盗贼，拥有八级大盗系统，王枫用探查得知其身份后心生吞噬对方系统的念头，并回忆了自己八世轮回中对各类天骄的认知。"
+  }
+]

@@ -1,0 +1,34 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 16,
+    "time_in_story": "紧接上章离开姜寒汐之后",
+    "location": "野外（逃离姜寒汐后的路上）",
+    "characters_present": [
+      "王枫"
+    ],
+    "summary": "王枫跑开后满头大汗地回味恶作剧，与系统对话得知黑丝不会发臭，一度想回去取但顾虑可能撞见姜寒汐，最终作罢。"
+  },
+  {
+    "scene_start_line": 17,
+    "scene_end_line": 99,
+    "time_in_story": "紧接上一场景",
+    "location": "野外林地",
+    "characters_present": [
+      "王枫",
+      "二哈",
+      "青玄宗四人"
+    ],
+    "summary": "二哈被青玄宗四人追赶跑到王枫面前求助。对方以方圆百里皆其宗门之物为由威胁王枫交出二哈，王枫暴起将四人全部击杀。搜尸后从二哈口中获得一瓶下品炼骨丹，随后骑二哈离开。"
+  },
+  {
+    "scene_start_line": 100,
+    "scene_end_line": 103,
+    "time_in_story": "王枫刚离开后",
+    "location": "同一片林地（青玄宗四人死亡现场）",
+    "characters_present": [
+      "五名紫衣女子"
+    ],
+    "summary": "王枫前脚离开，一队五名紫衣女子随后赶到，发现青玄宗弟子的尸体并对此感到疑惑。"
+  }
+]

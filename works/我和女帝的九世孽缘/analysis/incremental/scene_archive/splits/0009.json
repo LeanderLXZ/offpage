@@ -1,0 +1,35 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 36,
+    "time_in_story": "第二天早晨",
+    "location": "房间（客房）",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "王枫早晨醒来发现自己抱着姜寒汐入睡，慌忙滚下床假装做俯卧撑。姜寒汐醒来后误解其姿势为\"单相思\"，王枫极力辩解并提出以道心起誓，姜寒汐最终打消怀疑。"
+  },
+  {
+    "scene_start_line": 37,
+    "scene_end_line": 46,
+    "time_in_story": "早晨",
+    "location": "村子",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "两人各怀心思离开房间。姜寒汐计划前往北境冰宫提升修为，王枫则前去寻找村长打听狩猎队消息。"
+  },
+  {
+    "scene_start_line": 47,
+    "scene_end_line": 85,
+    "time_in_story": "早晨",
+    "location": "村长家",
+    "characters_present": [
+      "王枫",
+      "村长"
+    ],
+    "summary": "王枫向村长询问狩猎队下落，得知他们往东边走后失联已超三天。村长透露有一名逃回的队员尚未苏醒，王枫背起村长赶去寻找该队员。"
+  }
+]

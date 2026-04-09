@@ -1,0 +1,46 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 32,
+    "time_in_story": "白天（淬体突破后）",
+    "location": "村子（户外）",
+    "characters_present": [
+      "姜寒汐",
+      "王枫"
+    ],
+    "summary": "姜寒汐突破淬体六层后忍饥修炼，王枫主动送上烤妖兽肉，姜寒汐勉强道谢后小口食用，发现比灵丹妙药好吃得多。村民对这个突然出现的绝美女子心存畏惧，无人敢与她搭话。"
+  },
+  {
+    "scene_start_line": 33,
+    "scene_end_line": 47,
+    "time_in_story": "夜晚",
+    "location": "村子（空房屋前）",
+    "characters_present": [
+      "王枫",
+      "村长"
+    ],
+    "summary": "村长为王枫安排了一间狩猎队留下的空房屋。村长询问姜寒汐的身份，王枫说是自己捡回来的，村长误解二人关系，王枫尴尬地将村长打发走。"
+  },
+  {
+    "scene_start_line": 48,
+    "scene_end_line": 67,
+    "time_in_story": "夜晚（村长离开后）",
+    "location": "村子户外 → 王枫屋中",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "王枫以\"在外面睡会被全村人围观、被当成没人要的孩子\"为由说服姜寒汐去自己屋里睡。姜寒汐因被戳中幼年遭父母抛弃的痛处而起身跟随，实际上村里还有其他空房，她被王枫骗进了屋。"
+  },
+  {
+    "scene_start_line": 68,
+    "scene_end_line": 90,
+    "time_in_story": "夜晚（进屋后）",
+    "location": "王枫的屋内",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "姜寒汐进屋后说王枫有些眼熟但想不起来，王枫连忙撒谎搪塞。随后王枫假装屋里只有一张床，主动提出自己睡地上，以\"声东击西\"之策让姜寒汐认为他是正人君子。"
+  }
+]

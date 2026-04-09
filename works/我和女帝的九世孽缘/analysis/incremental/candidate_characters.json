@@ -1,0 +1,539 @@
+{
+  "work_id": "我和女帝的九世孽缘",
+  "candidates": [
+    {
+      "character_id": "王枫",
+      "aliases": [
+        {
+          "name": "倭瓜男",
+          "type": "化名",
+          "first_appearance": "约第5章"
+        },
+        {
+          "name": "淫贼大帝",
+          "type": "代称",
+          "first_appearance": "约第17章"
+        },
+        {
+          "name": "枫天帝",
+          "type": "封号",
+          "first_appearance": "约第318章"
+        },
+        {
+          "name": "劫匪仙人",
+          "type": "化名",
+          "first_appearance": "约第181章"
+        },
+        {
+          "name": "王浩帅",
+          "type": "化名",
+          "first_appearance": "约第409章"
+        },
+        {
+          "name": "十响神子",
+          "type": "封号",
+          "first_appearance": "约第252章"
+        },
+        {
+          "name": "伪大道",
+          "type": "代称",
+          "first_appearance": "约第491章"
+        }
+      ],
+      "description": "男主角，穿越者，拥有主神级系统。共有九条命，前八世均死于姜寒汐之手。第九世复活后以攻略姜寒汐为最终目标，性格嬉皮笑脸但关键时刻极为可靠，擅长伪装、搞怪和深情反转。",
+      "frequency": "高",
+      "importance": "主角",
+      "recommended": true
+    },
+    {
+      "character_id": "姜寒汐",
+      "aliases": [
+        {
+          "name": "极冰女帝",
+          "type": "封号",
+          "first_appearance": "约第1章"
+        },
+        {
+          "name": "寒仙女帝",
+          "type": "封号",
+          "first_appearance": "约第395章"
+        },
+        {
+          "name": "大道之女",
+          "type": "代称",
+          "first_appearance": "约第470章"
+        },
+        {
+          "name": "冰仙传人",
+          "type": "代称",
+          "first_appearance": "约第366章"
+        }
+      ],
+      "description": "女主角，极冰女帝转世重修。外表冷艳高贵内心缺爱敏感，王枫九世追求的对象。拥有太古冥寒体和太古寒瞳，修炼帝冰诀。从仇人到道侣到妻子的感情线贯穿全书。",
+      "frequency": "高",
+      "importance": "主角",
+      "recommended": true
+    },
+    {
+      "character_id": "萧浩",
+      "aliases": [
+        {
+          "name": "太阳剑体",
+          "type": "代称",
+          "first_appearance": "约第33章"
+        }
+      ],
+      "description": "王枫的徒弟，拥有太阳剑体。性格直率忠诚但在感情方面是直男，与楚妍儿的感情线为重要副线。后半段被天魔寄生半魔化。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "冷凝月",
+      "aliases": [
+        {
+          "name": "冷圣女",
+          "type": "称呼",
+          "first_appearance": "约第89章"
+        },
+        {
+          "name": "冷傻子",
+          "type": "绰号",
+          "first_appearance": "约第323章"
+        }
+      ],
+      "description": "冰宫圣女，蓝星穿越者（被泥头车撞死后魂穿），无系统无金手指。性格极度怕死、单纯到近乎傻，从未杀过人。苟道风格修炼，后在仙界与苏婉关系暧昧。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "小龙",
+      "aliases": [
+        {
+          "name": "龙心语",
+          "type": "本名",
+          "first_appearance": "约第441章"
+        },
+        {
+          "name": "炎冰金龙",
+          "type": "代称",
+          "first_appearance": "约第118章"
+        }
+      ],
+      "description": "王枫前两世孵化的炎冰金龙，认王枫为爹爹、姜寒汐为娘亲。可在幼女形态和少女形态间切换，是连接王枫与姜寒汐的情感纽带。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "寒淼",
+      "aliases": [
+        {
+          "name": "寒剑",
+          "type": "本名",
+          "first_appearance": "约第1章"
+        },
+        {
+          "name": "寒剑器灵",
+          "type": "代称",
+          "first_appearance": "约第12章"
+        }
+      ],
+      "description": "姜寒汐的本命帝器寒剑的器灵，真名寒淼。化形为不足一米五的冰蓝长发呆毛小萝莉，头顶呆毛是致命弱点。与旭辰（星辰剑）发展出感情线。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "旭辰",
+      "aliases": [
+        {
+          "name": "星辰剑",
+          "type": "本名",
+          "first_appearance": "约第162章"
+        }
+      ],
+      "description": "王枫的本命剑星辰剑的器灵，赐名旭辰。化形为十八九岁黑金发色男子，阳光少年感。对寒淼一见倾心，性格直球但经常被寒淼暴打。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "楚妍儿",
+      "aliases": [
+        {
+          "name": "太阴剑体",
+          "type": "代称",
+          "first_appearance": "约第57章"
+        }
+      ],
+      "description": "东阳女帝之女，拥有太阴剑体。性格外刚内柔，与萧浩从打闹到相爱。在天苍大劫中死亡，后被系统复活。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "哈弟",
+      "aliases": [
+        {
+          "name": "二哈",
+          "type": "绰号",
+          "first_appearance": "约第28章"
+        },
+        {
+          "name": "天机犬",
+          "type": "代称",
+          "first_appearance": "约第120章"
+        },
+        {
+          "name": "狼王",
+          "type": "称呼",
+          "first_appearance": "约第28章"
+        }
+      ],
+      "description": "天机圣地的天机犬，外形为哈士奇。王枫的老友，性格二且搞笑。在仙界成为妖仙尊但重伤缩为幼崽形态，后与冷凝月组成搞笑搭档。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "林凡",
+      "aliases": [
+        {
+          "name": "无情大帝",
+          "type": "封号",
+          "first_appearance": "约第330章"
+        },
+        {
+          "name": "林郎",
+          "type": "称呼",
+          "first_appearance": "约第214章"
+        }
+      ],
+      "description": "幻天莹的道侣，蓝星穿越者，同样拥有系统。与王枫长相几乎一模一样。太古时代在天琼大陆活跃，后失忆成为大帝。最终殉情进入往生门后被复活。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "幻天莹",
+      "aliases": [
+        {
+          "name": "幻天大帝",
+          "type": "封号",
+          "first_appearance": "约第213章"
+        },
+        {
+          "name": "幻神女",
+          "type": "封号",
+          "first_appearance": "约第281章"
+        },
+        {
+          "name": "天琼第一美人",
+          "type": "称呼",
+          "first_appearance": "约第288章"
+        }
+      ],
+      "description": "太古时代半仙巅峰强者，被天道镇压后残魂困在帝陨秘境数十万年。传授姜寒汐幻天术。与林凡的爱情悲剧横跨百万年。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "苏婉",
+      "aliases": [],
+      "description": "姜寒汐在仙界的好友，仙尊级别。喜欢女性，对冷凝月有特殊好感。性格八卦爱吃瓜，实力强大。与冷凝月、陆清瑶组成仙界三傻。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "冰仙",
+      "aliases": [
+        {
+          "name": "姜璇仙",
+          "type": "本名",
+          "first_appearance": "约第499章"
+        },
+        {
+          "name": "冰仙三代",
+          "type": "代称",
+          "first_appearance": "约第366章"
+        },
+        {
+          "name": "冰宫第三代大帝",
+          "type": "封号",
+          "first_appearance": "约第402章"
+        }
+      ],
+      "description": "姜寒汐的生母，冰宫第三代大帝。因成仙路开启被迫抛弃年幼的姜寒汐，导致母女关系极为冷淡。封存了姜寒汐关于王枫的记忆。",
+      "frequency": "中",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "许青枫",
+      "aliases": [],
+      "description": "天琼大陆天剑山少宗主（太古时代），后在仙界成为道天仙府新道师。王枫的好友，经常扮演小丑角色。",
+      "frequency": "中",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "系统",
+      "aliases": [
+        {
+          "name": "主神级系统",
+          "type": "本名",
+          "first_appearance": "约第391章"
+        }
+      ],
+      "description": "王枫的主神级系统，自诞生起携带数十亿本源点且拥有独特情感功能。有独立意识，会吐槽、操心、自我牺牲。为复活王枫不惜割裂自身本源。",
+      "frequency": "高",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "方天",
+      "aliases": [
+        {
+          "name": "血魔大帝",
+          "type": "封号",
+          "first_appearance": "约第160章"
+        }
+      ],
+      "description": "天苍大陆唯一存活的大帝，半仙境，以魔修证道。企图通过血祭成仙坛成仙。天苍大劫的终极反派，最终被王枫以命换命击杀。",
+      "frequency": "中",
+      "importance": "重要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "柳绫",
+      "aliases": [
+        {
+          "name": "柳树",
+          "type": "代称",
+          "first_appearance": "约第3章"
+        },
+        {
+          "name": "柳青瑶",
+          "type": "本名",
+          "first_appearance": "约第252章"
+        },
+        {
+          "name": "善魂",
+          "type": "代称",
+          "first_appearance": "约第163章"
+        },
+        {
+          "name": "恶魂",
+          "type": "代称",
+          "first_appearance": "约第162章"
+        }
+      ],
+      "description": "百万年前的柳树妖，三魂分裂。柳村守村神。人魂柳青瑶吞噬穿越者魂魄获得新身份，最终三魂融合成就妖仙。",
+      "frequency": "中",
+      "importance": "次要配角",
+      "recommended": true
+    },
+    {
+      "character_id": "楚沫兮",
+      "aliases": [
+        {
+          "name": "东阳女帝",
+          "type": "封号",
+          "first_appearance": "约第58章"
+        },
+        {
+          "name": "仙庭前代圣女",
+          "type": "代称",
+          "first_appearance": "约第65章"
+        }
+      ],
+      "description": "楚妍儿的母亲，东阳皇朝女帝。真实身份为仙庭前代圣女，圣王境九层巅峰。",
+      "frequency": "中",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "江少清",
+      "aliases": [
+        {
+          "name": "江圣子",
+          "type": "称呼",
+          "first_appearance": "约第314章"
+        },
+        {
+          "name": "道战圣地前代圣子",
+          "type": "代称",
+          "first_appearance": "约第310章"
+        }
+      ],
+      "description": "楚妍儿的父亲，道战圣地前代圣子。在荒禁中与王枫重逢后认女。",
+      "frequency": "中",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "剑闲余",
+      "aliases": [
+        {
+          "name": "老林",
+          "type": "化名",
+          "first_appearance": "约第179章"
+        },
+        {
+          "name": "剑宗大老祖",
+          "type": "代称",
+          "first_appearance": "约第372章"
+        }
+      ],
+      "description": "剑宗太上长老老祖，真实境界为伪帝境。在剑宗伪装成打杂老人老林。在蓝星转世后仍以老林为化名。",
+      "frequency": "中",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "剑澜",
+      "aliases": [],
+      "description": "剑宗宗主，准帝中期。以剑为姓，持极品圣器天燎剑。也是萧浩的第二任师父。",
+      "frequency": "中",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "三太上长老",
+      "aliases": [
+        {
+          "name": "冷寒珊",
+          "type": "本名",
+          "first_appearance": "约第492章"
+        },
+        {
+          "name": "老三",
+          "type": "称呼",
+          "first_appearance": "约第112章"
+        }
+      ],
+      "description": "冰宫三位太上长老中最年轻的一位，准帝境后期。经常因王枫与姜寒汐的亲密行为道心受损。贯穿冰宫剧情线。",
+      "frequency": "高",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "秦羽溪",
+      "aliases": [],
+      "description": "剑宗圣女，拥有异瞳加重瞳双重特殊瞳术。天苍大劫中死亡，在冥界靠重瞳重塑肉身。",
+      "frequency": "中",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "罗天安",
+      "aliases": [
+        {
+          "name": "冥海大帝",
+          "type": "封号",
+          "first_appearance": "约第329章"
+        }
+      ],
+      "description": "玄海大陆半仙境大帝，与方天合谋成仙。被方天在决战中杀死祭坛。",
+      "frequency": "中",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "陆清瑶",
+      "aliases": [
+        {
+          "name": "陆清姚",
+          "type": "本名",
+          "first_appearance": "约第244章"
+        }
+      ],
+      "description": "凡人少女马车夫，后成为仙界三傻之一。死后被王枫用往生术复活。",
+      "frequency": "中",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "江清瑶",
+      "aliases": [
+        {
+          "name": "江清姚",
+          "type": "本名",
+          "first_appearance": "约第286章"
+        }
+      ],
+      "description": "天剑山大师姐，许青枫的师姐兼道侣。因太古诅咒去世，后被王枫用往生术复活。",
+      "frequency": "低",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "寒小麟",
+      "aliases": [
+        {
+          "name": "冰麒麟",
+          "type": "代称",
+          "first_appearance": "约第320章"
+        },
+        {
+          "name": "小麟",
+          "type": "昵称",
+          "first_appearance": "约第325章"
+        },
+        {
+          "name": "冰淇麟",
+          "type": "绰号",
+          "first_appearance": "约第524章"
+        }
+      ],
+      "description": "仙界冰麒麟族长幼崽，融入姜寒汐眉心成为契约神兽。可化形为人形小女孩。",
+      "frequency": "中",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "太上宗主分魂",
+      "aliases": [],
+      "description": "太上神宗宗主的仙皇境残魂。为姜寒汐传授冰仙三代太上寒仙诀。",
+      "frequency": "中",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "冥主",
+      "aliases": [],
+      "description": "冥界之主，外表为丑萌小男孩，道帝境巅峰。被王枫掐住抽屁股教训。",
+      "frequency": "低",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "往生婆",
+      "aliases": [],
+      "description": "冥界往生桥守护者，道圣境巅峰。被王枫制服后配合查找亡魂。",
+      "frequency": "低",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "莫磊",
+      "aliases": [],
+      "description": "柳村村长，王枫初始剧情的重要角色。后携张四女儿在锦明城卖菜，身衰力竭后去世。",
+      "frequency": "低",
+      "importance": "次要配角",
+      "recommended": false
+    },
+    {
+      "character_id": "叶君临",
+      "aliases": [],
+      "description": "姜寒汐的父亲，被冰仙囚禁在冰渊深处密室中浑身诡化。王枫前往冥界获取渊泉诡心即为救他。",
+      "frequency": "低",
+      "importance": "次要配角",
+      "recommended": false
+    }
+  ]
+}

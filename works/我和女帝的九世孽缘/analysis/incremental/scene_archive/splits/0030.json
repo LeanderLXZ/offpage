@@ -1,0 +1,35 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 10,
+    "time_in_story": "白天（具体时间不明）",
+    "location": "客栈大堂柜台",
+    "characters_present": [
+      "王枫",
+      "客栈老板"
+    ],
+    "summary": "王枫用一颗下品灵石买下客栈八成收入，老板将全部天字号房间钥匙交予他，王枫随后上楼选了一间天字号房间入住。"
+  },
+  {
+    "scene_start_line": 11,
+    "scene_end_line": 80,
+    "time_in_story": "同日白天至入夜（入睡前）",
+    "location": "客栈天字号房间内",
+    "characters_present": [
+      "王枫"
+    ],
+    "summary": "王枫清点储物空间并回收多余物品获得888本源点，在1000点奖池中抽到紫色随机兵器借助卡，又在100点奖池中抽到呼唤拨浪鼓，滴血认主后发现拨浪鼓是用来呼唤自己的，骂了一声后将其丢进储物空间，躺下睡觉。"
+  },
+  {
+    "scene_start_line": 81,
+    "scene_end_line": 93,
+    "time_in_story": "夜晚",
+    "location": "客栈大堂柜台",
+    "characters_present": [
+      "姜寒汐",
+      "客栈掌柜",
+      "客栈中的路人"
+    ],
+    "summary": "姜寒汐夜晚来到客栈欲开天字号房间，被告知钥匙全在大掌柜（王枫）手中，遂改开地字号房间入住。在场路人对她的容貌和仙人身份议论纷纷。"
+  }
+]

@@ -1,0 +1,47 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 39,
+    "time_in_story": "当晚，入夜后",
+    "location": "王枫的房屋内",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "王枫将床让给姜寒汐，自己睡在地上。系统发布两个任务：三天内寻找柳村狩猎队，以及攻略极冰女帝姜寒汐（奖励无敌境界）。王枫因任务激动翻来覆去被姜寒汐察觉，二人短暂交谈后王枫提及狩猎队失踪之事，随后起身出门散心。"
+  },
+  {
+    "scene_start_line": 40,
+    "scene_end_line": 64,
+    "time_in_story": "当晚，深夜",
+    "location": "柳村中央，柳树上",
+    "characters_present": [
+      "王枫",
+      "小女孩",
+      "柳神"
+    ],
+    "summary": "王枫爬上柳树遥望夜空，再次听到小女孩来找柳神玩耍。待四周安静后，王枫回忆自己来到这个世界两千多年、被姜寒汐杀了八世的经历，感慨万千，决定回去与她培养感情。"
+  },
+  {
+    "scene_start_line": 65,
+    "scene_end_line": 83,
+    "time_in_story": "当晚，深夜稍后",
+    "location": "王枫的房屋内",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "王枫返回房中，姜寒汐察觉他哭过但被他以沙子进眼搪塞。王枫忍不住注视姜寒汐的容貌被她发现，连忙道歉后躺下准备入睡。"
+  },
+  {
+    "scene_start_line": 84,
+    "scene_end_line": 93,
+    "time_in_story": "数分钟后，直至翌日",
+    "location": "王枫的房屋内",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "姜寒汐告知有一队人被困在某处，但王枫已经睡着未能听到。叙述补充姜寒汐破境降生时探测到那队人，以及她与王枫在柳村相遇的经过。二人一夜无话。"
+  }
+]

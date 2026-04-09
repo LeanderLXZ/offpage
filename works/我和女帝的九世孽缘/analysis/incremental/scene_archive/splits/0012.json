@@ -1,0 +1,48 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 18,
+    "time_in_story": "夜晚",
+    "location": "王枫与姜寒汐借住的房屋",
+    "characters_present": [
+      "姜寒汐",
+      "王枫"
+    ],
+    "summary": "姜寒汐透露她知道一队人被困的位置，王枫惊喜追问，姜寒汐表示明天再说便不再理会。二人各自入睡，一夜无话。"
+  },
+  {
+    "scene_start_line": 19,
+    "scene_end_line": 34,
+    "time_in_story": "第二天上午",
+    "location": "张四家中",
+    "characters_present": [
+      "王枫",
+      "张四",
+      "李妹",
+      "小女孩"
+    ],
+    "summary": "王枫前往张四家探望，张四已醒但仍虚弱，欲跪谢被王枫拦下。王枫直入主题询问狩猎队下落，张四提供了消息并告知自己沿途做了记号。"
+  },
+  {
+    "scene_start_line": 35,
+    "scene_end_line": 43,
+    "time_in_story": "第二天上午（稍后）",
+    "location": "村子内（住处、村中央）",
+    "characters_present": [
+      "王枫",
+      "柳树"
+    ],
+    "summary": "王枫获得记号线索后回到住处，发现姜寒汐已不在。他到村中央询问柳树，得知她往村东方向去了，便顺路出发寻找。"
+  },
+  {
+    "scene_start_line": 44,
+    "scene_end_line": 83,
+    "time_in_story": "一个时辰后",
+    "location": "村东方向的南林外围",
+    "characters_present": [
+      "王枫",
+      "姜寒汐"
+    ],
+    "summary": "王枫寻了一个时辰找到姜寒汐，目睹她斩杀一头马羊妖兽。王枫上前搭话，寒剑突然剧烈震颤似要攻击王枫，姜寒汐不解但将剑收起。王枫请求她同行寻找狩猎队，姜寒汐以与己无关为由拒绝。王枫决定靠完成系统任务来突破聚灵境。"
+  }
+]
