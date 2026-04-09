@@ -201,8 +201,10 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
 - **Phase 0 — Chapter summarization**: Split all chapters into chunks
   (~25 ch/chunk), multiple chunks processed in parallel via
   `ThreadPoolExecutor` (`--concurrency`, default 10). Each chunk is one
-  LLM call. Produces per-chapter structured summaries under
-  `analysis/incremental/chapter_summaries/`.
+  LLM call. Three-level JSON repair (L1 programmatic → L2 LLM 600s →
+  L3 full re-run, max 1). Completion gate: all chunks must succeed
+  before Phase 1 proceeds. Produces per-chapter structured summaries
+  under `analysis/incremental/chapter_summaries/`.
 - **Phase 1 — Global analysis** (from summaries): cross-chunk character
   identity merging → world overview (`world_overview.json`) → batch plan
   (`source_batch_plan.json`) → candidate characters

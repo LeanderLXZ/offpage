@@ -38,6 +38,8 @@
 - 多 chunk 并行处理（`--concurrency` 控制，默认 10）
 - 产出每章的结构化摘要（事件、出场角色、地点、情绪基调、身份变化线索、
   候选阶段边界标记）
+- JSON 修复：L1 程序化 → L2 LLM（600s）→ L3 全量重跑（最多 1 次）
+- 完成门控：全部 chunk 成功后才进入 Phase 1，有缺失则阻断并退出
 - 输出：`works/{work_id}/analysis/incremental/chapter_summaries/`
 
 ### 3. 全书分析（Phase 1）

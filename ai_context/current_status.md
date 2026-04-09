@@ -62,13 +62,15 @@ No runtime implementation code yet.
 - Failure triage: reviewer findings classified as fixable (≤5 specific field
   errors) → targeted fix agent (minimal edits + re-validate); systemic
   (file missing, structural, understanding-level) → full rollback + retry
-- Three-level JSON repair pipeline (`json_repair.py`): programmatic regex
-  (zero tokens) → LLM repair on broken JSON (minimal tokens) → full re-run
-  (last resort). Integrated into Phase 0 skip-check/post-write and Phase 3
-  validator for both JSON and JSONL files.
+- Three-level JSON repair pipeline (`json_repair.py`): L1 programmatic regex
+  (zero tokens) → L2 LLM repair (600s timeout, configurable via
+  `repair_timeout`) → L3 full re-run (caller-implemented, max 1 attempt).
+  Integrated into Phase 0 skip-check/post-write and Phase 3 validator for
+  both JSON and JSONL files.
 - Phase 0 parallel summarization: multiple chunks processed concurrently
-  via `ThreadPoolExecutor` (`--concurrency`, default 10). Completed chunk
-  files auto-skipped on resume.
+  via `ThreadPoolExecutor` (`--concurrency`, default 10). L3 auto-retry on
+  JSON repair failure. Completion gate blocks Phase 1 if any chunk missing.
+  Completed chunk files auto-skipped on resume.
 - Git integration: extraction branch, per-batch commits, auto-rollback
   (full-repo scope), squash-merge to main on completion
 - Phase 3.5 cross-batch consistency checker (`consistency_checker.py`):

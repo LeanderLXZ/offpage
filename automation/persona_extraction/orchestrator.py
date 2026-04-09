@@ -299,10 +299,15 @@ class ExtractionOrchestrator:
         start: int,
         end: int,
         summaries_dir: Path,
+        *,
+        _is_l3_retry: bool = False,
     ) -> tuple[int, bool, str]:
         """Process a single summarization chunk.
 
         Returns (chunk_index, success, message).
+
+        If L1+L2 JSON repair both fail and this is not already an L3 retry,
+        the chunk is automatically re-run once from scratch (L3).
         """
         output_path = summaries_dir / f"chunk_{idx:03d}.json"
 
@@ -322,7 +327,7 @@ class ExtractionOrchestrator:
 
         data = _load_json(output_path)
         if data is None:
-            # Try three-level repair
+            # Try L1 + L2 repair
             ok, desc = try_repair_json_file(
                 output_path,
                 backend=self.backend,
@@ -332,7 +337,14 @@ class ExtractionOrchestrator:
                 data = _load_json(output_path)
             else:
                 output_path.unlink(missing_ok=True)
-                return idx, False, f"JSON repair failed: {desc}"
+                # L3: full re-run (once)
+                if not _is_l3_retry:
+                    logger.info("L3 full re-run for chunk_%03d", idx)
+                    return self._summarize_chunk(
+                        idx, total_chunks, start, end, summaries_dir,
+                        _is_l3_retry=True,
+                    )
+                return idx, False, f"JSON repair failed (L3 also failed): {desc}"
 
         count = len(data.get("summaries", [])) if data else 0
         expected = end - start + 1
@@ -451,13 +463,19 @@ class ExtractionOrchestrator:
         if completed > 0:
             print(f"  Avg: {_fmt_duration(elapsed / completed)}/chunk")
 
-        # Verify all chunks completed
+        # Verify all chunks completed — gate for Phase 1
         all_done = sum(1 for i in range(1, total_chunks + 1)
                        if (summaries_dir / f"chunk_{i:03d}.json").exists())
-        print(f"\n[OK] Summarization: {all_done}/{total_chunks} chunks")
 
         if all_done < total_chunks:
-            print("[WARN] Some chunks missing. Re-run to fill gaps.")
+            missing = [f"chunk_{i:03d}" for i in range(1, total_chunks + 1)
+                       if not (summaries_dir / f"chunk_{i:03d}.json").exists()]
+            print(f"\n[ERROR] Summarization: {all_done}/{total_chunks} chunks")
+            print(f"  Missing: {missing}")
+            print("  Re-run to fill gaps (completed chunks will be skipped).")
+            sys.exit(1)
+
+        print(f"\n[OK] Summarization: {all_done}/{total_chunks} chunks")
 
         return summaries_dir
 

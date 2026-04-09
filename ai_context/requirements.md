@@ -122,7 +122,8 @@ revision tracking, roleplay-focused. Seven-step workflow:
 
 1. Ingest (normalize, split, metadata)
 2. Chapter summarization (chunk-based, ~25 ch/chunk, parallel via
-   `--concurrency`, default 10)
+   `--concurrency`, default 10; L1→L2→L3 JSON repair; completion
+   gate blocks Phase 1 if any chunk missing)
 3. Global analysis (from all summaries, in order):
    a. Cross-chunk character identity merging
    b. World overview (genre, power system, factions, geography, major
@@ -168,7 +169,9 @@ See `docs/requirements.md` §10 for full details.
 ## §11 Automated Extraction Pipeline
 
 Python orchestrator in `automation/` drives multi-batch extraction via CLI.
-Phase 0 chunk summarization runs in parallel (`--concurrency`, default 10).
+Phase 0 chunk summarization runs in parallel (`--concurrency`, default 10);
+three-level JSON repair (L1 programmatic → L2 LLM 600s → L3 full re-run);
+completion gate blocks Phase 1 if any chunk missing.
 Analysis → user confirmation → extraction loop (per batch: git preflight →
 **1+N split extraction** [world call → N parallel character calls] →
 programmatic validation → semantic review → git commit or rollback+retry) →
