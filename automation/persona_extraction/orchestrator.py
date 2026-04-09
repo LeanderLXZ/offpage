@@ -839,7 +839,7 @@ class ExtractionOrchestrator:
         if batch.state in (BatchState.RETRYING, BatchState.PENDING):
             # --- Step 1: Git preflight ---
             tracker.start_step()
-            tracker.print_step(1, 6, "Git preflight")
+            tracker.print_step(1, 7, "Git preflight")
             problems = preflight_check(
                 self.project_root, progress.extraction_branch or None,
                 ignore_patterns=["extraction_progress.json", "__pycache__"])
@@ -850,7 +850,7 @@ class ExtractionOrchestrator:
                 batch.error_message = "; ".join(problems)
                 progress.save(self.project_root)
                 return
-            tracker.print_step_done(1, 6, "Git preflight")
+            tracker.print_step_done(1, 7, "Git preflight")
 
             # --- Step 2: World extraction (Phase A) ---
             tracker.start_step()
@@ -939,7 +939,7 @@ class ExtractionOrchestrator:
                 progress.save(self.project_root)
 
             tracker.start_step()
-            tracker.print_step(4, 8, "Post-processing (digest + catalog)")
+            tracker.print_step(4, 7, "Post-processing (digest + catalog)")
 
             # Determine batch order (0-based index in batches list)
             batch_order = next(
@@ -962,13 +962,13 @@ class ExtractionOrchestrator:
                 # be validated by the review lanes below.
 
             tracker.record_step(ProgressTracker.STEP_VALIDATION)
-            tracker.print_step_done(4, 8, "Post-processing",
+            tracker.print_step_done(4, 7, "Post-processing",
                                     f"{len(pp_issues)} issues")
 
             batch.transition(BatchState.REVIEWING)
             progress.save(self.project_root)
 
-        # --- Step 5+6: Parallel review lanes (V+R+F per entity) ---
+        # --- Step 5: Parallel review lanes (V+R+F per entity) ---
         if batch.state == BatchState.REVIEWING:
             # Safety check: verify extraction output still exists on disk
             work_dir = self.project_root / "works" / progress.work_id
@@ -987,7 +987,7 @@ class ExtractionOrchestrator:
 
             tracker.start_step()
             n_lanes = 1 + len(progress.target_characters)
-            tracker.print_step(5, 8,
+            tracker.print_step(5, 7,
                                f"Parallel review lanes ({n_lanes} lanes)")
 
             lane_results = run_parallel_review(
@@ -1033,12 +1033,12 @@ class ExtractionOrchestrator:
                 return
 
             tracker.record_step(ProgressTracker.STEP_REVIEW)
-            tracker.print_step_done(5, 8, "Parallel review lanes",
+            tracker.print_step_done(5, 7, "Parallel review lanes",
                                     f"{n_lanes}/{n_lanes} passed")
 
-            # --- Step 7: Commit gate (programmatic, 0 token) ---
+            # --- Step 6: Commit gate (programmatic, 0 token) ---
             tracker.start_step()
-            tracker.print_step(7, 8, "Commit gate")
+            tracker.print_step(6, 7, "Commit gate")
 
             gate_passed, gate_issues = run_commit_gate(
                 project_root=self.project_root,
@@ -1058,14 +1058,14 @@ class ExtractionOrchestrator:
                 progress.save(self.project_root)
                 return
 
-            tracker.print_step_done(7, 8, "Commit gate", "PASS")
+            tracker.print_step_done(6, 7, "Commit gate", "PASS")
             batch.transition(BatchState.PASSED)
             progress.save(self.project_root)
 
-        # --- Step 8: Git commit ---
+        # --- Step 7: Git commit ---
         if batch.state == BatchState.PASSED:
             tracker.start_step()
-            tracker.print_step(8, 8, "Git commit")
+            tracker.print_step(7, 7, "Git commit")
 
             # Clear feedback/error fields on successful commit
             batch.last_reviewer_feedback = ""
@@ -1085,9 +1085,9 @@ class ExtractionOrchestrator:
                 # Save again with the SHA (this will be uncommitted
                 # on disk but consistent on next resume)
                 progress.save(self.project_root)
-                tracker.print_step_done(8, 8, "Git commit", sha)
+                tracker.print_step_done(7, 7, "Git commit", sha)
             else:
-                tracker.print_step_done(8, 8, "Git commit",
+                tracker.print_step_done(7, 7, "Git commit",
                                         "no changes")
 
             tracker.finish_batch()
