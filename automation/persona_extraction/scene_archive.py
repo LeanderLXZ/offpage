@@ -406,10 +406,13 @@ def _build_chapter_to_stage_map(
 
     for batch in plan.get("batches", []):
         stage_id = batch.get("stage_id", "")
-        ch_start = batch.get("chapter_start", 0)
-        ch_end = batch.get("chapter_end", 0)
-        for ch in range(ch_start, ch_end + 1):
-            mapping[f"{ch:04d}"] = stage_id
+        ch_range = batch.get("chapters", "")
+        if "-" in ch_range:
+            parts = ch_range.split("-")
+            ch_start = int(parts[0])
+            ch_end = int(parts[1])
+            for ch in range(ch_start, ch_end + 1):
+                mapping[f"{ch:04d}"] = stage_id
 
     return mapping
 
@@ -602,13 +605,14 @@ def run_scene_archive(
         # Save initial progress
         progress.save(project_root)
 
-        # Load known aliases for validation
-        known_aliases = _load_known_aliases(project_root, work_id)
+        # Scene archive is work-level (all characters), so skip
+        # character name validation — it would reject valid names
+        # that aren't in the extracted character set.
 
         # Run parallel processing
         _run_parallel(
             project_root, work_id, backend, progress,
-            pending, concurrency, known_aliases)
+            pending, concurrency, None)
 
     # Check if all passed
     not_passed = [cid for cid in chapters_to_process
@@ -643,17 +647,23 @@ def run_scene_archive(
 def _collect_chapters(
     plan: dict[str, Any], end_batch: int,
 ) -> list[str]:
-    """Collect chapter IDs from batch plan, respecting end_batch limit."""
+    """Collect chapter IDs from batch plan, respecting end_batch limit.
+
+    Parses the 'chapters' field (format: "0001-0011") from each batch.
+    """
     chapters: list[str] = []
     batches = plan.get("batches", [])
 
     for i, batch in enumerate(batches):
         if end_batch > 0 and (i + 1) > end_batch:
             break
-        ch_start = batch.get("chapter_start", 0)
-        ch_end = batch.get("chapter_end", 0)
-        for ch in range(ch_start, ch_end + 1):
-            chapters.append(f"{ch:04d}")
+        ch_range = batch.get("chapters", "")
+        if "-" in ch_range:
+            parts = ch_range.split("-")
+            ch_start = int(parts[0])
+            ch_end = int(parts[1])
+            for ch in range(ch_start, ch_end + 1):
+                chapters.append(f"{ch:04d}")
 
     return chapters
 

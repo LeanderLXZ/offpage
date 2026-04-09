@@ -49,6 +49,24 @@ class ValidationReport:
         return "\n".join(lines)
 
 
+def _load_importance_map(project_root: Path, work_id: str) -> dict[str, str]:
+    """Load character importance from candidate_characters.json.
+
+    Returns {character_name: importance} e.g. {"王枫": "主角", "萧浩": "重要配角"}.
+    """
+    path = (project_root / "works" / work_id / "analysis"
+            / "incremental" / "candidate_characters.json")
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return {c["character_id"]: c.get("importance", "")
+                for c in data.get("candidates", [])
+                if c.get("character_id")}
+    except (json.JSONDecodeError, OSError, KeyError):
+        return {}
+
+
 def validate_batch(
     project_root: Path,
     work_id: str,
@@ -65,8 +83,10 @@ def validate_batch(
     issues.extend(_check_world(work_dir, stage_id, schema_dir))
 
     # ---- Character checks (for each target character) ----
+    importance_map = _load_importance_map(project_root, work_id)
     for char_id in character_ids:
-        issues.extend(_check_character(work_dir, char_id, stage_id, schema_dir))
+        issues.extend(_check_character(
+            work_dir, char_id, stage_id, schema_dir, importance_map))
 
     # ---- Baseline file checks (first batch creates them) ----
     for char_id in character_ids:
@@ -78,6 +98,87 @@ def validate_batch(
 
     # ---- Cross-consistency ----
     issues.extend(_check_cross_consistency(work_dir, stage_id, character_ids))
+
+    passed = not any(i.severity == "error" for i in issues)
+    return ValidationReport(passed=passed, issues=issues)
+
+
+def validate_baseline(
+    project_root: Path,
+    work_id: str,
+    character_ids: list[str],
+    schema_dir: Path | None = None,
+) -> ValidationReport:
+    """Validate Phase 2.5 baseline outputs (identity, manifest, foundation).
+
+    Run after baseline production to catch issues early before Phase 3.
+    """
+    issues: list[ValidationIssue] = []
+    schema_dir = schema_dir or (project_root / "schemas")
+    work_dir = project_root / "works" / work_id
+
+    # World foundation
+    foundation_path = work_dir / "world" / "foundation" / "foundation.json"
+    if not foundation_path.exists():
+        issues.append(ValidationIssue(
+            "error", str(foundation_path), "foundation.json missing"))
+    else:
+        data = _load_json(foundation_path)
+        if data is None:
+            issues.append(ValidationIssue(
+                "error", str(foundation_path), "Invalid JSON"))
+        elif not data.get("work_id"):
+            issues.append(ValidationIssue(
+                "error", str(foundation_path), "work_id is empty"))
+
+    # Per-character baseline checks
+    for char_id in character_ids:
+        char_dir = work_dir / "characters" / char_id / "canon"
+
+        # identity.json
+        id_path = char_dir / "identity.json"
+        if not id_path.exists():
+            issues.append(ValidationIssue(
+                "error", str(id_path), "identity.json missing"))
+        else:
+            try_repair_json_file(id_path)
+            identity = _load_json(id_path)
+            if identity is None:
+                issues.append(ValidationIssue(
+                    "error", str(id_path), "Invalid JSON"))
+            else:
+                # Schema validation
+                issues.extend(_validate_schema(
+                    identity, schema_dir / "identity.schema.json",
+                    str(id_path)))
+                # Required field non-null checks
+                if not identity.get("canonical_name"):
+                    issues.append(ValidationIssue(
+                        "error", str(id_path),
+                        "canonical_name is empty or missing"))
+                # Check aliases have valid names
+                for i, alias in enumerate(identity.get("aliases", [])):
+                    if not alias.get("name"):
+                        issues.append(ValidationIssue(
+                            "error", str(id_path),
+                            f"aliases[{i}].name is empty or null"))
+
+        # manifest.json
+        manifest_path = char_dir.parent / "manifest.json"
+        if not manifest_path.exists():
+            issues.append(ValidationIssue(
+                "error", str(manifest_path), "manifest.json missing"))
+        else:
+            try_repair_json_file(manifest_path)
+            manifest = _load_json(manifest_path)
+            if manifest is None:
+                issues.append(ValidationIssue(
+                    "error", str(manifest_path), "Invalid JSON"))
+            else:
+                issues.extend(_validate_schema(
+                    manifest,
+                    schema_dir / "character_manifest.schema.json",
+                    str(manifest_path)))
 
     passed = not any(i.severity == "error" for i in issues)
     return ValidationReport(passed=passed, issues=issues)
@@ -134,7 +235,9 @@ def _check_world(work_dir: Path, stage_id: str,
 # ---------------------------------------------------------------------------
 
 def _check_character(work_dir: Path, char_id: str, stage_id: str,
-                     schema_dir: Path) -> list[ValidationIssue]:
+                     schema_dir: Path,
+                     importance_map: dict[str, str] | None = None,
+                     ) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     char_dir = work_dir / "characters" / char_id / "canon"
 
@@ -151,7 +254,7 @@ def _check_character(work_dir: Path, char_id: str, stage_id: str,
                 snapshot, schema_dir / "stage_snapshot.schema.json",
                 str(snapshot_path)))
             issues.extend(_check_snapshot_depth(
-                snapshot, str(snapshot_path)))
+                snapshot, str(snapshot_path), importance_map))
 
     # Memory timeline (.json array format)
     memory_path = char_dir / "memory_timeline" / f"{stage_id}.json"
@@ -188,10 +291,35 @@ def _check_character(work_dir: Path, char_id: str, stage_id: str,
     return issues
 
 
+def _min_examples_for_target(target: str,
+                             importance_map: dict[str, str]) -> int:
+    """Return minimum example count based on character importance.
+
+    主角 → 5, 重要配角 → 3, others/unknown → 1.
+    Uses substring matching (target_type may contain extra context).
+    """
+    for name, importance in importance_map.items():
+        if name in target:
+            if importance == "主角":
+                return 5
+            if importance == "重要配角":
+                return 3
+            return 1
+    return 1
+
+
 def _check_snapshot_depth(snapshot: dict,
-                          label: str) -> list[ValidationIssue]:
-    """Deep checks on snapshot self-containedness and quality."""
+                          label: str,
+                          importance_map: dict[str, str] | None = None,
+                          ) -> list[ValidationIssue]:
+    """Deep checks on snapshot self-containedness and quality.
+
+    Args:
+        importance_map: {character_name: importance} from candidate_characters.
+            主角 targets require ≥5 examples, 重要配角 ≥3, others ≥1.
+    """
     issues: list[ValidationIssue] = []
+    _imp = importance_map or {}
 
     # --- Top-level sections must exist and be non-empty ---
     for section in ("voice_state", "behavior_state",
@@ -223,11 +351,13 @@ def _check_snapshot_depth(snapshot: dict,
             for i, entry in enumerate(vs["target_voice_map"]):
                 examples = entry.get("dialogue_examples") or []
                 target = entry.get("target_type", f"[{i}]")
-                if len(examples) < 3:
+                min_ex = _min_examples_for_target(target, _imp)
+                if len(examples) < min_ex:
                     issues.append(ValidationIssue(
                         "warning", label,
-                        f"target_voice_map '{target}' has only "
-                        f"{len(examples)} dialogue_examples (want >=3)"))
+                        f"target_voice_map '{target}' has "
+                        f"{len(examples)} dialogue_examples "
+                        f"(want >={min_ex})"))
 
     # --- behavior_state depth ---
     bs = snapshot.get("behavior_state") or {}
@@ -241,11 +371,13 @@ def _check_snapshot_depth(snapshot: dict,
             for i, entry in enumerate(bs["target_behavior_map"]):
                 examples = entry.get("action_examples") or []
                 target = entry.get("target_type", f"[{i}]")
-                if len(examples) < 3:
+                min_ex = _min_examples_for_target(target, _imp)
+                if len(examples) < min_ex:
                     issues.append(ValidationIssue(
                         "warning", label,
-                        f"target_behavior_map '{target}' has only "
-                        f"{len(examples)} action_examples (want >=3)"))
+                        f"target_behavior_map '{target}' has "
+                        f"{len(examples)} action_examples "
+                        f"(want >={min_ex})"))
 
     # --- relationships depth ---
     rels = snapshot.get("relationships") or []

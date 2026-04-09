@@ -99,7 +99,7 @@
 
 重点字段：
 - `canonical_name`：角色最终/最通用的正式名称
-- `aliases`：结构化别名数组（从身份合并结果直接转化），每条含 name、type（本名/化名/代称/称呼/封号/道号/武器名/其他）、effective_stages（可先留空，提取时填充）、source、used_by
+- `aliases`：结构化别名数组（从身份合并结果直接转化），每条含 name、type（本名/化名/代称/称呼/昵称/绰号/封号/道号/武器名/其他）、effective_stages（可先留空，提取时填充）、source、used_by
 - `gender`、`species`、`birth_origin`、`appearance_summary`、`background_summary`、`initial_social_position`、`affiliations`、`distinguishing_features`
 - `core_wounds`：角色的核心创伤——跨全故事始终影响角色行为和心理的根源性伤痛。每条含：
   - `wound`：创伤内容

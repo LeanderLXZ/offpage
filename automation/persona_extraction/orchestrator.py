@@ -48,6 +48,7 @@ from .prompt_builder import (
     build_world_extraction_prompt,
 )
 from .scene_archive import run_scene_archive
+from .validator import validate_baseline
 from .validator import ValidationReport, validate_batch
 
 logger = logging.getLogger(__name__)
@@ -492,6 +493,16 @@ class ExtractionOrchestrator:
                   f"{', '.join(missing_critical)}")
             print("  Cannot proceed to extraction without these files.")
             print("  Re-run with --resume to retry baseline production.")
+            sys.exit(1)
+
+        # Phase 2.5 exit validation — catch schema/field errors early
+        print("\n--- Phase 2.5 Validation ---")
+        baseline_report = validate_baseline(
+            self.project_root, self.work_id, character_ids)
+        print(baseline_report.summary())
+        if not baseline_report.passed:
+            print("\n[ERROR] Baseline validation failed. "
+                  "Fix the errors above before proceeding.")
             sys.exit(1)
 
         # Mark baseline as done in progress so resume skips it

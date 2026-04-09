@@ -87,8 +87,8 @@
 如果存在前一阶段的输出，请先读取它，并确保本批产出在以下维度与之保持一致：
 
 - emotional_voice_map 条目数不少于前一 batch
-- target_voice_map 每个 target 至少 3-5 条 dialogue_examples
-- target_behavior_map 每个 target 至少 3-5 条 action_examples
+- target_voice_map 每个 target 的 dialogue_examples 不少于下方质量要求表的最低值
+- target_behavior_map 每个 target 的 action_examples 不少于下方质量要求表的最低值
 - relationships 每个条目都有 driving_events 和 relationship_history_summary
 - evidence_refs 每个结论至少 2 条
 - source_type 必须逐条判断，不可全部标为 canon
@@ -114,7 +114,7 @@
 - evidence_refs 越来越少或省略
 - source_type 全标 canon 而没有区分 inference/ambiguous
 - dialogue_examples / action_examples 减少或复制前阶段
-- target_voice_map 或 target_behavior_map 每条 target 不足 3 条示例
+- target_voice_map 或 target_behavior_map 某 target 的示例数低于上方质量要求表的最低值
 - relationships 缺少 driving_events 或 relationship_history_summary
 
 ### 字段命名严格对照（写错会导致 schema 校验失败）
@@ -144,25 +144,30 @@
 
 **target_voice_map（对象语气矩阵）** 和 **target_behavior_map（对象行为矩阵）** 是角色面对不同对象时语气和行为差异化的核心数据，直接决定角色扮演的真实感。同一个情绪（如愤怒），面对不同对象时说话方式和行为完全不同——这种差异必须被充分捕捉。
 
+### 各 target 的最低 examples 数量（importance-based）
+
+不同 target 的最低 dialogue_examples / action_examples 数量取决于该 target
+在作品中的重要程度：
+
+{quality_requirements}
+
+**未在上表中列出的泛化类型**（"村民"、"小孩"、"陌生人"等）：可选，简要描述
+即可，不需要大量例句。
+
 ### target_voice_map 要求
 
-**只对主要角色和重要配角详细记录。** 泛化类型（"陌生人"、"路人"、"普通村民"）
-不需要大量例句——角色的整体性格 + emotional_voice_map + relationship_behavior_map
-已经足够让 LLM 推断面对无名角色时的表现。
-
-- **主要角色和重要配角**：使用具体角色名，每个 target 至少 3-5 条 dialogue_examples，覆盖该对象下的多种情绪和场景
-- **泛化类型**（"村民"、"小孩"等）：可选，简要描述即可
+- 使用具体角色名，每个 target 的 dialogue_examples 数量**不少于上表的最低值**，
+  覆盖该对象下的多种情绪和场景
 - **voice_shift 要具体**：不要写"语气变温柔"，要写具体描述
-- **typical_expressions 要丰富**：主要角色至少 3-5 条，覆盖高频表达
+- **typical_expressions 要丰富**：主角 target 至少 5 条，重要配角至少 3 条
 
 ### target_behavior_map 要求
 
-与 target_voice_map 平行结构，侧重行为而非语言。同样 **只对主要角色和重要配角详细记录**：
+与 target_voice_map 平行结构，侧重行为而非语言：
 
-- **主要角色和重要配角**：每个 target 至少 3-5 条 action_examples
-- **泛化类型**：可选，简要描述即可
+- 每个 target 的 action_examples 数量**不少于上表的最低值**
 - **behavior_shift 要具体**：不要写"行为更谨慎"，要写具体描述
-- **typical_actions 要丰富**：主要角色至少 3-5 条
+- **typical_actions 要丰富**：主角 target 至少 5 条，重要配角至少 3 条
 
 ## memory_timeline 详细度要求
 
