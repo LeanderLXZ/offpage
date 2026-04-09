@@ -5,8 +5,11 @@ Progress file lives at:
 
 State machine per batch:
   pending → extracting → extracted → reviewing → passed → committed
-                │                       │
-                └→ error                └→ failed → retrying → extracting
+                │                       │  │
+                └→ error                │  └→ fixing → passed → committed
+                                        │               │
+                                        └→ failed ──────┘
+                                             └→ retrying → extracting
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ class BatchState(str, Enum):
     REVIEWING = "reviewing"
     PASSED = "passed"
     COMMITTED = "committed"
+    FIXING = "fixing"
     FAILED = "failed"
     RETRYING = "retrying"
     ERROR = "error"
@@ -36,14 +40,16 @@ class BatchState(str, Enum):
 
 # Valid transitions
 _TRANSITIONS: dict[BatchState, set[BatchState]] = {
-    BatchState.PENDING:     {BatchState.EXTRACTING},
+    BatchState.PENDING:     {BatchState.EXTRACTING, BatchState.ERROR},
     BatchState.EXTRACTING:  {BatchState.EXTRACTED, BatchState.ERROR},
     BatchState.EXTRACTED:   {BatchState.REVIEWING},
-    BatchState.REVIEWING:   {BatchState.PASSED, BatchState.FAILED},
+    BatchState.REVIEWING:   {BatchState.PASSED, BatchState.FAILED,
+                             BatchState.FIXING},
+    BatchState.FIXING:      {BatchState.PASSED, BatchState.FAILED},
     BatchState.PASSED:      {BatchState.COMMITTED},
     BatchState.COMMITTED:   set(),  # terminal
     BatchState.FAILED:      {BatchState.RETRYING},
-    BatchState.RETRYING:    {BatchState.EXTRACTING},
+    BatchState.RETRYING:    {BatchState.EXTRACTING, BatchState.ERROR},
     BatchState.ERROR:       {BatchState.EXTRACTING, BatchState.PENDING},
 }
 
@@ -61,6 +67,7 @@ class BatchEntry:
     committed_sha: str = ""
     last_updated: str = ""
     error_message: str = ""
+    fail_source: str = ""  # "programmatic" or "semantic" — which check caused FAIL
 
     def can_transition(self, target: BatchState) -> bool:
         return target in _TRANSITIONS.get(self.state, set())
@@ -87,6 +94,7 @@ class BatchEntry:
             "committed_sha": self.committed_sha,
             "last_updated": self.last_updated,
             "error_message": self.error_message,
+            "fail_source": self.fail_source,
         }
 
     @classmethod
@@ -103,6 +111,7 @@ class BatchEntry:
             committed_sha=d.get("committed_sha", ""),
             last_updated=d.get("last_updated", ""),
             error_message=d.get("error_message", ""),
+            fail_source=d.get("fail_source", ""),
         )
 
 
@@ -116,26 +125,41 @@ class ExtractionProgress:
     batches: list[BatchEntry] = field(default_factory=list)
     analysis_done: bool = False
     characters_confirmed: bool = False
+    baseline_done: bool = False
     created_at: str = ""
     last_updated: str = ""
 
     # ---- Queries ----
 
     def next_pending_batch(self) -> BatchEntry | None:
-        """Return the first actionable batch (pending, or error/failed needing retry)."""
-        # First: any batch in-progress that got interrupted
+        """Return the first actionable batch, respecting sequential order.
+
+        Batches are sequential — batch N+1 depends on batch N's output.
+        We scan in order and return the first non-committed batch that is
+        actionable.  If a batch is stuck (failed/error beyond max retries),
+        we return None to block the pipeline rather than skipping ahead.
+        """
         for b in self.batches:
+            if b.state == BatchState.COMMITTED:
+                continue
+            # In-progress states (interrupted run) — resume immediately
             if b.state in (BatchState.EXTRACTING, BatchState.EXTRACTED,
-                           BatchState.REVIEWING, BatchState.RETRYING):
+                           BatchState.REVIEWING, BatchState.FIXING,
+                           BatchState.RETRYING):
                 return b
-        # Then: first pending
-        for b in self.batches:
+            # Pending — normal next batch
             if b.state == BatchState.PENDING:
                 return b
-        # Then: failed batches that can still retry
-        for b in self.batches:
-            if b.state == BatchState.FAILED and b.retry_count < b.max_retries:
-                return b
+            # Failed — retry if allowed, otherwise block
+            if b.state == BatchState.FAILED:
+                if b.retry_count < b.max_retries:
+                    return b
+                return None  # blocked — needs manual intervention
+            # Error — retry if allowed, otherwise block
+            if b.state == BatchState.ERROR:
+                if b.retry_count < b.max_retries:
+                    return b
+                return None  # blocked — needs manual intervention
         return None
 
     def all_committed(self) -> bool:
@@ -173,8 +197,12 @@ class ExtractionProgress:
                 / "analysis" / "incremental" / "extraction_progress.json")
         if not path.exists():
             return None
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return cls.from_dict(data)
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return cls.from_dict(data)
+        except (json.JSONDecodeError, OSError, KeyError) as exc:
+            logger.warning("Failed to load progress from %s: %s", path, exc)
+            return None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -185,6 +213,7 @@ class ExtractionProgress:
             "batches": [b.to_dict() for b in self.batches],
             "analysis_done": self.analysis_done,
             "characters_confirmed": self.characters_confirmed,
+            "baseline_done": self.baseline_done,
             "created_at": self.created_at,
             "last_updated": self.last_updated,
         }
@@ -199,6 +228,7 @@ class ExtractionProgress:
             batches=[BatchEntry.from_dict(b) for b in d.get("batches", [])],
             analysis_done=d.get("analysis_done", False),
             characters_confirmed=d.get("characters_confirmed", False),
+            baseline_done=d.get("baseline_done", False),
             created_at=d.get("created_at", ""),
             last_updated=d.get("last_updated", ""),
         )

@@ -8,13 +8,27 @@ import logging
 import os
 import shutil
 import subprocess
+import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .process_guard import fmt_memory, get_rss_mb
+
 logger = logging.getLogger(__name__)
+
+
+def _fmt_elapsed(seconds: float) -> str:
+    """Format seconds as compact human-readable string."""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    m, s = divmod(int(seconds), 60)
+    if m < 60:
+        return f"{m}m{s:02d}s"
+    h, m = divmod(m, 60)
+    return f"{h}h{m:02d}m{s:02d}s"
 
 
 def _find_claude_binary() -> str:
@@ -67,6 +81,8 @@ class LLMResult:
     raw: dict[str, Any] = field(default_factory=dict)
     session_id: str | None = None
     error: str | None = None
+    pid: int | None = None
+    duration_seconds: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -132,38 +148,85 @@ class ClaudeBackend(LLMBackend):
                      self.max_turns, timeout_seconds)
         logger.debug("Prompt length: %d chars", len(prompt))
 
+        start = time.monotonic()
+        proc = subprocess.Popen(
+            cmd, cwd=self.project_root,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+
+        print(f"    PID {proc.pid} started")
+
+        # Heartbeat thread — prints elapsed + memory every 30s
+        stop_event = threading.Event()
+        orch_pid = os.getpid()
+
+        def heartbeat() -> None:
+            while not stop_event.wait(30):
+                elapsed = time.monotonic() - start
+                child_mem = fmt_memory(get_rss_mb(proc.pid))
+                orch_mem = fmt_memory(get_rss_mb(orch_pid))
+                print(f"    ... running [{_fmt_elapsed(elapsed)}]"
+                      f"  PID {proc.pid}"
+                      f"  Mem: claude={child_mem} orch={orch_mem}")
+
+        hb = threading.Thread(target=heartbeat, daemon=True)
+        hb.start()
+
         try:
-            proc = subprocess.run(
-                cmd,
-                cwd=self.project_root,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-            )
+            stdout, stderr = proc.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+            duration = time.monotonic() - start
             return LLMResult(success=False, text="",
-                             error="claude -p timed out")
+                             error="claude -p timed out",
+                             pid=proc.pid, duration_seconds=duration)
+        finally:
+            stop_event.set()
+            hb.join(timeout=2)
+
+        duration = time.monotonic() - start
+        child_mem = fmt_memory(get_rss_mb(proc.pid))
+        print(f"    PID {proc.pid} finished [{_fmt_elapsed(duration)}]")
 
         if proc.returncode != 0:
-            stderr = proc.stderr.strip()
-            # Detect rate-limit
-            if "rate" in stderr.lower() or "limit" in stderr.lower():
+            stderr_s = stderr.strip()
+            lower = stderr_s.lower()
+            # Detect token/context limit (not retryable — same prompt
+            # will hit the same limit)
+            token_limit_signals = [
+                "context window", "context_length", "max_tokens",
+                "token limit", "too many tokens", "prompt is too long",
+                "maximum context length",
+            ]
+            if any(sig in lower for sig in token_limit_signals):
+                return LLMResult(
+                    success=False, text="",
+                    error=f"token_limit: {stderr_s}",
+                    pid=proc.pid, duration_seconds=duration)
+            # Detect rate-limit (retryable)
+            rate_limit_signals = ["rate limit", "rate_limit", "too many requests"]
+            if any(sig in lower for sig in rate_limit_signals):
                 return LLMResult(success=False, text="",
-                                 error=f"rate_limit: {stderr}")
+                                 error=f"rate_limit: {stderr_s}",
+                                 pid=proc.pid, duration_seconds=duration)
             return LLMResult(success=False, text="",
-                             error=f"exit {proc.returncode}: {stderr}")
+                             error=f"exit {proc.returncode}: {stderr_s}",
+                             pid=proc.pid, duration_seconds=duration)
 
         # Parse JSON output
         try:
-            data = json.loads(proc.stdout)
+            data = json.loads(stdout)
         except json.JSONDecodeError:
             # Fallback: treat raw stdout as text
-            return LLMResult(success=True, text=proc.stdout.strip())
+            return LLMResult(success=True, text=stdout.strip(),
+                             pid=proc.pid, duration_seconds=duration)
 
-        result_text = data.get("result", proc.stdout.strip())
+        result_text = data.get("result", stdout.strip())
         session_id = data.get("session_id")
         return LLMResult(success=True, text=result_text, raw=data,
-                         session_id=session_id)
+                         session_id=session_id,
+                         pid=proc.pid, duration_seconds=duration)
 
 
 # ---------------------------------------------------------------------------
@@ -189,23 +252,52 @@ class CodexBackend(LLMBackend):
 
         logger.info("Running codex --full-auto  (timeout=%ds)", timeout_seconds)
 
+        start = time.monotonic()
+        proc = subprocess.Popen(
+            cmd, cwd=self.project_root,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+
+        print(f"    PID {proc.pid} started")
+
+        stop_event = threading.Event()
+        orch_pid = os.getpid()
+
+        def heartbeat() -> None:
+            while not stop_event.wait(30):
+                elapsed = time.monotonic() - start
+                child_mem = fmt_memory(get_rss_mb(proc.pid))
+                orch_mem = fmt_memory(get_rss_mb(orch_pid))
+                print(f"    ... running [{_fmt_elapsed(elapsed)}]"
+                      f"  PID {proc.pid}"
+                      f"  Mem: codex={child_mem} orch={orch_mem}")
+
+        hb = threading.Thread(target=heartbeat, daemon=True)
+        hb.start()
+
         try:
-            proc = subprocess.run(
-                cmd,
-                cwd=self.project_root,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-            )
+            stdout, stderr = proc.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+            duration = time.monotonic() - start
             return LLMResult(success=False, text="",
-                             error="codex timed out")
+                             error="codex timed out",
+                             pid=proc.pid, duration_seconds=duration)
+        finally:
+            stop_event.set()
+            hb.join(timeout=2)
+
+        duration = time.monotonic() - start
+        print(f"    PID {proc.pid} finished [{_fmt_elapsed(duration)}]")
 
         if proc.returncode != 0:
             return LLMResult(success=False, text="",
-                             error=f"exit {proc.returncode}: {proc.stderr.strip()}")
+                             error=f"exit {proc.returncode}: {stderr.strip()}",
+                             pid=proc.pid, duration_seconds=duration)
 
-        return LLMResult(success=True, text=proc.stdout.strip())
+        return LLMResult(success=True, text=stdout.strip(),
+                         pid=proc.pid, duration_seconds=duration)
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +331,12 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
                              timeout_seconds=timeout_seconds)
         if result.success:
             return result
+        # Token/context limit — same prompt will fail again, don't retry
+        if result.error and "token_limit" in result.error:
+            logger.error("Token limit exceeded (not retryable): %s",
+                         result.error)
+            return result
+        # Rate limit — retryable with backoff
         if result.error and "rate_limit" in result.error:
             if attempt < max_retries:
                 wait = cooldown_seconds * attempt

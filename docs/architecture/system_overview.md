@@ -121,13 +121,28 @@
 - `works/{work_id}/analysis/` 用于持久化和增量的作品级分析
 - 如需草稿笔记，应保留在同一作品资产包下，而非恢复仓库级 `analysis/` 目录
 
-推荐提取顺序：
+自动化提取流程：
 
-1. 识别候选角色
-2. 按批次阅读源文本，进行共享世界信息提取
-3. 按批次阅读源文本，逐个提取选定角色
+0. **阶段 0 — 章节归纳**：按分组（chunk，约 25 章/组）逐组归纳，产出每章
+   结构化摘要。存储在 `analysis/incremental/chapter_summaries/`
+1. **阶段 1 — 全书分析**（基于摘要）：跨 chunk 角色身份合并 → 世界观概览
+   (`world_overview.json`) → 剧情阶段划分 (`source_batch_plan.json`) →
+   候选角色识别 (`candidate_characters.json`)
+2. **阶段 2 — 用户确认**：用户选定目标角色、确认 batch 边界
+3. **阶段 2.5 — Baseline 产出**：基于全书摘要上下文，产出世界 foundation
+   (`world/foundation/foundation.json`) 和已确认角色的 identity baseline
+   (`identity.json`, `manifest.json`)。这些是初稿，后续批次可修正
+4. **阶段 3 — 1+N 分层批次提取**：逐 batch 读原文，采用 1+N 架构：先一次
+   世界提取，再 N 次角色提取并行。每次调用只传最近一个 snapshot/memory，
+   不传全部历史。首批额外创建 `voice_rules.json`、`behavior_rules.json`、
+   `boundaries.json`、`failure_modes.json`。任何批次可修正任何已写入的 baseline
+5. **阶段 3.5 — 跨批次一致性检查**：Phase 3 全部 batch 提交后，运行程序化
+   跨批次一致性检查（零 token），可选 LLM 裁定标记项。有 error 时阻断 Phase 4
+6. **阶段 4 — 场景切分**：Phase 3.5 通过后，逐 batch 范围读原文，按自然场景
+   边界切分产出 scene_archive 条目。各 batch 间无依赖，可并行。与 Phase 3
+   分离以避免单次调用任务过重影响质量
 
-任何一个源阅读批次仍可能修订或补充多个下游资产，包括世界层和多个角色资产包。
+任何一个批次仍可能修订或补充多个下游资产，包括世界层和多个角色资产包。
 
 ### 3. 世界资产包
 
@@ -180,9 +195,30 @@
 - 角色 manifest
 - 角色圣经（character bible）
 - 记忆时间线
-- 语音与行为规则
+- 语音与行为规则（baseline，提取锚点，不在运行时加载）
 - 与作品时间线对应的阶段目录
-- 与作品级 `stage_id` 对应的阶段投射或阶段快照
+- 与作品级 `stage_id` 对应的**自包含阶段快照**（stage_snapshot）
+
+阶段快照是运行时角色扮演的唯一状态来源（配合不变层 identity、failure_modes、
+hard_boundaries）。每个快照包含该阶段的完整状态：
+
+- `voice_state`：语气基调、情绪语气矩阵（emotional_voice_map）、
+  **对象语气矩阵**（target_voice_map，按具体角色区分的说话差异）
+- `behavior_state`：**core_goals**（理性目标）、**obsessions**（执念）、
+  决策风格、情绪反应矩阵（emotional_reaction_map）、
+  **对象行为矩阵**（target_behavior_map，按具体角色区分的行为差异）
+- `emotional_baseline`：dominant_traits、**active_goals**（活跃理性目标）、
+  **active_obsessions**（活跃执念）、active_fears、active_wounds
+- `boundary_state`、`relationships`、`knowledge_scope`、`misunderstandings`、
+  `concealments`、`stage_delta`
+- `character_arc`：角色从阶段 1 到当前的整体弧线概览
+
+target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细记录
+（每 target 至少 3-5 条原文示例）；泛化类型（陌生人、路人）简要描述即可。
+
+**运行时过滤加载**：target_voice_map 和 target_behavior_map 按用户扮演角色
+过滤，只加载匹配条目。**Fallback**：如果当前 stage snapshot 缺少匹配条目
+（如该角色近期未出场），引擎向前扫描最近包含该条目的 stage snapshot。
 
 角色构建通常应在初始的世界优先批次处理建立了该作品的共享世界背景之后进行。
 
@@ -199,7 +235,9 @@
 
 作品级用户/关系材料应默认使用所选作品的语言。
 
-当用户选择目标角色时，运行时应从 `works/{work_id}/characters/{character_id}/` 加载规范基线，然后叠加来自 `users/{user_id}/` 的用户特定状态。
+当用户选择目标角色时，运行时从 `works/{work_id}/characters/{character_id}/`
+加载所选阶段的自包含快照（不加载 baseline，不做合并），然后叠加来自
+`users/{user_id}/` 的用户特定状态。
 
 `role_binding.json` 应能存储：
 
@@ -267,27 +305,28 @@
 
 在对话开始时，系统应加载：
 
-`世界基线 + 选定的世界阶段快照 + 选定阶段的关系快照 + 目标角色基线 + 目标阶段投射 + 用户人设或用户侧角色绑定 + 可选的对齐用户侧规范阶段投射 + 长期档案 + 关系核心 + 当前 context + 近期 session 状态`
+`世界 foundation + 选定的世界阶段快照 + 阶段关系快照 + 角色不变层（identity + failure_modes + hard_boundaries）+ 选定阶段的自包含快照 + memory_timeline 近期 2 阶段全量 + memory_digest.jsonl 全量 + scene_archive 摘要 + 用户绑定 + 长期档案 + 关系核心 + 当前 context + 近期 session 状态`
+
+注意：角色 baseline（voice_rules、behavior_rules、boundaries 的 soft 部分）
+**不在运行时加载**。运行时角色状态完全由自包含的 stage_snapshot 提供。
 
 推荐的加载拆分：
 
 - 启动必需：
-  - 世界基线
-  - 选定的世界阶段快照
-  - 选定阶段的关系快照
-  - 目标角色基线
-  - 目标阶段投射
-  - 用户摘要层状态
-  - 当前 context 摘要
-  - 当前范围的存档引用
-  - 近期 session 摘要
+  - 世界 foundation + 选定的世界阶段快照 + 阶段关系快照
+  - 角色不变层：identity.json、failure_modes.json、hard_boundaries
+  - 选定阶段的**自包含** stage_snapshot（voice/behavior/boundary/relationships 全含）
+  - memory_timeline：近期 2 阶段（N + N-1）全量
+  - memory_digest.jsonl：全量（压缩索引，覆盖全历史，远期感知）
+  - scene_archive：stage 1..N 摘要 + 当前阶段附近 N 个 full_text（默认 N=5）
+  - vocab_dict.txt → jieba 自定义词典
+  - 用户摘要层状态（role_binding、long_term_profile、relationship_core）
+  - 当前 context 摘要 + 近期 session 摘要
 - 按需加载：
-  - 特定世界事件
-  - 地点/势力记录
-  - 历史范围
-  - 角色记忆详情
-  - 详细的用户 context 历史
-  - 账户存档摘要
+  - 特定世界事件、地点/势力记录
+  - 历史 stage_snapshot（深层历史回忆时）
+  - FTS5/embedding 检索 memory_timeline 和 scene_archive 详情
+  - 详细的用户 context 历史、账户存档摘要
   - 完整 session 转录
   - 需要验证时的原始章节证据
 

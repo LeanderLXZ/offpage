@@ -18,7 +18,7 @@ works/{work_id}/
       cosmology.json
       power_system.json
     history/
-      timeline.jsonl
+      timeline.json
     events/
       {event_id}.json
     state/
@@ -47,7 +47,7 @@ works/{work_id}/
       canon/
         identity.json
         bible.md
-        memory_timeline/{stage_id}.jsonl
+        memory_timeline/{stage_id}.json
         relationships.json
         voice_rules.json
         behavior_rules.json
@@ -110,8 +110,8 @@ works/{work_id}/
   性别、种族、出身、外貌、初始社会地位）。schema:
   `schemas/identity.schema.json`
 - `bible.md` — 角色圣经（完整人设文档，Markdown 格式）
-- `memory_timeline/{stage_id}.jsonl` — 角色视角的记忆时间线，按阶段拆分（每行
-  一条记忆）。加载阶段 N 时只需读取阶段 1..N 的文件。内容涵盖：
+- `memory_timeline/{stage_id}.json` — 角色视角的记忆时间线，按阶段拆分（JSON
+  数组，每个元素为一条记忆）。加载阶段 N 时只需读取阶段 1..N 的文件。内容涵盖：
   - 客观事件与角色的主观体验（可能与事实不同）
   - 情感影响与获得的新认知
   - 角色在该事件中产生的误解（如有）
@@ -198,7 +198,7 @@ works/{work_id}/
 
 - 每个提取 batch 对应一个剧情阶段（batch N = 阶段 N）
 - 分批规划在分析阶段按自然剧情边界确定，每个 batch 的章节数可以不同
-  （默认目标 10 章，最小 5 章，最大 20 章，可在作品 config 中调整）
+  （默认目标 10 章，最小 5 章，最大 15 章，可在作品 config 中调整）
 - 阶段 N 是累积的：选择阶段 N 意味着提取阶段 1..N 的全部内容
 - **时间性原则**：当前所选阶段是角色的"现在"，之前的阶段是按顺序发生的
   历史事件。角色能记住发生过的事情，但必须用当前阶段的状态、性格和口吻

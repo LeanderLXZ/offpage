@@ -122,9 +122,9 @@ Recommended sections:
 - `user_turn_intent`
 - `retrieved_supporting_evidence`
 - `response_constraints`
-  - cognitive conflict rules (see `prompts/runtime/认知冲突处理规则.md`)
-  - historical recall rules (see `prompts/runtime/历史回忆处理规则.md`)
-  - dilution protection rules (see `prompts/runtime/会话稀释保护检查清单.md`)
+  - cognitive conflict rules (see `simulation/prompt_templates/认知冲突处理规则.md`)
+  - historical recall rules (see `simulation/prompt_templates/历史回忆处理规则.md`)
+  - anti-dilution rules (see `simulation/prompt_templates/会话防稀释检查清单.md`)
 
 ## 5. Writeback Patch
 

@@ -30,6 +30,14 @@
         "additionalProperties": false,
         "required": ["description", "correct_behavior"],
         "properties": {
+          "id": {
+            "type": "string",
+            "description": "崩坏模式唯一标识。例如：FM-JHX-01。"
+          },
+          "name": {
+            "type": "string",
+            "description": "崩坏模式简称。例如：过早软化、话痨化。"
+          },
           "description": {
             "type": "string",
             "description": "常见错误描述。例如：容易把傲娇写成真的讨厌对方、容易让角色过于主动表白。"
@@ -41,6 +49,13 @@
           "correct_behavior": {
             "type": "string",
             "description": "正确的行为应该是什么。例如：角色的傲娇是保护机制，实际上在意但嘴上不承认。"
+          },
+          "common_triggers": {
+            "type": "array",
+            "description": "容易触发此崩坏模式的常见场景。",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

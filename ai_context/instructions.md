@@ -9,14 +9,15 @@ explicitly asks for a prompt-driven workflow.
 
 ## Default Reading Order
 
-1. `ai_context/project_background.md`
-2. `ai_context/requirements.md`
-3. `ai_context/read_scope.md`
-4. `ai_context/current_status.md`
-5. `ai_context/architecture.md`
-6. `ai_context/decisions.md`
-7. `ai_context/next_steps.md`
-8. `ai_context/handoff.md`
+1. `ai_context/conventions.md` ← short, re-read periodically during session
+2. `ai_context/project_background.md`
+3. `ai_context/requirements.md`
+4. `ai_context/read_scope.md`
+5. `ai_context/current_status.md`
+6. `ai_context/architecture.md`
+7. `ai_context/decisions.md`
+8. `ai_context/next_steps.md`
+9. `ai_context/handoff.md`
 
 ## Update Expectations
 
@@ -48,8 +49,15 @@ Long sessions cause you to forget what you read earlier. These rules help:
 3. **When switching task types** — re-read the relevant `ai_context/` file.
 4. **If you cannot recall** `work_id`, `character_id`, `stage_id`, or what
    was decided earlier in this conversation — stop and re-read, do not guess.
-5. **After completing any task** — run the Logging Checklist below.
-   Check whether you also missed logging a previous task in this session.
+5. **After completing any task** — re-read `conventions.md` and run through
+   its Post-Change Checklist. Check whether you also missed logging a
+   previous task in this session.
+6. **Every 3-4 tasks in a long session** — re-read `conventions.md` in full.
+   This file is short and designed for periodic refreshing. Pay special
+   attention to the cross-file alignment table and the log timestamp format.
+7. **Before creating any file in `docs/logs/`** — run
+   `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'` to get the exact
+   timestamp. Do not guess or approximate the time.
 
 ## Logging Rules — CRITICAL
 
@@ -71,8 +79,11 @@ Checklist — after completing a task, ask yourself:
 Log format:
 
 - Location: `docs/logs/{timestamp}_{slug}.md`
-- Timestamp format: `YYYY-MM-DD_HHMMSS`
-- Timezone: `America/New_York` (use `TZ='America/New_York' date` to get it)
+- Timestamp format: `YYYY-MM-DD_HHMMSS` — **HHMMSS is mandatory, never omit
+  the time portion.** Bad: `2026-04-03_foo.md`. Good:
+  `2026-04-03_020841_foo.md`. Always run the date command below to get the
+  exact timestamp before creating the file.
+- Timezone: `America/New_York` (use `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'`)
 - Content: what changed, which files, and why
 
 Layer summary:
