@@ -1,0 +1,39 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 11,
+    "time_in_story": "白天至天色渐晚",
+    "location": "楚国皇宫内",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "萧浩",
+      "Character E"
+    ],
+    "summary": "Character B不理会Character A，默默观察皇宫。四人在宫中走了一天，Character B与Character A各自沉默却同行，萧浩则不断与Character E打闹并屡屡挨踢。"
+  },
+  {
+    "scene_start_line": 12,
+    "scene_end_line": 61,
+    "time_in_story": "入夜",
+    "location": "皇宫台阶上及寝宫走廊",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "Character E",
+      "萧浩"
+    ],
+    "summary": "夜色中四人坐在台阶上看星星，Character B询问Character E的愿望，Character E说想见从未谋面的父亲，Character B答应帮她实现。Character B内心因打算'借'Character E的东西而心怀愧疚。随后Character E为众人安排住处，故意给Character B和Character A安排一间超大床房，拿萧浩开玩笑后带他离去。"
+  },
+  {
+    "scene_start_line": 62,
+    "scene_end_line": 104,
+    "time_in_story": "入夜，稍后",
+    "location": "皇宫寝宫房间内",
+    "characters_present": [
+      "Character B",
+      "Character A"
+    ],
+    "summary": "房间只有一张大床和沐浴隔间，Character B反复恳求Character A解开绳子，称今夜有事要去拿东西。Character A内心纠结，既怕他逃跑又不想耽误他的事，同时回忆自己在<location>的经历，认为若Character B体质特殊，<location>可能出现两位大帝，最终以'强扭的瓜不甜但解渴'做出了决定。"
+  }
+]

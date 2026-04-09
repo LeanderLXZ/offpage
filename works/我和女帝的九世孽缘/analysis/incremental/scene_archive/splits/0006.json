@@ -1,0 +1,64 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 14,
+    "time_in_story": "夜晚（漆黑一片）",
+    "location": "青色结界内，村民聚集处",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "村民"
+    ],
+    "summary": "Character A持剑出现在结界内寻找\"倭瓜脸\"之人。Character B主动上前，谎称那人已逃出结界外。Character A望向结界外的黑暗，低声发誓必杀此人。"
+  },
+  {
+    "scene_start_line": 15,
+    "scene_end_line": 27,
+    "time_in_story": "同一夜晚",
+    "location": "青色结界内",
+    "characters_present": [
+      "Character A",
+      "Character B"
+    ],
+    "summary": "Character A放弃追索，就地盘坐修炼<technique>。叙述交代她破境重修后修为全失，仅剩三件法器、帝器寒剑及少量丹药资源，最多支撑修炼到扩灵境。Character B因前世经验不敢打扰她修炼。"
+  },
+  {
+    "scene_start_line": 28,
+    "scene_end_line": 42,
+    "time_in_story": "同一夜晚，稍后",
+    "location": "青色结界内，篝火烤肉处",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "村民"
+    ],
+    "summary": "Character B回到人群中处理妖兽肉、串好烤串。专注处理时抬头发现Character A不知何时已站在面前盯着他，被吓得滑倒。Character A问他是否怕她，Character B掩饰后赶紧跑开烤肉。"
+  },
+  {
+    "scene_start_line": 43,
+    "scene_end_line": 65,
+    "time_in_story": "同一夜晚，紧接上文",
+    "location": "青色结界内，篝火旁",
+    "characters_present": [
+      "Character B",
+      "系统",
+      "村民",
+      "Character A"
+    ],
+    "summary": "Character B在心中向系统求助。系统建议趁Character A修为不高时一步步攻略她，称这是他八世以来唯一的机会。系统以Character A的美貌诱导Character B，Character B被带节奏喊出\"攻\"字，两次在众人面前失态后临场编造借口掩饰。"
+  },
+  {
+    "scene_start_line": 66,
+    "scene_end_line": 99,
+    "time_in_story": "同一夜晚，紧接上文",
+    "location": "青色结界内，篝火处及Character A修炼处",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "小孩们",
+      "村民",
+      "系统"
+    ],
+    "summary": "Character B分发食物，把妖兽腰子给体弱者、鸟蛋给小孩。随后让小孩把几颗鸟蛋送给Character A。Character A因修为不高抵抗不住饥饿，趁无人注意偷偷吃完鸟蛋，却发现Character B正笑着看她，一时心虚尴尬。系统催促Character B继续进攻，Character B凭八世经验判断她只是因身为前世<character>吃低级食物被人撞见而尴尬。"
+  }
+]

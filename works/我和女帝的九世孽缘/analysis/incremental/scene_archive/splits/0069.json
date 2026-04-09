@@ -1,0 +1,48 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 12,
+    "time_in_story": "夜间",
+    "location": "皇宫·Character B房间外",
+    "characters_present": [
+      "Character B",
+      "Character A"
+    ],
+    "summary": "Character B与Character A换上夜行衣，压低声音悄悄离开房间，准备夜间行动。"
+  },
+  {
+    "scene_start_line": 13,
+    "scene_end_line": 36,
+    "time_in_story": "夜间",
+    "location": "皇宫殿顶",
+    "characters_present": [
+      "Character B",
+      "Character A"
+    ],
+    "summary": "二人飞踏上殿顶，Character A察觉Character B意图是偷兵器而非取东西。Character B拒绝Character A去北境的提议，以先前约定压制她的反对，带她朝储兵殿前进。"
+  },
+  {
+    "scene_start_line": 37,
+    "scene_end_line": 68,
+    "time_in_story": "夜间",
+    "location": "储兵殿",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "守殿老者"
+    ],
+    "summary": "二人潜入储兵殿，击晕门口守卫后遭遇守殿老者，但老者仅结灵境一层，被Character A瞬间制服。Character B将殿内兵器大量装入储物袋，Character A负责放哨，并质疑Character B手法过于娴熟。"
+  },
+  {
+    "scene_start_line": 69,
+    "scene_end_line": 103,
+    "time_in_story": "夜间",
+    "location": "储兵殿",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "秦风"
+    ],
+    "summary": "Character A发现有人来，二人躲入角落。来者秦风同为盗贼，拥有八级大盗系统，Character B用探查得知其身份后心生吞噬对方系统的念头，并回忆了自己八世轮回中对各类天骄的认知。"
+  }
+]

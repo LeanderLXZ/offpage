@@ -1,0 +1,39 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 24,
+    "time_in_story": "紧接上章Character A出手之后",
+    "location": "街道/公共场所（萧浩、张叔等人所在处）",
+    "characters_present": [
+      "Character B",
+      "萧浩",
+      "Character A",
+      "张叔",
+      "少女"
+    ],
+    "summary": "Character B故意打乱体内灵力假装重伤。萧浩情急之下爆发剑体气势，张叔震惊后松手放开他。萧浩跑到Character B身前，被Character B暗中提示后领会意图，配合演戏喊Character A\"师娘\"。"
+  },
+  {
+    "scene_start_line": 25,
+    "scene_end_line": 50,
+    "time_in_story": "紧接上一场景",
+    "location": "同一地点",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "萧浩"
+    ],
+    "summary": "Character B趁Character A为他调理灵力之机偷摸她手背。Character A将萧浩赶到一旁，专心检查Character B体内灵力，发现其混沌色灵力与她万年前亲手击杀的那位大帝完全相同，且同为法体双修、体质疑似一致，但尚未觉醒，反复探查数遍。"
+  },
+  {
+    "scene_start_line": 51,
+    "scene_end_line": 92,
+    "time_in_story": "紧接上一场景",
+    "location": "同一地点",
+    "characters_present": [
+      "Character B",
+      "Character A"
+    ],
+    "summary": "Character A反复探查时灵力误入Character B下半身，引发其难以压制的生理反应。Character B艰难开口求助，Character A发觉后连忙收回灵力，以呵斥掩饰尴尬。灵力调理完毕后Character A起身，暗恼Character B占她便宜，却不自觉戴上白纱斗笠遮面。Character B则在原地拼命平复身体反应。"
+  }
+]

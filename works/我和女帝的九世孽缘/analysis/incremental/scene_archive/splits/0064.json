@@ -1,0 +1,28 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 100,
+    "time_in_story": "未明确，离开<stage_title>前",
+    "location": "<stage_title>内",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "Character E",
+      "萧浩"
+    ],
+    "summary": "Character E邀请众人前往皇宫，Character B贪图宫中资源立刻答应。Character A拒绝前往并劝Character B专心修炼，Character B先以强硬语气交涉无果，转而躺地撒泼打滚抱住Character A的脚耍赖，Character A无奈松口同意前行但不解开绳子。四人在宗门弟子的注目下离开<stage_title>。"
+  },
+  {
+    "scene_start_line": 101,
+    "scene_end_line": 107,
+    "time_in_story": "抵达皇宫后",
+    "location": "皇宫",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "Character E",
+      "萧浩"
+    ],
+    "summary": "四人进入皇宫，Character B和萧浩四处张望，Character B暗中盘算如何'借'走宫中的兵器和资源，Character E意识到自己请了个贼进宫。"
+  }
+]

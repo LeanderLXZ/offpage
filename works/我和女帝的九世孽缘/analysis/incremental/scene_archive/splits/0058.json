@@ -1,0 +1,26 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 39,
+    "time_in_story": "Character E战斗结束后",
+    "location": "比试现场观众区",
+    "characters_present": [
+      "萧浩",
+      "Character E",
+      "Character B",
+      "东阳皇朝<character>"
+    ],
+    "summary": "Character E战后虚弱，萧浩不情愿地给她衣服并将她背回Character B身旁，两人一路拌嘴。东阳皇朝<character>易容藏在人群中暗中观察。Character B对萧浩的直男表现感到无奈。"
+  },
+  {
+    "scene_start_line": 40,
+    "scene_end_line": 101,
+    "time_in_story": "数日后，比试进入决赛",
+    "location": "比试擂台",
+    "characters_present": [
+      "Character B",
+      "Character A"
+    ],
+    "summary": "比试只剩最后两人，Character B的对手正是Character A。Character B想认输但被半炷香不可认输的规则限制。Character A以压制修为至聚灵境九层巅峰参赛，用剑身拍打Character B挑衅。Character B怒而认真应战，以诡异身法突破Character A防御将其扑倒，但Character A翻身反压住Character B。"
+  }
+]

@@ -1,0 +1,53 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 33,
+    "time_in_story": "离开钻洞鼠洞穴后，白天赶路途中",
+    "location": "山林/赶路途中",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "中年男子",
+      "狩猎队成员"
+    ],
+    "summary": "众人离开钻洞鼠洞穴赶路回村。Character B趴在Character A背上，因身体反应拼命压制，后与Character A简短对话，坚持不下来。途中Character B因伤势疲累在她背上睡着，Character A施展身法加速赶路。"
+  },
+  {
+    "scene_start_line": 34,
+    "scene_end_line": 44,
+    "time_in_story": "夜晚到来之际",
+    "location": "村子入口/村中",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "狩猎队成员",
+      "断臂女子",
+      "村民们"
+    ],
+    "summary": "Character A背着Character B赶在夜晚前回到村子，与狩猎队碰面。村民们围上来为伤者包扎，Character A命人取来草药和被褥，背着Character B进入屋内。"
+  },
+  {
+    "scene_start_line": 45,
+    "scene_end_line": 82,
+    "time_in_story": "入夜后",
+    "location": "村中屋内（及屋外）",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "村民们",
+      "狩猎队成员"
+    ],
+    "summary": "Character A为Character B上药疗伤。Character B被冰凉的草药痛醒，剧烈挣扎，村民将他按住，Character A用布堵住他的嘴。Character B一度以为Character A要杀他，险些爆发修为反抗，最终看清是在上药才安静下来。屋外狩猎队听到惨叫声感叹不已。"
+  },
+  {
+    "scene_start_line": 83,
+    "scene_end_line": 96,
+    "time_in_story": "半夜",
+    "location": "村中屋内",
+    "characters_present": [
+      "Character B",
+      "Character A"
+    ],
+    "summary": "上药持续到半夜才结束，Character B精疲力尽趴在床上。村民已离去，Character A在旁饮水休息。Character B不忘为未能兑现烤肉之约道歉，Character A靠墙盘坐恢复灵力，心中感慨此人单纯。"
+  }
+]

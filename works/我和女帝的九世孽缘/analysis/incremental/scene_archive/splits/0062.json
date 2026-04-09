@@ -1,0 +1,27 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 14,
+    "time_in_story": "大赛结束后，白天",
+    "location": "<stage_title>",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "宗主"
+    ],
+    "summary": "宗主与众人商议入宗事宜，Character A表示不加入<stage_title>但请求同行前往中州，宗主欣然应允。"
+  },
+  {
+    "scene_start_line": 15,
+    "scene_end_line": 103,
+    "time_in_story": "当晚夜间",
+    "location": "<stage_title>，Character B房间内",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "萧浩",
+      "Character E"
+    ],
+    "summary": "Character A与Character B同住一间房并逼问其隐瞒的真实修为和\"倭瓜男\"身份，Character B矢口否认，Character A用缚灵绳将他捆住。萧浩携Character E敲门送上\"早生贵子\"祝福后逃跑。Character A将Character B塞进被窝，独自思量：若Character B真有大帝之资的天赋体质，可破例将他收入<location>，并回忆起<location>曾因圣女以命相逼而破例收过一名男弟子的旧事。"
+  }
+]

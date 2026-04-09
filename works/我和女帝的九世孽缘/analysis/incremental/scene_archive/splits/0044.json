@@ -1,0 +1,41 @@
+[
+  {
+    "scene_start_line": 1,
+    "scene_end_line": 11,
+    "time_in_story": "白天（紧接上回）",
+    "location": "皇城街头",
+    "characters_present": [
+      "Character B",
+      "Character A"
+    ],
+    "summary": "Character A嫌弃Character B递来的糖葫芦，Character B只好自己吃，同时痴痴注视Character A，令她感到不自在。"
+  },
+  {
+    "scene_start_line": 12,
+    "scene_end_line": 68,
+    "time_in_story": "白天（紧接上一场景）",
+    "location": "皇城街头",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "Character E",
+      "萧浩",
+      "张叔"
+    ],
+    "summary": "少女Character E突然出现赞美Character A容貌，随即萧浩被追兵张叔抓获。张叔威胁Character B等人乖乖跟他走，Character E为Character A求情并表达喜爱。Character B与Character E争相亲近Character A，萧浩再次喊出\"师娘\"惹怒Character A。"
+  },
+  {
+    "scene_start_line": 69,
+    "scene_end_line": 94,
+    "time_in_story": "白天（紧接上一场景）",
+    "location": "皇城街头",
+    "characters_present": [
+      "Character B",
+      "Character A",
+      "Character E",
+      "萧浩",
+      "张叔"
+    ],
+    "summary": "Character A出手打Character B一掌，Character B发现其力道仅为聚灵境三层，为顾全她面子故意假装被打飞倒地。Character A见状蹲下查看他的伤势。"
+  }
+]
