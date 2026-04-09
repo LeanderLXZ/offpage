@@ -69,7 +69,9 @@ No runtime implementation code yet.
 - Git integration: extraction branch, per-batch commits, auto-rollback
   (full-repo scope), squash-merge to main on completion
 - Phase 3.5 cross-batch consistency checker (`consistency_checker.py`):
-  8 programmatic checks (zero tokens) after all batches commit
+  8 programmatic checks (zero tokens) after all batches commit;
+  importance-based thresholds for target_map example counts
+  (主角≥5, 重要配角≥3, others≥1)
 - Resume auto-reset: blocked batches automatically reset to pending on
   `--resume`, no manual progress file editing needed
 - Progress/end-batch separation (Phase 4 pattern): progress always
@@ -81,11 +83,15 @@ No runtime implementation code yet.
   `--concurrency` for parallelism. Output: `works/{work_id}/rag/`
 - Prompt templates: analysis, world extraction, character extraction,
   semantic review, targeted fix, scene split (coordinated_extraction.md
-  kept for legacy)
+  kept for legacy). Character extraction prompt dynamically injects
+  importance-based quality requirements (min examples per target)
 - Breakpoint recovery via progress file; token/context limit errors
   distinguished from rate limits (not retried — same prompt will fail again)
 - Baseline recovery: `baseline_done` tracked in progress; `--resume`
   auto-detects incomplete baseline and re-runs Phase 2.5
+- Phase 2.5 exit validation: `validate_baseline()` checks schema
+  compliance and required field non-null for identity/manifest/foundation
+  before allowing Phase 3 to start
 - REVIEWING state recovery: verifies extraction output exists on disk
   before continuing review; resets to PENDING if files missing
 - Process guard: PID lockfile (prevents duplicate runs), startup git
@@ -134,7 +140,8 @@ No runtime implementation code yet.
 - No real user package yet (only template)
 - No simulation-engine service implementation
 - No terminal adapter implementation
-- Phase 4 (scene archive) extraction implemented but not yet run
+- Phase 4 (scene archive) extraction implemented; integration bugs fixed
+  (lock bypass, chapter parsing, stage_id mapping, character validation)
 - No retrieval implementation yet (design finalized, pending extraction
   completion)
 - World schemas incomplete (no formal schema for foundation, timeline, events,

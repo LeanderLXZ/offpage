@@ -203,6 +203,8 @@ LLM 产出的 JSON 经常有格式问题（内容完整但解析失败）。管�
 - 提取失败 → 自动回滚未提交的文件变更（全仓库范围，不仅限于 `works/`）
 - **Baseline 恢复**：`--resume` 时自动检测 Phase 2.5 baseline 是否完成，
   缺失则补跑，避免后续 batch 因缺少 identity.json 而全部失败
+- **Baseline 出口验证**：Phase 2.5 完成后运行 `validate_baseline()`
+  校验 schema + required 字段非空，阻断不合格的 baseline 进入 Phase 3
 - **REVIEWING 中断恢复**：恢复到 REVIEWING 状态时先验证提取产物仍在磁盘，
   文件缺失则自动回退重新提取
 - Resume 时自动重置 blocked batch（retry 耗尽的），无需手动编辑 progress
@@ -213,14 +215,15 @@ LLM 产出的 JSON 经常有格式问题（内容完整但解析失败）。管�
 
 Phase 3 全部 batch 提交后自动运行。包含 8 项程序化检查（零 token），
 可选 LLM 裁定标记项。产出 `consistency_report.json`。有 error 级别问题时
-阻断 Phase 4，需人工处理后继续。
+阻断 Phase 4，需人工处理后继续。target_map 样本数检查使用
+importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。
 
 代码：`persona_extraction/consistency_checker.py`
 
 ## Phase 4：场景切分
 
-Phase 4 与 Phase 3 完全独立——前置条件仅为 `source_batch_plan.json`
-（Phase 1 产物）。
+Phase 4 与 Phase 3 完全独立——无 PID 锁（不做 git 操作），可与 Phase 3
+并行运行。前置条件仅为 `source_batch_plan.json`（Phase 1 产物）。
 
 **运行方式**：
 
@@ -240,7 +243,8 @@ python -m persona_extraction "<work_id>" -r .. \
 - 每章一次 `claude -p`，LLM 标注场景边界 + 元数据（不输出 full_text）
 - 程序根据行号从原文提取 full_text
 - 多章并行执行（`--concurrency`，默认 10）
-- 仅程序化校验（行号有效、不重叠、覆盖全章、alias 匹配）
+- 仅程序化校验（行号有效、不重叠、覆盖全章；alias 匹配可选——scene archive
+  是 work-level 产物，不限于提取目标角色集）
 - 全部完成后合并为 `works/{work_id}/rag/scene_archive.jsonl`
 - `scene_id` 格式：`scene_{chapter}_{seq}`（如 `scene_0015_003`）
 

@@ -10,7 +10,7 @@ from pathlib import Path
 from .git_utils import preflight_check
 from .llm_backend import create_backend
 from .orchestrator import ExtractionOrchestrator
-from .process_guard import PidLock, launch_background
+from .process_guard import launch_background
 from .progress import ExtractionProgress
 from .scene_archive import run_scene_archive
 
@@ -131,37 +131,16 @@ def main(argv: list[str] | None = None) -> None:
               f"project root (no schemas/ directory).")
         sys.exit(1)
 
-    # --- Pre-flight: check for already-running instance ---
-    lock = PidLock(project_root, args.work_id)
-    existing = lock.is_held()
-    if existing:
-        pid = existing.get("pid", "?")
-        started = existing.get("started", "?")
-        print(f"[ERROR] Another extraction is already running:")
-        print(f"  PID: {pid}  Started: {started}")
-        print(f"  If the process is dead, remove the lock:")
-        print(f"  rm \"{lock.lock_path}\"")
-        sys.exit(1)
-
-    # --- Background mode ---
-    if args.background:
-        if not args.resume and not args.characters:
-            print("[ERROR] --background requires --resume or --characters "
-                  "(no interactive prompts in background mode).")
-            sys.exit(1)
-
-        # Re-launch without --background
-        extra = [a for a in sys.argv[1:] if a != "--background"]
-        launch_background(args.work_id, project_root, extra)
-        sys.exit(0)
-
-    # --- Phase 4 standalone path ---
+    # --- Phase 4 standalone path (no lock — no git operations) ---
     if args.start_phase == "4":
+        if args.background:
+            extra = [a for a in sys.argv[1:] if a != "--background"]
+            launch_background(args.work_id, project_root, extra)
+            sys.exit(0)
         backend = create_backend(
             args.backend, project_root,
             max_turns=args.max_turns, model=args.model,
             effort=args.effort)
-        # Phase 4 doesn't need git preflight — no git commits
         success = run_scene_archive(
             project_root, args.work_id, backend,
             concurrency=args.concurrency,
@@ -169,6 +148,16 @@ def main(argv: list[str] | None = None) -> None:
             resume=args.resume,
         )
         sys.exit(0 if success else 1)
+
+    # --- Background mode (Phase 0-3.5) ---
+    if args.background:
+        if not args.resume and not args.characters:
+            print("[ERROR] --background requires --resume or --characters "
+                  "(no interactive prompts in background mode).")
+            sys.exit(1)
+        extra = [a for a in sys.argv[1:] if a != "--background"]
+        launch_background(args.work_id, project_root, extra)
+        sys.exit(0)
 
     # --- Standard Phase 0-3.5 path ---
 

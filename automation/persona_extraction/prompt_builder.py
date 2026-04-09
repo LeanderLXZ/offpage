@@ -326,6 +326,10 @@ def build_character_extraction_prompt(
         project_root, work_id, character_id, batch, prev_batch,
         world_snapshot_path)
 
+    # Build importance-based quality requirements table
+    quality_requirements = _build_quality_requirements(
+        project_root, work_id, progress.target_characters)
+
     context = {
         "work_id": work_id,
         "batch_id": batch.batch_id,
@@ -340,6 +344,7 @@ def build_character_extraction_prompt(
         "prev_char_snapshot": prev_char_snapshot,
         "files_to_read": "\n".join(f"- {f}" for f in files_to_read),
         "is_first_batch": batch.batch_id == "batch_001",
+        "quality_requirements": quality_requirements,
         "reviewer_feedback": reviewer_feedback,
         "retry_note": (
             f"\n\n## 重试注意\n\n"
@@ -646,6 +651,50 @@ def build_scene_split_prompt(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+_IMPORTANCE_THRESHOLDS = {"主角": 5, "重要配角": 3}
+
+
+def _build_quality_requirements(
+    project_root: Path,
+    work_id: str,
+    target_characters: list[str],
+) -> str:
+    """Build a markdown table of per-target min examples from importance."""
+    candidates_path = (project_root / "works" / work_id / "analysis"
+                       / "incremental" / "candidate_characters.json")
+    candidates = _read_json(candidates_path)
+    if not candidates:
+        return ("| target | importance | 最低 examples |\n"
+                "|--------|-----------|---------------|\n"
+                "| （未找到 candidate_characters.json，默认全部 ≥3） "
+                "| — | 3 |")
+
+    # Build {character_id: importance}
+    importance_map: dict[str, str] = {}
+    for c in candidates.get("candidates", []):
+        cid = c.get("character_id", "")
+        if cid:
+            importance_map[cid] = c.get("importance", "")
+
+    lines = [
+        "| target | importance | 最低 examples |",
+        "|--------|-----------|---------------|",
+    ]
+    for char_id in target_characters:
+        imp = importance_map.get(char_id, "")
+        min_ex = _IMPORTANCE_THRESHOLDS.get(imp, 1)
+        lines.append(f"| {char_id} | {imp or '—'} | {min_ex} |")
+
+    # Also list other known important characters not in target set
+    for cid, imp in importance_map.items():
+        if cid not in target_characters and imp in _IMPORTANCE_THRESHOLDS:
+            min_ex = _IMPORTANCE_THRESHOLDS[imp]
+            lines.append(f"| {cid} | {imp} | {min_ex} |")
+
+    lines.append("| 其他泛化类型 | — | 1 |")
+    return "\n".join(lines)
+
 
 def _read_json(path: Path) -> dict[str, Any] | None:
     if not path.exists():

@@ -93,13 +93,28 @@ def run_consistency_check(
     work_dir = project_root / "works" / work_id
     issues: list[ConsistencyIssue] = []
 
+    # Load importance map for example count thresholds
+    imp_path = (project_root / "works" / work_id / "analysis"
+                / "incremental" / "candidate_characters.json")
+    importance_map: dict[str, str] = {}
+    if imp_path.exists():
+        try:
+            imp_data = json.loads(imp_path.read_text(encoding="utf-8"))
+            importance_map = {
+                c["character_id"]: c.get("importance", "")
+                for c in imp_data.get("candidates", [])
+                if c.get("character_id")}
+        except (json.JSONDecodeError, OSError, KeyError):
+            pass
+
     issues.extend(_check_alias_consistency(work_dir, character_ids, stage_ids))
     issues.extend(_check_field_completeness(work_dir, character_ids, stage_ids))
     issues.extend(_check_relationship_continuity(work_dir, character_ids, stage_ids))
     issues.extend(_check_source_type_distribution(work_dir, character_ids, stage_ids))
     issues.extend(_check_evidence_refs_coverage(work_dir, character_ids, stage_ids))
     issues.extend(_check_memory_id_correspondence(work_dir, character_ids, stage_ids))
-    issues.extend(_check_target_map_counts(work_dir, character_ids, stage_ids))
+    issues.extend(_check_target_map_counts(
+        work_dir, character_ids, stage_ids, importance_map))
     issues.extend(_check_stage_id_alignment(work_dir, character_ids, stage_ids))
 
     error_count = sum(1 for i in issues if i.severity == "error")
@@ -402,12 +417,30 @@ def _check_memory_id_correspondence(
     return issues
 
 
+def _min_examples_for_target(target: str,
+                             importance_map: dict[str, str]) -> int:
+    """主角 → 5, 重要配角 → 3, others → 1. Substring match."""
+    for name, importance in importance_map.items():
+        if name in target:
+            if importance == "主角":
+                return 5
+            if importance == "重要配角":
+                return 3
+            return 1
+    return 1
+
+
 def _check_target_map_counts(
     work_dir: Path, character_ids: list[str], stage_ids: list[str],
+    importance_map: dict[str, str] | None = None,
 ) -> list[ConsistencyIssue]:
-    """Verify target_voice_map and target_behavior_map have ≥3 examples per target."""
+    """Verify target maps have enough examples.
+
+    Thresholds based on character importance from candidate_characters:
+    主角 ≥5, 重要配角 ≥3, others ≥1.
+    """
     issues: list[ConsistencyIssue] = []
-    min_examples = 3
+    imp = importance_map or {}
 
     for char_id in character_ids:
         for stage_id in stage_ids:
@@ -420,24 +453,26 @@ def _check_target_map_counts(
             for entry in voice_state.get("target_voice_map", []):
                 target = entry.get("target_type", "?")
                 examples = entry.get("dialogue_examples", [])
-                if len(examples) < min_examples:
+                min_ex = _min_examples_for_target(target, imp)
+                if len(examples) < min_ex:
                     issues.append(ConsistencyIssue(
                         "warning", "target_map",
                         f"{char_id}/{stage_id}/voice/{target}",
-                        f"target_voice_map has {len(examples)} dialogue_examples "
-                        f"(min {min_examples})"))
+                        f"target_voice_map has {len(examples)} "
+                        f"dialogue_examples (want >={min_ex})"))
 
             # target_behavior_map
             behavior_state = snapshot.get("behavior_state", {})
             for entry in behavior_state.get("target_behavior_map", []):
                 target = entry.get("target_type", "?")
                 examples = entry.get("action_examples", [])
-                if len(examples) < min_examples:
+                min_ex = _min_examples_for_target(target, imp)
+                if len(examples) < min_ex:
                     issues.append(ConsistencyIssue(
                         "warning", "target_map",
                         f"{char_id}/{stage_id}/behavior/{target}",
-                        f"target_behavior_map has {len(examples)} action_examples "
-                        f"(min {min_examples})"))
+                        f"target_behavior_map has {len(examples)} "
+                        f"action_examples (want >={min_ex})"))
 
     return issues
 
