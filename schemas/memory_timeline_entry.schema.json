@@ -28,7 +28,7 @@
     },
     "location": {
       "type": "string",
-      "description": "事件发生的地点。例如：天剑宗·演武场、南林城外。"
+      "description": "事件发生的地点。例如：某宗门·演武场、某城外。"
     },
     "event_summary": {
       "type": "string",

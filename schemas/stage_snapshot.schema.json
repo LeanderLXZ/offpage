@@ -263,7 +263,7 @@
             "properties": {
               "target_type": {
                 "type": "string",
-                "description": "对象类型或具体角色。例如：王枫（真面目）、倭瓜男、系统、村民、小孩。对重要角色使用具体名称而非泛化类型。"
+                "description": "对象类型或具体角色。例如：角色A（真面目）、角色B、系统、村民、小孩。对重要角色使用具体名称而非泛化类型。"
               },
               "voice_shift": {
                 "type": "string",
@@ -378,7 +378,7 @@
             "properties": {
               "target_type": {
                 "type": "string",
-                "description": "对象类型或具体角色。例如：王枫（真面目）、倭瓜男、系统、村民。"
+                "description": "对象类型或具体角色。例如：角色A（真面目）、角色B、系统、村民。"
               },
               "behavior_shift": {
                 "type": "string",
