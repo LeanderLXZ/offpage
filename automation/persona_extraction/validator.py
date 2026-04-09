@@ -52,7 +52,7 @@ class ValidationReport:
 def _load_importance_map(project_root: Path, work_id: str) -> dict[str, str]:
     """Load character importance from candidate_characters.json.
 
-    Returns {character_name: importance} e.g. {"王枫": "主角", "萧浩": "重要配角"}.
+    Returns {character_name: importance} e.g. {"角色A": "主角", "角色B": "重要配角"}.
     """
     path = (project_root / "works" / work_id / "analysis"
             / "incremental" / "candidate_characters.json")

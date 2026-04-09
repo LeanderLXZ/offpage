@@ -209,7 +209,8 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   identity merging → world overview (`world_overview.json`) → batch plan
   (`source_batch_plan.json`) → candidate characters
   (`candidate_characters.json`). Exit validation: programmatic check of
-  batch chapter counts (5-15 limit); oversized batches auto-split.
+  batch chapter counts (5-15 limit); oversized batches trigger LLM re-run
+  with corrective feedback (up to 2 retries).
 - **Phase 2 — User confirmation**: user selects target characters and
   confirms batch boundaries.
 - **Phase 2.5 — Baseline production**: with full-book context and

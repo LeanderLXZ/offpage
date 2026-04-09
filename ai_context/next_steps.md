@@ -2,12 +2,10 @@
 
 ## Highest Priority
 
-1. **Continue automated extraction for 我和女帝的九世孽缘.**
+1. **Continue automated extraction for the onboarded work.**
    - Phase 0 (summarization) and Phase 1 (analysis) are complete
-   - Run: `cd automation && python -m persona_extraction "我和女帝的九世孽缘" -r .. -c 姜寒汐 王枫`
-   - This will skip Phase 0-1 (outputs exist), auto-confirm Phase 2 with
-     preset characters, then proceed through Phase 2.5 → Phase 3 → Phase 3.5 → Phase 4
-   - 40 batches total, target characters: 姜寒汐, 王枫
+   - Run: `python -m automation.persona_extraction "<work_id>" --resume`
+   - This will skip completed phases and resume from the last checkpoint
    - Monitor the first 2-3 batches for output quality, tune prompt templates
      in `automation/prompt_templates/` if needed
    - Note: need clean git working tree before running (stash or commit pending

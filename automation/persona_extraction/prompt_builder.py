@@ -88,8 +88,18 @@ def build_summarization_prompt(
     return _render_template(template, context)
 
 
-def build_analysis_prompt(project_root: Path, work_id: str) -> str:
-    """Build prompt for the analysis phase (from summaries → batch plan + candidates)."""
+def build_analysis_prompt(
+    project_root: Path,
+    work_id: str,
+    *,
+    correction_feedback: str = "",
+) -> str:
+    """Build prompt for the analysis phase (from summaries → batch plan + candidates).
+
+    Args:
+        correction_feedback: If non-empty, appended to the prompt to guide
+            the LLM to fix specific issues (e.g. oversized batches).
+    """
     template = _load_template("analysis.md")
 
     # Gather context
@@ -116,7 +126,16 @@ def build_analysis_prompt(project_root: Path, work_id: str) -> str:
         "summaries_dir": str(summaries_dir),
     }
 
-    return _render_template(template, context)
+    rendered = _render_template(template, context)
+
+    if correction_feedback:
+        rendered += (
+            "\n\n---\n\n"
+            "## ⚠️ 修正要求（上次产出未通过验证）\n\n"
+            f"{correction_feedback}\n"
+        )
+
+    return rendered
 
 
 # ---------------------------------------------------------------------------

@@ -23,30 +23,21 @@ packages yet, no real user packages, and no runtime code.
 
 ## Current Work Continuation Point
 
-Work: `我和女帝的九世孽缘`
-
-Source package intact at `sources/works/我和女帝的九世孽缘/` (537 chapters).
-Phase 0 (summarization), Phase 1 (analysis), Phase 2 (confirmation), and
-Phase 2.5 (baselines) are complete. Phase 3 in progress: batch_001 committed, batch_002-040 pending.
-40 batches total, target characters: 姜寒汐, 王枫.
-Extraction runs on branch `extraction/我和女帝的九世孽缘`.
-Phase 3.5 (cross-batch consistency check) will run automatically after
-all batches commit. Resume auto-resets blocked batches.
+One Chinese web novel is onboarded and in progress. Check
+`works/` and `sources/works/` for the actual work_id.
 
 ### How to continue extraction
 
 ```bash
-cd automation
-
 # Resume in foreground
-python -m persona_extraction "我和女帝的九世孽缘" -r .. --resume
+python -m automation.persona_extraction "<work_id>" --resume
 
 # Resume in background (survives SSH disconnect), max 6 hours
-python -m persona_extraction "我和女帝的九世孽缘" -r .. \
+python -m automation.persona_extraction "<work_id>" \
     --resume --background --max-runtime 360
 
 # Follow log
-tail -f ../works/我和女帝的九世孽缘/analysis/incremental/extraction.log
+tail -f works/<work_id>/analysis/incremental/extraction.log
 ```
 
 Optional: `pip install jsonschema` for programmatic schema validation (the

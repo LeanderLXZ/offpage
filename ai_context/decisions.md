@@ -74,7 +74,7 @@ that a new AI should know beyond what the architecture docs already say.
     characters require detailed entries (at least 3-5 examples each);
     generic types (strangers, passersby) are brief or omitted — LLM can
     infer from overall personality. Important characters use concrete names
-    (e.g. "王枫（真面目）"), not generic types. At runtime, only entries
+    (e.g. "角色名（真面目）"), not generic types. At runtime, only entries
     matching the user's role are loaded. Fallback: if the current stage
     snapshot lacks a matching entry (character absent for several stages),
     the engine scans backwards through previous stage snapshots — pure

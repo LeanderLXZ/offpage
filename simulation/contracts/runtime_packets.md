@@ -164,8 +164,8 @@ Examples:
 
 - `0001`
 - `0008-0010`
-- `阶段1_南林初遇`
-- `王枫第九世复生与姜寒汐南林重逢`
+- `阶段01_主角初登场`
+- `角色A与角色B在某地重逢`
 
 Do not repeat full chapter paths inside every packet unless the path itself is
 the meaningful distinction.
