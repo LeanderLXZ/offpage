@@ -175,6 +175,32 @@ class ExtractionProgress:
                 return b
         return None
 
+    def expand_batches(self, full_plan_batches: list[dict],
+                       max_batches: int = 0) -> int:
+        """Append new batches from the full batch plan that are not yet tracked.
+
+        Args:
+            full_plan_batches: All batches from source_batch_plan.json.
+            max_batches: Expand up to this many total batches (0 = all).
+
+        Returns:
+            Number of new batches added.
+        """
+        existing_ids = {b.batch_id for b in self.batches}
+        target = full_plan_batches[:max_batches] if max_batches > 0 \
+            else full_plan_batches
+        added = 0
+        for b in target:
+            if b["batch_id"] not in existing_ids:
+                self.batches.append(BatchEntry(
+                    batch_id=b["batch_id"],
+                    stage_id=b["stage_id"],
+                    chapters=b["chapters"],
+                    chapter_count=b.get("chapter_count", 0),
+                ))
+                added += 1
+        return added
+
     # ---- Persistence ----
 
     def progress_path(self, project_root: Path) -> Path:

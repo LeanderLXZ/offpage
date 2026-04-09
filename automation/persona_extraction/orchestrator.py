@@ -554,16 +554,12 @@ class ExtractionOrchestrator:
                       f"— {b.get('boundary_reason', '')}")
             print()
 
-        # End batch
-        if preset_end_batch is not None:
-            end_batch = preset_end_batch
-        else:
+        # --end-batch is a runtime limit only; progress always contains
+        # the full batch plan (same pattern as Phase 4).
+        if preset_end_batch is None:
             raw = input(f"Extract up to batch N (total {total_batches}, "
                         f"0 or empty = all): ").strip()
-            end_batch = int(raw) if raw else 0
-
-        if end_batch > 0:
-            batches_data = batches_data[:end_batch]
+            preset_end_batch = int(raw) if raw else 0
 
         batch_size = batch_plan.get("default_batch_size", 10)
 
@@ -579,7 +575,7 @@ class ExtractionOrchestrator:
                     chapters=b["chapters"],
                     chapter_count=b.get("chapter_count", 10),
                 )
-                for b in batches_data
+                for b in batches_data  # full plan, not truncated
             ],
             analysis_done=True,
             characters_confirmed=True,
@@ -588,9 +584,12 @@ class ExtractionOrchestrator:
         progress.save(self.project_root)
         self.progress = progress
 
+        run_label = (f"first {preset_end_batch}" if preset_end_batch
+                     else "all")
         print(f"\n[OK] Configuration saved.")
         print(f"     Characters: {selected}")
-        print(f"     Batches: {len(progress.batches)}")
+        print(f"     Batches: {len(progress.batches)} total "
+              f"(this run: {run_label})")
         print(f"     Branch: {progress.extraction_branch}")
         return progress
 
@@ -612,6 +611,9 @@ class ExtractionOrchestrator:
             sys.exit(1)
 
         self.progress = progress
+
+        # Expand batches from batch plan if --end-batch increased
+        self._ensure_batches_from_plan(progress, max_batches)
 
         # Check if baseline production was completed — if not, run it now
         if not progress.baseline_done:
@@ -657,8 +659,11 @@ class ExtractionOrchestrator:
         print(f"  Characters: {progress.target_characters}")
         print(f"  Total batches: {tracker.total}")
         print(f"  Completed: {completed_before}")
-        target = max_batches if max_batches > 0 else tracker.remaining
-        print(f"  Target this run: {target}")
+        if max_batches > 0:
+            to_run = max(0, max_batches - completed_before)
+            print(f"  Target: {max_batches} (up to {to_run} this run)")
+        else:
+            print(f"  Target: all ({tracker.remaining} remaining)")
         print(f"{'=' * 60}")
 
         # Create extraction branch
@@ -668,6 +673,8 @@ class ExtractionOrchestrator:
                 print("[ERROR] Cannot create extraction branch.")
                 sys.exit(1)
 
+        reached_limit = False
+
         while True:
             if self._interrupted:
                 break
@@ -676,25 +683,30 @@ class ExtractionOrchestrator:
                 break
 
             if (max_batches > 0
-                    and tracker.completed_this_run >= max_batches):
-                print(f"\n[STOP] Reached max_batches limit ({max_batches}).")
+                    and tracker.completed >= max_batches):
+                print(f"\n[STOP] Reached max_batches limit "
+                      f"({tracker.completed}/{max_batches}).")
+                reached_limit = True
                 break
 
             batch = progress.next_pending_batch()
             if batch is None:
                 if progress.all_committed():
                     print("\n[DONE] All batches completed!")
-                    self._run_consistency_check(progress)
-                    self._offer_squash_merge(progress)
-                    # Phase 4: scene archive
-                    self._run_scene_archive(
-                        end_batch=max_batches, resume=True)
+                    reached_limit = True
                 else:
                     print("\n[BLOCKED] No actionable batches. "
                           "Check progress for blocked/error batches.")
                 break
 
             self._process_batch(progress, batch, tracker)
+
+        # Post-loop: run Phase 3.5/4 when target was reached
+        if reached_limit:
+            self._run_consistency_check(progress)
+            self._offer_squash_merge(progress)
+            self._run_scene_archive(
+                end_batch=max_batches, resume=True)
 
         tracker.print_summary()
 
@@ -1117,6 +1129,36 @@ class ExtractionOrchestrator:
         else:
             print(f"  [ERROR] Squash-merge failed. "
                   f"Merge manually from '{branch}'.")
+
+    # ------------------------------------------------------------------
+    # Batch expansion (like Phase 4: always derive targets from plan)
+    # ------------------------------------------------------------------
+
+    def _ensure_batches_from_plan(
+        self,
+        progress: ExtractionProgress,
+        max_batches: int = 0,
+    ) -> None:
+        """Ensure progress contains all target batches from the batch plan.
+
+        Like Phase 4's chapter expansion pattern: every run re-reads the
+        batch plan and appends any batches not yet tracked.  Existing
+        batch states are preserved.
+        """
+        plan_path = (self.project_root / "works" / self.work_id
+                     / "analysis" / "incremental" / "source_batch_plan.json")
+        if not plan_path.exists():
+            return
+
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        full_batches = plan.get("batches", [])
+
+        current_count = len(progress.batches)
+        added = progress.expand_batches(full_batches, max_batches=max_batches)
+        if added > 0:
+            progress.save(self.project_root)
+            print(f"  [EXPAND] Added {added} new batches from batch plan "
+                  f"({current_count} → {len(progress.batches)})")
 
     # ------------------------------------------------------------------
     # Full pipeline

@@ -1230,7 +1230,7 @@ Baseline 文件（voice_rules、behavior_rules、boundaries）仍然存在，
 │  │     └──── retrying ←── failed ←────┘                │         │
 │  │          (retry ≤ 2)                                │         │
 │  │                                                     │         │
-│  │  --resume 时: blocked batch 自动重置为 pending       │         │
+│  │  --resume 时: blocked 重置 + 按 batch plan 扩展       │         │
 │  └──────────────────────┬──────────────────────────────┘         │
 │                         ▼                                        │
 │  ┌─ Phase 3.5 ─ 跨批次一致性检查（全部 committed 后）─┐          │
@@ -1414,6 +1414,11 @@ fix 后重新跑语义审校；如果是程序化校验发现的，fix 后重新
 - **Resume 自动重置**：`--resume` 时自动将所有 blocked batch（retry 耗尽的
   FAILED/ERROR）重置为 pending，retry_count 清零。用户主动 resume 即意味着
   问题已处理，无需手动编辑 progress 文件
+- **Progress 与 `--end-batch` 分离**（同 Phase 4 模式）：progress 文件
+  始终包含完整 batch plan（Phase 2 确认时写入全量），`--end-batch` 仅作为
+  运行时限制控制本次执行范围，不影响 progress 数据结构。提取循环入口额外
+  执行防御性补全（从 batch plan 追加缺失 batch），应对 plan 更新或手动编辑
+  progress 等边缘情况
 
 ### 11.6 Git 集成
 
