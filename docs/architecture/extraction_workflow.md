@@ -34,8 +34,8 @@
 
 ### 2. 章节归纳（Phase 0）
 
-- 将全书按分组（chunk，约 20-25 章/组）逐组归纳
-- 每个 chunk 独立处理，可并行
+- 将全书按分组（chunk，约 20-25 章/组）归纳
+- 多 chunk 并行处理（`--concurrency` 控制，默认 10）
 - 产出每章的结构化摘要（事件、出场角色、地点、情绪基调、身份变化线索、
   候选阶段边界标记）
 - 输出：`works/{work_id}/analysis/incremental/chapter_summaries/`

@@ -66,6 +66,9 @@ No runtime implementation code yet.
   (zero tokens) → LLM repair on broken JSON (minimal tokens) → full re-run
   (last resort). Integrated into Phase 0 skip-check/post-write and Phase 3
   validator for both JSON and JSONL files.
+- Phase 0 parallel summarization: multiple chunks processed concurrently
+  via `ThreadPoolExecutor` (`--concurrency`, default 10). Completed chunk
+  files auto-skipped on resume.
 - Git integration: extraction branch, per-batch commits, auto-rollback
   (full-repo scope), squash-merge to main on completion
 - Phase 3.5 cross-batch consistency checker (`consistency_checker.py`):

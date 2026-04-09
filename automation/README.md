@@ -61,6 +61,10 @@ python -m automation.persona_extraction "<work_id>" -b claude -m opus
 python -m automation.persona_extraction "<work_id>" \
     -c 角色A 角色B \
     --end-batch 5
+
+# 调整 Phase 0/Phase 4 并发数（默认 10）
+python -m automation.persona_extraction "<work_id>" \
+    -c 角色A 角色B --concurrency 5
 ```
 
 ### 断点续跑

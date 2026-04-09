@@ -92,7 +92,7 @@ def main(argv: list[str] | None = None) -> None:
         "--concurrency",
         type=int,
         default=10,
-        help="Max parallel workers for Phase 4 (default: 10)",
+        help="Max parallel workers for Phase 0 and Phase 4 (default: 10)",
     )
     parser.add_argument(
         "--resume", action="store_true",
