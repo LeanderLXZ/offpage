@@ -208,7 +208,8 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
 - **Phase 1 — Global analysis** (from summaries): cross-chunk character
   identity merging → world overview (`world_overview.json`) → batch plan
   (`source_batch_plan.json`) → candidate characters
-  (`candidate_characters.json`).
+  (`candidate_characters.json`). Exit validation: programmatic check of
+  batch chapter counts (5-15 limit); oversized batches auto-split.
 - **Phase 2 — User confirmation**: user selects target characters and
   confirms batch boundaries.
 - **Phase 2.5 — Baseline production**: with full-book context and

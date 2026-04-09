@@ -512,6 +512,11 @@ class ExtractionOrchestrator:
         else:
             print("  [WARN] World overview not found.")
 
+        # Phase 1 exit validation: enforce batch chapter_count limits
+        if batch_plan:
+            batch_plan = _validate_and_split_batch_plan(
+                batch_plan, inc_dir / "source_batch_plan.json")
+
         return {
             "batch_plan": batch_plan,
             "candidates": candidates,
@@ -1333,6 +1338,130 @@ def _is_fixable(verdict: dict[str, str]) -> bool:
         return False
 
     return True
+
+
+def _validate_and_split_batch_plan(
+    batch_plan: dict[str, Any],
+    plan_path: Path,
+    *,
+    max_batch_size: int = 15,
+    target_batch_size: int = 10,
+    min_batch_size: int = 5,
+) -> dict[str, Any]:
+    """Validate batch chapter counts and auto-split oversized batches.
+
+    LLM-generated batch plans frequently violate the max chapter constraint.
+    This function programmatically splits oversized batches into sub-batches
+    of ~target_batch_size chapters, rewrites the plan file, and returns the
+    corrected plan.
+
+    Returns the (possibly modified) batch_plan dict.
+    """
+    import math
+
+    batches = batch_plan.get("batches", [])
+    if not batches:
+        return batch_plan
+
+    oversized = [(i, b) for i, b in enumerate(batches)
+                 if b.get("chapter_count", 0) > max_batch_size]
+
+    if not oversized:
+        print(f"  [OK] Batch plan: {len(batches)} batches, "
+              f"all within {min_batch_size}-{max_batch_size} chapter limit.")
+        return batch_plan
+
+    print(f"\n  [WARN] {len(oversized)} batch(es) exceed {max_batch_size} "
+          f"chapter limit — auto-splitting:")
+
+    new_batches: list[dict[str, Any]] = []
+
+    for orig_batch in batches:
+        ch_count = orig_batch.get("chapter_count", 0)
+
+        if ch_count <= max_batch_size:
+            new_batches.append(orig_batch)
+            continue
+
+        # Parse chapter range
+        chapters_str = orig_batch.get("chapters", "")
+        parts = chapters_str.split("-", 1)
+        if len(parts) != 2:
+            logger.warning("Cannot parse chapters '%s', keeping as-is",
+                           chapters_str)
+            new_batches.append(orig_batch)
+            continue
+
+        ch_start = int(parts[0])
+        ch_end = int(parts[1])
+
+        # Calculate number of sub-batches
+        n_sub = math.ceil(ch_count / target_batch_size)
+        # Ensure no sub-batch is below min size
+        while n_sub > 1 and ch_count / n_sub < min_batch_size:
+            n_sub -= 1
+
+        base_size = ch_count // n_sub
+        remainder = ch_count % n_sub
+
+        # Generate suffix labels
+        suffixes = _generate_split_suffixes(n_sub)
+
+        orig_stage = orig_batch.get("stage_id", "")
+        orig_reason = orig_batch.get("boundary_reason", "")
+        orig_events = orig_batch.get("key_events_expected", [])
+
+        sub_start = ch_start
+        for j in range(n_sub):
+            sub_size = base_size + (1 if j < remainder else 0)
+            sub_end = sub_start + sub_size - 1
+
+            sub_batch = {
+                "batch_id": "",  # will be renumbered below
+                "stage_id": f"{orig_stage}_{suffixes[j]}",
+                "chapters": f"{sub_start:04d}-{sub_end:04d}",
+                "chapter_count": sub_size,
+                "boundary_reason": (
+                    f"程序化拆分（原 batch 含 {ch_count} 章，"
+                    f"超 {max_batch_size} 章上限）"
+                    if j > 0
+                    else orig_reason
+                ),
+                "key_events_expected": orig_events if j == 0 else [],
+            }
+            new_batches.append(sub_batch)
+            sub_start = sub_end + 1
+
+        print(f"    {orig_stage}: {ch_count} ch → "
+              f"split into {n_sub} sub-batches")
+
+    # Renumber batch_ids
+    for i, b in enumerate(new_batches):
+        b["batch_id"] = f"batch_{i + 1:03d}"
+
+    batch_plan["batches"] = new_batches
+
+    # Rewrite the plan file
+    plan_path.write_text(
+        json.dumps(batch_plan, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    print(f"\n  [OK] Batch plan rewritten: {len(batches)} → "
+          f"{len(new_batches)} batches. "
+          f"All within {min_batch_size}-{max_batch_size} chapter limit.")
+
+    return batch_plan
+
+
+def _generate_split_suffixes(n: int) -> list[str]:
+    """Generate sub-batch name suffixes: 上/下, 上/中/下, a/b/c/d..."""
+    if n == 2:
+        return ["上", "下"]
+    if n == 3:
+        return ["上", "中", "下"]
+    # For 4+, use alphabetic
+    return [chr(ord("a") + i) for i in range(n)]
 
 
 def _load_json(path: Path) -> dict[str, Any] | None:
