@@ -556,10 +556,9 @@ class ExtractionOrchestrator:
                     print(f"  [RETRY] Will re-run Phase 1 to correct "
                           f"batch plan (attempt {attempt + 1})...")
                 else:
-                    print(f"  [ERROR] Batch plan still has violating batches "
-                          f"after {MAX_ANALYSIS_RETRIES} retries. "
-                          f"Proceeding with current plan.")
-                    break
+                    print(f"  [FATAL] Batch plan still has violating batches "
+                          f"after {MAX_ANALYSIS_RETRIES} retries. Aborting.")
+                    sys.exit(1)
             else:
                 break  # no plan produced, let downstream handle
 

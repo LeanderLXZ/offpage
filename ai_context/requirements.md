@@ -129,7 +129,8 @@ revision tracking, roleplay-focused. Seven-step workflow:
    b. World overview (genre, power system, factions, geography, major
       world-lines/eras, core setting rules)
    c. Batch plan (story-boundary-based stage splitting; exit validation
-      enforces 5-15 chapter limit, re-runs LLM with correction if violated)
+      enforces 5-15 chapter limit as hard gate, re-runs LLM with correction
+      if violated, aborts if still violating after retries)
    d. Candidate character identification (post-merge, with aliases)
    e. **Baseline production** (new): write world foundation files and
       character identity.json + manifest.json for confirmed characters.
