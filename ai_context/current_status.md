@@ -72,6 +72,9 @@ No runtime implementation code yet.
   8 programmatic checks (zero tokens) after all batches commit
 - Resume auto-reset: blocked batches automatically reset to pending on
   `--resume`, no manual progress file editing needed
+- Progress/end-batch separation (Phase 4 pattern): progress always
+  contains full batch plan; `--end-batch` is runtime-only limit.
+  Defensive expansion at extraction loop entry for edge cases
 - Phase 4 scene archive (`scene_archive.py`): per-chapter parallel
   LLM calls for scene boundary annotation, programmatic validation,
   full_text extraction by line number. `--start-phase 4` standalone,

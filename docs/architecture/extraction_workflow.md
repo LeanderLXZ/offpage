@@ -285,5 +285,7 @@ orchestrator (Python)
 - Token/context limit 与 rate limit 区分：前者不重试（相同 prompt 必定再超限），
   后者递增退避重试
 - Baseline 恢复：resume 时自动检测 Phase 2.5 产出完整性，缺失则补跑
+- Progress 与 `--end-batch` 分离（同 Phase 4 模式）：progress 始终包含完整
+  batch plan，`--end-batch` 仅控制运行时执行范围；入口防御性补全应对边缘情况
 - 回滚范围覆盖全仓库（不仅限 `works/`），防止 LLM agent 在其他目录写入残留
 - 每 30s 心跳显示 PID、内存占用、已用时间；分步耗时追踪和 ETA 预估
