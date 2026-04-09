@@ -199,9 +199,10 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
 ### Pipeline phases
 
 - **Phase 0 — Chapter summarization**: Split all chapters into chunks
-  (~25 ch/chunk), each chunk summarized by one LLM call. Produces
-  per-chapter structured summaries under `analysis/incremental/
-  chapter_summaries/`.
+  (~25 ch/chunk), multiple chunks processed in parallel via
+  `ThreadPoolExecutor` (`--concurrency`, default 10). Each chunk is one
+  LLM call. Produces per-chapter structured summaries under
+  `analysis/incremental/chapter_summaries/`.
 - **Phase 1 — Global analysis** (from summaries): cross-chunk character
   identity merging → world overview (`world_overview.json`) → batch plan
   (`source_batch_plan.json`) → candidate characters

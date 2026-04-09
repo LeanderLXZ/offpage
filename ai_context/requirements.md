@@ -121,7 +121,8 @@ Principles: incremental, evidence-backed, Chinese identifiers, explicit
 revision tracking, roleplay-focused. Seven-step workflow:
 
 1. Ingest (normalize, split, metadata)
-2. Chapter summarization (chunk-based, ~25 ch/chunk, parallelizable)
+2. Chapter summarization (chunk-based, ~25 ch/chunk, parallel via
+   `--concurrency`, default 10)
 3. Global analysis (from all summaries, in order):
    a. Cross-chunk character identity merging
    b. World overview (genre, power system, factions, geography, major
@@ -167,6 +168,7 @@ See `docs/requirements.md` §10 for full details.
 ## §11 Automated Extraction Pipeline
 
 Python orchestrator in `automation/` drives multi-batch extraction via CLI.
+Phase 0 chunk summarization runs in parallel (`--concurrency`, default 10).
 Analysis → user confirmation → extraction loop (per batch: git preflight →
 **1+N split extraction** [world call → N parallel character calls] →
 programmatic validation → semantic review → git commit or rollback+retry) →

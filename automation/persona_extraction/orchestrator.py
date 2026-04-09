@@ -292,6 +292,55 @@ class ExtractionOrchestrator:
     # Phase 0: Chapter summarization (chunk-based)
     # ------------------------------------------------------------------
 
+    def _summarize_chunk(
+        self,
+        idx: int,
+        total_chunks: int,
+        start: int,
+        end: int,
+        summaries_dir: Path,
+    ) -> tuple[int, bool, str]:
+        """Process a single summarization chunk.
+
+        Returns (chunk_index, success, message).
+        """
+        output_path = summaries_dir / f"chunk_{idx:03d}.json"
+
+        prompt = build_summarization_prompt(
+            self.project_root, self.work_id,
+            idx, total_chunks, start, end)
+
+        result = run_with_retry(self.backend, prompt,
+                                timeout_seconds=600)
+
+        if not result.success:
+            return idx, False, result.error or "LLM call failed"
+
+        # Verify output was written
+        if not output_path.exists():
+            return idx, False, "Output file not created"
+
+        data = _load_json(output_path)
+        if data is None:
+            # Try three-level repair
+            ok, desc = try_repair_json_file(
+                output_path,
+                backend=self.backend,
+                expected_key="summaries",
+            )
+            if ok:
+                data = _load_json(output_path)
+            else:
+                output_path.unlink(missing_ok=True)
+                return idx, False, f"JSON repair failed: {desc}"
+
+        count = len(data.get("summaries", [])) if data else 0
+        expected = end - start + 1
+        if count < expected:
+            return idx, True, f"{count}/{expected} summaries (partial)"
+
+        return idx, True, ""
+
     def run_summarization(self) -> Path:
         """Summarize all chapters in chunks, return summaries directory."""
         print("\n" + "=" * 60)
@@ -312,29 +361,26 @@ class ExtractionOrchestrator:
                          / "analysis" / "incremental" / "chapter_summaries")
         summaries_dir.mkdir(parents=True, exist_ok=True)
 
-        # Build chunk list
-        chunks: list[tuple[int, int]] = []  # (start, end) 1-based
+        # Build chunk list: (idx, start, end) all 1-based
+        chunks: list[tuple[int, int, int]] = []
         for i in range(0, total_chapters, self.chunk_size):
             start = i + 1
             end = min(i + self.chunk_size, total_chapters)
-            chunks.append((start, end))
+            idx = i // self.chunk_size + 1
+            chunks.append((idx, start, end))
 
         total_chunks = len(chunks)
         print(f"  Total chapters: {total_chapters}")
         print(f"  Chunk size: {self.chunk_size}")
-        print(f"  Total chunks: {total_chunks}\n")
+        print(f"  Total chunks: {total_chunks}")
 
-        for idx, (start, end) in enumerate(chunks, 1):
-            if self._interrupted:
-                break
-
+        # Filter out already-completed chunks
+        pending: list[tuple[int, int, int]] = []
+        for idx, start, end in chunks:
             output_path = summaries_dir / f"chunk_{idx:03d}.json"
-
-            # Skip already-completed chunks (repair if needed)
             if output_path.exists():
                 existing = _load_json(output_path)
                 if existing is None:
-                    # Try repair before deciding to re-run
                     ok, desc = try_repair_json_file(
                         output_path,
                         backend=self.backend,
@@ -349,60 +395,68 @@ class ExtractionOrchestrator:
                     print(f"  [{idx}/{total_chunks}] chunk_{idx:03d} "
                           f"({start:04d}-{end:04d}) — already done, skipping")
                     continue
+            pending.append((idx, start, end))
 
-            print(f"  [{idx}/{total_chunks}] chunk_{idx:03d} "
-                  f"({start:04d}-{end:04d}) — summarizing...")
+        if not pending:
+            print(f"\n[OK] All {total_chunks} chunks already complete.")
+            return summaries_dir
 
-            prompt = build_summarization_prompt(
-                self.project_root, self.work_id,
-                idx, total_chunks, start, end)
+        print(f"  To process: {len(pending)}")
+        print(f"  Concurrency: {self.concurrency}")
+        print("=" * 60)
 
-            result = run_with_retry(self.backend, prompt,
-                                    timeout_seconds=600)
+        # Parallel processing
+        start_time = time.monotonic()
+        completed = 0
+        failed = 0
+        total_pending = len(pending)
 
-            if not result.success:
-                print(f"    [ERROR] Chunk {idx} failed: {result.error}")
-                print("    Stopping summarization. Resume will skip "
-                      "completed chunks.")
-                sys.exit(1)
+        print(f"\n  Processing {total_pending} chunks "
+              f"with {self.concurrency} workers...\n")
 
-            # Verify output was written, attempt repair if malformed
-            if output_path.exists():
-                data = _load_json(output_path)
-                if data is None:
-                    # JSON is malformed — try three-level repair
-                    print("    [WARN] Malformed JSON, attempting repair...")
-                    ok, desc = try_repair_json_file(
-                        output_path,
-                        backend=self.backend,
-                        expected_key="summaries",
-                    )
-                    if ok:
-                        data = _load_json(output_path)
-                        print(f"    [REPAIRED] {desc}")
+        with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
+            futures = {}
+            for idx, start, end in pending:
+                future = executor.submit(
+                    self._summarize_chunk,
+                    idx, total_chunks, start, end, summaries_dir,
+                )
+                futures[future] = (idx, start, end)
+
+            for future in as_completed(futures):
+                idx, start, end = futures[future]
+                try:
+                    chunk_idx, success, msg = future.result()
+                except Exception as exc:
+                    chunk_idx, success, msg = idx, False, str(exc)
+
+                if success:
+                    completed += 1
+                    if msg:  # partial
+                        print(f"    [WARN] chunk_{idx:03d} "
+                              f"({start:04d}-{end:04d}): {msg}  "
+                              f"({completed}/{total_pending})")
                     else:
-                        print(f"    [REPAIR FAILED] {desc}")
-                        print("    Will retry this chunk on next run.")
-                        output_path.unlink(missing_ok=True)
-                        continue
+                        print(f"    [OK] chunk_{idx:03d} "
+                              f"({start:04d}-{end:04d})  "
+                              f"({completed}/{total_pending})")
+                else:
+                    failed += 1
+                    print(f"    [FAIL] chunk_{idx:03d}: {msg[:120]}")
 
-                count = len(data.get("summaries", [])) if data else 0
-                expected = end - start + 1
-                print(f"    [OK] {count}/{expected} chapter summaries")
-                if count < expected:
-                    print(f"    [WARN] Missing {expected - count} summaries")
-            else:
-                print(f"    [ERROR] Output file not created: {output_path}")
-                print("    Stopping. The LLM may not have written the file.")
-                sys.exit(1)
+        elapsed = time.monotonic() - start_time
+        print(f"\n  Completed: {completed}/{total_pending}  "
+              f"Failed: {failed}  "
+              f"Elapsed: {_fmt_duration(elapsed)}")
+        if completed > 0:
+            print(f"  Avg: {_fmt_duration(elapsed / completed)}/chunk")
 
         # Verify all chunks completed
-        completed = sum(1 for i in range(1, total_chunks + 1)
-                        if (summaries_dir / f"chunk_{i:03d}.json").exists())
-        print(f"\n[OK] Summarization complete: {completed}/{total_chunks} "
-              f"chunks")
+        all_done = sum(1 for i in range(1, total_chunks + 1)
+                       if (summaries_dir / f"chunk_{i:03d}.json").exists())
+        print(f"\n[OK] Summarization: {all_done}/{total_chunks} chunks")
 
-        if completed < total_chunks:
+        if all_done < total_chunks:
             print("[WARN] Some chunks missing. Re-run to fill gaps.")
 
         return summaries_dir
