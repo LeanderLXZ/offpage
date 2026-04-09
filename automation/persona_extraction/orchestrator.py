@@ -35,7 +35,7 @@ from .git_utils import (
     rollback_to_head,
     squash_merge_to,
 )
-from .json_repair import try_repair_json_file, try_repair_jsonl_file
+from .json_repair import try_repair_json_file
 from .llm_backend import LLMBackend, LLMResult, run_with_retry
 from .post_processing import run_batch_post_processing
 from .process_guard import PidLock, fmt_memory, get_rss_mb
@@ -529,21 +529,22 @@ class ExtractionOrchestrator:
 
             # Phase 1 exit validation: check batch chapter_count limits
             if batch_plan:
-                oversized = _check_batch_plan_limits(batch_plan)
-                if not oversized:
+                violating = _check_batch_plan_limits(batch_plan)
+                if not violating:
                     break  # all good
 
                 if attempt <= MAX_ANALYSIS_RETRIES:
                     # Build correction feedback for next attempt
                     details = "; ".join(
                         f"{b.get('stage_id', '?')}={b.get('chapter_count')}章"
-                        for b in oversized)
+                        for b in violating)
                     correction_feedback = (
-                        f"上次产出的 batch plan 中有 {len(oversized)} 个 batch "
-                        f"超过 15 章上限：{details}。\n\n"
+                        f"上次产出的 batch plan 中有 {len(violating)} 个 batch "
+                        f"不满足 5-15 章限制：{details}。\n\n"
                         "请重新生成 `source_batch_plan.json`，确保每个 batch "
                         "的 chapter_count 在 5-15 范围内。对于跨度大的故事弧，"
-                        "必须在其中寻找次级剧情节点拆分为多个 batch。\n\n"
+                        "必须在其中寻找次级剧情节点拆分为多个 batch；"
+                        "对于过短的 batch，应合并到相邻 batch。\n\n"
                         "其他已产出的文件（world_overview.json、"
                         "candidate_characters.json）如果已存在且正确，"
                         "可以保留不变，只需重写 batch plan。"
@@ -555,7 +556,7 @@ class ExtractionOrchestrator:
                     print(f"  [RETRY] Will re-run Phase 1 to correct "
                           f"batch plan (attempt {attempt + 1})...")
                 else:
-                    print(f"  [ERROR] Batch plan still has oversized batches "
+                    print(f"  [ERROR] Batch plan still has violating batches "
                           f"after {MAX_ANALYSIS_RETRIES} retries. "
                           f"Proceeding with current plan.")
                     break
@@ -1393,28 +1394,31 @@ def _check_batch_plan_limits(
 ) -> list[dict[str, Any]]:
     """Check batch chapter counts against limits.
 
-    Returns a list of oversized batch dicts (empty = all OK).
+    Returns a list of violating batch dicts (empty = all OK).
     Prints a report either way.
     """
     batches = batch_plan.get("batches", [])
     if not batches:
         return []
 
-    oversized = [b for b in batches
-                 if b.get("chapter_count", 0) > max_batch_size]
+    violating = [b for b in batches
+                 if (b.get("chapter_count", 0) > max_batch_size
+                     or b.get("chapter_count", 0) < min_batch_size)]
 
-    if not oversized:
+    if not violating:
         print(f"  [OK] Batch plan: {len(batches)} batches, "
               f"all within {min_batch_size}-{max_batch_size} chapter limit.")
         return []
 
-    print(f"\n  [FAIL] {len(oversized)}/{len(batches)} batch(es) exceed "
-          f"{max_batch_size} chapter limit:")
-    for b in oversized:
+    print(f"\n  [FAIL] {len(violating)}/{len(batches)} batch(es) outside "
+          f"{min_batch_size}-{max_batch_size} chapter limit:")
+    for b in violating:
+        count = b.get("chapter_count", "?")
+        tag = "over" if isinstance(count, int) and count > max_batch_size else "under"
         print(f"    {b.get('batch_id', '?')}: {b.get('stage_id', '?')} "
-              f"— {b.get('chapter_count', '?')} chapters")
+              f"— {count} chapters ({tag})")
 
-    return oversized
+    return violating
 
 
 def _load_json(path: Path) -> dict[str, Any] | None:
