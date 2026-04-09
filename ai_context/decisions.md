@@ -100,13 +100,28 @@ that a new AI should know beyond what the architecture docs already say.
 24. Each phase step (summarization chunk, analysis, baseline production, batch
     extraction) is a fresh `claude -p` call with no shared session memory.
     Context between steps is entirely file-based.
-25. Two-layer quality check: programmatic (jsonschema, free) + semantic
-    (independent LLM reviewer). Only semantic errors cause FAIL.
-25a. Failure triage after review: fixable issues (≤5 specific field/value
+24a. Extraction prompts do NOT read `simulation/contracts/baseline_merge.md`,
+    `memory_digest.jsonl`, or `stage_catalog.json`. The self-contained
+    snapshot contract is embedded directly in the extraction prompt.
+    `memory_digest.jsonl` and `stage_catalog.json` are maintained
+    programmatically by `post_processing.py` (0 token, idempotent).
+25. Three-layer quality check per batch: programmatic validation (free) +
+    per-lane semantic review (independent LLM agent) + commit gate
+    (programmatic cross-consistency). Only semantic errors cause FAIL.
+25a. Parallel review lanes (审校通道): after extraction + post-processing,
+    world and each character get independent validate → review → fix
+    pipelines running in parallel. Each lane's reviewer has narrowed input
+    (only its own files + schema + programmatic report; character lanes
+    also read world snapshot for cross-consistency). Targeted fix input
+    is similarly narrowed (no full chunk summaries by default).
+25b. Commit gate (提交门控): programmatic (0 token) check after all lanes
+    pass. Verifies stage_id alignment, world-character consistency, and
+    programmatically-maintained file validity. Any lane failure or gate
+    failure → full batch rollback. No per-lane commit.
+25c. Failure triage after review: fixable issues (≤5 specific field/value
     errors, no missing files) → targeted fix agent makes minimal edits +
-    re-validate (zero-token check); systemic issues (file missing, structural,
-    understanding-level) → full rollback + retry. This avoids discarding
-    25+ minutes of extraction work for a single wrong field value.
+    re-validate; systemic issues (file missing, structural,
+    understanding-level) → full rollback + retry.
 26. Extraction runs on a dedicated git branch. Each passing batch is committed.
     Rollback on failure = git reset. After all batches complete, squash-merge
     to main (one clean commit); the extraction branch can then be deleted.
@@ -114,7 +129,9 @@ that a new AI should know beyond what the architecture docs already say.
     10 chapters). stage_id should be a meaningful Chinese name.
 28. The orchestrator pre-computes the file read list for each call (world /
     character). Only the most recent snapshot and memory_timeline are included
-    (not full history). Agents should not explore freely.
+    (not full history). `memory_digest.jsonl`, `stage_catalog.json`, and
+    `baseline_merge.md` are excluded from the read list. Agents should not
+    explore freely.
 
 ## Memory System and Retrieval
 

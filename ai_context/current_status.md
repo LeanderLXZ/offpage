@@ -57,8 +57,17 @@ No runtime implementation code yet.
 - `automation/` directory with Python package `persona_extraction`
 - CLI entry point: `persona-extract` command
 - LLM backend abstraction supporting Claude CLI and Codex CLI
-- Progress tracking with state machine (pending → … → fixing → passed → committed)
-- Two-layer quality check: programmatic (jsonschema) + semantic (LLM reviewer)
+- Progress tracking with state machine (pending → extracting → extracted →
+  post_processing → reviewing → passed → committed)
+- Programmatic post-processing (`post_processing.py`): after extraction,
+  automatically generates `memory_digest.jsonl` from `memory_timeline` and
+  maintains `stage_catalog.json` from snapshot metadata (0 token, idempotent)
+- Parallel review lanes (`review_lanes.py`): world + each character gets
+  an independent validate → review → fix pipeline, running in parallel.
+  Commit gate (提交门控) performs programmatic cross-consistency check
+  before batch commit. All lanes must pass; any failure → full batch rollback.
+- Two-layer quality check per lane: programmatic (jsonschema) + semantic
+  (LLM reviewer with narrowed input scope)
 - Failure triage: reviewer findings classified as fixable (≤5 specific field
   errors) → targeted fix agent (minimal edits + re-validate); systemic
   (file missing, structural, understanding-level) → full rollback + retry
@@ -87,9 +96,14 @@ No runtime implementation code yet.
   full_text extraction by line number. `--start-phase 4` standalone,
   `--concurrency` for parallelism. Output: `works/{work_id}/rag/`
 - Prompt templates: analysis, world extraction, character extraction,
-  semantic review, targeted fix, scene split (coordinated_extraction.md
-  kept for legacy). Character extraction prompt dynamically injects
-  importance-based quality requirements (min examples per target)
+  world semantic review, character semantic review, targeted fix,
+  scene split (coordinated_extraction.md kept for legacy; unified
+  semantic_review.md kept for backward compat). Character extraction
+  prompt embeds self-contained snapshot contract directly (no longer
+  reads `simulation/contracts/baseline_merge.md`). Prompt dynamically
+  injects importance-based quality requirements (min examples per target).
+  Extraction prompts do not read or write `memory_digest.jsonl` or
+  `stage_catalog.json` (programmatic now)
 - Breakpoint recovery via progress file; token/context limit errors
   distinguished from rate limits (not retried — same prompt will fail again)
 - Baseline recovery: `baseline_done` tracked in progress; `--resume`

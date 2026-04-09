@@ -32,11 +32,12 @@
 
 本批应产出或更新：
 
-- `world/stage_catalog.json` — 追加本阶段条目
 - `world/stage_snapshots/{stage_id}.json` — 当前阶段世界快照（遵循 world_stage_snapshot.schema.json）
 - `world/foundation/` — 如有基础设定修正
 - `world/social/stage_relationships/{stage_id}.json` — 动态关系
 - 按需：events, locations, factions, cast
+
+**注意**：`world/stage_catalog.json` 由编排脚本自动维护，**不要手动写入或修改此文件**。
 
 ## 风格一致性要求
 
@@ -69,8 +70,7 @@
 完成后，请确认已产出以下内容：
 
 1. 世界快照 `world/stage_snapshots/{stage_id}.json`
-2. `world/stage_catalog.json` 更新
-3. 基础设定修正（如有）
+2. 基础设定修正（如有）
 4. 所有文件都通过 schema 校验
 5. evidence_refs 非空
 6. source_type 已标注

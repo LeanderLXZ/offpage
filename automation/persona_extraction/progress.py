@@ -4,12 +4,12 @@ Progress file lives at:
   works/{work_id}/analysis/incremental/extraction_progress.json
 
 State machine per batch:
-  pending → extracting → extracted → reviewing → passed → committed
-                │                       │  │
-                └→ error                │  └→ fixing → passed → committed
-                                        │               │
-                                        └→ failed ──────┘
-                                             └→ retrying → extracting
+  pending → extracting → extracted → post_processing → reviewing
+                │                                        │  │
+                └→ error                                 │  └→ fixing → passed → committed
+                                                         │               │
+                                                         └→ failed ──────┘
+                                                              └→ retrying → extracting
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ class BatchState(str, Enum):
     PENDING = "pending"
     EXTRACTING = "extracting"
     EXTRACTED = "extracted"
+    POST_PROCESSING = "post_processing"
     REVIEWING = "reviewing"
     PASSED = "passed"
     COMMITTED = "committed"
@@ -40,17 +41,19 @@ class BatchState(str, Enum):
 
 # Valid transitions
 _TRANSITIONS: dict[BatchState, set[BatchState]] = {
-    BatchState.PENDING:     {BatchState.EXTRACTING, BatchState.ERROR},
-    BatchState.EXTRACTING:  {BatchState.EXTRACTED, BatchState.ERROR},
-    BatchState.EXTRACTED:   {BatchState.REVIEWING},
-    BatchState.REVIEWING:   {BatchState.PASSED, BatchState.FAILED,
-                             BatchState.FIXING},
-    BatchState.FIXING:      {BatchState.PASSED, BatchState.FAILED},
-    BatchState.PASSED:      {BatchState.COMMITTED},
-    BatchState.COMMITTED:   set(),  # terminal
-    BatchState.FAILED:      {BatchState.RETRYING},
-    BatchState.RETRYING:    {BatchState.EXTRACTING, BatchState.ERROR},
-    BatchState.ERROR:       {BatchState.EXTRACTING, BatchState.PENDING},
+    BatchState.PENDING:          {BatchState.EXTRACTING, BatchState.ERROR},
+    BatchState.EXTRACTING:       {BatchState.EXTRACTED, BatchState.ERROR},
+    BatchState.EXTRACTED:        {BatchState.POST_PROCESSING,
+                                  BatchState.REVIEWING},  # REVIEWING kept for compat
+    BatchState.POST_PROCESSING:  {BatchState.REVIEWING, BatchState.ERROR},
+    BatchState.REVIEWING:        {BatchState.PASSED, BatchState.FAILED,
+                                  BatchState.FIXING},
+    BatchState.FIXING:           {BatchState.PASSED, BatchState.FAILED},
+    BatchState.PASSED:           {BatchState.COMMITTED},
+    BatchState.COMMITTED:        set(),  # terminal
+    BatchState.FAILED:           {BatchState.RETRYING},
+    BatchState.RETRYING:         {BatchState.EXTRACTING, BatchState.ERROR},
+    BatchState.ERROR:            {BatchState.EXTRACTING, BatchState.PENDING},
 }
 
 
