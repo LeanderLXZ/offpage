@@ -186,6 +186,7 @@ def try_repair_json_file(
     *,
     backend: object | None = None,
     expected_key: str | None = None,
+    repair_timeout: int = 600,
 ) -> tuple[bool, str]:
     """Try to repair a JSON file. Returns (success, description).
 
@@ -200,6 +201,8 @@ def try_repair_json_file(
         If provided, the repaired JSON must contain this top-level key
         (e.g. ``"summaries"``).  Repair is considered failed if the key
         is missing or empty.
+    repair_timeout
+        Timeout in seconds for the L2 LLM repair call. Default 600.
     """
     content = path.read_text(encoding="utf-8")
 
@@ -239,7 +242,7 @@ def try_repair_json_file(
         return False, "L1 failed and backend is not an LLMBackend"
 
     prompt = build_llm_repair_prompt(content, str(path))
-    result = run_with_retry(backend, prompt, timeout_seconds=120)
+    result = run_with_retry(backend, prompt, timeout_seconds=repair_timeout)
 
     if not result.success:
         return False, f"L2 LLM repair call failed: {result.error}"
