@@ -27,7 +27,7 @@ Arbitrary characters, stage-based state, long-term memory, multiple terminals.
   tracking, mutual influence. See §2.5 for full example.
 - Cross-stage historical recall: behavioral details (nicknames, speech habits,
   attitudes, knowledge state), not just event summaries. Current personality
-  used when recalling. See §2.6 for "臭小子" example.
+  used when recalling. See §2.6 for nickname recall example.
 - Stage selection: one-line summary per stage, fixed for entire context.
 
 ## §3 Three Deep-Roleplay Goals
@@ -129,7 +129,7 @@ revision tracking, roleplay-focused. Seven-step workflow:
    b. World overview (genre, power system, factions, geography, major
       world-lines/eras, core setting rules)
    c. Batch plan (story-boundary-based stage splitting; exit validation
-      enforces 5-15 chapter limit, auto-splits oversized batches)
+      enforces 5-15 chapter limit, re-runs LLM with correction if violated)
    d. Candidate character identification (post-merge, with aliases)
    e. **Baseline production** (new): write world foundation files and
       character identity.json + manifest.json for confirmed characters.

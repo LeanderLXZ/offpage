@@ -60,7 +60,8 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 世界快照、角色快照、记忆时间线、运行时阶段选择全部建立在此切分之上。
 
 **出口验证**：Phase 1 完成后程序化检查所有 batch 的 `chapter_count`。超过 15 章
-上限的 batch 按 target 10 章自动均分拆分（0 token），重写 `source_batch_plan.json`。
+上限的 batch 会触发 Phase 1 重跑——删除 `source_batch_plan.json`，带修正反馈
+重新调用 LLM 产出更精准的切分（最多重试 2 次）。
 
 ### 4. 活跃角色确认（Phase 2）
 

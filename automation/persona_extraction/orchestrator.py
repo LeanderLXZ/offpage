@@ -486,36 +486,81 @@ class ExtractionOrchestrator:
     # ------------------------------------------------------------------
 
     def run_analysis(self) -> dict[str, Any]:
-        """Run analysis phase: identity merge + world overview + batch plan + candidates."""
-        print("\n" + "=" * 60)
-        print("  Phase 1: Analysis (from chapter summaries)")
-        print("=" * 60 + "\n")
+        """Run analysis phase: identity merge + world overview + batch plan + candidates.
 
-        prompt = build_analysis_prompt(self.project_root, self.work_id)
-        result = run_with_retry(self.backend, prompt, timeout_seconds=1800)
-
-        if not result.success:
-            print(f"[ERROR] Analysis failed: {result.error}")
-            sys.exit(1)
-
-        print("[OK] Analysis complete.")
-
-        # Try to load the generated files
+        If the produced batch plan contains oversized batches (>15 chapters),
+        the plan file is deleted and the LLM is re-run with corrective
+        feedback (up to MAX_ANALYSIS_RETRIES times).
+        """
+        MAX_ANALYSIS_RETRIES = 2
         work_dir = self.project_root / "works" / self.work_id
         inc_dir = work_dir / "analysis" / "incremental"
-        batch_plan = _load_json(inc_dir / "source_batch_plan.json")
-        candidates = _load_json(inc_dir / "candidate_characters.json")
-        world_overview = _load_json(inc_dir / "world_overview.json")
+        correction_feedback = ""
 
-        if world_overview:
-            print("  [OK] World overview produced.")
-        else:
-            print("  [WARN] World overview not found.")
+        for attempt in range(1, MAX_ANALYSIS_RETRIES + 2):
+            print("\n" + "=" * 60)
+            if attempt == 1:
+                print("  Phase 1: Analysis (from chapter summaries)")
+            else:
+                print(f"  Phase 1: Analysis — retry {attempt - 1}"
+                      f" (correcting batch plan)")
+            print("=" * 60 + "\n")
 
-        # Phase 1 exit validation: enforce batch chapter_count limits
-        if batch_plan:
-            batch_plan = _validate_and_split_batch_plan(
-                batch_plan, inc_dir / "source_batch_plan.json")
+            prompt = build_analysis_prompt(
+                self.project_root, self.work_id,
+                correction_feedback=correction_feedback)
+            result = run_with_retry(self.backend, prompt,
+                                    timeout_seconds=1800)
+
+            if not result.success:
+                print(f"[ERROR] Analysis failed: {result.error}")
+                sys.exit(1)
+
+            print("[OK] Analysis complete.")
+
+            batch_plan = _load_json(inc_dir / "source_batch_plan.json")
+            candidates = _load_json(inc_dir / "candidate_characters.json")
+            world_overview = _load_json(inc_dir / "world_overview.json")
+
+            if world_overview:
+                print("  [OK] World overview produced.")
+            else:
+                print("  [WARN] World overview not found.")
+
+            # Phase 1 exit validation: check batch chapter_count limits
+            if batch_plan:
+                oversized = _check_batch_plan_limits(batch_plan)
+                if not oversized:
+                    break  # all good
+
+                if attempt <= MAX_ANALYSIS_RETRIES:
+                    # Build correction feedback for next attempt
+                    details = "; ".join(
+                        f"{b.get('stage_id', '?')}={b.get('chapter_count')}章"
+                        for b in oversized)
+                    correction_feedback = (
+                        f"上次产出的 batch plan 中有 {len(oversized)} 个 batch "
+                        f"超过 15 章上限：{details}。\n\n"
+                        "请重新生成 `source_batch_plan.json`，确保每个 batch "
+                        "的 chapter_count 在 5-15 范围内。对于跨度大的故事弧，"
+                        "必须在其中寻找次级剧情节点拆分为多个 batch。\n\n"
+                        "其他已产出的文件（world_overview.json、"
+                        "candidate_characters.json）如果已存在且正确，"
+                        "可以保留不变，只需重写 batch plan。"
+                    )
+                    # Delete the bad plan so the LLM regenerates it
+                    plan_path = inc_dir / "source_batch_plan.json"
+                    if plan_path.exists():
+                        plan_path.unlink()
+                    print(f"  [RETRY] Will re-run Phase 1 to correct "
+                          f"batch plan (attempt {attempt + 1})...")
+                else:
+                    print(f"  [ERROR] Batch plan still has oversized batches "
+                          f"after {MAX_ANALYSIS_RETRIES} retries. "
+                          f"Proceeding with current plan.")
+                    break
+            else:
+                break  # no plan produced, let downstream handle
 
         return {
             "batch_plan": batch_plan,
@@ -1340,128 +1385,36 @@ def _is_fixable(verdict: dict[str, str]) -> bool:
     return True
 
 
-def _validate_and_split_batch_plan(
+def _check_batch_plan_limits(
     batch_plan: dict[str, Any],
-    plan_path: Path,
     *,
     max_batch_size: int = 15,
-    target_batch_size: int = 10,
     min_batch_size: int = 5,
-) -> dict[str, Any]:
-    """Validate batch chapter counts and auto-split oversized batches.
+) -> list[dict[str, Any]]:
+    """Check batch chapter counts against limits.
 
-    LLM-generated batch plans frequently violate the max chapter constraint.
-    This function programmatically splits oversized batches into sub-batches
-    of ~target_batch_size chapters, rewrites the plan file, and returns the
-    corrected plan.
-
-    Returns the (possibly modified) batch_plan dict.
+    Returns a list of oversized batch dicts (empty = all OK).
+    Prints a report either way.
     """
-    import math
-
     batches = batch_plan.get("batches", [])
     if not batches:
-        return batch_plan
+        return []
 
-    oversized = [(i, b) for i, b in enumerate(batches)
+    oversized = [b for b in batches
                  if b.get("chapter_count", 0) > max_batch_size]
 
     if not oversized:
         print(f"  [OK] Batch plan: {len(batches)} batches, "
               f"all within {min_batch_size}-{max_batch_size} chapter limit.")
-        return batch_plan
+        return []
 
-    print(f"\n  [WARN] {len(oversized)} batch(es) exceed {max_batch_size} "
-          f"chapter limit — auto-splitting:")
+    print(f"\n  [FAIL] {len(oversized)}/{len(batches)} batch(es) exceed "
+          f"{max_batch_size} chapter limit:")
+    for b in oversized:
+        print(f"    {b.get('batch_id', '?')}: {b.get('stage_id', '?')} "
+              f"— {b.get('chapter_count', '?')} chapters")
 
-    new_batches: list[dict[str, Any]] = []
-
-    for orig_batch in batches:
-        ch_count = orig_batch.get("chapter_count", 0)
-
-        if ch_count <= max_batch_size:
-            new_batches.append(orig_batch)
-            continue
-
-        # Parse chapter range
-        chapters_str = orig_batch.get("chapters", "")
-        parts = chapters_str.split("-", 1)
-        if len(parts) != 2:
-            logger.warning("Cannot parse chapters '%s', keeping as-is",
-                           chapters_str)
-            new_batches.append(orig_batch)
-            continue
-
-        ch_start = int(parts[0])
-        ch_end = int(parts[1])
-
-        # Calculate number of sub-batches
-        n_sub = math.ceil(ch_count / target_batch_size)
-        # Ensure no sub-batch is below min size
-        while n_sub > 1 and ch_count / n_sub < min_batch_size:
-            n_sub -= 1
-
-        base_size = ch_count // n_sub
-        remainder = ch_count % n_sub
-
-        # Generate suffix labels
-        suffixes = _generate_split_suffixes(n_sub)
-
-        orig_stage = orig_batch.get("stage_id", "")
-        orig_reason = orig_batch.get("boundary_reason", "")
-        orig_events = orig_batch.get("key_events_expected", [])
-
-        sub_start = ch_start
-        for j in range(n_sub):
-            sub_size = base_size + (1 if j < remainder else 0)
-            sub_end = sub_start + sub_size - 1
-
-            sub_batch = {
-                "batch_id": "",  # will be renumbered below
-                "stage_id": f"{orig_stage}_{suffixes[j]}",
-                "chapters": f"{sub_start:04d}-{sub_end:04d}",
-                "chapter_count": sub_size,
-                "boundary_reason": (
-                    f"程序化拆分（原 batch 含 {ch_count} 章，"
-                    f"超 {max_batch_size} 章上限）"
-                    if j > 0
-                    else orig_reason
-                ),
-                "key_events_expected": orig_events if j == 0 else [],
-            }
-            new_batches.append(sub_batch)
-            sub_start = sub_end + 1
-
-        print(f"    {orig_stage}: {ch_count} ch → "
-              f"split into {n_sub} sub-batches")
-
-    # Renumber batch_ids
-    for i, b in enumerate(new_batches):
-        b["batch_id"] = f"batch_{i + 1:03d}"
-
-    batch_plan["batches"] = new_batches
-
-    # Rewrite the plan file
-    plan_path.write_text(
-        json.dumps(batch_plan, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-
-    print(f"\n  [OK] Batch plan rewritten: {len(batches)} → "
-          f"{len(new_batches)} batches. "
-          f"All within {min_batch_size}-{max_batch_size} chapter limit.")
-
-    return batch_plan
-
-
-def _generate_split_suffixes(n: int) -> list[str]:
-    """Generate sub-batch name suffixes: 上/下, 上/中/下, a/b/c/d..."""
-    if n == 2:
-        return ["上", "下"]
-    if n == 3:
-        return ["上", "中", "下"]
-    # For 4+, use alphabetic
-    return [chr(ord("a") + i) for i in range(n)]
+    return oversized
 
 
 def _load_json(path: Path) -> dict[str, Any] | None:

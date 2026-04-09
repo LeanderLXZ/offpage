@@ -38,19 +38,12 @@ No runtime implementation code yet.
     `active_goals`/`active_obsessions` split in emotional_baseline
 - User package template at `users/_template/`
 
-### First Work Package: <work_id>
+### First Work Package
 
-- Source: `sources/works/<work_id>/` — 537 normalized chapters from epub
-- Canon directory: `works/<work_id>/` — Phase 0-2.5 complete, Phase 3
-  in progress
-- Phase 0: 22/22 chapter summary chunks produced (537/537 chapters)
-- Phase 1: `world_overview.json`, `source_batch_plan.json` (40 batches),
-  `candidate_characters.json` (30 candidates) produced
-- Phase 2: Target characters confirmed: Character A, Character B
-- Phase 2.5: World foundation + character identity baselines — pending
-  re-extraction (test products cleaned for schema update retest)
-- Phase 3: All 40 batches reset to pending. Extraction runs on branch
-  `extraction/<work_id>`
+- One Chinese web novel onboarded (500+ chapters)
+- Phase 0-1 complete (chapter summaries + global analysis)
+- Phase 2 target characters confirmed (2 characters)
+- Phase 2.5-3 in progress (baseline + batch extraction)
 
 ### Automated Extraction Orchestrator
 

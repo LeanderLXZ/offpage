@@ -145,12 +145,12 @@
 
 **示例**：
 
-- 阶段 1：女主和男主是仇家，女主叫男主"臭小子"，男主隐瞒自己是女主前世
-  爱人的身份，女主不知道男主的真实身份。
-- 阶段 10：男女主已经相爱，女主性格仍然害羞，且已知道男主的真实身份。
-- 加载阶段 10 后，用户（男主）问："你以前叫我什么？"
-- 女主应当能回答（以阶段 10 害羞的语气）："我当时虽然叫你臭小子，但是
-  咱们那个时候还是仇家嘛。人家又不知道你的真实身份。"
+- 阶段 1：角色 A 和角色 B 是对手关系，A 用不友好的绰号称呼 B，B 隐瞒了
+  自己的真实身份，A 不知道 B 的真实背景。
+- 阶段 10：A 和 B 已经和解，A 性格仍然含蓄，且已知道 B 的真实身份。
+- 加载阶段 10 后，用户（B）问："你以前叫我什么？"
+- A 应当能回答（以阶段 10 的语气）："我当时那么叫你，是因为咱们那个时候
+  还是对手嘛。我又不知道你的真实身份。"
 
 这要求系统在以下层面提供足够的历史细节：
 
@@ -267,7 +267,7 @@ chunk 的内容，因此同一角色可能在不同 chunk 中以不同名称出�
 
 要求：
 - 章节归纳阶段：当 chunk 内出现疑似已知角色的新名称时，应在摘要中标注
-  可能的关联（如"Character D疑似即寒剑"），但不强制合并（因为单个 chunk 信息
+  可能的关联（如"角色B疑似即角色A"），但不强制合并（因为单个 chunk 信息
   不充分）
 - 全书分析阶段（读取所有 chunk 摘要后）：**必须** 执行跨 chunk 的角色身份
   合并，将同一角色在不同阶段的不同名称统一到一个候选角色条目中。候选角色
@@ -276,8 +276,8 @@ chunk 的内容，因此同一角色可能在不同 chunk 中以不同名称出�
   模式延续、其他角色的反应一致等
 - 不确定的合并应标注为推测，留待提取阶段用原文验证
 
-示例：寒剑（武器形态代称，前中期使用）→ Character D（正式名，后期获知）→
-寒三水 / 三水（昵称，主角所取）应合并为同一候选角色"Character D"，并记录所有
+示例：角色代称A（武器形态代称，前中期使用）→ 角色正式名（正式名，后期获知）→
+角色昵称 / 简称（昵称，主角所取）应合并为同一候选角色"角色正式名"，并记录所有
 别名。
 
 #### 通用要求
@@ -1469,7 +1469,7 @@ target_voice_map 和 target_behavior_map 的最低 examples 数量不是固定�
 | Phase | 验证内容 |
 |-------|---------|
 | Phase 0 (summarization) | 每个 chunk 输出 JSON 格式正确、非空 |
-| Phase 1 (analysis) | candidate_characters / batch_plan / world_overview 结构完整、required 字段存在；batch plan 章节数验证（5-15），超限 batch 程序化拆分 |
+| Phase 1 (analysis) | candidate_characters / batch_plan / world_overview 结构完整、required 字段存在；batch plan 章节数验证（5-15），超限则删除 plan 并带修正反馈重跑 LLM |
 | Phase 2.5 (baseline) | identity.json / manifest.json / foundation.json schema 校验 + required 字段非空 |
 | Phase 3 (extraction) | validate_batch（已有） |
 | Phase 3.5 (consistency) | consistency_check（已有） |
@@ -1660,24 +1660,20 @@ fix 后重新跑语义审校；如果是程序化校验发现的，fix 后重新
 
 - 尽量贴近自然剧情边界
 - 最小批次 5 章，最大批次 15 章，默认 10 章
-- 为每个阶段取有意义的中文名称（如"阶段1_<stage_title>初遇"）
+- 为每个阶段取有意义的中文名称（如"阶段01_主角初登场"）
 - stage_id 在世界包和角色包间必须一致
 
-#### 程序化兜底：超限 batch 自动拆分
+#### 出口验证：超限 batch 自动重跑
 
 LLM 产出的 batch plan 可能违反章节数上限（实测常见）。Phase 1 出口验证
-包含程序化拆分逻辑，无需额外 LLM 调用：
+检测到超限 batch 后，删除 `source_batch_plan.json` 并带修正反馈重跑 LLM：
 
-1. 扫描所有 batch，标记 `chapter_count > max_batch_size`（默认 15）的 batch
-2. 对超限 batch 按 `target_batch_size`（默认 10）均分拆分：
-   - 计算子 batch 数 = ceil(chapter_count / target_batch_size)
-   - 均匀分配章节（余数分摊到前几个子 batch）
-   - 子 batch 的 `stage_id` 在原名后追加序号后缀（如"阶段09_中州重逢与疗伤"
-     → "阶段09a_中州重逢与疗伤_上"、"阶段09b_中州重逢与疗伎_下"）
-   - `batch_id` 重新编号保持连续
-   - `boundary_reason` 标注为 "程序化拆分（原 batch 超 {n} 章上限）"
-3. 拆分后重新写入 `source_batch_plan.json`，打印拆分报告
-4. 拆分不会少于 `min_batch_size`（默认 5）章
+1. 扫描所有 batch，检查 `chapter_count` 是否在 5-15 范围内
+2. 如有超限，打印违规 batch 列表，删除 `source_batch_plan.json`
+3. 构建修正反馈（列出具体违规 batch 和章节数），追加到下次 analysis prompt
+4. 重跑 Phase 1 LLM（最多重试 2 次），其他已产出文件（world_overview、
+   candidate_characters）保留不变
+5. 若重试耗尽仍有超限，打印警告并继续（不阻断流程）
 
 ### 11.10 跨批次一致性检查（Phase 3.5）
 
@@ -1732,10 +1728,10 @@ ThreadPoolExecutor，每个 worker 起一个 `claude -p` 子进程。
   {
     "scene_start_line": 1,
     "scene_end_line": 45,
-    "time_in_story": "第九世复活后第一天清晨",
-    "location": "<stage_title>村外",
-    "characters_present": ["Character B", "Character A"],
-    "summary": "Character B在<stage_title>村外苏醒，发现Character A昏倒在旁..."
+    "time_in_story": "故事开始第一天清晨",
+    "location": "某村外",
+    "characters_present": ["角色A", "角色B"],
+    "summary": "角色A在村外苏醒，发现角色B昏倒在旁..."
   }
 ]
 ```
@@ -1792,7 +1788,7 @@ works/{work_id}/
 {
   "phase": "scene_archive",
   "work_id": "<work_id>",
-  "total_chapters": 537,
+  "total_chapters": 500,
   "chapters": {
     "0001": {"state": "passed", "retry_count": 0},
     "0002": {"state": "splitting", "retry_count": 0},
@@ -1951,7 +1947,7 @@ works/{work_id}/characters/{character_id}/canon/stage_snapshots/{stage_id}.json
    `stage_snapshots/{stage_id}.json`
 2. **匹配 target 条目**：在 `target_voice_map` 和 `target_behavior_map` 中
    查找与用户角色匹配的条目
-   - 用户扮演 canon 角色（如Character B）→ 精确匹配 `target_type`
+   - 用户扮演 canon 角色 → 精确匹配 `target_type`
    - 用户扮演 OC / 自定义角色 → 按 role_binding 中的设定特征匹配最接近的
      关系类型条目
 3. **Fallback——向前扫描**：如果当前 snapshot 中找不到匹配条目（如该角色
@@ -2112,14 +2108,14 @@ works/{work_id}/characters/{character_id}/canon/memory_digest.jsonl
 **条目结构**：
 ```json
 {
-  "memory_id": "Character A_S01_001",
-  "stage_id": "阶段01_九世复活·<stage_title>初遇",
-  "time_in_story": "破境重修降生之时",
-  "location": "虚空→<stage_title>",
-  "event_summary": "破境重修降生，被陌生人偷窥",
-  "emotional_tags": "愤怒,屈辱",
-  "memory_importance": "defining",
-  "involved_targets": ["倭瓜男"]
+  "memory_id": "角色A_S01_001",
+  "stage_id": "阶段01_主角初登场",
+  "time_in_story": "故事开始之时",
+  "location": "起始地点",
+  "event_summary": "角色A在某地苏醒，遭遇意外事件",
+  "emotional_tags": "警惕,困惑",
+  "memory_importance": "major",
+  "involved_targets": ["角色B"]
 }
 ```
 
