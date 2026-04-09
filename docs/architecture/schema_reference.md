@@ -52,6 +52,26 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **位置**：`characters/{character_id}/canon/identity.json`
 **运行时**：始终加载。
 
+**别名系统**：`aliases` 字段为结构化对象数组，每条记录包含：
+- `name` — 名称文本
+- `type` — 类型（本名/化名/代称/称呼/封号/道号/武器名/其他）
+- `effective_stages` — 生效阶段范围（null=全阶段）
+- `source` — 来源说明
+- `used_by` — 使用该称呼的角色列表（仅对称呼类型有意义）
+
+`character_manifest.json` 的 `aliases` 保持扁平字符串数组用于快速查找。
+
+**核心创伤**：`core_wounds` 字段记录跨全故事始终影响角色行为的根源性心理
+创伤，每条含 `wound`、`origin`（成因）、`behavioral_impact`（行为影响）、
+`source_type`。不同于 stage_snapshot 中的 `active_wounds`（随阶段演变），
+core_wounds 记录最底层的创伤根源。
+
+**核心人物关系**：`key_relationships` 字段记录对角色有重大影响的跨全故事
+关系概览，每条含 `target`、`initial_relationship`、`relationship_arc`
+（全局演变弧线）、`turning_points`、`source_type`。不同于 stage_snapshot
+中的 `relationships`（记录某一阶段的关系状态），key_relationships 提供
+关系的全局演变轨迹。
+
 ---
 
 ### voice_rules.schema.json
@@ -67,6 +87,11 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **用途**：角色行为规则的提取锚点（baseline）。
 **位置**：`characters/{character_id}/canon/behavior_rules.json`
 **运行时**：**不加载**。运行时使用 stage_snapshot 中的 `behavior_state`。
+
+**目标与执念拆分**：原 `core_drives` 已拆分为 `core_goals`（理性目标）和
+`obsessions`（执念——非理性的心结）。旧字段向后兼容保留，新提取应使用拆分
+字段。stage_snapshot 中的 `behavior_state` 和 `emotional_baseline` 做对应
+拆分（`core_goals`/`obsessions`、`active_goals`/`active_obsessions`）。
 
 ---
 
@@ -104,36 +129,70 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 - 每个快照必须自包含，包含完整的状态（即使与上一阶段无变化）
 - 运行时直接加载，不需要与 baseline 合并
 - Baseline 文件是提取锚点，不在运行时加载
+- `target_voice_map` 和 `target_behavior_map` 按用户扮演角色**过滤加载**
+  （只加载匹配条目）；如果当前快照缺少匹配条目，引擎向前扫描最近包含
+  该条目的快照（fallback，纯代码 I/O，不产生额外 LLM 调用）
+- 只对主要角色和重要配角详细记录（每 target 至少 3-5 条示例）；
+  泛化类型（陌生人、路人）简要描述即可
 
 **关键 section**：
 
 | Section | 说明 |
 |---------|------|
-| `voice_state` | 完整的语气基调、语言习惯、用词偏好、口头禅、禁忌用语、情绪语气矩阵、对象语气矩阵、典型对话示例 |
-| `behavior_state` | 核心驱动力、决策风格、情绪触发器、情绪反应矩阵、关系行为矩阵、习惯性行为、压力应对 |
+| `active_aliases` | 本阶段活跃名称（primary_name、active_names、hidden_identities、known_as 称呼映射） |
+| `voice_state` | 语气基调、语言习惯、用词偏好、口头禅、禁忌用语、情绪语气矩阵（emotional_voice_map）、**对象语气矩阵**（target_voice_map，按具体角色区分，每 target 至少 3-5 条对话示例）、典型对话示例 |
+| `behavior_state` | **core_goals**（理性目标）、**obsessions**（执念）、决策风格、情绪触发器、情绪反应矩阵（emotional_reaction_map）、关系行为矩阵（relationship_behavior_map，通用类型）、**对象行为矩阵**（target_behavior_map，与 target_voice_map 平行，按具体角色区分，每 target 至少 3-5 条行为示例）、习惯性行为、压力应对 |
 | `boundary_state` | 当前阶段有效的软边界、容易被误判的点 |
 | `relationships` | 对每个重要角色的完整关系状态（态度、信任、亲密度、语气变化、行为变化、驱动事件、关系演变概述） |
 | `misunderstandings` | 角色持有的误解（主观认知 vs 客观事实） |
 | `concealments` | 角色主动隐瞒的事情 |
 | `stage_delta` | 从上一阶段的变化摘要（信息性） |
+| `character_arc` | 角色从阶段 1 到当前的整体弧线概览（arc_summary、arc_stages 关键节点、current_position） |
 | `source_notes` | 推断和不确定性记录（field + source_type + note） |
 
 ---
 
 ### memory_timeline_entry.schema.json
 
-**用途**：角色记忆条目——角色视角的主观记忆。
-**位置**：`characters/{character_id}/canon/memory_timeline/{stage_id}.jsonl`
-**格式**：JSONL，每行一条记忆。
+**用途**：角色记忆条目——角色第一人称主观视角的归纳记忆（不是原文复制）。
+**位置**：`characters/{character_id}/canon/memory_timeline/{stage_id}.json`
+**格式**：JSON 数组，每个元素为一条记忆。
+**运行时**：启动加载近期 2 个阶段（N + N-1）全文；远期阶段通过
+`memory_digest.jsonl` 摘要感知，详情通过 FTS5 按需检索。
 
 **关键字段**：
+- `time_in_story` — 故事内时间
+- `location` — 事件发生地点
 - `event_summary` — 客观发生了什么
-- `subjective_experience` — 角色认为发生了什么（可能与事实不同）
+- `subjective_experience` — 角色对事件的主观体验（第一人称视角，核心字段）
 - `emotional_impact` — 情感影响
 - `misunderstanding` — 是否产生了误解
 - `concealment` — 是否选择隐瞒
 - `source_type` — 信息来源（canon/inference/ambiguous）
 - `memory_importance` — 重要程度（trivial ~ defining）
+- `scene_refs` — 关联的 scene_archive scene_id（追溯到原文）
+
+**归纳要求**：角色第一人称主观视角，是归纳不是原文复制。必须包含心理活动
+和态度变化的因果。篇幅由事件复杂度决定，不设硬性字数限制。
+
+---
+
+### memory_digest_entry.schema.json
+
+**用途**：记忆压缩摘要条目——从 memory_timeline 自动提取的精简索引。
+**位置**：`characters/{character_id}/canon/memory_digest.jsonl`
+**格式**：JSONL，每行一条压缩摘要。
+**运行时**：启动时全量加载，为 LLM 提供远期历史感知（~60-80 tokens/条）。
+
+**关键字段**：
+- `memory_id` — 与 memory_timeline 条目的 memory_id 一一对应
+- `stage_id` — 所属阶段
+- `time_in_story` — 故事内时间
+- `location` — 事件地点
+- `event_summary` — 事件精简摘要
+- `emotional_tags` — 情感标签
+- `memory_importance` — 重要程度
+- `involved_targets` — 涉及的角色
 
 ---
 
@@ -210,4 +269,4 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 | behavior_rules.json | 提取锚点 | **不加载** |
 | boundaries.json | 提取锚点（hard_boundaries 加载） | hard_boundaries **加载** |
 | stage_snapshot | 每批产出 | **加载**（核心） |
-| memory_timeline | 每批产出 | 加载 1..N |
+| memory_timeline | 每批产出 | 近期 2 阶段全量 + memory_digest 概览 + FTS5 按需 |

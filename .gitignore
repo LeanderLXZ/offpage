@@ -1,8 +1,10 @@
+# Extraction runtime artifacts (lock, log)
+works/*/analysis/incremental/.extraction.lock
+works/*/analysis/incremental/extraction.log
+
 # Large novel corpus and derived source data
 sources/raw/*
 !sources/raw/.gitkeep
-sources/works/*
-!sources/works/.gitkeep
 sources/works/*/raw/
 sources/works/*/normalized/
 sources/works/*/chapters/
@@ -10,6 +12,9 @@ sources/works/*/scenes/
 sources/works/*/chunks/
 sources/works/*/metadata/
 sources/works/*/rag/
+
+# Scene archive and retrieval artifacts (large, generated)
+works/*/rag/
 
 # Evidence artifacts (large intermediate outputs)
 analysis/evidence/*
@@ -34,6 +39,10 @@ users/*
 *.bin
 *.npy
 *.npz
+
+# Python bytecode
+__pycache__/
+*.pyc
 
 # Claude Code local config
 .claude/

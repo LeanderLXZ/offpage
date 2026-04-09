@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/memory_digest_entry.schema.json",
+  "title": "记忆摘要条目",
+  "description": "memory_timeline 的压缩索引条目。启动时全量加载，供 LLM 感知全历史记忆并判断是否需要 FTS5 检索详情。从 memory_timeline 条目自动生成。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "memory_id",
+    "stage_id",
+    "event_summary",
+    "memory_importance"
+  ],
+  "properties": {
+    "memory_id": {
+      "type": "string",
+      "description": "对应 memory_timeline 条目的唯一标识。"
+    },
+    "stage_id": {
+      "type": "string",
+      "description": "所属阶段。"
+    },
+    "time_in_story": {
+      "type": "string",
+      "description": "故事内时间。"
+    },
+    "location": {
+      "type": "string",
+      "description": "事件发生地点。"
+    },
+    "event_summary": {
+      "type": "string",
+      "description": "客观层面发生了什么（简短摘要）。"
+    },
+    "emotional_tags": {
+      "type": "string",
+      "description": "关键情绪标签，逗号分隔。从 emotional_impact 提取。"
+    },
+    "memory_importance": {
+      "type": "string",
+      "enum": ["trivial", "minor", "significant", "critical", "defining"],
+      "description": "记忆重要度。"
+    },
+    "involved_targets": {
+      "type": "array",
+      "description": "涉及的关系角色名列表。从 relationship_impact 提取。",
+      "items": { "type": "string" }
+    }
+  }
+}

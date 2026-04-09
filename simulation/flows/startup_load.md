@@ -15,18 +15,27 @@ Compile the minimum useful packet for the first reply.
 7. Read the minimum `world/foundation/` files required for global rules.
 8. Read target character baseline.
 9. Read target character selected-stage snapshot.
-10. Read `users/{user_id}/profile.json`.
-11. Read the active persona summary when used.
-12. Read `role_binding.json`.
-13. Read `long_term_profile.json`.
-14. Read `relationship_core/manifest.json`.
-15. Read `relationship_core/pinned_memories.jsonl` when present.
-16. Read current context summary files.
-17. Read current context `character_state.json`.
-18. Read current context `session_index.json`.
-19. Read recent session summaries.
-19. Read `users/{user_id}/conversation_library/manifest.json` when present.
-20. Read scoped archive refs for the current `work_id` and `character_id`
+10. Read target character memory_timeline: recent 2 stages (N + N-1) full.
+10b. Read target character `memory_digest.jsonl` in full (compressed index
+    of all stages, for distant-history awareness).
+11. Load scene_archive summaries for stages 1..N where target character is
+    in `characters_present`.
+12. Load scene_archive full_text for N scenes (default N=5) around the
+    current stage where target character is in `characters_present`.
+13. Load vocab dict (`works/{work_id}/indexes/vocab_dict.txt`) into jieba
+    as custom dictionary for per-turn keyword matching.
+14. Read `users/{user_id}/profile.json`.
+15. Read the active persona summary when used.
+16. Read `role_binding.json`.
+17. Read `long_term_profile.json`.
+18. Read `relationship_core/manifest.json`.
+19. Read `relationship_core/pinned_memories.jsonl` when present.
+20. Read current context summary files.
+21. Read current context `character_state.json`.
+22. Read current context `session_index.json`.
+23. Read recent session summaries.
+24. Read `users/{user_id}/conversation_library/manifest.json` when present.
+25. Read scoped archive refs for the current `work_id` and `character_id`
     when present.
 
 ## Startup Rules
@@ -38,6 +47,15 @@ Compile the minimum useful packet for the first reply.
 5. When a work-specific load profile exists, treat it as the local override on
    top of repo-level defaults.
 6. Do not load full active or archived `transcript.jsonl` files at startup.
+7. Memory_timeline beyond the 2 recent stages is not loaded at startup.
+   `memory_digest.jsonl` provides compressed awareness of all historical
+   stages; detailed entries are available via FTS5/embedding on-demand.
+8. Scene_archive full_text is only loaded for the N scenes nearest the current
+   stage — other scenes are available via FTS5/embedding on-demand retrieval,
+   with their summaries already loaded for context.
+9. Vocab dict is loaded into jieba at startup for per-turn keyword matching.
+   This enables the two-level retrieval funnel (jieba+FTS5 → embedding
+   fallback) described in `simulation/retrieval/index_and_rag.md`.
 
 ## Output
 

@@ -13,14 +13,15 @@ Goals:
 Recommended read order for a new AI:
 
 1. `instructions.md`
-2. `read_scope.md`
-3. `project_background.md`
-4. `requirements.md`
-5. `current_status.md`
-6. `architecture.md`
-7. `decisions.md`
-8. `next_steps.md`
-9. `handoff.md`
+2. `conventions.md` ← operational rules, re-read during session
+3. `read_scope.md`
+4. `project_background.md`
+5. `requirements.md`
+6. `current_status.md`
+7. `architecture.md`
+8. `decisions.md`
+9. `next_steps.md`
+10. `handoff.md`
 
 Only read heavier context when one of the following is true:
 

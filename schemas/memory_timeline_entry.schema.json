@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/memory_timeline_entry.schema.json",
   "title": "角色记忆时间线条目",
-  "description": "memory_timeline/{stage_id}.jsonl 中每一行的 schema。记忆按阶段拆分存储，每个阶段一个文件。每条记忆是角色视角的主观记忆，不是客观剧情摘要。记忆应反映角色知道什么、感受什么、误解什么、隐瞒什么。",
+  "description": "memory_timeline/{stage_id}.json 中数组元素的 schema。记忆按阶段拆分存储，每个阶段一个 JSON 文件（顶层为数组）。每条记忆是角色视角的主观记忆，不是客观剧情摘要。记忆应反映角色知道什么、感受什么、误解什么、隐瞒什么。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -21,6 +21,14 @@
       "type": "string",
       "minLength": 1,
       "description": "这条记忆属于哪个剧情阶段。"
+    },
+    "time_in_story": {
+      "type": "string",
+      "description": "故事内时间。格式不必严格统一，保留原文的时间表述即可。例如：第三世·天剑宗大比前夕、两年后、大婚当日。"
+    },
+    "location": {
+      "type": "string",
+      "description": "事件发生的地点。例如：天剑宗·演武场、南林城外。"
     },
     "event_summary": {
       "type": "string",
@@ -107,6 +115,13 @@
     "source_note": {
       "type": "string",
       "description": "当 source_type 为 inference 或 ambiguous 时，简要说明推断依据或多义性所在。"
+    },
+    "scene_refs": {
+      "type": "array",
+      "description": "关联的 scene_archive scene_id，形成从主观记忆到原文的追溯链。非必填——有些记忆可能跨多个场景或无法精确对应。",
+      "items": {
+        "type": "string"
+      }
     },
     "evidence_refs": {
       "type": "array",

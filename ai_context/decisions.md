@@ -35,54 +35,163 @@ that a new AI should know beyond what the architecture docs already say.
 11. `ai_context/` remains English as the AI handoff layer. JSON field names may
     remain English.
 
+## Character Depth Dimensions
+
+12a. `identity.json` carries two cross-story fields beyond static bio:
+    `core_wounds` (root psychological traumas with origin and behavioral
+    impact) and `key_relationships` (relationship arcs with initial state,
+    evolution summary, turning points). These are loaded at runtime
+    alongside the stage snapshot.
+12b. `behavior_state.core_drives` is split into `core_goals` (rational,
+    re-prioritizable targets) and `obsessions` (irrational fixations tied
+    to trauma or emotion, not subject to cost-benefit reasoning). The same
+    split applies in `emotional_baseline`: `active_desires` → `active_goals`
+    + `active_obsessions`. Old fields kept for backward compatibility.
+12c. `character_arc` in stage_snapshot provides a bird's-eye view from
+    stage 1 to the current stage (arc_summary, arc_stages key nodes,
+    current_position). Complements `stage_delta` which covers only the
+    previous-to-current change.
+
 ## Extraction
 
-12. Batches are split by natural story boundaries during the analysis phase.
-    Each batch may have a different chapter count (target 10, min 5, max 20).
+12. batch (extraction) = stage (runtime), 1:1. "Batch" is the pipeline
+    term; "stage" is the content/runtime term. Both kept for clarity.
+    Batches are split by natural story boundaries during the analysis phase.
+    Each batch may have a different chapter count (target 10, min 5, max 15).
     Batch N = stage N candidate. Stage N is cumulative through 1..N.
-13. Once active characters are confirmed, coordinated batches co-produce world
-    + character updates. Targeted character supplement only when gaps remain.
+13. Once active characters are confirmed, Phase 2.5 produces world foundation
+    and character baselines (identity.json, manifest.json) from full-book
+    context. Then **1+N split extraction** per batch: one world call, then
+    N parallel character calls. Batch 1 additionally creates
+    voice/behavior/boundary baselines (need raw text). All batches may correct
+    any existing baseline. Targeted character supplement only when gaps remain.
 14. Any batch may revise any already-written asset across the whole work
     package, not only the current target.
 15. Do not generate per-batch report files. Update progress files in-place.
+16. `target_voice_map` (voice_state) and `target_behavior_map`
+    (behavior_state) are parallel structures mapping specific targets to
+    voice/behavior differences. Only main characters and important supporting
+    characters require detailed entries (at least 3-5 examples each);
+    generic types (strangers, passersby) are brief or omitted — LLM can
+    infer from overall personality. Important characters use concrete names
+    (e.g. "王枫（真面目）"), not generic types. At runtime, only entries
+    matching the user's role are loaded. Fallback: if the current stage
+    snapshot lacks a matching entry (character absent for several stages),
+    the engine scans backwards through previous stage snapshots — pure
+    code-level file I/O before the LLM call, no extra LLM invocation.
 
 ## User Model
 
-16. One `user_id` = one locked work-target-counterpart binding. Setup locks
+17. One `user_id` = one locked work-target-counterpart binding. Setup locks
     after initial creation; changes require new package or explicit migration.
-17. Canon-backed user-side roles inherit the target stage by default.
-18. Session/context state updates continuously. Long-term profile and
+18. Canon-backed user-side roles inherit the target stage by default.
+19. Session/context state updates continuously. Long-term profile and
     relationship core update only after explicit merge confirmation.
-19. Context-level `character_state.json` tracks real-time character changes
+20. Context-level `character_state.json` tracks real-time character changes
     (mood, personality, voice, agreements, relationship delta, events,
     memories). These are promoted to long-term layers only at merge.
-20. Merge is append-first. Events and memories are added, never overwritten.
-21. Session close is explicit (exit keyword or close intent). System then asks
+21. Merge is append-first. Events and memories are added, never overwritten.
+22. Session close is explicit (exit keyword or close intent). System then asks
     about merge.
-22. Full transcripts stay local; startup loads summary layer only.
+23. Full transcripts stay local; startup loads summary layer only.
 
 ## Automated Extraction
 
-23. Each batch agent is a fresh `claude -p` call with no shared session memory.
-    Context between batches is entirely file-based.
-24. Two-layer quality check: programmatic (jsonschema, free) + semantic
+24. Each phase step (summarization chunk, analysis, baseline production, batch
+    extraction) is a fresh `claude -p` call with no shared session memory.
+    Context between steps is entirely file-based.
+25. Two-layer quality check: programmatic (jsonschema, free) + semantic
     (independent LLM reviewer). Only semantic errors cause FAIL.
-25. Extraction runs on a dedicated git branch. Each passing batch is committed.
-    Rollback on failure = git reset.
-26. Batch boundaries should follow natural story arcs (min 5, max 20, default
+25a. Failure triage after review: fixable issues (≤5 specific field/value
+    errors, no missing files) → targeted fix agent makes minimal edits +
+    re-validate (zero-token check); systemic issues (file missing, structural,
+    understanding-level) → full rollback + retry. This avoids discarding
+    25+ minutes of extraction work for a single wrong field value.
+26. Extraction runs on a dedicated git branch. Each passing batch is committed.
+    Rollback on failure = git reset. After all batches complete, squash-merge
+    to main (one clean commit); the extraction branch can then be deleted.
+27. Batch boundaries should follow natural story arcs (min 5, max 15, default
     10 chapters). stage_id should be a meaningful Chinese name.
-27. The orchestrator pre-computes the file read list for each batch agent.
-    Agents should not explore freely.
+28. The orchestrator pre-computes the file read list for each call (world /
+    character). Only the most recent snapshot and memory_timeline are included
+    (not full history). Agents should not explore freely.
+
+## Memory System and Retrieval
+
+29. Three-layer memory: stage_snapshot (aggregated state, current stage only),
+    memory_timeline (subjective process per event, first-person summary),
+    scene_archive (original text split by scene). No separate dialogue corpus.
+30. memory_timeline entries include `time_in_story`, `location`, `scene_refs`
+    (linking back to scene_archive). Not raw text — first-person subjective
+    summaries with psychological detail and causal reasoning. No hard length
+    limit; entry count controlled by importance filtering.
+31. scene_archive entries include `time_in_story` and `location` for temporal
+    and spatial retrieval. Eight fields total. Work-level asset, not
+    per-character. One scene never crosses a chapter boundary. `stage_id`
+    derived from chapter number via batch plan.
+32. Startup loads: memory_timeline recent 2 stages (N + N-1) full text +
+    memory_digest.jsonl (compressed index of all stages, ~60-80 tokens/entry,
+    for distant-history awareness); scene_archive summaries for all relevant
+    stages + N full_text scenes around current stage (default N=5); vocab dict
+    into jieba. FTS5 on memory_timeline provides on-demand detail retrieval
+    for distant stages; no separate embedding needed for memory_timeline
+    (scene_archive embedding covers semantic queries via scene_refs
+    back-reference).
+33. Two-level retrieval funnel:
+    Level 1 (default, <20ms): jieba segmentation + work-level vocab dict
+    matching + FTS5 query → top-K summaries injected into main LLM prompt.
+    No match = no retrieval. LLM judges relevance itself.
+    Level 2 (fallback, 200-300ms): LLM calls `search_memory` tool (tool use)
+    → engine runs embedding search on summary vectors → second LLM call.
+    Rare. No separate vector DB — single SQLite file with optional embedding
+    BLOB column.
+34. When simulating character A, only load scenes where A is in
+    `characters_present` and A's own memory_timeline. Do not load other
+    characters' memories or scenes where A is absent.
+35. Phase 3.5 (cross-batch consistency check) runs after all Phase 3 batches
+    commit. Primarily programmatic (zero tokens) with optional LLM
+    adjudication only for flagged items. Errors block Phase 4. This catches
+    cross-batch drift that per-batch validation cannot detect (e.g. alias
+    mismatches, relationship discontinuity, lazy source_type annotation).
+36. scene_archive is produced in Phase 4, independent from Phase 3 (only
+    requires `source_batch_plan.json` from Phase 1). Per-chapter LLM calls
+    output scene boundary annotations; program extracts full_text from
+    source. Parallel execution (`--concurrency`, default 10). Programmatic
+    validation only (no semantic review). `scene_id` = `scene_{chapter}_{seq}`.
+37. Retrieval artifacts (fts.sqlite, scene_archive.jsonl) live under
+    `works/{work_id}/rag/` and are not committed to git (.gitignore).
+    Intermediate Phase 4 splits under
+    `works/{work_id}/analysis/incremental/scene_archive/`. Lightweight
+    indexes and vocab dict go to `works/{work_id}/indexes/`.
+38. Proactive character association: engine extracts context-state keywords
+    (current location, recent events, emotion, conversation partner) for
+    jieba matching each turn — not just user input. This widens the FTS5
+    candidate pool so the character can naturally recall related memories
+    without being asked. LLM decides whether to mention a memory.
+39. Vocab dict (work-level, jieba custom dictionary format) is auto-generated
+    from extraction output. Contains character names/aliases, locations,
+    techniques, event keywords. Stored at
+    `works/{work_id}/indexes/vocab_dict.txt`, committed to git.
+
+## JSON Repair
+
+40. LLM-produced JSON frequently contains format errors (unescaped inner
+    quotes, trailing commas, truncation) while content is intact. Use the
+    three-level repair pipeline before re-running: L1 programmatic regex
+    (zero tokens) → LLM repair on broken JSON only (minimal tokens) →
+    L3 full re-run (last resort). See `automation/persona_extraction/
+    json_repair.py`.
 
 ## Repository
 
-28. Keep the repo lightweight. Do not commit novels, databases, indexes, large
+41. Keep the repo lightweight. Do not commit novels, databases, indexes, large
     artifacts, or real user packages.
-29. `works/*/analysis/incremental/` and `works/*/indexes/` are git-tracked as
+42. `works/*/analysis/incremental/` and `works/*/indexes/` are git-tracked as
     canonical work assets.
-30. `docs/logs/` is write-mostly historical. Do not proactively read.
-31. `prompts/` is available as workflow tooling but is not the default
-    authority for ordinary continuation after handoff — `ai_context/` is.
-32. `automation/` contains the extraction orchestrator. `prompt_templates/`
-    under it are the automated pipeline's own prompts, separate from
-    `prompts/` which is for interactive use.
+43. `docs/logs/` is write-mostly historical. Do not proactively read.
+44. `prompts/` contains only manual-scenario prompts (ingest, review,
+    supplement, cold start). Extraction prompts live in
+    `automation/prompt_templates/`; runtime LLM behavior rules live in
+    `simulation/prompt_templates/`. Each module is self-contained.
+45. `automation/` and `simulation/` each have their own `prompt_templates/`
+    directory. Neither depends on `prompts/`.

@@ -56,8 +56,13 @@ def git_status(project_root: Path) -> GitStatus:
 
 
 def preflight_check(project_root: Path,
-                    expected_branch: str | None = None) -> list[str]:
-    """Run preflight checks before a batch. Returns list of problems."""
+                    expected_branch: str | None = None,
+                    ignore_patterns: list[str] | None = None) -> list[str]:
+    """Run preflight checks before a batch. Returns list of problems.
+
+    ``ignore_patterns`` — file path substrings to tolerate in dirty status
+    (e.g. ``["extraction_progress.json", "__pycache__"]``).
+    """
     problems: list[str] = []
     gs = git_status(project_root)
 
@@ -66,8 +71,20 @@ def preflight_check(project_root: Path,
         return problems
 
     if not gs.clean:
-        problems.append("Working tree has uncommitted changes. "
-                        "Commit or stash before extraction.")
+        # Check if all dirty files match ignore patterns
+        ignore = ignore_patterns or []
+        status_proc = _git(["status", "--porcelain"], project_root)
+        dirty_lines = [l for l in status_proc.stdout.strip().splitlines()
+                       if l.strip()]
+        significant = []
+        for line in dirty_lines:
+            # porcelain format: XY filename  (filename starts at col 3)
+            fname = line[3:].strip().strip('"')
+            if not any(pat in fname for pat in ignore):
+                significant.append(fname)
+        if significant:
+            problems.append("Working tree has uncommitted changes. "
+                            "Commit or stash before extraction.")
 
     if gs.in_rebase:
         problems.append("A rebase is in progress. Resolve it first.")
@@ -127,7 +144,7 @@ def commit_batch(project_root: Path, batch_id: str, stage_id: str,
         logger.warning("Nothing to commit for batch %s", batch_id)
         return None
 
-    message = (f"{batch_id}: 协同提取完成 ({stage_id})\n\n"
+    message = (f"{batch_id}: 分层提取完成 ({stage_id})\n\n"
                f"Automated extraction via persona-extraction orchestrator.")
 
     result = _git(["commit", "-m", message], project_root)
@@ -142,14 +159,22 @@ def commit_batch(project_root: Path, batch_id: str, stage_id: str,
 
 
 def rollback_to_head(project_root: Path) -> bool:
-    """Discard all uncommitted changes (hard reset to HEAD)."""
+    """Discard all uncommitted changes (hard reset to HEAD).
+
+    Restores tracked files and removes untracked files across the whole
+    repo (not just works/).  Excludes __pycache__ and .pyc artefacts.
+    """
     result = _git(["checkout", "--", "."], project_root)
-    clean = _git(["clean", "-fd", "works/"], project_root)
-    success = result.returncode == 0
+    # Clean untracked files repo-wide, excluding caches
+    clean = _git(["clean", "-fd",
+                  "--exclude=__pycache__",
+                  "--exclude=*.pyc"], project_root)
+    success = result.returncode == 0 and clean.returncode == 0
     if success:
-        logger.info("Rolled back to HEAD")
+        logger.info("Rolled back to HEAD (full-repo clean)")
     else:
-        logger.error("Rollback failed: %s", result.stderr)
+        logger.error("Rollback failed: checkout=%s clean=%s",
+                     result.stderr, clean.stderr)
     return success
 
 
@@ -162,3 +187,38 @@ def rollback_last_commit(project_root: Path) -> bool:
     else:
         logger.error("Rollback of last commit failed: %s", result.stderr)
     return success
+
+
+def squash_merge_to(project_root: Path, target_branch: str,
+                    source_branch: str, message: str) -> str | None:
+    """Squash-merge *source_branch* into *target_branch*.
+
+    Returns the new commit SHA on *target_branch*, or None on failure.
+    The source branch is **not** deleted — caller decides.
+    """
+    # Switch to target branch
+    result = _git(["checkout", target_branch], project_root)
+    if result.returncode != 0:
+        logger.error("Cannot checkout %s: %s", target_branch, result.stderr)
+        return None
+
+    # Squash merge
+    result = _git(["merge", "--squash", source_branch], project_root)
+    if result.returncode != 0:
+        logger.error("Squash merge failed: %s", result.stderr)
+        _git(["checkout", source_branch], project_root)
+        return None
+
+    # Commit
+    result = _git(["commit", "-m", message], project_root)
+    if result.returncode != 0:
+        logger.error("Squash commit failed: %s", result.stderr)
+        _git(["reset", "--hard", "HEAD"], project_root)
+        _git(["checkout", source_branch], project_root)
+        return None
+
+    sha_proc = _git(["rev-parse", "--short", "HEAD"], project_root)
+    sha = sha_proc.stdout.strip()
+    logger.info("Squash-merged %s into %s as %s", source_branch,
+                target_branch, sha)
+    return sha

@@ -148,19 +148,31 @@ For the user layer, keep a clear split:
 - transcript recall should route through context/session indexes and session
   summaries before opening the full transcript
 
-## Local RAG Direction
+## Memory Retrieval
 
-Do not jump straight to a heavy vector stack.
+Two retrieval libraries support the runtime:
 
-Recommended rollout:
+1. **scene_archive** — original text split by scene (work-level, stored under
+   `works/{work_id}/rag/scene_archive.jsonl`)
+2. **memory_timeline** — character subjective memories (character-level,
+   stored under `works/{work_id}/characters/{character_id}/canon/memory_timeline/`)
 
-1. structured retrieval from canon files and work indexes
-2. local lexical retrieval with `sqlite FTS5` if needed
-3. optional embeddings only after lexical + metadata filtering becomes
-   insufficient
+Two-level retrieval funnel:
 
-Large local retrieval artifacts should stay local by default rather than being
-committed as ordinary repo content.
+1. **jieba + vocab dict + FTS5** (default, <20ms per turn) — every turn,
+   jieba segments user input + context keywords, matches against work-level
+   vocab dict, queries FTS5 for top-K summaries. No match = no retrieval.
+2. **Embedding via LLM tool use** (fallback, 200-300ms) — LLM calls
+   `search_memory` tool when FTS5 candidates are insufficient. Rare.
+
+The engine also extracts context-state keywords (location, recent events,
+emotion) to enable **proactive character association** — the character may
+naturally recall related memories without being asked.
+
+Tech: `jieba` (segmentation), `sqlite FTS5` (primary), `bge-large-zh-v1.5`
+(optional embedding fallback). Single SQLite file, no separate vector DB.
+
+See `simulation/retrieval/index_and_rag.md` and `docs/requirements.md` §12.
 
 ## First Read Order For Runtime Work
 

@@ -31,6 +31,7 @@
     },
     "aliases": {
       "type": "array",
+      "description": "所有别名的扁平列表（纯名称字符串），用于快速查找和匹配。完整的结构化别名信息存放在 identity.json 的 aliases 字段中。",
       "items": {
         "type": "string"
       },

@@ -8,8 +8,7 @@
   "required": [
     "schema_version",
     "work_id",
-    "character_id",
-    "core_drives"
+    "character_id"
   ],
   "properties": {
     "schema_version": {
@@ -25,7 +24,21 @@
     },
     "core_drives": {
       "type": "array",
-      "description": "角色最根本的行为驱动力。例如：守护某人、追求自由、证明自我价值。",
+      "description": "【已拆分】向后兼容保留。新提取应使用 core_goals + obsessions。如果同时存在 core_drives 和 core_goals/obsessions，以后者为准。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "core_goals": {
+      "type": "array",
+      "description": "角色的理性目标——角色有意识追求的、可以权衡利弊调整优先级的目标。例如：'恢复修为至大帝境'、'提升修为'、'保护弱者'。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "obsessions": {
+      "type": "array",
+      "description": "角色的执念——非理性的、难以放下的心结或驱动力，通常与核心创伤或强烈情感相关，即使不利于自身也会坚持。例如：'追杀倭瓜男——维护被践踏的尊严'、'被姜寒汐杀了八次的仇恨与恐惧交织'。区别于 core_goals：执念不受理性权衡控制。",
       "items": {
         "type": "string"
       }

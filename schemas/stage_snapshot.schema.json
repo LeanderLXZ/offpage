@@ -41,6 +41,64 @@
     "snapshot_summary": {
       "type": "string"
     },
+    "active_aliases": {
+      "type": "object",
+      "description": "当前阶段角色的活跃名称信息。标注角色在本阶段使用的名称、隐藏的身份、以及不同角色对其的称呼。",
+      "additionalProperties": false,
+      "properties": {
+        "primary_name": {
+          "type": "string",
+          "description": "角色在本阶段最常用的名称。可能与 canonical_name 不同（如化名期间）。"
+        },
+        "active_names": {
+          "type": "array",
+          "description": "本阶段角色正在使用的所有名称（包括 primary_name）。可以是简单字符串，也可以是带语境的对象。",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "context": {
+                    "type": "string",
+                    "description": "使用该名称的语境。例如：'战斗时'、'日常交流'、'正式场合'。"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "hidden_identities": {
+          "type": "array",
+          "description": "本阶段角色刻意隐藏的身份/名称。例如：角色化名活动时，其真实身份属于隐藏身份。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "hidden_from": {
+                "type": "string",
+                "description": "对谁隐藏。可以是角色 ID、'所有人'等。"
+              },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "known_as": {
+          "type": "object",
+          "description": "不同角色对本角色的称呼映射。键为 character_id，值为该角色对本角色使用的称呼列表。",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+
     "chapter_scope": {
       "type": "object",
       "additionalProperties": false,
@@ -97,6 +155,17 @@
         },
         "active_desires": {
           "type": "array",
+          "description": "【已拆分】向后兼容保留。新提取应使用 active_goals + active_obsessions。",
+          "items": { "type": "string" }
+        },
+        "active_goals": {
+          "type": "array",
+          "description": "当前阶段活跃的理性目标。",
+          "items": { "type": "string" }
+        },
+        "active_obsessions": {
+          "type": "array",
+          "description": "当前阶段活跃的执念——非理性的、无法放下的心结。",
           "items": { "type": "string" }
         },
         "active_fears": {
@@ -186,7 +255,7 @@
         },
         "target_voice_map": {
           "type": "array",
-          "description": "当前阶段下面对不同对象类型的语气变化。",
+          "description": "当前阶段下面对不同对象的语气变化。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条对话示例），泛化类型（陌生人、路人等）简要描述即可。",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -194,15 +263,20 @@
             "properties": {
               "target_type": {
                 "type": "string",
-                "description": "对象类型。例如：亲近者、陌生人、敌对者、长辈、下属、暧昧对象。"
+                "description": "对象类型或具体角色。例如：王枫（真面目）、倭瓜男、系统、村民、小孩。对重要角色使用具体名称而非泛化类型。"
               },
-              "voice_shift": { "type": "string" },
+              "voice_shift": {
+                "type": "string",
+                "description": "面对该对象时语气的整体变化描述。"
+              },
               "typical_expressions": {
                 "type": "array",
+                "description": "面对该对象时的典型表达列表。",
                 "items": { "type": "string" }
               },
               "dialogue_examples": {
                 "type": "array",
+                "description": "原文中面对该对象的对话示例。主要角色和重要配角要求至少 3-5 条，覆盖多种情绪和场景；泛化类型可简要。",
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
@@ -226,7 +300,17 @@
       "properties": {
         "core_drives": {
           "type": "array",
-          "description": "当前阶段的核心驱动力。",
+          "description": "【已拆分】向后兼容保留。新提取应使用 core_goals + obsessions。",
+          "items": { "type": "string" }
+        },
+        "core_goals": {
+          "type": "array",
+          "description": "当前阶段的理性目标——角色有意识追求的、可权衡调整的目标。",
+          "items": { "type": "string" }
+        },
+        "obsessions": {
+          "type": "array",
+          "description": "当前阶段的执念——非理性的心结或驱动力，与核心创伤或强烈情感相关，不受理性权衡控制。",
           "items": { "type": "string" }
         },
         "decision_making_style": {
@@ -271,7 +355,7 @@
         },
         "relationship_behavior_map": {
           "type": "array",
-          "description": "当前阶段下面对不同关系类型的行为模式。",
+          "description": "当前阶段下面对不同关系类型的通用行为模式。提供默认行为基线。",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -281,6 +365,49 @@
               "default_stance": { "type": "string" },
               "boundaries": { "type": "string" },
               "escalation_pattern": { "type": "string" }
+            }
+          }
+        },
+        "target_behavior_map": {
+          "type": "array",
+          "description": "当前阶段下面对不同对象的具体行为模式。与 voice_state.target_voice_map 平行，侧重肢体反应、距离感、习惯性动作、回避模式等行为差异。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条行为示例），泛化类型简要描述即可。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["target_type"],
+            "properties": {
+              "target_type": {
+                "type": "string",
+                "description": "对象类型或具体角色。例如：王枫（真面目）、倭瓜男、系统、村民。"
+              },
+              "behavior_shift": {
+                "type": "string",
+                "description": "面对该对象时行为模式的整体变化描述。"
+              },
+              "typical_actions": {
+                "type": "array",
+                "description": "面对该对象时的典型行为列表。",
+                "items": { "type": "string" }
+              },
+              "action_examples": {
+                "type": "array",
+                "description": "原文中面对该对象的具体行为示例。主要角色和重要配角要求至少 3-5 条、场景多样；泛化类型可简要。",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "description": "角色的具体行为描述。"
+                    },
+                    "context": {
+                      "type": "string",
+                      "description": "行为发生的场景和原因。"
+                    },
+                    "evidence_ref": { "type": "string" }
+                  }
+                }
+              }
             }
           }
         },
@@ -532,6 +659,41 @@
       }
     },
 
+    "character_arc": {
+      "type": "object",
+      "description": "角色从阶段 1 到当前阶段的整体弧线概览。第一个阶段可省略或仅写起点状态。与 stage_delta（记录单阶段变化）互补：character_arc 提供全局俯瞰视角。",
+      "additionalProperties": false,
+      "properties": {
+        "arc_summary": {
+          "type": "string",
+          "description": "一句话概括角色从起点到当前的核心变化轨迹。例如：'从完全冰冷的前大帝，到被一个人的善意逐渐撬开冰层，开始在最脆弱时依赖对方'。"
+        },
+        "arc_stages": {
+          "type": "array",
+          "description": "弧线的关键节点列表（按时间顺序），每个节点描述一个弧线阶段。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stage_id", "description"],
+            "properties": {
+              "stage_id": {
+                "type": "string",
+                "description": "对应的阶段 ID。"
+              },
+              "description": {
+                "type": "string",
+                "description": "该阶段在弧线中的角色状态和变化。例如：'冰冷疏离→首次接受善意→主动疗伤'。"
+              }
+            }
+          }
+        },
+        "current_position": {
+          "type": "string",
+          "description": "角色当前在弧线中的位置和趋势。例如：'冰层下的情感开始自发泄漏，但离主动承认还很远'。"
+        }
+      }
+    },
+
     "memory_refs": {
       "type": "array",
       "items": { "type": "string" }
@@ -554,8 +716,8 @@
           },
           "source_type": {
             "type": "string",
-            "enum": ["inference", "ambiguous"],
-            "description": "inference = 基于原文的合理推断；ambiguous = 原文存在多义性。"
+            "enum": ["canon", "inference", "ambiguous"],
+            "description": "canon = 原文明确描述；inference = 基于原文的合理推断；ambiguous = 原文存在多义性。"
           },
           "note": {
             "type": "string",

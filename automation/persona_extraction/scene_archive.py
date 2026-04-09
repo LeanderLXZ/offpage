@@ -1,0 +1,741 @@
+"""Phase 4 — Scene archive: split chapters into scenes.
+
+Each chapter is processed independently by a single LLM call that outputs
+scene boundary annotations (start/end line numbers + metadata).  The program
+then extracts full_text from the original chapter file using those line
+numbers.  Multiple chapters run in parallel via ThreadPoolExecutor.
+
+Progress is tracked independently from Phase 3 in:
+  works/{work_id}/analysis/incremental/scene_archive/progress.json
+
+Intermediate per-chapter results are stored in:
+  works/{work_id}/analysis/incremental/scene_archive/splits/{chapter}.json
+
+Final output:
+  works/{work_id}/rag/scene_archive.jsonl
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from .llm_backend import LLMBackend, run_with_retry
+from .json_repair import programmatic_repair
+from .prompt_builder import build_scene_split_prompt
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Progress tracking
+# ---------------------------------------------------------------------------
+
+class ChapterState:
+    PENDING = "pending"
+    SPLITTING = "splitting"
+    SPLIT = "split"
+    VALIDATING = "validating"
+    PASSED = "passed"
+    FAILED = "failed"
+    RETRYING = "retrying"
+    ERROR = "error"
+
+
+@dataclass
+class ChapterEntry:
+    chapter_id: str
+    state: str = ChapterState.PENDING
+    retry_count: int = 0
+    max_retries: int = 2
+    error_message: str = ""
+    last_updated: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "state": self.state,
+            "retry_count": self.retry_count,
+            "max_retries": self.max_retries,
+            "error_message": self.error_message,
+            "last_updated": self.last_updated,
+        }
+
+    @classmethod
+    def from_dict(cls, chapter_id: str, d: dict[str, Any]) -> ChapterEntry:
+        return cls(
+            chapter_id=chapter_id,
+            state=d.get("state", ChapterState.PENDING),
+            retry_count=d.get("retry_count", 0),
+            max_retries=d.get("max_retries", 2),
+            error_message=d.get("error_message", ""),
+            last_updated=d.get("last_updated", ""),
+        )
+
+
+@dataclass
+class SceneArchiveProgress:
+    work_id: str
+    total_chapters: int = 0
+    chapters: dict[str, ChapterEntry] = field(default_factory=dict)
+    merged: bool = False
+    last_updated: str = ""
+
+    def progress_dir(self, project_root: Path) -> Path:
+        return (project_root / "works" / self.work_id
+                / "analysis" / "incremental" / "scene_archive")
+
+    def progress_path(self, project_root: Path) -> Path:
+        return self.progress_dir(project_root) / "progress.json"
+
+    def splits_dir(self, project_root: Path) -> Path:
+        return self.progress_dir(project_root) / "splits"
+
+    def save(self, project_root: Path) -> Path:
+        path = self.progress_path(project_root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.last_updated = _now_iso()
+        data = {
+            "phase": "scene_archive",
+            "work_id": self.work_id,
+            "total_chapters": self.total_chapters,
+            "chapters": {
+                cid: entry.to_dict()
+                for cid, entry in self.chapters.items()
+            },
+            "merged": self.merged,
+            "last_updated": self.last_updated,
+        }
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        return path
+
+    @classmethod
+    def load(cls, project_root: Path, work_id: str,
+             ) -> SceneArchiveProgress | None:
+        path = (project_root / "works" / work_id / "analysis"
+                / "incremental" / "scene_archive" / "progress.json")
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            prog = cls(
+                work_id=data["work_id"],
+                total_chapters=data.get("total_chapters", 0),
+                merged=data.get("merged", False),
+                last_updated=data.get("last_updated", ""),
+            )
+            for cid, entry_data in data.get("chapters", {}).items():
+                prog.chapters[cid] = ChapterEntry.from_dict(cid, entry_data)
+            return prog
+        except (json.JSONDecodeError, OSError, KeyError) as exc:
+            logger.warning("Failed to load scene archive progress: %s", exc)
+            return None
+
+    def pending_chapters(self) -> list[str]:
+        """Return chapter IDs that need processing."""
+        actionable = {ChapterState.PENDING, ChapterState.SPLITTING,
+                      ChapterState.SPLIT, ChapterState.VALIDATING,
+                      ChapterState.RETRYING}
+        return [cid for cid, e in sorted(self.chapters.items())
+                if e.state in actionable]
+
+    def failed_chapters(self) -> list[str]:
+        return [cid for cid, e in sorted(self.chapters.items())
+                if e.state in (ChapterState.FAILED, ChapterState.ERROR)]
+
+    def all_passed(self) -> bool:
+        return all(e.state == ChapterState.PASSED
+                   for e in self.chapters.values())
+
+    def reset_failed(self) -> int:
+        """Reset failed/error chapters to pending (for --resume)."""
+        count = 0
+        for entry in self.chapters.values():
+            if entry.state in (ChapterState.FAILED, ChapterState.ERROR):
+                entry.state = ChapterState.PENDING
+                entry.retry_count = 0
+                entry.error_message = ""
+                count += 1
+        return count
+
+    def stats(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for entry in self.chapters.values():
+            counts[entry.state] = counts.get(entry.state, 0) + 1
+        return counts
+
+
+# ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
+
+def validate_scene_split(
+    scenes: list[dict[str, Any]],
+    total_lines: int,
+    known_aliases: set[str] | None = None,
+) -> list[str]:
+    """Validate a chapter's scene split output.
+
+    Returns a list of error messages (empty = valid).
+    """
+    errors: list[str] = []
+
+    if not scenes:
+        errors.append("No scenes produced")
+        return errors
+
+    required_fields = {"scene_start_line", "scene_end_line",
+                       "time_in_story", "location",
+                       "characters_present", "summary"}
+
+    prev_end = 0
+    for i, scene in enumerate(scenes):
+        prefix = f"Scene {i + 1}"
+
+        # Check required fields
+        missing = required_fields - set(scene.keys())
+        if missing:
+            errors.append(f"{prefix}: missing fields: {missing}")
+            continue
+
+        start = scene.get("scene_start_line")
+        end = scene.get("scene_end_line")
+
+        if not isinstance(start, int) or not isinstance(end, int):
+            errors.append(f"{prefix}: start/end line must be integers")
+            continue
+
+        # Line number validity
+        if start < 1:
+            errors.append(f"{prefix}: start_line {start} < 1")
+        if end > total_lines:
+            errors.append(f"{prefix}: end_line {end} > total lines {total_lines}")
+        if start > end:
+            errors.append(f"{prefix}: start_line {start} > end_line {end}")
+
+        # No overlap, no gap
+        expected_start = prev_end + 1
+        if start != expected_start:
+            if start < expected_start:
+                errors.append(
+                    f"{prefix}: overlap — start_line {start}, "
+                    f"previous scene ended at {prev_end}")
+            else:
+                errors.append(
+                    f"{prefix}: gap — lines {expected_start}-{start - 1} "
+                    f"not covered")
+        prev_end = end
+
+        # Empty fields
+        for fld in ("time_in_story", "location", "summary"):
+            if not scene.get(fld):
+                errors.append(f"{prefix}: {fld} is empty")
+
+        if not scene.get("characters_present"):
+            errors.append(f"{prefix}: characters_present is empty")
+
+        # Alias matching (soft check)
+        if known_aliases:
+            for char in scene.get("characters_present", []):
+                if char not in known_aliases:
+                    errors.append(
+                        f"{prefix}: unknown character '{char}' "
+                        f"(not in known aliases)")
+
+    # Check full coverage
+    if prev_end != total_lines:
+        errors.append(
+            f"Incomplete coverage: last scene ends at line {prev_end}, "
+            f"but chapter has {total_lines} lines")
+
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Single chapter processing
+# ---------------------------------------------------------------------------
+
+def _process_chapter(
+    project_root: Path,
+    work_id: str,
+    chapter_id: str,
+    backend: LLMBackend,
+    progress: SceneArchiveProgress,
+    known_aliases: set[str] | None = None,
+) -> tuple[str, bool, str]:
+    """Process a single chapter.  Returns (chapter_id, success, error_msg)."""
+    entry = progress.chapters[chapter_id]
+    chapter_path = (project_root / "sources" / "works" / work_id
+                    / "chapters" / f"{chapter_id}.txt")
+
+    if not chapter_path.exists():
+        return chapter_id, False, f"Chapter file not found: {chapter_path}"
+
+    lines = chapter_path.read_text(encoding="utf-8").splitlines()
+    total_lines = len(lines)
+
+    if total_lines == 0:
+        return chapter_id, False, "Chapter file is empty"
+
+    # Build prompt
+    prompt = build_scene_split_prompt(
+        project_root, work_id, chapter_id, lines)
+
+    # Update state
+    entry.state = ChapterState.SPLITTING
+    entry.last_updated = _now_iso()
+
+    # Run LLM
+    result = run_with_retry(backend, prompt, timeout_seconds=600)
+
+    if not result.success:
+        msg = result.error or "LLM call failed"
+        entry.state = ChapterState.FAILED
+        entry.error_message = msg
+        entry.last_updated = _now_iso()
+        return chapter_id, False, msg
+
+    entry.state = ChapterState.SPLIT
+    entry.last_updated = _now_iso()
+
+    # Parse output
+    scenes = _parse_scene_output(result.text)
+    if scenes is None:
+        # Try L1 programmatic JSON repair
+        repaired = programmatic_repair(result.text)
+        scenes = _parse_scene_output(repaired)
+
+    if scenes is None:
+        msg = "Failed to parse LLM output as JSON array"
+        entry.state = ChapterState.FAILED
+        entry.error_message = msg
+        entry.last_updated = _now_iso()
+        return chapter_id, False, msg
+
+    # Validate
+    entry.state = ChapterState.VALIDATING
+    entry.last_updated = _now_iso()
+
+    errors = validate_scene_split(scenes, total_lines, known_aliases)
+
+    if errors:
+        entry.retry_count += 1
+        if entry.retry_count > entry.max_retries:
+            entry.state = ChapterState.ERROR
+            entry.error_message = "; ".join(errors)
+        else:
+            entry.state = ChapterState.FAILED
+            entry.error_message = "; ".join(errors)
+        entry.last_updated = _now_iso()
+        return chapter_id, False, "; ".join(errors)
+
+    # Save intermediate result
+    splits_dir = progress.splits_dir(project_root)
+    splits_dir.mkdir(parents=True, exist_ok=True)
+    split_path = splits_dir / f"{chapter_id}.json"
+    split_path.write_text(
+        json.dumps(scenes, ensure_ascii=False, indent=2),
+        encoding="utf-8")
+
+    entry.state = ChapterState.PASSED
+    entry.error_message = ""
+    entry.last_updated = _now_iso()
+
+    return chapter_id, True, ""
+
+
+def _parse_scene_output(text: str) -> list[dict[str, Any]] | None:
+    """Extract JSON array from LLM output."""
+    text = text.strip()
+
+    # Try direct parse
+    try:
+        data = json.loads(text)
+        if isinstance(data, list):
+            return data
+    except json.JSONDecodeError:
+        pass
+
+    # Try extracting from markdown code block
+    import re
+    match = re.search(r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group(1))
+            if isinstance(data, list):
+                return data
+        except json.JSONDecodeError:
+            pass
+
+    # Try finding first [ ... ] block
+    start = text.find("[")
+    end = text.rfind("]")
+    if start >= 0 and end > start:
+        try:
+            data = json.loads(text[start:end + 1])
+            if isinstance(data, list):
+                return data
+        except json.JSONDecodeError:
+            pass
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Merge
+# ---------------------------------------------------------------------------
+
+def _build_chapter_to_stage_map(
+    project_root: Path, work_id: str,
+) -> dict[str, str]:
+    """Build chapter_id → stage_id mapping from source_batch_plan.json."""
+    plan_path = (project_root / "works" / work_id / "analysis"
+                 / "incremental" / "source_batch_plan.json")
+    if not plan_path.exists():
+        return {}
+
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    mapping: dict[str, str] = {}
+
+    for batch in plan.get("batches", []):
+        stage_id = batch.get("stage_id", "")
+        ch_start = batch.get("chapter_start", 0)
+        ch_end = batch.get("chapter_end", 0)
+        for ch in range(ch_start, ch_end + 1):
+            mapping[f"{ch:04d}"] = stage_id
+
+    return mapping
+
+
+def merge_scene_archive(
+    project_root: Path,
+    work_id: str,
+    progress: SceneArchiveProgress,
+) -> tuple[bool, str]:
+    """Merge all per-chapter splits into scene_archive.jsonl.
+
+    Returns (success, error_message).
+    """
+    if not progress.all_passed():
+        return False, "Not all chapters have passed"
+
+    chapter_to_stage = _build_chapter_to_stage_map(project_root, work_id)
+    if not chapter_to_stage:
+        return False, "source_batch_plan.json not found or empty"
+
+    splits_dir = progress.splits_dir(project_root)
+    rag_dir = project_root / "works" / work_id / "rag"
+    rag_dir.mkdir(parents=True, exist_ok=True)
+    output_path = rag_dir / "scene_archive.jsonl"
+
+    # Collect all scenes in chapter order
+    all_scenes: list[dict[str, Any]] = []
+    scene_ids_seen: set[str] = set()
+
+    for chapter_id in sorted(progress.chapters.keys()):
+        split_path = splits_dir / f"{chapter_id}.json"
+        if not split_path.exists():
+            return False, f"Split file missing for chapter {chapter_id}"
+
+        scenes = json.loads(split_path.read_text(encoding="utf-8"))
+        chapter_path = (project_root / "sources" / "works" / work_id
+                        / "chapters" / f"{chapter_id}.txt")
+        lines = chapter_path.read_text(encoding="utf-8").splitlines()
+
+        stage_id = chapter_to_stage.get(chapter_id, "")
+
+        for seq, scene in enumerate(scenes, 1):
+            scene_id = f"scene_{chapter_id}_{seq:03d}"
+
+            if scene_id in scene_ids_seen:
+                return False, f"Duplicate scene_id: {scene_id}"
+            scene_ids_seen.add(scene_id)
+
+            # Extract full_text from lines
+            start = scene.get("scene_start_line", 1) - 1  # 0-indexed
+            end = scene.get("scene_end_line", len(lines))
+            full_text = "\n".join(lines[start:end])
+
+            entry = {
+                "scene_id": scene_id,
+                "stage_id": stage_id,
+                "chapter": chapter_id,
+                "time_in_story": scene.get("time_in_story", ""),
+                "location": scene.get("location", ""),
+                "characters_present": scene.get("characters_present", []),
+                "summary": scene.get("summary", ""),
+                "full_text": full_text,
+            }
+            all_scenes.append(entry)
+
+    # Write JSONL
+    with open(output_path, "w", encoding="utf-8") as f:
+        for entry in all_scenes:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    # Final integrity check
+    chapters_covered = {s["chapter"] for s in all_scenes}
+    expected = set(progress.chapters.keys())
+    missing = expected - chapters_covered
+    if missing:
+        return False, f"Chapters missing from output: {sorted(missing)}"
+
+    return True, ""
+
+
+# ---------------------------------------------------------------------------
+# Main orchestrator
+# ---------------------------------------------------------------------------
+
+def _load_known_aliases(
+    project_root: Path, work_id: str,
+) -> set[str] | None:
+    """Load character aliases from identity.json files if available."""
+    chars_dir = project_root / "works" / work_id / "characters"
+    if not chars_dir.exists():
+        return None
+
+    aliases: set[str] = set()
+    for identity_path in chars_dir.glob("*/canon/identity.json"):
+        try:
+            data = json.loads(identity_path.read_text(encoding="utf-8"))
+            # Add main name
+            if data.get("name"):
+                aliases.add(data["name"])
+            # Add aliases
+            for alias in data.get("aliases", []):
+                if isinstance(alias, dict) and alias.get("name"):
+                    aliases.add(alias["name"])
+                elif isinstance(alias, str):
+                    aliases.add(alias)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    return aliases if aliases else None
+
+
+def run_scene_archive(
+    project_root: Path,
+    work_id: str,
+    backend: LLMBackend,
+    *,
+    concurrency: int = 10,
+    end_batch: int = 0,
+    resume: bool = False,
+) -> bool:
+    """Run Phase 4: scene archive generation.
+
+    Args:
+        concurrency: Max parallel chapter workers.
+        end_batch: Only process chapters from batches 1..N (0 = all).
+        resume: If True, load existing progress and continue.
+
+    Returns True if completed successfully.
+    """
+    print("\n" + "=" * 60)
+    print("  Phase 4: Scene Archive")
+    print("=" * 60)
+
+    # Check precondition: source_batch_plan.json
+    plan_path = (project_root / "works" / work_id / "analysis"
+                 / "incremental" / "source_batch_plan.json")
+    if not plan_path.exists():
+        print("[ERROR] source_batch_plan.json not found. "
+              "Phase 1 must complete first.")
+        return False
+
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+
+    # Determine which chapters to process
+    chapters_to_process = _collect_chapters(plan, end_batch)
+    if not chapters_to_process:
+        print("[ERROR] No chapters to process.")
+        return False
+
+    # Load or create progress
+    progress: SceneArchiveProgress | None = None
+    if resume:
+        progress = SceneArchiveProgress.load(project_root, work_id)
+
+    if progress is None:
+        progress = SceneArchiveProgress(
+            work_id=work_id,
+            total_chapters=len(chapters_to_process),
+        )
+
+    # Ensure all target chapters have entries
+    for cid in chapters_to_process:
+        if cid not in progress.chapters:
+            progress.chapters[cid] = ChapterEntry(chapter_id=cid)
+
+    # On resume, reset failed chapters
+    if resume:
+        reset_count = progress.reset_failed()
+        if reset_count > 0:
+            print(f"  Reset {reset_count} failed/error chapters to pending")
+
+    # Filter to chapters that need work
+    pending = [cid for cid in chapters_to_process
+               if progress.chapters[cid].state != ChapterState.PASSED]
+
+    if not pending:
+        if progress.merged:
+            print("  Phase 4 already complete.")
+            return True
+        print("  All chapters already passed. Proceeding to merge.")
+    else:
+        stats = progress.stats()
+        print(f"  Work: {work_id}")
+        print(f"  Total chapters: {len(chapters_to_process)}")
+        print(f"  Already passed: {stats.get(ChapterState.PASSED, 0)}")
+        print(f"  To process: {len(pending)}")
+        print(f"  Concurrency: {concurrency}")
+        print("=" * 60)
+
+        # Save initial progress
+        progress.save(project_root)
+
+        # Load known aliases for validation
+        known_aliases = _load_known_aliases(project_root, work_id)
+
+        # Run parallel processing
+        _run_parallel(
+            project_root, work_id, backend, progress,
+            pending, concurrency, known_aliases)
+
+    # Check if all passed
+    not_passed = [cid for cid in chapters_to_process
+                  if progress.chapters[cid].state != ChapterState.PASSED]
+    if not_passed:
+        stats = progress.stats()
+        print(f"\n[INCOMPLETE] {len(not_passed)} chapters not passed:")
+        for state, count in sorted(stats.items()):
+            if state != ChapterState.PASSED:
+                print(f"  {state}: {count}")
+        progress.save(project_root)
+        return False
+
+    # Merge
+    print("\n--- Merging scene archive ---")
+    success, error = merge_scene_archive(project_root, work_id, progress)
+    if not success:
+        print(f"[ERROR] Merge failed: {error}")
+        progress.save(project_root)
+        return False
+
+    progress.merged = True
+    progress.save(project_root)
+
+    total_scenes = _count_jsonl_lines(
+        project_root / "works" / work_id / "rag" / "scene_archive.jsonl")
+    print(f"  [OK] scene_archive.jsonl written "
+          f"({total_scenes} scenes, {len(chapters_to_process)} chapters)")
+    return True
+
+
+def _collect_chapters(
+    plan: dict[str, Any], end_batch: int,
+) -> list[str]:
+    """Collect chapter IDs from batch plan, respecting end_batch limit."""
+    chapters: list[str] = []
+    batches = plan.get("batches", [])
+
+    for i, batch in enumerate(batches):
+        if end_batch > 0 and (i + 1) > end_batch:
+            break
+        ch_start = batch.get("chapter_start", 0)
+        ch_end = batch.get("chapter_end", 0)
+        for ch in range(ch_start, ch_end + 1):
+            chapters.append(f"{ch:04d}")
+
+    return chapters
+
+
+def _run_parallel(
+    project_root: Path,
+    work_id: str,
+    backend: LLMBackend,
+    progress: SceneArchiveProgress,
+    pending: list[str],
+    concurrency: int,
+    known_aliases: set[str] | None,
+) -> None:
+    """Run chapter processing in parallel."""
+    start_time = time.monotonic()
+    completed = 0
+    failed = 0
+    total = len(pending)
+
+    print(f"\n  Processing {total} chapters with {concurrency} workers...\n")
+
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = {}
+        for chapter_id in pending:
+            future = executor.submit(
+                _process_chapter,
+                project_root, work_id, chapter_id,
+                backend, progress, known_aliases,
+            )
+            futures[future] = chapter_id
+
+        for future in as_completed(futures):
+            chapter_id = futures[future]
+            try:
+                cid, success, error_msg = future.result()
+            except Exception as exc:
+                cid = chapter_id
+                success = False
+                error_msg = str(exc)
+                entry = progress.chapters[cid]
+                entry.state = ChapterState.ERROR
+                entry.error_message = error_msg
+                entry.last_updated = _now_iso()
+
+            if success:
+                completed += 1
+                print(f"    [OK] {cid}  ({completed}/{total})")
+            else:
+                failed += 1
+                print(f"    [FAIL] {cid}: {error_msg[:100]}")
+
+            # Periodic save
+            if (completed + failed) % 10 == 0:
+                progress.save(project_root)
+
+    # Final save
+    progress.save(project_root)
+
+    elapsed = time.monotonic() - start_time
+    print(f"\n  Completed: {completed}/{total}  "
+          f"Failed: {failed}  "
+          f"Elapsed: {_fmt_duration(elapsed)}")
+    if completed > 0:
+        print(f"  Avg: {_fmt_duration(elapsed / completed)}/chapter")
+
+
+def _count_jsonl_lines(path: Path) -> int:
+    if not path.exists():
+        return 0
+    with open(path, "r", encoding="utf-8") as f:
+        return sum(1 for _ in f)
+
+
+def _fmt_duration(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    m, s = divmod(int(seconds), 60)
+    if m < 60:
+        return f"{m}m{s:02d}s"
+    h, m = divmod(m, 60)
+    return f"{h}h{m:02d}m{s:02d}s"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")

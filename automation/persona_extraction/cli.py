@@ -7,9 +7,15 @@ import logging
 import sys
 from pathlib import Path
 
+from .git_utils import preflight_check
 from .llm_backend import create_backend
 from .orchestrator import ExtractionOrchestrator
+from .process_guard import PidLock, launch_background
 from .progress import ExtractionProgress
+from .scene_archive import run_scene_archive
+
+# Phase 4 does not need git preflight (no commits), but shares the lock.
+VALID_PHASES = ("auto", "0", "1", "2", "2.5", "3", "3.5", "4")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -63,14 +69,46 @@ def main(argv: list[str] | None = None) -> None:
         help="Pre-select character IDs (skip interactive prompt)",
     )
     parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=25,
+        help="Chapters per summarization chunk (default: 25)",
+    )
+    parser.add_argument(
         "--end-batch",
         type=int,
         default=None,
         help="Stop after batch N (0 = all)",
     )
     parser.add_argument(
+        "--start-phase",
+        choices=VALID_PHASES,
+        default="auto",
+        help="Start from this phase (default: auto-detect). "
+             "Phases: 0 (summarization), 1 (analysis), 2 (confirmation), "
+             "2.5 (baseline), 3 (extraction), 3.5 (consistency), 4 (scenes)",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=10,
+        help="Max parallel workers for Phase 4 (default: 10)",
+    )
+    parser.add_argument(
         "--resume", action="store_true",
         help="Resume from existing progress (skip analysis)",
+    )
+    parser.add_argument(
+        "--background", action="store_true",
+        help="Run in background (survives SSH disconnect). "
+             "Requires --resume or --characters (no interactive prompts).",
+    )
+    parser.add_argument(
+        "--max-runtime",
+        type=int,
+        default=0,
+        help="Max total runtime in minutes (0 = unlimited). "
+             "Stops gracefully after limit.",
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true",
@@ -93,6 +131,47 @@ def main(argv: list[str] | None = None) -> None:
               f"project root (no schemas/ directory).")
         sys.exit(1)
 
+    # --- Pre-flight: check for already-running instance ---
+    lock = PidLock(project_root, args.work_id)
+    existing = lock.is_held()
+    if existing:
+        pid = existing.get("pid", "?")
+        started = existing.get("started", "?")
+        print(f"[ERROR] Another extraction is already running:")
+        print(f"  PID: {pid}  Started: {started}")
+        print(f"  If the process is dead, remove the lock:")
+        print(f"  rm \"{lock.lock_path}\"")
+        sys.exit(1)
+
+    # --- Background mode ---
+    if args.background:
+        if not args.resume and not args.characters:
+            print("[ERROR] --background requires --resume or --characters "
+                  "(no interactive prompts in background mode).")
+            sys.exit(1)
+
+        # Re-launch without --background
+        extra = [a for a in sys.argv[1:] if a != "--background"]
+        launch_background(args.work_id, project_root, extra)
+        sys.exit(0)
+
+    # --- Phase 4 standalone path ---
+    if args.start_phase == "4":
+        backend = create_backend(
+            args.backend, project_root,
+            max_turns=args.max_turns, model=args.model,
+            effort=args.effort)
+        # Phase 4 doesn't need git preflight — no git commits
+        success = run_scene_archive(
+            project_root, args.work_id, backend,
+            concurrency=args.concurrency,
+            end_batch=args.end_batch or 0,
+            resume=args.resume,
+        )
+        sys.exit(0 if success else 1)
+
+    # --- Standard Phase 0-3.5 path ---
+
     # Create backends
     backend = create_backend(
         args.backend, project_root,
@@ -111,21 +190,44 @@ def main(argv: list[str] | None = None) -> None:
         work_id=args.work_id,
         backend=backend,
         reviewer_backend=reviewer_backend,
+        chunk_size=args.chunk_size,
+        max_runtime_minutes=args.max_runtime,
+        start_phase=args.start_phase,
+        concurrency=args.concurrency,
     )
 
-    if args.resume:
-        progress = ExtractionProgress.load(project_root, args.work_id)
-        if not progress:
-            print(f"[ERROR] No existing progress for '{args.work_id}'.")
-            sys.exit(1)
-        orch.run_extraction_loop(progress)
-    else:
-        orch.run_full(
-            preset_characters=args.characters,
-            preset_end_batch=args.end_batch,
-        )
+    # Acquire lock
+    if not orch.acquire_lock():
+        sys.exit(1)
 
-    print("\nDone.")
+    # --- Pre-flight: check git working tree ---
+    problems = preflight_check(
+        project_root,
+        ignore_patterns=["extraction_progress.json", "__pycache__",
+                         "scene_archive"])
+    if problems:
+        for p in problems:
+            print(f"[PREFLIGHT] {p}")
+        orch.release_lock()
+        sys.exit(1)
+
+    try:
+        if args.resume:
+            progress = ExtractionProgress.load(project_root, args.work_id)
+            if not progress:
+                print(f"[ERROR] No existing progress for '{args.work_id}'.")
+                sys.exit(1)
+            orch.run_extraction_loop(progress,
+                                     max_batches=args.end_batch or 0)
+        else:
+            orch.run_full(
+                preset_characters=args.characters,
+                preset_end_batch=args.end_batch,
+            )
+
+        print("\nDone.")
+    finally:
+        orch.release_lock()
 
 
 if __name__ == "__main__":

@@ -30,11 +30,38 @@
     },
     "aliases": {
       "type": "array",
-      "description": "角色的其他称呼。包括：别名、称号、外号、化名等。",
+      "description": "角色的所有曾用名、化名、称呼、代称等。每条记录包含名称文本、类型、生效阶段范围和来源信息。",
       "items": {
-        "type": "string"
-      },
-      "uniqueItems": true
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "名称文本。"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["本名", "化名", "代称", "称呼", "封号", "道号", "武器名", "其他"],
+            "description": "名称类型。本名=正式名称变更；化名=伪装身份；代称=非正式临时称呼（如'小龙'）；称呼=他人对该角色的特定称呼；封号=官方头衔；道号=修炼名号；武器名=作为武器时的名称。"
+          },
+          "effective_stages": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "该名称生效的阶段 ID 列表。null 或省略表示全阶段有效。"
+          },
+          "source": {
+            "type": "string",
+            "description": "名称的来源或原因。例如：'姜寒汐对王枫的日常称呼'、'在仙界的重生身份'。"
+          },
+          "used_by": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "使用该称呼的角色 ID 列表。null 或省略表示通用。仅对 type=称呼 有意义。"
+          }
+        }
+      }
     },
     "gender": {
       "type": "string"
@@ -64,6 +91,69 @@
       "description": "角色的初始所属势力或组织。后续变化记录在 stage_snapshot 中。",
       "items": {
         "type": "string"
+      }
+    },
+    "core_wounds": {
+      "type": "array",
+      "description": "角色的核心创伤——跨全故事始终影响角色行为和心理的根源性伤痛。不同于阶段性的 active_wounds（在 stage_snapshot 中随阶段演变），core_wounds 记录的是角色最底层的、贯穿故事的心理创伤根源。例如：被父母抛弃、被至亲背叛、童年虐待。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["wound"],
+        "properties": {
+          "wound": {
+            "type": "string",
+            "description": "创伤内容。例如：'五岁被亲生父母抛弃于冰宫门前'。"
+          },
+          "origin": {
+            "type": "string",
+            "description": "创伤的来源/成因。例如：'母亲为逃避追杀将她遗弃'。"
+          },
+          "behavioral_impact": {
+            "type": "string",
+            "description": "创伤对角色行为的长期影响。例如：'极度抗拒亲密关系，对被抛弃话题敏感到会改变行为决策'。"
+          },
+          "source_type": {
+            "type": "string",
+            "enum": ["canon", "inference", "ambiguous"],
+            "description": "来源类型。"
+          }
+        }
+      }
+    },
+    "key_relationships": {
+      "type": "array",
+      "description": "角色的核心人物关系——跨全故事的关系概览，包含关系演变弧线。不同于 stage_snapshot 中的 relationships（记录某一阶段的关系状态），key_relationships 记录关系的全局演变轨迹。仅记录对角色有重大影响的关系。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target", "relationship_arc"],
+        "properties": {
+          "target": {
+            "type": "string",
+            "description": "关系对象。可以是具体角色名或泛化类型（如'师父'）。"
+          },
+          "initial_relationship": {
+            "type": "string",
+            "description": "故事开始时的关系状态。例如：'宿敌——被她杀了八次的仇人'。"
+          },
+          "relationship_arc": {
+            "type": "string",
+            "description": "关系的全局演变弧线概述。例如：'仇人→被迫共处→策略性接近→产生真情→彼此信任→结为伴侣'。"
+          },
+          "turning_points": {
+            "type": "array",
+            "description": "关系的关键转折点。",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source_type": {
+            "type": "string",
+            "enum": ["canon", "inference", "ambiguous"],
+            "description": "来源类型。"
+          }
+        }
       }
     },
     "distinguishing_features": {
