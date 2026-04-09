@@ -509,9 +509,9 @@ def _load_known_aliases(
     for identity_path in chars_dir.glob("*/canon/identity.json"):
         try:
             data = json.loads(identity_path.read_text(encoding="utf-8"))
-            # Add main name
-            if data.get("name"):
-                aliases.add(data["name"])
+            # Add canonical name
+            if data.get("canonical_name"):
+                aliases.add(data["canonical_name"])
             # Add aliases
             for alias in data.get("aliases", []):
                 if isinstance(alias, dict) and alias.get("name"):

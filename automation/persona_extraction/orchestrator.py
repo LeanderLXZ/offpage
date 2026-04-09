@@ -498,7 +498,7 @@ class ExtractionOrchestrator:
         # Phase 2.5 exit validation — catch schema/field errors early
         print("\n--- Phase 2.5 Validation ---")
         baseline_report = validate_baseline(
-            self.project_root, self.work_id, character_ids)
+            self.project_root, self.work_id, target_characters)
         print(baseline_report.summary())
         if not baseline_report.passed:
             print("\n[ERROR] Baseline validation failed. "
