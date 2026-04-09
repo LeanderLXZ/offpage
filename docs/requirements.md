@@ -1469,7 +1469,7 @@ target_voice_map 和 target_behavior_map 的最低 examples 数量不是固定�
 | Phase | 验证内容 |
 |-------|---------|
 | Phase 0 (summarization) | 每个 chunk 输出 JSON 格式正确、非空 |
-| Phase 1 (analysis) | candidate_characters / batch_plan / world_overview 结构完整、required 字段存在 |
+| Phase 1 (analysis) | candidate_characters / batch_plan / world_overview 结构完整、required 字段存在；batch plan 章节数验证（5-15），超限 batch 程序化拆分 |
 | Phase 2.5 (baseline) | identity.json / manifest.json / foundation.json schema 校验 + required 字段非空 |
 | Phase 3 (extraction) | validate_batch（已有） |
 | Phase 3.5 (consistency) | consistency_check（已有） |
@@ -1662,6 +1662,22 @@ fix 后重新跑语义审校；如果是程序化校验发现的，fix 后重新
 - 最小批次 5 章，最大批次 15 章，默认 10 章
 - 为每个阶段取有意义的中文名称（如"阶段1_<stage_title>初遇"）
 - stage_id 在世界包和角色包间必须一致
+
+#### 程序化兜底：超限 batch 自动拆分
+
+LLM 产出的 batch plan 可能违反章节数上限（实测常见）。Phase 1 出口验证
+包含程序化拆分逻辑，无需额外 LLM 调用：
+
+1. 扫描所有 batch，标记 `chapter_count > max_batch_size`（默认 15）的 batch
+2. 对超限 batch 按 `target_batch_size`（默认 10）均分拆分：
+   - 计算子 batch 数 = ceil(chapter_count / target_batch_size)
+   - 均匀分配章节（余数分摊到前几个子 batch）
+   - 子 batch 的 `stage_id` 在原名后追加序号后缀（如"阶段09_中州重逢与疗伤"
+     → "阶段09a_中州重逢与疗伤_上"、"阶段09b_中州重逢与疗伎_下"）
+   - `batch_id` 重新编号保持连续
+   - `boundary_reason` 标注为 "程序化拆分（原 batch 超 {n} 章上限）"
+3. 拆分后重新写入 `source_batch_plan.json`，打印拆分报告
+4. 拆分不会少于 `min_batch_size`（默认 5）章
 
 ### 11.10 跨批次一致性检查（Phase 3.5）
 

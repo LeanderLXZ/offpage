@@ -128,7 +128,8 @@ revision tracking, roleplay-focused. Seven-step workflow:
    a. Cross-chunk character identity merging
    b. World overview (genre, power system, factions, geography, major
       world-lines/eras, core setting rules)
-   c. Batch plan (story-boundary-based stage splitting)
+   c. Batch plan (story-boundary-based stage splitting; exit validation
+      enforces 5-15 chapter limit, auto-splits oversized batches)
    d. Candidate character identification (post-merge, with aliases)
    e. **Baseline production** (new): write world foundation files and
       character identity.json + manifest.json for confirmed characters.
