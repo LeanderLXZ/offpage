@@ -7,9 +7,10 @@ Flow:
        a. Git preflight
        b. World extraction (Phase A, single LLM call)
        c. Character extraction (Phase B, N parallel LLM calls)
-       d. Programmatic validation (Python)
-       e. Semantic review (LLM)
-       f. Git commit or rollback + retry
+       d. Programmatic post-processing (memory_digest + stage_catalog)
+       e. Parallel review lanes (world + each character: V+R+F)
+       f. Commit gate (programmatic cross-consistency)
+       g. Git commit or rollback + retry
   3.5 Cross-batch consistency check (programmatic, zero tokens)
   4. Scene archive (per-chapter parallel, programmatic validation only)
 """
@@ -36,6 +37,7 @@ from .git_utils import (
 )
 from .json_repair import try_repair_json_file, try_repair_jsonl_file
 from .llm_backend import LLMBackend, LLMResult, run_with_retry
+from .post_processing import run_batch_post_processing
 from .process_guard import PidLock, fmt_memory, get_rss_mb
 from .progress import BatchEntry, BatchState, ExtractionProgress
 from .prompt_builder import (
@@ -47,9 +49,9 @@ from .prompt_builder import (
     build_targeted_fix_prompt,
     build_world_extraction_prompt,
 )
+from .review_lanes import run_commit_gate, run_parallel_review
 from .scene_archive import run_scene_archive
-from .validator import validate_baseline
-from .validator import ValidationReport, validate_batch
+from .validator import validate_baseline, validate_lane
 
 logger = logging.getLogger(__name__)
 
@@ -930,37 +932,43 @@ class ExtractionOrchestrator:
             batch.transition(BatchState.EXTRACTED)
             progress.save(self.project_root)
 
-        # --- Step 4: Programmatic validation ---
-        if batch.state == BatchState.EXTRACTED:
-            tracker.start_step()
-            tracker.print_step(4, 7, "Programmatic validation")
-            report = validate_batch(
-                self.project_root, progress.work_id,
-                batch.stage_id, progress.target_characters)
-
-            if not report.passed:
-                print(f"    [FAIL] {report.summary()}")
-                rollback_to_head(self.project_root)
-                batch.transition(BatchState.REVIEWING)
-                batch.last_reviewer_feedback = (
-                    "Programmatic validation failures:\n" +
-                    "\n".join(str(i) for i in report.issues
-                             if i.severity == "error"))
-                batch.fail_source = "programmatic"
-                batch.transition(BatchState.FAILED)
+        # --- Step 4: Programmatic post-processing ---
+        if batch.state in (BatchState.EXTRACTED, BatchState.POST_PROCESSING):
+            if batch.state == BatchState.EXTRACTED:
+                batch.transition(BatchState.POST_PROCESSING)
                 progress.save(self.project_root)
-                return
 
-            errors = sum(1 for i in report.issues if i.severity == "error")
-            warns = sum(1 for i in report.issues if i.severity == "warning")
+            tracker.start_step()
+            tracker.print_step(4, 8, "Post-processing (digest + catalog)")
+
+            # Determine batch order (0-based index in batches list)
+            batch_order = next(
+                (i for i, b in enumerate(progress.batches)
+                 if b.batch_id == batch.batch_id), 0)
+
+            pp_issues = run_batch_post_processing(
+                project_root=self.project_root,
+                work_id=progress.work_id,
+                stage_id=batch.stage_id,
+                batch_order=batch_order,
+                character_ids=progress.target_characters,
+                chapter_range=batch.chapters,
+            )
+
+            if pp_issues:
+                for issue in pp_issues:
+                    print(f"    [WARN] {issue}")
+                # Post-processing warnings don't block — files may still
+                # be validated by the review lanes below.
+
             tracker.record_step(ProgressTracker.STEP_VALIDATION)
-            tracker.print_step_done(4, 7, "Programmatic validation",
-                                    f"{errors}E/{warns}W")
+            tracker.print_step_done(4, 8, "Post-processing",
+                                    f"{len(pp_issues)} issues")
 
             batch.transition(BatchState.REVIEWING)
             progress.save(self.project_root)
 
-        # --- Step 5: Semantic review ---
+        # --- Step 5+6: Parallel review lanes (V+R+F per entity) ---
         if batch.state == BatchState.REVIEWING:
             # Safety check: verify extraction output still exists on disk
             work_dir = self.project_root / "works" / progress.work_id
@@ -978,138 +986,86 @@ class ExtractionOrchestrator:
                 return
 
             tracker.start_step()
-            tracker.print_step(5, 7, "Semantic review")
-            report = validate_batch(
-                self.project_root, progress.work_id,
-                batch.stage_id, progress.target_characters)
+            n_lanes = 1 + len(progress.target_characters)
+            tracker.print_step(5, 8,
+                               f"Parallel review lanes ({n_lanes} lanes)")
 
-            reviewer_prompt = build_reviewer_prompt(
-                self.project_root, progress, batch,
-                report.summary())
+            lane_results = run_parallel_review(
+                project_root=self.project_root,
+                progress=progress,
+                batch=batch,
+                backend=self.backend,
+                reviewer_backend=self.reviewer_backend,
+                validate_fn=validate_lane,
+                build_reviewer_fn=build_reviewer_prompt,
+                build_fix_fn=build_targeted_fix_prompt,
+                parse_verdict_fn=_parse_verdict,
+                is_fixable_fn=_is_fixable,
+                run_with_retry_fn=run_with_retry,
+            )
 
-            review_result = run_with_retry(
-                self.reviewer_backend, reviewer_prompt,
-                timeout_seconds=600)
+            # Print lane results
+            passed_lanes = sum(1 for r in lane_results if r.passed)
+            failed_lanes = [r for r in lane_results if not r.passed]
+            for r in lane_results:
+                status = "PASS" if r.passed else "FAIL"
+                detail = r.error or r.findings[:200] if not r.passed else ""
+                print(f"    [{r.lane_type}:{r.lane_id}] {status}"
+                      f"{' — ' + detail if detail else ''}")
 
-            if not review_result.success:
-                print(f"    [ERROR] Review failed: {review_result.error}")
-                batch.transition(BatchState.FAILED)
-                batch.last_reviewer_feedback = (
-                    f"Review agent error: {review_result.error}")
-                progress.save(self.project_root)
-                return
+            if failed_lanes:
+                tracker.print_step_done(
+                    5, 8, "Parallel review lanes",
+                    f"{passed_lanes}/{n_lanes} passed")
 
-            verdict = _parse_verdict(review_result.text)
+                # Collect failure feedback for retry
+                feedback_parts = []
+                for r in failed_lanes:
+                    feedback_parts.append(
+                        f"[{r.lane_type}:{r.lane_id}] "
+                        f"{r.error or r.findings[:500]}")
+                batch.last_reviewer_feedback = "\n".join(feedback_parts)
 
-            if verdict["verdict"] != "PASS":
-                findings = verdict.get("findings", "")
-                print(f"    [FAIL] {findings[:500]}")
-
-                # Classify: targeted fix or full rollback?
-                if _is_fixable(verdict):
-                    print("    [FIXABLE] Attempting targeted fix...")
-                    batch.transition(BatchState.FIXING)
-                    batch.last_reviewer_feedback = review_result.text
-                    batch.fail_source = "semantic"
-                    progress.save(self.project_root)
-                else:
-                    print("    [SYSTEMIC] Full rollback required.")
-                    rollback_to_head(self.project_root)
-                    batch.transition(BatchState.FAILED)
-                    batch.last_reviewer_feedback = review_result.text
-                    progress.save(self.project_root)
-                    return
-            else:
-                tracker.record_step(ProgressTracker.STEP_REVIEW)
-                tracker.print_step_done(5, 7, "Semantic review",
-                                        verdict["verdict"])
-
-                batch.transition(BatchState.PASSED)
-                progress.save(self.project_root)
-
-        # --- Step 6: Targeted fix ---
-        if batch.state == BatchState.FIXING:
-            tracker.start_step()
-            tracker.print_step(6, 7, "Targeted fix")
-
-            findings = _parse_verdict(
-                batch.last_reviewer_feedback).get("findings", "")
-
-            fix_prompt = build_targeted_fix_prompt(
-                self.project_root, progress, batch, findings)
-
-            fix_result = run_with_retry(
-                self.backend, fix_prompt, timeout_seconds=600)
-
-            if not fix_result.success:
-                print(f"    [ERROR] Targeted fix failed: {fix_result.error}")
-                print("    Falling back to full rollback...")
+                print("    [FAIL] Rolling back for retry...")
                 rollback_to_head(self.project_root)
                 batch.transition(BatchState.FAILED)
                 progress.save(self.project_root)
                 return
 
-            # Re-run the check layer that originally caused the failure
-            fail_source = batch.fail_source or "programmatic"
+            tracker.record_step(ProgressTracker.STEP_REVIEW)
+            tracker.print_step_done(5, 8, "Parallel review lanes",
+                                    f"{n_lanes}/{n_lanes} passed")
 
-            if fail_source == "semantic":
-                # Re-run semantic review after fix
-                print("    [RE-CHECK] Re-running semantic review...")
-                fix_report = validate_batch(
-                    self.project_root, progress.work_id,
-                    batch.stage_id, progress.target_characters)
-                reviewer_prompt = build_reviewer_prompt(
-                    self.project_root, progress, batch,
-                    fix_report.summary())
-                re_review = run_with_retry(
-                    self.reviewer_backend, reviewer_prompt,
-                    timeout_seconds=600)
-                if not re_review.success:
-                    print(f"    [FIX FAILED] Re-review failed: "
-                          f"{re_review.error}")
-                    rollback_to_head(self.project_root)
-                    batch.transition(BatchState.FAILED)
-                    progress.save(self.project_root)
-                    return
-                re_verdict = _parse_verdict(re_review.text)
-                if re_verdict["verdict"] != "PASS":
-                    print(f"    [FIX FAILED] Still fails semantic review: "
-                          f"{re_verdict.get('findings', '')[:300]}")
-                    rollback_to_head(self.project_root)
-                    batch.transition(BatchState.FAILED)
-                    progress.save(self.project_root)
-                    return
-                tracker.record_step(ProgressTracker.STEP_FIX)
-                tracker.print_step_done(6, 7, "Targeted fix",
-                                        "semantic re-check PASS")
-            else:
-                # Re-run programmatic validation after fix
-                fix_report = validate_batch(
-                    self.project_root, progress.work_id,
-                    batch.stage_id, progress.target_characters)
-                fix_errors = sum(1 for i in fix_report.issues
-                                 if i.severity == "error")
-                fix_warns = sum(1 for i in fix_report.issues
-                                if i.severity == "warning")
-                if not fix_report.passed:
-                    print(f"    [FIX FAILED] Still has errors after fix: "
-                          f"{fix_report.summary()}")
-                    print("    Falling back to full rollback...")
-                    rollback_to_head(self.project_root)
-                    batch.transition(BatchState.FAILED)
-                    progress.save(self.project_root)
-                    return
-                tracker.record_step(ProgressTracker.STEP_FIX)
-                tracker.print_step_done(6, 7, "Targeted fix",
-                                        f"{fix_errors}E/{fix_warns}W")
+            # --- Step 7: Commit gate (programmatic, 0 token) ---
+            tracker.start_step()
+            tracker.print_step(7, 8, "Commit gate")
 
+            gate_passed, gate_issues = run_commit_gate(
+                project_root=self.project_root,
+                work_id=progress.work_id,
+                stage_id=batch.stage_id,
+                character_ids=progress.target_characters,
+                lane_results=lane_results,
+            )
+
+            if not gate_passed:
+                for issue in gate_issues:
+                    print(f"    [GATE] {issue}")
+                print("    [FAIL] Commit gate failed, rolling back...")
+                rollback_to_head(self.project_root)
+                batch.last_reviewer_feedback = "\n".join(gate_issues)
+                batch.transition(BatchState.FAILED)
+                progress.save(self.project_root)
+                return
+
+            tracker.print_step_done(7, 8, "Commit gate", "PASS")
             batch.transition(BatchState.PASSED)
             progress.save(self.project_root)
 
-        # --- Step 7: Git commit ---
+        # --- Step 8: Git commit ---
         if batch.state == BatchState.PASSED:
             tracker.start_step()
-            tracker.print_step(7, 7, "Git commit")
+            tracker.print_step(8, 8, "Git commit")
 
             # Clear feedback/error fields on successful commit
             batch.last_reviewer_feedback = ""
@@ -1129,9 +1085,9 @@ class ExtractionOrchestrator:
                 # Save again with the SHA (this will be uncommitted
                 # on disk but consistent on next resume)
                 progress.save(self.project_root)
-                tracker.print_step_done(7, 7, "Git commit", sha)
+                tracker.print_step_done(8, 8, "Git commit", sha)
             else:
-                tracker.print_step_done(7, 7, "Git commit",
+                tracker.print_step_done(8, 8, "Git commit",
                                         "no changes")
 
             tracker.finish_batch()

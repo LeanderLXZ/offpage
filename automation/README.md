@@ -10,13 +10,19 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
   ┌─────────────────┼──────────────────┐
   │                 │                  │
   ▼                 ▼                  ▼
-提取 agent      reviewer agent     程序化校验
-(claude -p)     (claude -p)        (Python/jsonschema)
-                    │
-               ┌────┴────┐
-               ▼         ▼
-          定点修复    全量回滚
-         (局部问题)  (系统性问题)
+提取 agent     程序化后处理        并行审校通道
+(claude -p)    (digest/catalog     (world + 各角色独立)
+               0 token)            ┌──────────────┐
+                                   │ 校验 → 审校   │
+                                   │ → 修复(可选)  │
+                                   └──────┬───────┘
+                                          ▼
+                                     提交门控
+                                  (程序化, 0 token)
+                                          │
+                                   ┌──────┴──────┐
+                                   ▼             ▼
+                              git commit    全量回滚
 ```
 
 每个 batch 的流程：
@@ -24,12 +30,14 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 1. Git preflight check（工作区干净、分支正确）
 2. 构建 prompt（含文件清单、前批参照、schema 引用）
 3. 运行提取 agent（`claude -p`，无人值守）
-4. **JSON 修复**（如果输出格式有问题，先尝试自动修复再决定是否重跑）
-5. 程序化校验（JSON schema + 结构完整性，不花 token）
-6. 语义审校（独立 agent 检查质量和一致性）
+4. **程序化后处理**：L1 JSON 修复 + 生成 memory_digest + 更新 stage_catalog
+5. **并行审校通道**（world + 各角色各一条通道）：
+   - 每条通道独立：程序化校验 → 语义审校 → 定点修复（如需）
+   - 通道间并行运行，互不阻塞
+6. **提交门控**（程序化，0 token）：确认全通道 PASS + 交叉一致性检查
 7. **失败分级**：
-   - 局部问题（≤5 个具体字段错误）→ 定点修复 agent → 再校验 → commit
-   - 系统性问题（文件缺失/结构错误/理解偏差）→ rollback + 全量重试
+   - 局部问题（≤5 个具体字段错误）→ 通道内定点修复 → 再审校 → 继续
+   - 系统性问题（文件缺失/结构错误/理解偏差）→ 全 batch rollback + 重试
 
 ## 依赖
 
@@ -145,24 +153,30 @@ works/{work_id}/analysis/incremental/.extraction.lock
 automation/
 ├── pyproject.toml
 ├── README.md
-├── prompt_templates/          ← 提取和审校的 prompt 模板
+├── prompt_templates/               ← 提取和审校的 prompt 模板
 │   ├── analysis.md
-│   ├── world_extraction.md    ← 世界层提取 (Phase A)
-│   ├── character_extraction.md ← 角色层提取 (Phase B, 并行)
-│   ├── coordinated_extraction.md ← (legacy, 保留兼容)
-│   └── semantic_review.md
-└── persona_extraction/        ← Python 包
+│   ├── world_extraction.md         ← 世界层提取 (Phase A)
+│   ├── character_extraction.md     ← 角色层提取 (Phase B, 并行)
+│   ├── semantic_review_world.md    ← 世界层语义审校（per-lane）
+│   ├── semantic_review_character.md ← 角色层语义审校（per-lane）
+│   ├── semantic_review.md          ← 统一审校（legacy/兜底）
+│   ├── targeted_fix.md             ← 定点修复
+│   ├── coordinated_extraction.md   ← (legacy, 保留兼容)
+│   └── scene_split.md
+└── persona_extraction/             ← Python 包
     ├── __init__.py
-    ├── cli.py                 ← CLI 入口
-    ├── orchestrator.py        ← 主循环
-    ├── llm_backend.py         ← Claude/Codex 后端抽象
-    ├── progress.py            ← 进度追踪和状态机
-    ├── validator.py           ← 程序化校验（不花 token）
-    ├── json_repair.py         ← 三级 JSON 修复（见下）
-    ├── prompt_builder.py      ← 上下文感知的 prompt 组装
-    ├── consistency_checker.py ← 跨批次一致性检查（Phase 3.5）
-    ├── git_utils.py           ← Git 安全操作
-    └── process_guard.py       ← PID 锁、内存监控、后台启动
+    ├── cli.py                      ← CLI 入口
+    ├── orchestrator.py             ← 主循环
+    ├── llm_backend.py              ← Claude/Codex 后端抽象
+    ├── progress.py                 ← 进度追踪和状态机
+    ├── validator.py                ← 程序化校验（不花 token）
+    ├── post_processing.py          ← 程序化后处理（digest/catalog）
+    ├── review_lanes.py             ← 并行审校通道 + 提交门控
+    ├── json_repair.py              ← 三级 JSON 修复（见下）
+    ├── prompt_builder.py           ← 上下文感知的 prompt 组装
+    ├── consistency_checker.py      ← 跨批次一致性检查（Phase 3.5）
+    ├── git_utils.py                ← Git 安全操作
+    └── process_guard.py            ← PID 锁、内存监控、后台启动
 ```
 
 ## 进度文件

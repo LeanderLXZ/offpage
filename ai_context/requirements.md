@@ -174,13 +174,18 @@ three-level JSON repair (L1 programmatic → L2 LLM 600s → L3 full re-run);
 completion gate blocks Phase 1 if any chunk missing.
 Analysis → user confirmation → extraction loop (per batch: git preflight →
 **1+N split extraction** [world call → N parallel character calls] →
-programmatic validation → semantic review → git commit or rollback+retry) →
+**programmatic post-processing** [memory_digest generation + stage_catalog
+upsert, 0 token] → **parallel review lanes** [world + each character:
+validate → review → fix independently] → **commit gate** [programmatic
+cross-consistency, 0 token] → git commit or full batch rollback+retry) →
 Phase 3.5 cross-batch consistency check → Phase 4 scene archive. Each call
 is a fresh agent; context is file-based. Input trimming: only the most recent
-stage_snapshot and memory_timeline are passed (not full history). Extraction
-timeout 3600s, review 600s. Targeted fix re-runs the original failing check
-layer. Commit clears feedback/error fields. Two-layer quality check
-(programmatic + semantic). Batch size max 15 chapters. Phase 4 is independent
+stage_snapshot and memory_timeline are passed (not full history).
+`baseline_merge.md`, `memory_digest.jsonl`, `stage_catalog.json` excluded
+from extraction input. Self-contained snapshot contract embedded in prompt.
+Extraction timeout 3600s, review 600s. Targeted fix re-runs the original
+failing check layer with narrowed input scope. Commit clears feedback/error
+fields. Batch size max 15 chapters. Phase 4 is independent
 (only needs Phase 1 batch plan): per-chapter parallel LLM calls for scene
 boundary annotation, programmatic validation only, output to
 `works/{work_id}/rag/scene_archive.jsonl`. CLI: `--start-phase 4`,

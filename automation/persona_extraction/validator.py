@@ -103,6 +103,45 @@ def validate_batch(
     return ValidationReport(passed=passed, issues=issues)
 
 
+def validate_lane(
+    project_root: Path,
+    work_id: str,
+    stage_id: str,
+    character_ids: list[str],
+    lane_type: str = "all",
+    lane_character_id: str | None = None,
+    schema_dir: Path | None = None,
+) -> ValidationReport:
+    """Run programmatic checks scoped to a single review lane.
+
+    Args:
+        lane_type: "world", "character", or "all" (full batch).
+        lane_character_id: Required when lane_type is "character".
+    """
+    if lane_type == "all":
+        return validate_batch(project_root, work_id, stage_id,
+                              character_ids, schema_dir)
+
+    issues: list[ValidationIssue] = []
+    schema_dir = schema_dir or (project_root / "schemas")
+    work_dir = project_root / "works" / work_id
+
+    if lane_type == "world":
+        issues.extend(_check_world(work_dir, stage_id, schema_dir))
+    elif lane_type == "character" and lane_character_id:
+        importance_map = _load_importance_map(project_root, work_id)
+        issues.extend(_check_character(
+            work_dir, lane_character_id, stage_id, schema_dir,
+            importance_map))
+        issues.extend(_check_baselines(
+            work_dir, lane_character_id, schema_dir))
+        issues.extend(_check_manifest(
+            work_dir, lane_character_id, schema_dir))
+
+    passed = not any(i.severity == "error" for i in issues)
+    return ValidationReport(passed=passed, issues=issues)
+
+
 def validate_baseline(
     project_root: Path,
     work_id: str,

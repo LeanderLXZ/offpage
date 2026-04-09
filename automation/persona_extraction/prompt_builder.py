@@ -366,14 +366,74 @@ def build_reviewer_prompt(
     progress: ExtractionProgress,
     batch: BatchEntry,
     programmatic_report: str,
+    *,
+    lane_type: str = "all",
+    lane_character_id: str | None = None,
 ) -> str:
-    """Build prompt for semantic review."""
-    template = _load_template("semantic_review.md")
+    """Build prompt for semantic review.
 
+    Args:
+        lane_type: "world", "character", or "all" (legacy).
+        lane_character_id: Required when lane_type is "character".
+    """
     work_id = progress.work_id
     work_dir = project_root / "works" / work_id
 
     prev_batch = _find_previous_committed_batch(progress, batch)
+
+    # --- Build explicit file list for the lane ---
+    review_files: list[str] = []
+
+    if lane_type in ("world", "all"):
+        review_files.append(
+            f"- `{work_dir / 'world' / 'stage_snapshots' / (batch.stage_id + '.json')}`")
+        if prev_batch:
+            prev_ws = (work_dir / "world" / "stage_snapshots"
+                       / f"{prev_batch.stage_id}.json")
+            if prev_ws.exists():
+                review_files.append(f"- `{prev_ws}` (前批对比)")
+
+    char_ids = ([lane_character_id] if lane_type == "character"
+                and lane_character_id
+                else progress.target_characters if lane_type == "all"
+                else [])
+    for char_id in char_ids:
+        char_dir = work_dir / "characters" / char_id / "canon"
+        review_files.append(
+            f"- `{char_dir / 'stage_snapshots' / (batch.stage_id + '.json')}`")
+        review_files.append(
+            f"- `{char_dir / 'memory_timeline' / (batch.stage_id + '.json')}`")
+        if prev_batch:
+            prev_cs = (char_dir / "stage_snapshots"
+                       / f"{prev_batch.stage_id}.json")
+            if prev_cs.exists():
+                review_files.append(f"- `{prev_cs}` (前批对比)")
+
+    # Character lanes also read the world snapshot for cross-consistency
+    if lane_type == "character":
+        ws_path = (work_dir / "world" / "stage_snapshots"
+                   / f"{batch.stage_id}.json")
+        if ws_path.exists():
+            review_files.append(
+                f"- `{ws_path}` (世界快照，交叉一致性参照)")
+
+    # Schema files
+    if lane_type in ("world", "all"):
+        review_files.append(
+            f"- `{project_root / 'schemas' / 'world_stage_snapshot.schema.json'}`")
+    if lane_type in ("character", "all"):
+        review_files.append(
+            f"- `{project_root / 'schemas' / 'stage_snapshot.schema.json'}`")
+        review_files.append(
+            f"- `{project_root / 'schemas' / 'memory_timeline_entry.schema.json'}`")
+
+    # Select appropriate template
+    if lane_type == "world":
+        template = _load_template("semantic_review_world.md")
+    elif lane_type == "character":
+        template = _load_template("semantic_review_character.md")
+    else:
+        template = _load_template("semantic_review.md")
 
     context = {
         "work_id": work_id,
@@ -381,10 +441,10 @@ def build_reviewer_prompt(
         "stage_id": batch.stage_id,
         "chapters": batch.chapters,
         "target_characters": ", ".join(progress.target_characters),
-        "work_dir": str(work_dir),
-        "schemas_dir": str(project_root / "schemas"),
+        "character_id": lane_character_id or "",
         "prev_stage_id": prev_batch.stage_id if prev_batch else "(无)",
         "programmatic_report": programmatic_report,
+        "review_files": "\n".join(review_files) if review_files else "(无)",
     }
 
     return _render_template(template, context)
@@ -399,22 +459,34 @@ def build_targeted_fix_prompt(
     progress: ExtractionProgress,
     batch: BatchEntry,
     findings: str,
+    *,
+    lane_type: str = "all",
+    lane_character_id: str | None = None,
 ) -> str:
-    """Build prompt for targeted fix of specific reviewer findings."""
+    """Build prompt for targeted fix of specific reviewer findings.
+
+    Args:
+        lane_type: "world", "character", or "all" (legacy).
+        lane_character_id: Required when lane_type is "character".
+    """
     template = _load_template("targeted_fix.md")
 
     work_id = progress.work_id
     work_dir = project_root / "works" / work_id
     source_dir = project_root / "sources" / "works" / work_id
 
-    # Collect affected output files (current batch's products)
+    # Collect affected output files — scoped to the lane
     affected: list[str] = []
-    # World snapshot
-    ws = work_dir / "world" / "stage_snapshots" / f"{batch.stage_id}.json"
-    if ws.exists():
-        affected.append(f"- `{ws.relative_to(project_root)}`")
-    # Character files
-    for char_id in progress.target_characters:
+    if lane_type in ("world", "all"):
+        ws = work_dir / "world" / "stage_snapshots" / f"{batch.stage_id}.json"
+        if ws.exists():
+            affected.append(f"- `{ws.relative_to(project_root)}`")
+
+    char_ids = ([lane_character_id] if lane_type == "character"
+                and lane_character_id
+                else progress.target_characters if lane_type == "all"
+                else [])
+    for char_id in char_ids:
         char_dir = work_dir / "characters" / char_id / "canon"
         cs = char_dir / "stage_snapshots" / f"{batch.stage_id}.json"
         if cs.exists():
@@ -422,9 +494,6 @@ def build_targeted_fix_prompt(
         mt = char_dir / "memory_timeline" / f"{batch.stage_id}.json"
         if mt.exists():
             affected.append(f"- `{mt.relative_to(project_root)}`")
-        md = char_dir / "memory_digest.jsonl"
-        if md.exists():
-            affected.append(f"- `{md.relative_to(project_root)}`")
 
     # Evidence: source chapters for this batch
     evidence: list[str] = []
@@ -434,12 +503,13 @@ def build_targeted_fix_prompt(
         if ch_file.exists():
             evidence.append(f"- `{ch_file.relative_to(project_root)}`")
 
-    # Also include chapter summaries as lighter evidence
+    # Only include chapter summary chunks covering this batch's range
     summaries_dir = (work_dir / "analysis" / "incremental"
                      / "chapter_summaries")
     if summaries_dir.exists():
         for p in sorted(summaries_dir.glob("chunk_*.json")):
-            evidence.append(f"- `{p.relative_to(project_root)}`")
+            if _chunk_covers_range(p, start, end):
+                evidence.append(f"- `{p.relative_to(project_root)}`")
 
     context = {
         "work_id": work_id,
@@ -497,10 +567,7 @@ def _build_world_read_list(
         if ws.exists():
             files.append(str(ws.relative_to(project_root)))
 
-    # World stage_catalog (to append)
-    catalog = work_dir / "world" / "stage_catalog.json"
-    if catalog.exists():
-        files.append(str(catalog.relative_to(project_root)))
+    # NOTE: world stage_catalog.json removed — now programmatically maintained.
 
     # Source chapters for this batch
     start, end = _parse_chapter_range(batch.chapters)
@@ -526,14 +593,15 @@ def _build_character_read_list(
     source_dir = project_root / "sources" / "works" / work_id
     char_dir = work_dir / "characters" / character_id / "canon"
 
-    # Schemas (character only)
+    # Schemas (character extraction only — digest/catalog now programmatic)
     for schema in ("stage_snapshot.schema.json",
-                   "memory_timeline_entry.schema.json",
-                   "memory_digest_entry.schema.json"):
+                   "memory_timeline_entry.schema.json"):
         files.append(f"schemas/{schema}")
 
-    # Architecture reference
-    files.append("simulation/contracts/baseline_merge.md")
+    # NOTE: baseline_merge.md removed — self-contained snapshot contract
+    # is now embedded in the extraction prompt template.
+    # NOTE: memory_digest.jsonl removed — now programmatically generated.
+    # NOTE: stage_catalog.json removed — now programmatically maintained.
 
     # World snapshot just generated by Phase A
     if world_snapshot_path:
@@ -563,18 +631,6 @@ def _build_character_read_list(
         mt = char_dir / "memory_timeline" / f"{prev_batch.stage_id}.json"
         if mt.exists():
             files.append(str(mt.relative_to(project_root)))
-
-    # memory_digest.jsonl (append target, need to see existing)
-    if char_dir.exists():
-        md = char_dir / "memory_digest.jsonl"
-        if md.exists():
-            files.append(str(md.relative_to(project_root)))
-
-    # stage_catalog (to append)
-    if char_dir.exists():
-        sc = char_dir / "stage_catalog.json"
-        if sc.exists():
-            files.append(str(sc.relative_to(project_root)))
 
     # Source chapters for this batch (after baselines so agent knows aliases)
     start, end = _parse_chapter_range(batch.chapters)
@@ -621,6 +677,26 @@ def _parse_chapter_range(chapters: str) -> tuple[int, int]:
     if len(parts) == 2:
         return int(parts[0]), int(parts[1])
     return int(parts[0]), int(parts[0])
+
+
+def _chunk_covers_range(chunk_path: Path, batch_start: int,
+                        batch_end: int) -> bool:
+    """Check if a chunk summary file covers any chapters in the batch range.
+
+    Chunk files are named like chunk_0001_0025.json (start_end chapters).
+    """
+    stem = chunk_path.stem  # e.g. "chunk_0001_0025"
+    parts = stem.split("_")
+    if len(parts) >= 3:
+        try:
+            chunk_start = int(parts[1])
+            chunk_end = int(parts[2])
+            # Overlap check
+            return chunk_start <= batch_end and chunk_end >= batch_start
+        except ValueError:
+            pass
+    # If we can't parse, include it as fallback
+    return True
 
 
 # ---------------------------------------------------------------------------

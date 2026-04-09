@@ -216,11 +216,25 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   (`world/foundation/foundation.json`) and character baselines
   (`identity.json`, `manifest.json`) for each target character. These are
   drafts — any subsequent batch may correct them.
-- **Phase 3 — Coordinated batch extraction**: per-batch loop (extract →
-  validate → review → commit). Produces world stage_snapshot, character
-  stage_snapshot, and memory_timeline. Batch 1 additionally creates
-  `voice_rules.json`, `behavior_rules.json`, `boundaries.json`,
-  `failure_modes.json`. All batches may correct any existing baseline.
+- **Phase 3 — Coordinated batch extraction**: per-batch loop:
+  1. World extraction (1 LLM call)
+  2. Character extraction (N parallel LLM calls)
+  3. Programmatic post-processing: L1 JSON repair + generate
+     `memory_digest.jsonl` from `memory_timeline` + upsert
+     `stage_catalog.json` from snapshot metadata (0 token)
+  4. Parallel review lanes: world + each character independently runs
+     validate → semantic review → targeted fix. Lanes run in parallel
+     via ThreadPoolExecutor.
+  5. Commit gate (提交门控): programmatic cross-consistency check
+     (stage_id alignment, world-character consistency). All lanes must
+     pass; any failure → full batch rollback.
+  6. Git commit.
+  Batch 1 additionally creates `voice_rules.json`, `behavior_rules.json`,
+  `boundaries.json`, `failure_modes.json`. All batches may correct any
+  existing baseline.
+  Extraction prompts do NOT read `baseline_merge.md`, `memory_digest.jsonl`,
+  or `stage_catalog.json` — self-contained snapshot contract is embedded in
+  the prompt; digest and catalog are programmatically maintained.
 - **Phase 3.5 — Cross-batch consistency check**: after all Phase 3 batches
   commit, run 8 programmatic checks (zero tokens): alias consistency, field
   completeness, relationship continuity, source_type distribution,
@@ -246,8 +260,9 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   output, schemas, baseline files)
 - Three-level JSON repair: programmatic regex (L1, zero tokens) → LLM
   repair on broken JSON only (L2, minimal tokens) → full re-run (L3)
-- Two-layer quality check: programmatic validation (free, deterministic) +
-  semantic review (independent LLM agent); Phase 4 uses programmatic only
+- Three-layer quality check per batch: programmatic validation (free) +
+  per-lane semantic review (independent LLM agent) + commit gate
+  (programmatic cross-consistency); Phase 4 uses programmatic only
 - Extraction runs on a dedicated git branch; each passing batch is committed
 - Rollback on failure = `git reset` to last committed batch
 - After all batches complete, squash-merge to main (one clean commit);

@@ -86,9 +86,8 @@ required 字段非空。验证失败阻断 Phase 3。
 
 #### 6.1 世界信息提取（Phase A，1 次调用）
 
-每批产出或更新：
+每批产出或更新（LLM 产出）：
 
-- `world/stage_catalog.json` — 追加新阶段条目
 - `world/stage_snapshots/{stage_id}.json` — 当前阶段的世界快照
 - `world/foundation/` — 如有修正
 - `world/social/stage_relationships/{stage_id}.json` — 动态关系
@@ -108,17 +107,20 @@ required 字段非空。验证失败阻断 Phase 3。
 - `characters/{character_id}/canon/boundaries.json`
 - `characters/{character_id}/canon/failure_modes.json`
 
-**阶段文件**（每批产出）：
+**阶段文件**（LLM 产出）：
 
-- `characters/{character_id}/canon/stage_catalog.json` — 追加新阶段条目
 - `characters/{character_id}/canon/stage_snapshots/{stage_id}.json` —
   **自包含快照**，包含该阶段的完整 voice_state、behavior_state、
   boundary_state、relationships、personality、mood、knowledge
 - `characters/{character_id}/canon/memory_timeline/{stage_id}.json` —
   该阶段的角色记忆条目
+
+**程序化维护**（0 token，提取后由 `post_processing.py` 自动生成）：
+
 - `characters/{character_id}/canon/memory_digest.jsonl` —
-  从本阶段 memory_timeline 自动追加压缩摘要条目（遵循
-  memory_digest_entry.schema.json）
+  从 memory_timeline 自动提取压缩摘要（遵循 memory_digest_entry.schema.json）
+- `characters/{character_id}/canon/stage_catalog.json` — 从 snapshot 元数据自动维护
+- `world/stage_catalog.json` — 从世界 snapshot 元数据自动维护
 
 **自包含快照的生成规则**：
 
@@ -258,9 +260,13 @@ orchestrator (Python)
     │       ├── git preflight
     │       ├── claude -p (世界提取, 3600s)
     │       ├── claude -p ×N (角色提取并行, 3600s)
-    │       ├── 程序化校验 (Python/jsonschema)
-    │       ├── claude -p (语义审校 prompt)
-    │       ├── [局部问题] → claude -p (定点修复) → 重跑原检查层 → commit
+    │       ├── 程序化后处理 (digest/catalog, 0 token)
+    │       ├── 并行审校通道 (world + 各角色独立):
+    │       │       ├── 程序化校验 (Python/jsonschema)
+    │       │       ├── claude -p (语义审校, per-lane)
+    │       │       └── [局部问题] → claude -p (定点修复) → 重跑检查
+    │       ├── 提交门控 (程序化跨通道一致性, 0 token)
+    │       ├── [全通过] → git commit
     │       └── [系统性问题] → rollback + 全量重试
     │
     ├── 跨批次一致性检查 (Phase 3.5):
@@ -275,8 +281,9 @@ orchestrator (Python)
 
 - 每个 batch 拆分为 1+N 次独立 `claude -p` 调用（世界 + N 角色），不共享 session 内存
 - 批次间和调用间上下文通过文件系统传递；只传最近一个 snapshot/memory（不传全部历史）
-- 两层质量检查：程序化校验（免费）+ 语义审校（LLM）
-- 失败分级：局部问题（≤5 个字段级错误）→ 定点修复（~5% token 成本）；
+- 三层质量检查：程序化校验（免费）+ 每通道语义审校（LLM，world + 各角色独立并行）+
+  提交门控（程序化跨通道一致性，0 token）
+- 失败分级：局部问题（≤5 个字段级错误）→ 通道内定点修复（~5% token 成本）；
   系统性问题（文件缺失/结构错误/理解偏差）→ 全量回滚重试
 - 提取在独立 git 分支进行，每 batch 单独 commit（精确回滚）；全部完成后
   squash merge 回 main（干净历史），extraction 分支可删除
