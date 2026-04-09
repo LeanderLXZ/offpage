@@ -63,6 +63,11 @@ Use `prompts/review/数据包审校.md` for full package review.
 - Keep updating incrementally, do not restart from scratch
 - Do not accidentally rewrite Chinese canon into English summaries
 - Do not paste large raw text into logs, docs, or answers
+- Do not put specific book names, character names, chapter names, or plot
+  details from any test work into docs, requirements, README, prompt templates,
+  schemas, or ai_context — even in examples, use generic placeholders
+  (e.g. "角色A", "<work_id>", "阶段01_主角初登场"). Only `works/`, `sources/`,
+  and `docs/logs/` (historical records) may contain work-specific references
 
 ## After Each Milestone
 
