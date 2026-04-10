@@ -355,6 +355,35 @@ class ExtractionOrchestrator:
 
         return idx, True, ""
 
+    def _extraction_output_exists(
+        self,
+        progress: ExtractionProgress,
+        batch: BatchEntry,
+    ) -> bool:
+        """Check if extraction output already exists on disk for a batch.
+
+        Returns True if world stage_snapshot AND all target character
+        stage_snapshots exist, indicating the extraction step can be
+        skipped (smart resume).
+        """
+        work_dir = self.project_root / "works" / progress.work_id
+        stage_id = batch.stage_id
+
+        # World snapshot must exist
+        world_ss = (work_dir / "world" / "stage_snapshots"
+                    / f"{stage_id}.json")
+        if not world_ss.exists():
+            return False
+
+        # All target character snapshots must exist
+        for char_id in progress.target_characters:
+            char_ss = (work_dir / "characters" / char_id / "canon"
+                       / "stage_snapshots" / f"{stage_id}.json")
+            if not char_ss.exists():
+                return False
+
+        return True
+
     def run_summarization(self) -> Path:
         """Summarize all chapters in chunks, return summaries directory."""
         print("\n" + "=" * 60)
@@ -902,85 +931,99 @@ class ExtractionOrchestrator:
                 return
             tracker.print_step_done(1, 7, "Git preflight")
 
-            # --- Step 2: World extraction (Phase A) ---
-            tracker.start_step()
-            tracker.print_step(2, 7, "World extraction")
-            batch.transition(BatchState.EXTRACTING)
-            progress.save(self.project_root)
-
-            world_prompt = build_world_extraction_prompt(
-                self.project_root, progress, batch,
-                reviewer_feedback=batch.last_reviewer_feedback)
-
-            world_result = run_with_retry(self.backend, world_prompt,
-                                          timeout_seconds=3600)
-
-            if not world_result.success:
-                print(f"    [ERROR] World extraction failed: "
-                      f"{world_result.error}")
-                print("    Rolling back uncommitted changes...")
-                rollback_to_head(self.project_root)
-                batch.transition(BatchState.ERROR)
-                batch.error_message = (
-                    f"world: {world_result.error or 'unknown'}")
+            # --- Smart skip: if extraction output already on disk ---
+            if self._extraction_output_exists(progress, batch):
+                print(f"  [SKIP] Extraction output already on disk for "
+                      f"{batch.batch_id}, jumping to post-processing")
+                batch.transition(BatchState.EXTRACTED)
                 progress.save(self.project_root)
-                return
-            tracker.print_step_done(2, 7, "World extraction")
+            else:
+                # --- Step 2: World extraction (Phase A) ---
+                tracker.start_step()
+                tracker.print_step(2, 7, "World extraction")
+                batch.transition(BatchState.EXTRACTING)
+                progress.save(self.project_root)
 
-            # --- Step 3: Character extraction (Phase B, parallel) ---
-            tracker.start_step()
-            n_chars = len(progress.target_characters)
-            tracker.print_step(3, 7,
-                               f"Character extraction ({n_chars} parallel)")
-
-            # Determine world snapshot path for character prompts
-            work_dir = self.project_root / "works" / progress.work_id
-            ws_path = (work_dir / "world" / "stage_snapshots"
-                       / f"{batch.stage_id}.json")
-            world_snapshot_rel = ""
-            if ws_path.exists():
-                world_snapshot_rel = str(
-                    ws_path.relative_to(self.project_root))
-
-            char_errors: list[str] = []
-
-            def _extract_character(char_id: str) -> tuple[str, LLMResult]:
-                char_prompt = build_character_extraction_prompt(
-                    self.project_root, progress, batch, char_id,
-                    world_snapshot_path=world_snapshot_rel,
+                world_prompt = build_world_extraction_prompt(
+                    self.project_root, progress, batch,
                     reviewer_feedback=batch.last_reviewer_feedback)
-                result = run_with_retry(self.backend, char_prompt,
-                                        timeout_seconds=3600)
-                return char_id, result
 
-            with ThreadPoolExecutor(
-                    max_workers=n_chars) as executor:
-                futures = {
-                    executor.submit(_extract_character, c): c
-                    for c in progress.target_characters
-                }
-                for future in as_completed(futures):
-                    char_id, result = future.result()
-                    if not result.success:
-                        char_errors.append(
-                            f"{char_id}: {result.error or 'unknown'}")
-                        print(f"    [ERROR] {char_id} extraction failed: "
-                              f"{result.error}")
+                world_result = run_with_retry(self.backend, world_prompt,
+                                              timeout_seconds=3600)
 
-            if char_errors:
-                print("    Rolling back uncommitted changes...")
-                rollback_to_head(self.project_root)
-                batch.transition(BatchState.ERROR)
-                batch.error_message = "; ".join(char_errors)
+                if not world_result.success:
+                    print(f"    [ERROR] World extraction failed: "
+                          f"{world_result.error}")
+                    print("    Rolling back uncommitted changes...")
+                    rollback_to_head(self.project_root)
+                    batch.transition(BatchState.ERROR)
+                    batch.error_message = (
+                        f"world: {world_result.error or 'unknown'}")
+                    progress.save(self.project_root)
+                    return
+                tracker.print_step_done(2, 7, "World extraction")
+
+                # --- Step 3: Character extraction (Phase B, parallel) ---
+                tracker.start_step()
+                n_chars = len(progress.target_characters)
+                tracker.print_step(3, 7,
+                                   f"Character extraction "
+                                   f"({n_chars} parallel)")
+
+                # Determine world snapshot path for character prompts
+                work_dir = (self.project_root / "works"
+                            / progress.work_id)
+                ws_path = (work_dir / "world" / "stage_snapshots"
+                           / f"{batch.stage_id}.json")
+                world_snapshot_rel = ""
+                if ws_path.exists():
+                    world_snapshot_rel = str(
+                        ws_path.relative_to(self.project_root))
+
+                char_errors: list[str] = []
+
+                def _extract_character(
+                    char_id: str,
+                ) -> tuple[str, LLMResult]:
+                    char_prompt = build_character_extraction_prompt(
+                        self.project_root, progress, batch, char_id,
+                        world_snapshot_path=world_snapshot_rel,
+                        reviewer_feedback=batch.last_reviewer_feedback)
+                    result = run_with_retry(
+                        self.backend, char_prompt,
+                        timeout_seconds=3600)
+                    return char_id, result
+
+                with ThreadPoolExecutor(
+                        max_workers=n_chars) as executor:
+                    futures = {
+                        executor.submit(_extract_character, c): c
+                        for c in progress.target_characters
+                    }
+                    for future in as_completed(futures):
+                        char_id, result = future.result()
+                        if not result.success:
+                            char_errors.append(
+                                f"{char_id}: "
+                                f"{result.error or 'unknown'}")
+                            print(f"    [ERROR] {char_id} extraction "
+                                  f"failed: {result.error}")
+
+                if char_errors:
+                    print("    Rolling back uncommitted changes...")
+                    rollback_to_head(self.project_root)
+                    batch.transition(BatchState.ERROR)
+                    batch.error_message = "; ".join(char_errors)
+                    progress.save(self.project_root)
+                    return
+
+                tracker.record_step(ProgressTracker.STEP_EXTRACTION)
+                tracker.print_step_done(3, 7,
+                                        f"Character extraction "
+                                        f"({n_chars})")
+
+                batch.transition(BatchState.EXTRACTED)
                 progress.save(self.project_root)
-                return
-
-            tracker.record_step(ProgressTracker.STEP_EXTRACTION)
-            tracker.print_step_done(3, 7,
-                                    f"Character extraction ({n_chars})")
-
-            batch.transition(BatchState.EXTRACTED)
-            progress.save(self.project_root)
 
         # --- Step 4: Programmatic post-processing ---
         if batch.state in (BatchState.EXTRACTED, BatchState.POST_PROCESSING):

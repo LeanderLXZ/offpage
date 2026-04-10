@@ -28,9 +28,9 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 每个 batch 的流程：
 
 1. Git preflight check（工作区干净、分支正确）
-2. 构建 prompt（含文件清单、前批参照、schema 引用）
-3. 运行提取 agent（`claude -p`，无人值守）
-4. **程序化后处理**：L1 JSON 修复 + 生成 memory_digest + 更新 stage_catalog
+2. **智能跳过**：若产物已在磁盘（world + 各角色 snapshot），直接跳到 4
+3. 构建 prompt（含文件清单、前批参照、schema 引用）→ 运行提取 agent
+4. **程序化后处理**：L1 JSON 修复 + 生成 memory_digest + 更新 stage_catalog（世界 catalog 累积 key_events）
 5. **并行审校通道**（world + 各角色各一条通道）：
    - 每条通道独立：程序化校验 → 语义审校 → 定点修复（如需）
    - 通道间并行运行，互不阻塞

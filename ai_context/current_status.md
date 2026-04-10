@@ -54,7 +54,9 @@ No runtime implementation code yet.
   post_processing → reviewing → passed → committed)
 - Programmatic post-processing (`post_processing.py`): after extraction,
   automatically generates `memory_digest.jsonl` from `memory_timeline` and
-  maintains `stage_catalog.json` from snapshot metadata (0 token, idempotent)
+  maintains `stage_catalog.json` from snapshot metadata (world catalog
+  additionally accumulates `key_events` per stage for event timeline)
+  (0 token, idempotent)
 - Parallel review lanes (`review_lanes.py`): world + each character gets
   an independent validate → review → fix pipeline, running in parallel.
   Commit gate (提交门控) performs programmatic cross-consistency check
@@ -112,6 +114,8 @@ No runtime implementation code yet.
 - Phase 2.5 exit validation: `validate_baseline()` checks schema
   compliance and required field non-null for identity/manifest/foundation
   before allowing Phase 3 to start
+- Smart resume: PENDING batch with extraction output already on disk
+  skips LLM extraction, jumps to post-processing (saves tokens)
 - REVIEWING state recovery: verifies extraction output exists on disk
   before continuing review; resets to PENDING if files missing
 - Process guard: PID lockfile (prevents duplicate runs; Phase 3 uses

@@ -223,6 +223,28 @@ that a new AI should know beyond what the architecture docs already say.
     and regenerated. This guards against file loss from any cause
     (rollback, manual cleanup, filesystem errors).
 
+## World Snapshot and Catalog
+
+40f. World `stage_snapshot` only records **current stage** events
+    (`stage_events` for detail, `key_events` for 1-sentence summaries).
+    No cumulative history — previous design had `historical_events`
+    growing unbounded. `evidence_refs` simplified to chapter number list
+    (e.g. `["0001", "0002"]`), no detailed descriptions; per-event
+    `[NNNN]` inline tags provide fine-grained sourcing.
+
+40g. World `stage_catalog` accumulates `key_events` per stage entry.
+    Runtime reads all stages' `key_events` in order to build the
+    complete world event timeline — no need to load every stage snapshot.
+    Programmatic: `post_processing.py` copies `key_events` from snapshot
+    to catalog (0 token).
+
+40h. Smart resume: if a batch is PENDING but extraction output already
+    exists on disk (world + all character stage_snapshots), the
+    orchestrator skips LLM extraction and jumps directly to
+    post-processing. Saves tokens when a batch errored after producing
+    output (e.g. crash during post-processing or review). Detection:
+    `_extraction_output_exists()` in orchestrator.
+
 ## Repository
 
 41. Keep the repo lightweight. Do not commit novels, databases, indexes, large
