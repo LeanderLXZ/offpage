@@ -41,7 +41,8 @@ class BatchState(str, Enum):
 
 # Valid transitions
 _TRANSITIONS: dict[BatchState, set[BatchState]] = {
-    BatchState.PENDING:          {BatchState.EXTRACTING, BatchState.ERROR},
+    BatchState.PENDING:          {BatchState.EXTRACTING, BatchState.EXTRACTED,
+                                  BatchState.ERROR},
     BatchState.EXTRACTING:       {BatchState.EXTRACTED, BatchState.ERROR},
     BatchState.EXTRACTED:        {BatchState.POST_PROCESSING,
                                   BatchState.REVIEWING},  # REVIEWING kept for compat
@@ -52,7 +53,8 @@ _TRANSITIONS: dict[BatchState, set[BatchState]] = {
     BatchState.PASSED:           {BatchState.COMMITTED},
     BatchState.COMMITTED:        set(),  # terminal
     BatchState.FAILED:           {BatchState.RETRYING},
-    BatchState.RETRYING:         {BatchState.EXTRACTING, BatchState.ERROR},
+    BatchState.RETRYING:         {BatchState.EXTRACTING, BatchState.EXTRACTED,
+                                  BatchState.ERROR},
     BatchState.ERROR:            {BatchState.EXTRACTING, BatchState.PENDING},
 }
 
