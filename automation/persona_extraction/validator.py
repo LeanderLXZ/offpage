@@ -231,7 +231,7 @@ def validate_baseline(
             if not fpath.exists():
                 issues.append(ValidationIssue(
                     "warning", str(fpath),
-                    f"{fname} not produced (batch 1 will create)"))
+                    f"{fname} not produced (Phase 2.5 should create)"))
             else:
                 try_repair_json_file(fpath)
                 data = _load_json(fpath)
