@@ -26,9 +26,10 @@
 
 如果前一批有输出（`{prev_stage_id}`），对比：
 
-1. historical_events 条目的粒度和详细度是否相近
-2. current_world_state 描述风格是否一致
-3. evidence_refs 引用密度是否相近
+1. stage_events 条目的粒度和详细度是否相近
+2. key_events 是否为 1 句话级别摘要
+3. current_world_state 描述风格是否一致
+4. evidence_refs（章节号列表）是否完整
 4. 如果任何维度出现明显退化（比前批减少 50% 以上），标记为 FAIL
 
 ### B. 数据边界正确性
@@ -40,7 +41,7 @@
 
 7. snapshot_summary 是否存在且有意义？
 8. current_world_state 是否覆盖本批重大变化？
-9. historical_events 是否完整记录？
+9. stage_events 是否完整记录本阶段事件？key_events 是否覆盖重要事件？
 
 ### D. 时间性
 
@@ -58,9 +59,10 @@ FINDINGS:
 2. ...
 
 STYLE_CONSISTENCY:
-- historical_events: OK/退化
+- stage_events: OK/退化
+- key_events: OK/退化
 - current_world_state: OK/退化
-- evidence_refs density: OK/退化
+- evidence_refs: OK/退化
 
 SUMMARY:
 一句话总结。

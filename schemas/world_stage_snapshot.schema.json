@@ -51,9 +51,16 @@
         "type": "string"
       }
     },
-    "historical_events": {
+    "stage_events": {
       "type": "array",
-      "description": "截至当前阶段的累积历史事件。",
+      "description": "本阶段发生的事件（详细，仅本阶段，不累积历史）。每条标注章节引用如 [NNNN]。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "key_events": {
+      "type": "array",
+      "description": "本阶段重要事件摘要（1 句话级别），供 stage_catalog 累积使用。",
       "items": {
         "type": "string"
       }
@@ -101,8 +108,10 @@
     },
     "evidence_refs": {
       "type": "array",
+      "description": "本阶段引用的章节号列表，如 [\"0001\", \"0002\"]。",
       "items": {
-        "type": "string"
+        "type": "string",
+        "pattern": "^[0-9]{4}$"
       }
     }
   }
