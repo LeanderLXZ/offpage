@@ -24,7 +24,7 @@
     },
     "stages": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -70,8 +70,12 @@
           "current_world_summary": {
             "type": "string"
           },
-          "history_summary": {
-            "type": "string"
+          "key_events": {
+            "type": "array",
+            "description": "本阶段重要事件摘要（从 world stage_snapshot 的 key_events 复制）。runtime 按 order 顺序读取所有 stage 的 key_events 即拼出完整世界事件时间线。",
+            "items": {
+              "type": "string"
+            }
           },
           "snapshot_path": {
             "type": "string"

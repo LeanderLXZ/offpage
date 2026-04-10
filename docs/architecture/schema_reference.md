@@ -15,9 +15,9 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 ### world_stage_catalog.schema.json
 
-**用途**：世界阶段目录，列出作品的所有可选阶段。
+**用途**：世界阶段目录，列出作品的所有可选阶段。含累积 `key_events` 时间线。
 **位置**：`works/{work_id}/world/stage_catalog.json`
-**关键字段**：stages[].stage_id, stages[].title, stages[].summary
+**关键字段**：stages[].stage_id, stages[].title, stages[].short_summary, stages[].key_events
 
 ---
 
@@ -28,12 +28,13 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **关键字段**：
 - `snapshot_summary` — 阶段的世界状态概述
 - `foundation_corrections` — 对基础设定的修正
-- `historical_events` — 累积历史事件
+- `stage_events` — 本阶段事件（详细，仅本阶段）
+- `key_events` — 本阶段重要事件摘要（1 句话级别，供 stage_catalog 累积）
 - `current_world_state` — 当前阶段的世界总体状态
 - `relationship_shifts` — 关注的人物关系转变
 - `character_status_changes` — 人物状态变化（生死、等级等）
 - `location_changes`, `map_changes` — 地理变化
-- `evidence_refs` — 证据引用
+- `evidence_refs` — 章节号列表
 
 ---
 

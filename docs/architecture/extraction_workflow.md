@@ -125,7 +125,7 @@ required 字段非空。验证失败阻断 Phase 3。
 - `characters/{character_id}/canon/memory_digest.jsonl` —
   从 memory_timeline 自动提取压缩摘要（遵循 memory_digest_entry.schema.json）
 - `characters/{character_id}/canon/stage_catalog.json` — 从 snapshot 元数据自动维护
-- `world/stage_catalog.json` — 从世界 snapshot 元数据自动维护
+- `world/stage_catalog.json` — 从世界 snapshot 元数据自动维护（含 key_events 累积时间线）
 
 **自包含快照的生成规则**：
 
