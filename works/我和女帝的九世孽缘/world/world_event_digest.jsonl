@@ -3,3 +3,7 @@
 {"event_id": "WE-S01-003", "stage_id": "阶段01_南林初遇", "event_summary": "天苍大陆大帝格局变化：从三帝并立（第八世末期）变为仅存一位隐世大帝", "time_in_story": "王枫第九世复活，距第八世大帝之战已过万年以上"}
 {"event_id": "WE-S01-004", "stage_id": "阶段01_南林初遇", "event_summary": "柳村饥荒危机：狩猎队集体失踪，村民饿殍遍野", "time_in_story": "王枫第九世复活，距第八世大帝之战已过万年以上"}
 {"event_id": "WE-S01-005", "stage_id": "阶段01_南林初遇", "event_summary": "王枫猎兽救村并为恶鬼缠身的猎人张四成功驱邪", "time_in_story": "王枫第九世复活，距第八世大帝之战已过万年以上", "involved_characters": ["王枫"]}
+{"event_id": "WE-S02-001", "stage_id": "阶段02_离开南林", "event_summary": "柳村狩猎队六人从钻洞鼠地道中获救，柳村饥荒与人员危机暂时解除", "time_in_story": "王枫第九世复活后约十余日，南林阶段末期"}
+{"event_id": "WE-S02-002", "stage_id": "阶段02_离开南林", "event_summary": "骨马骷髅将（聚灵八层）首次突破柳树结界攻入柳村，被联手击杀", "time_in_story": "王枫第九世复活后约十余日，南林阶段末期"}
+{"event_id": "WE-S02-003", "stage_id": "阶段02_离开南林", "event_summary": "南林被发现是一片被悬崖围起的低地盆地，邪祟仅限于崖下活动，疑为诅咒之地", "time_in_story": "王枫第九世复活后约十余日，南林阶段末期"}
+{"event_id": "WE-S02-004", "stage_id": "阶段02_离开南林", "event_summary": "王枫与姜寒汐先后离开南林，结束南林暂居阶段", "time_in_story": "王枫第九世复活后约十余日，南林阶段末期", "involved_characters": ["姜寒汐", "王枫"]}
