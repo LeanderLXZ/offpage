@@ -1,6 +1,6 @@
 # 自动化提取编排器
 
-用脚本驱动 Claude Code CLI（或 Codex CLI）自动完成多批次的 1+N 分层提取（世界 → 角色并行）。
+用脚本驱动 Claude Code CLI（或 Codex CLI）自动完成多批次的 1+N 并行提取（世界 + 角色全并行）。
 
 ## 架构
 
@@ -28,8 +28,8 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 每个 batch 的流程：
 
 1. Git preflight check（工作区干净、分支正确）
-2. **智能跳过**：若产物已在磁盘（world + 各角色 snapshot），直接跳到 4
-3. 构建 prompt（含文件清单、前批参照、schema 引用）→ 运行提取 agent
+2. **智能跳过**：若产物已在磁盘（world + 各角色 snapshot），直接跳到 3
+3. 构建 prompt → 运行 1+N 提取 agent（世界 + 各角色全并行，无先后依赖）
 4. **程序化后处理**：L1 JSON 修复 + 生成 memory_digest + 生成 world_event_digest + 更新 stage_catalog
 5. **并行审校通道**（world + 各角色各一条通道）：
    - 每条通道独立：程序化校验 → 语义审校 → 定点修复（如需）
@@ -155,8 +155,8 @@ automation/
 ├── README.md
 ├── prompt_templates/               ← 提取和审校的 prompt 模板
 │   ├── analysis.md
-│   ├── world_extraction.md         ← 世界层提取 (Phase A)
-│   ├── character_extraction.md     ← 角色层提取 (Phase B, 并行)
+│   ├── world_extraction.md         ← 世界层提取（与角色并行）
+│   ├── character_extraction.md     ← 角色层提取（与世界并行）
 │   ├── semantic_review_world.md    ← 世界层语义审校（per-lane）
 │   ├── semantic_review_character.md ← 角色层语义审校（per-lane）
 │   ├── semantic_review.md          ← 统一审校（legacy/兜底）

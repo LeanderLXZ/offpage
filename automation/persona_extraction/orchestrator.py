@@ -3,14 +3,13 @@
 Flow:
   1. Analysis phase (LLM)  → batch plan + candidate characters
   2. User confirmation      → select characters, confirm batch plan, set range
-  3. Extraction loop        → for each batch (1+N split):
+  3. Extraction loop        → for each batch (1+N parallel):
        a. Git preflight
-       b. World extraction (Phase A, single LLM call)
-       c. Character extraction (Phase B, N parallel LLM calls)
-       d. Programmatic post-processing (memory_digest + stage_catalog)
-       e. Parallel review lanes (world + each character: V+R+F)
-       f. Commit gate (programmatic cross-consistency)
-       g. Git commit or rollback + retry
+       b. World + character extraction (1+N LLM calls, all parallel)
+       c. Programmatic post-processing (memory_digest + stage_catalog)
+       d. Parallel review lanes (world + each character: V+R+F)
+       e. Commit gate (programmatic cross-consistency)
+       f. Git commit or rollback + retry
   3.5 Cross-batch consistency check (programmatic, zero tokens)
   4. Scene archive (per-chapter parallel, programmatic validation only)
 """
@@ -1047,7 +1046,7 @@ class ExtractionOrchestrator:
         if batch.state in (BatchState.RETRYING, BatchState.PENDING):
             # --- Step 1: Git preflight ---
             tracker.start_step()
-            tracker.print_step(1, 7, "Git preflight")
+            tracker.print_step(1, 6, "Git preflight")
             problems = preflight_check(
                 self.project_root, pipeline.extraction_branch or None,
                 ignore_patterns=["extraction_progress.json",
@@ -1060,7 +1059,7 @@ class ExtractionOrchestrator:
                 batch.error_message = "; ".join(problems)
                 phase3.save(self.project_root)
                 return
-            tracker.print_step_done(1, 7, "Git preflight")
+            tracker.print_step_done(1, 6, "Git preflight")
 
             # --- Smart skip: if extraction output already on disk ---
             if self._extraction_output_exists(
@@ -1070,50 +1069,25 @@ class ExtractionOrchestrator:
                 batch.transition(BatchState.EXTRACTED)
                 phase3.save(self.project_root)
             else:
-                # --- Step 2: World extraction (Phase A) ---
+                # --- Step 2: World + Character extraction (1+N parallel) ---
                 tracker.start_step()
-                tracker.print_step(2, 7, "World extraction")
+                n_chars = len(pipeline.target_characters)
+                tracker.print_step(2, 6,
+                                   f"Extraction (1 world + "
+                                   f"{n_chars} characters parallel)")
                 batch.transition(BatchState.EXTRACTING)
                 phase3.save(self.project_root)
 
-                world_prompt = build_world_extraction_prompt(
-                    self.project_root, pipeline, batch,
-                    batches=phase3.batches,
-                    reviewer_feedback=batch.last_reviewer_feedback)
+                extraction_errors: list[str] = []
 
-                world_result = run_with_retry(self.backend, world_prompt,
-                                              timeout_seconds=3600)
-
-                if not world_result.success:
-                    print(f"    [ERROR] World extraction failed: "
-                          f"{world_result.error}")
-                    print("    Rolling back uncommitted changes...")
-                    rollback_to_head(self.project_root)
-                    batch.transition(BatchState.ERROR)
-                    batch.error_message = (
-                        f"world: {world_result.error or 'unknown'}")
-                    phase3.save(self.project_root)
-                    return
-                tracker.print_step_done(2, 7, "World extraction")
-
-                # --- Step 3: Character extraction (Phase B, parallel) ---
-                tracker.start_step()
-                n_chars = len(pipeline.target_characters)
-                tracker.print_step(3, 7,
-                                   f"Character extraction "
-                                   f"({n_chars} parallel)")
-
-                # Determine world snapshot path for character prompts
-                work_dir = (self.project_root / "works"
-                            / pipeline.work_id)
-                ws_path = (work_dir / "world" / "stage_snapshots"
-                           / f"{batch.stage_id}.json")
-                world_snapshot_rel = ""
-                if ws_path.exists():
-                    world_snapshot_rel = str(
-                        ws_path.relative_to(self.project_root))
-
-                char_errors: list[str] = []
+                def _extract_world() -> tuple[str, LLMResult]:
+                    prompt = build_world_extraction_prompt(
+                        self.project_root, pipeline, batch,
+                        batches=phase3.batches,
+                        reviewer_feedback=batch.last_reviewer_feedback)
+                    result = run_with_retry(
+                        self.backend, prompt, timeout_seconds=3600)
+                    return "world", result
 
                 def _extract_character(
                     char_id: str,
@@ -1121,7 +1095,6 @@ class ExtractionOrchestrator:
                     char_prompt = build_character_extraction_prompt(
                         self.project_root, pipeline, batch, char_id,
                         batches=phase3.batches,
-                        world_snapshot_path=world_snapshot_rel,
                         reviewer_feedback=batch.last_reviewer_feedback)
                     result = run_with_retry(
                         self.backend, char_prompt,
@@ -1129,44 +1102,45 @@ class ExtractionOrchestrator:
                     return char_id, result
 
                 with ThreadPoolExecutor(
-                        max_workers=n_chars) as executor:
-                    futures = {
-                        executor.submit(_extract_character, c): c
+                        max_workers=1 + n_chars) as executor:
+                    futures = [executor.submit(_extract_world)]
+                    futures.extend(
+                        executor.submit(_extract_character, c)
                         for c in pipeline.target_characters
-                    }
+                    )
                     for future in as_completed(futures):
-                        char_id, result = future.result()
+                        entity_id, result = future.result()
                         if not result.success:
-                            char_errors.append(
-                                f"{char_id}: "
+                            extraction_errors.append(
+                                f"{entity_id}: "
                                 f"{result.error or 'unknown'}")
-                            print(f"    [ERROR] {char_id} extraction "
+                            print(f"    [ERROR] {entity_id} extraction "
                                   f"failed: {result.error}")
 
-                if char_errors:
+                if extraction_errors:
                     print("    Rolling back uncommitted changes...")
                     rollback_to_head(self.project_root)
                     batch.transition(BatchState.ERROR)
-                    batch.error_message = "; ".join(char_errors)
+                    batch.error_message = "; ".join(extraction_errors)
                     phase3.save(self.project_root)
                     return
 
                 tracker.record_step(ProgressTracker.STEP_EXTRACTION)
-                tracker.print_step_done(3, 7,
-                                        f"Character extraction "
-                                        f"({n_chars})")
+                tracker.print_step_done(2, 6,
+                                        f"Extraction "
+                                        f"(1+{n_chars} parallel)")
 
                 batch.transition(BatchState.EXTRACTED)
                 phase3.save(self.project_root)
 
-        # --- Step 4: Programmatic post-processing ---
+        # --- Step 3: Programmatic post-processing ---
         if batch.state in (BatchState.EXTRACTED, BatchState.POST_PROCESSING):
             if batch.state == BatchState.EXTRACTED:
                 batch.transition(BatchState.POST_PROCESSING)
                 phase3.save(self.project_root)
 
             tracker.start_step()
-            tracker.print_step(4, 7, "Post-processing (digest + catalog)")
+            tracker.print_step(3, 6, "Post-processing (digest + catalog)")
 
             # Determine batch order (0-based index in batches list)
             batch_order = next(
@@ -1189,13 +1163,13 @@ class ExtractionOrchestrator:
                 # be validated by the review lanes below.
 
             tracker.record_step(ProgressTracker.STEP_VALIDATION)
-            tracker.print_step_done(4, 7, "Post-processing",
+            tracker.print_step_done(3, 6, "Post-processing",
                                     f"{len(pp_issues)} issues")
 
             batch.transition(BatchState.REVIEWING)
             phase3.save(self.project_root)
 
-        # --- Step 5: Parallel review lanes (V+R+F per entity) ---
+        # --- Step 4: Parallel review lanes (V+R+F per entity) ---
         if batch.state == BatchState.REVIEWING:
             # Safety check: verify extraction output still exists on disk
             work_dir = self.project_root / "works" / pipeline.work_id
@@ -1214,7 +1188,7 @@ class ExtractionOrchestrator:
 
             tracker.start_step()
             n_lanes = 1 + len(pipeline.target_characters)
-            tracker.print_step(5, 7,
+            tracker.print_step(4, 6,
                                f"Parallel review lanes ({n_lanes} lanes)")
 
             lane_results = run_parallel_review(
@@ -1244,7 +1218,7 @@ class ExtractionOrchestrator:
 
             if failed_lanes:
                 tracker.print_step_done(
-                    5, 8, "Parallel review lanes",
+                    4, 6, "Parallel review lanes",
                     f"{passed_lanes}/{n_lanes} passed")
 
                 # Collect failure feedback for retry
@@ -1262,12 +1236,12 @@ class ExtractionOrchestrator:
                 return
 
             tracker.record_step(ProgressTracker.STEP_REVIEW)
-            tracker.print_step_done(5, 7, "Parallel review lanes",
+            tracker.print_step_done(4, 6, "Parallel review lanes",
                                     f"{n_lanes}/{n_lanes} passed")
 
-            # --- Step 6: Commit gate (programmatic, 0 token) ---
+            # --- Step 5: Commit gate (programmatic, 0 token) ---
             tracker.start_step()
-            tracker.print_step(6, 7, "Commit gate")
+            tracker.print_step(5, 6, "Commit gate")
 
             gate_passed, gate_issues = run_commit_gate(
                 project_root=self.project_root,
@@ -1287,14 +1261,14 @@ class ExtractionOrchestrator:
                 phase3.save(self.project_root)
                 return
 
-            tracker.print_step_done(6, 7, "Commit gate", "PASS")
+            tracker.print_step_done(5, 6, "Commit gate", "PASS")
             batch.transition(BatchState.PASSED)
             phase3.save(self.project_root)
 
-        # --- Step 7: Git commit ---
+        # --- Step 6: Git commit ---
         if batch.state == BatchState.PASSED:
             tracker.start_step()
-            tracker.print_step(7, 7, "Git commit")
+            tracker.print_step(6, 6, "Git commit")
 
             # Clear feedback/error fields on successful commit
             batch.last_reviewer_feedback = ""
@@ -1314,9 +1288,9 @@ class ExtractionOrchestrator:
                 # Save again with the SHA (this will be uncommitted
                 # on disk but consistent on next resume)
                 phase3.save(self.project_root)
-                tracker.print_step_done(7, 7, "Git commit", sha)
+                tracker.print_step_done(6, 6, "Git commit", sha)
             else:
-                tracker.print_step_done(7, 7, "Git commit",
+                tracker.print_step_done(6, 6, "Git commit",
                                         "no changes")
 
             tracker.finish_batch()

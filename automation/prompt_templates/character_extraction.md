@@ -57,13 +57,6 @@
    - 更新 `identity.json` 的 `aliases`（追加新条目，含 type、effective_stages、source）
    - 更新本阶段 `stage_snapshot` 的 `active_aliases`
 
-## 世界快照参照
-
-本批的世界快照已由独立调用生成，位于：`{world_snapshot_path}`
-
-请先读取它，了解本阶段的世界状态、大事件时间线，作为角色提取的事实参照。
-角色的 knowledge_scope、experienced_events 等应与世界快照的客观事实一致。
-
 ## 角色层输出
 
 **所有 baseline 文件已在 Phase 2.5 全书分析阶段产出初稿**（基于全书摘要，

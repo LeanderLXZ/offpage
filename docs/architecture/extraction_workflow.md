@@ -89,11 +89,11 @@ baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
 （error），voice_rules/behavior_rules/boundaries/failure_modes 为建议
 （warning）。验证失败阻断 Phase 3。
 
-### 6. 1+N 分层批次提取
+### 6. 1+N 并行批次提取
 
-每个批次 N 采用 1+N 分层架构：先提取世界信息（1 次调用），再并行提取各角色信息（N 次调用）。每次调用只传最近一个 stage_snapshot 和 memory_timeline（不传全部历史），减少输入规模。提取超时 3600s。
+每个批次 N 采用 1+N 并行架构：世界提取（1 次调用）与各角色提取（N 次调用）**同一 batch 内全并行执行**，无先后依赖。每次调用只传最近一个 stage_snapshot 和 memory_timeline（不传全部历史），减少输入规模。提取超时 3600s。
 
-#### 6.1 世界信息提取（Phase A，1 次调用）
+#### 6.1 世界信息提取（1 次调用，与角色并行）
 
 每批产出或更新（LLM 产出）：
 
@@ -102,11 +102,11 @@ baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
 
 **对应提示词**：`automation/prompt_templates/world_extraction.md`
 
-#### 6.2 角色信息提取（Phase B，N 次并行调用）
+#### 6.2 角色信息提取（N 次并行调用，与世界并行）
 
 每批产出或更新：
 
-**Baseline 文件**（batch 1 时创建，后续仅在必要时修订）：
+**Baseline 文件**（每个 batch 都可修正和补充，不限 batch 1）：
 
 - `characters/{character_id}/canon/identity.json`
 - `characters/{character_id}/canon/voice_rules.json`
@@ -133,7 +133,7 @@ baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
 **自包含快照的生成规则**：
 
 - 阶段 1 快照 ≈ baseline 内容 + 阶段特有字段（事件、心情、关系等）
-- 阶段 N 快照以 baseline + 前一阶段快照为参照，产出完整的当前阶段状态
+- 阶段 N 快照以 baseline + 前一阶段快照 + 前一阶段 memory_timeline 为参照，产出完整的当前阶段状态
 - **未变化的内容也必须包含在快照中**——快照是自包含的，运行时不依赖 baseline
 - `stage_delta` 记录从上一阶段的变化（信息性，便于理解演变弧线）
 
@@ -273,10 +273,9 @@ orchestrator (Python)
     │
     ├── 用户确认 → 交互式选择角色、确认批次规划、设定提取范围
     │
-    ├── 提取循环 → 每个 batch (1+N):
+    ├── 提取循环 → 每个 batch (1+N 全并行):
     │       ├── git preflight
-    │       ├── claude -p (世界提取, 3600s)
-    │       ├── claude -p ×N (角色提取并行, 3600s)
+    │       ├── claude -p ×(1+N) (世界+角色全并行, 3600s)
     │       ├── 程序化后处理 (digest/catalog, 0 token)
     │       ├── 并行审校通道 (world + 各角色独立):
     │       │       ├── 程序化校验 (Python/jsonschema)
@@ -296,8 +295,10 @@ orchestrator (Python)
 
 关键设计决策：
 
-- 每个 batch 拆分为 1+N 次独立 `claude -p` 调用（世界 + N 角色），不共享 session 内存
-- 批次间和调用间上下文通过文件系统传递；只传最近一个 snapshot/memory（不传全部历史）
+- 每个 batch 拆分为 1+N 次独立 `claude -p` 调用（世界 + N 角色），**同一 batch 内全并行**，不共享 session 内存
+- 世界和角色间无执行依赖——角色不读世界快照，客观事实一致性由 commit gate 跨通道检查保证
+- 批次间上下文通过文件系统传递；只传最近一个 snapshot/memory（不传全部历史）
+- 每个 batch 都可修正和补充 baseline（不限 batch 1）
 - 三层质量检查：程序化校验（免费）+ 每通道语义审校（LLM，world + 各角色独立并行）+
   提交门控（程序化跨通道一致性，0 token）
 - 失败分级：局部问题（≤5 个字段级错误）→ 通道内定点修复（~5% token 成本）；
