@@ -58,8 +58,8 @@
 
 1. **Schema 确认**：你是否在本 batch 内重读过要写入文件对应的 schema？
    如果没有，**现在重读**。不要凭记忆填字段——schema 是权威。
-2. **前批对照**：本 batch 的输出在字段详细度、术语、evidence_refs 密度、
-   source_type 分布上是否与前一 batch 一致？
+2. **前批对照**：本 batch 的输出在字段详细度、术语、stage_events/key_events
+   粒度、source_type 分布上是否与前一 batch 一致？
 
 ### 边界禁令
 

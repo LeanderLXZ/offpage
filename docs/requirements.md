@@ -1329,7 +1329,7 @@ Baseline 文件（voice_rules、behavior_rules、boundaries）仍然存在，
 3. **提取循环**：对每个 batch 执行：
    a. Git preflight check（工作区干净、分支正确）
    b. **智能跳过**：若本 batch 的提取产物已在磁盘上存在（world + 全部角色
-      的 stage_snapshot），直接跳到 d（post_processing），不重复调用 LLM
+      的 stage_snapshot），直接跳到 e（post_processing），不重复调用 LLM
    c. 世界提取（claude -p, 3600s 超时）→ 生成 world stage_snapshot
    d. 角色提取（N 个 claude -p 并行, 3600s 超时）→ 各角色独立产出
    e. 程序化后处理：L1 JSON 修复 + 生成 memory_digest + 更新 stage_catalog（含世界 key_events 累积）
