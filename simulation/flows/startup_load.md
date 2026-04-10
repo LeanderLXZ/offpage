@@ -11,8 +11,7 @@ Compile the minimum useful packet for the first reply.
 3. Read `works/{work_id}/world/manifest.json`.
 4. Read `works/{work_id}/world/stage_catalog.json`.
 5. Read selected `world/stage_snapshots/{stage_id}.json`.
-6. Read selected `world/social/stage_relationships/{stage_id}.json`.
-7. Read the minimum `world/foundation/` files required for global rules.
+6. Read the minimum `world/foundation/` files required for global rules.
 8. Read target character baseline.
 9. Read target character selected-stage snapshot.
 10. Read target character memory_timeline: recent 2 stages (N + N-1) full.

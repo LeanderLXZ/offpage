@@ -48,7 +48,7 @@
    **缺少任何一个维度 = 扮演缺陷。** 例如缺 emotional_voice_map → 愤怒/吃醋/委屈时语气无法区分；缺 target_voice_map 或内容过少 → 面对不同角色时说话方式千篇一律；缺 target_behavior_map → 面对不同角色时行为无差异化；缺某角色 relationship → 面对该角色时态度混乱；core_goals 和 obsessions 混为一谈 → 角色行为动机模糊，理性与非理性不分；缺 character_arc → 角色在多阶段对话中丧失整体演变方向感
    
    **未出场角色的继承规则**：本批中某个重要角色未出场，但前一阶段快照中有该角色的 target_voice_map、target_behavior_map、relationships 条目时，必须从前一阶段 **原样继承** 到本阶段快照中。不可因为"本批没出现"就删除。没有新原文时不加新例句，但已有条目完整保留。
-3. **Baseline 修正**：identity.json 和 world foundation 已在全书分析阶段产出初稿。首批需新建 voice_rules.json、behavior_rules.json、boundaries.json、failure_modes.json（这些需要原文细节）。所有 baseline（包括已有的 identity.json）在任何批次中如发现原文与初稿不符，应直接修正
+3. **Baseline 修正**：所有 baseline 文件（identity.json、voice_rules.json、behavior_rules.json、boundaries.json、failure_modes.json）及 world foundation 已在 Phase 2.5 全书分析阶段产出初稿（标注 source_type: inference）。任何批次中如发现原文与初稿不符，应直接修正（把 inference 升级为 canon）。注意：这些 baseline 只记录跨阶段稳定的角色基底，阶段性变化写入 stage_snapshot
 4. **信息来源标注**：所有结构化数据必须标注 source_type（canon/inference/ambiguous）。inference 和 ambiguous 必须附带说明
 5. **证据引用**：每个结论必须有 evidence_refs（紧凑章节引用格式，如 `0001`, `0011-0013`）
 6. **中文标识**：中文作品的 work_id, character_id, stage_id, 路径段都使用中文
@@ -66,15 +66,12 @@
 
 ## 角色层输出
 
-**首批额外创建**（如果 {is_first_batch}）：
-- `characters/{character_id}/canon/voice_rules.json` — 需原文对话和语气细节
-- `characters/{character_id}/canon/behavior_rules.json` — 需原文行为描写
-- `characters/{character_id}/canon/boundaries.json` — 需原文细节判断
-- `characters/{character_id}/canon/failure_modes.json` — 需原文细节判断
+**所有 baseline 文件已在 Phase 2.5 全书分析阶段产出初稿**（基于全书摘要，
+标注 `source_type: inference`）。这些文件记录的是**跨阶段稳定的角色基底**
+——角色的本性风格、本性行为、底线禁忌、易崩模式等。阶段性变化（语气转变、
+行为偏移、情感波动等）由 stage_snapshot 覆盖，不应写入这些 baseline 文件。
 
-注意：`identity.json` 和 `manifest.json` 已在全书分析阶段产出初稿（已存在于文件系统中）。首批应读取并审核，如发现与原文不符则修正。
-
-**任何批次可修正的已有 baseline**：
+**任何批次可修正和补充的 baseline**（读到原文细节后把 inference 升级为 canon）：
 - `characters/{character_id}/canon/identity.json` — 修正别名、背景、core_wounds、key_relationships 等
 - `characters/{character_id}/canon/voice_rules.json` — 补充新发现的语言风格规则
 - `characters/{character_id}/canon/behavior_rules.json` — 补充新发现的行为模式

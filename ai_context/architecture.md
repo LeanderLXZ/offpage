@@ -24,7 +24,7 @@ For full details see `docs/architecture/system_overview.md` and
 2. **Extraction** (`works/{work_id}/analysis/`) — incremental batch extraction,
    evidence, conflicts
 3. **World** (`works/{work_id}/world/`) — world foundation, stages, events,
-   locations, factions, cast, social relationships
+   locations, factions, cast
 4. **Character** (`works/{work_id}/characters/{character_id}/`) — identity,
    memory (timeline + digest), voice, behavior, boundaries, stage snapshots
 5. **User** (`users/{user_id}/`) — one locked binding per user; role binding,
@@ -45,8 +45,7 @@ For full details see `docs/architecture/system_overview.md` and
 
 Startup loads (in order):
 
-1. World foundation (`foundation.json`) + selected world-stage snapshot +
-   stage relationships
+1. World foundation (`foundation.json`) + selected world-stage snapshot
 2. Target character `identity.json` (incl. `core_wounds`, `key_relationships`)
    + `failure_modes.json` + selected self-contained stage snapshot
    (voice/behavior/boundary/relationship state all included; no baseline
@@ -233,9 +232,8 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
      (stage_id alignment, world-character consistency). All lanes must
      pass; any failure → full batch rollback.
   6. Git commit.
-  Batch 1 additionally creates `voice_rules.json`, `behavior_rules.json`,
-  `boundaries.json`, `failure_modes.json`. All batches may correct any
-  existing baseline.
+  All batches may correct any existing baseline (Phase 2.5 produces skeleton
+  drafts of voice_rules, behavior_rules, boundaries, failure_modes).
   Extraction prompts do NOT read `baseline_merge.md`, `memory_digest.jsonl`,
   or `stage_catalog.json` — self-contained snapshot contract is embedded in
   the prompt; digest and catalog are programmatically maintained.

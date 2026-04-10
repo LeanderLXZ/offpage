@@ -35,12 +35,6 @@ works/{work_id}/
     cast/
       character_index.json
       character_summaries.json
-    social/
-      fixed_relationships/
-        {relationship_id}.json
-      stage_relationships/
-        {stage_id}.json
-
   characters/
     {character_id}/
       manifest.json
@@ -98,9 +92,9 @@ works/{work_id}/
 - `factions/` — 势力与机构
 - `maps/` — 地图结构与地理推测
 - `cast/` — 作品级角色索引与简要摘要（聚焦主角团和高频配角）
-- `social/` — 关系视图，分两类：
-  - `fixed_relationships/` — 不可变的结构性关系（亲子、兄弟等），跨所有阶段
-  - `stage_relationships/` — 随时间变化的动态关系（暧昧、联盟、对立等）
+关系信息不设独立目录：固定关系记录在 `characters/{char_id}/canon/identity.json`
+的 `key_relationships` 中；阶段性关系变化记录在 `world/stage_snapshots/` 的
+`relationship_shifts` 字段中。
 
 ### characters/
 

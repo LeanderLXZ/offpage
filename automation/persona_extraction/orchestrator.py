@@ -633,13 +633,22 @@ class ExtractionOrchestrator:
             print("  [MISS] World foundation not found.")
 
         for char_id in target_characters:
-            identity = (work_dir / "characters" / char_id
-                        / "canon" / "identity.json")
+            canon_dir = work_dir / "characters" / char_id / "canon"
+            identity = canon_dir / "identity.json"
             if identity.exists():
                 print(f"  [OK] {char_id}/identity.json produced.")
             else:
                 missing_critical.append(f"{char_id}/identity.json")
                 print(f"  [MISS] {char_id}/identity.json not found.")
+
+            # Check skeleton baseline files (non-critical — warn only)
+            for fname in ("voice_rules.json", "behavior_rules.json",
+                          "boundaries.json", "failure_modes.json"):
+                if (canon_dir / fname).exists():
+                    print(f"  [OK] {char_id}/{fname} produced.")
+                else:
+                    print(f"  [WARN] {char_id}/{fname} not found "
+                          f"(batch 1 will create from scratch).")
 
         if missing_critical:
             print(f"\n[ERROR] Missing critical baseline files: "

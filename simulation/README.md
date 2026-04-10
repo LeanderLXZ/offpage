@@ -104,7 +104,6 @@ Load by default:
 - `works/{work_id}/world/manifest.json`
 - `works/{work_id}/world/stage_catalog.json`
 - selected `world/stage_snapshots/{stage_id}.json`
-- selected `world/social/stage_relationships/{stage_id}.json`
 - lightweight world foundation files needed for global rules
 - target character baseline
 - target character selected-stage snapshot
