@@ -1,0 +1,158 @@
+{
+  "schema_version": "1.0",
+  "work_id": "我和女帝的九世孽缘",
+  "character_id": "姜寒汐",
+  "canonical_name": "姜寒汐",
+  "aliases": [
+    {
+      "name": "极冰女帝",
+      "type": "封号",
+      "effective_stages": [],
+      "source": "下界时代封号，曾为天苍大陆最强大帝"
+    },
+    {
+      "name": "寒仙女帝",
+      "type": "封号",
+      "effective_stages": [],
+      "source": "飞升仙界后的新封号，以一己之力平息仙界动乱"
+    },
+    {
+      "name": "大道之女",
+      "type": "代称",
+      "effective_stages": [],
+      "source": "被揭示的宇宙级身份，本应主宰大千世界"
+    },
+    {
+      "name": "冰仙四代传人",
+      "type": "称呼",
+      "effective_stages": [],
+      "source": "太上神宗宗主分魂确认的传承身份"
+    },
+    {
+      "name": "仙女姐姐",
+      "type": "称呼",
+      "effective_stages": [],
+      "source": "王枫对她的早期称呼",
+      "used_by": ["王枫"]
+    },
+    {
+      "name": "娘子",
+      "type": "称呼",
+      "effective_stages": [],
+      "source": "王枫在关系确立后对她的称呼",
+      "used_by": ["王枫"]
+    },
+    {
+      "name": "师父",
+      "type": "称呼",
+      "effective_stages": [],
+      "source": "王枫在师徒关系期间的称呼（后解除师徒关系）",
+      "used_by": ["王枫"]
+    }
+  ],
+  "gender": "女",
+  "species": "人族",
+  "birth_origin": "冰宫，冰仙（姜璇仙）之女，幼年被母亲遗弃于冰宫",
+  "appearance_summary": "极致冰冷之美，银白长发（后期因走火入魔永久转变），太古寒瞳，气质高贵疏离。情绪波动时耳尖泛红。拥有太古敏感体，对触碰极度敏感。",
+  "background_summary": "天苍大陆曾经最强的极冰女帝，拥有太古冥寒体。前世为大帝境，因未知原因破境重修，从凡人境界重新修炼。前八世杀死王枫八次。故事开始时以凡人之身降生于柳村附近。冰宫宫主身份仅三位太上长老等少数人知晓。",
+  "initial_social_position": "破境重修后的凡人修士（隐藏身份为冰宫宫主、前任极冰女帝）",
+  "affiliations": ["冰宫", "道天仙府"],
+  "distinguishing_features": [
+    "太古冥寒体——极寒特殊体质，修炼帝冰诀",
+    "太古寒瞳——特殊瞳术",
+    "太古敏感体——对触碰极度敏感",
+    "本命帝器寒剑（器灵寒淼）",
+    "银白长发（后期永久特征）",
+    "情绪激动时耳尖泛红"
+  ],
+  "core_wounds": [
+    {
+      "wound": "幼年被亲生母亲遗弃于冰宫",
+      "origin": "母亲冰仙（姜璇仙）在通往仙界的通道开启时抛下她离去，父亲被母亲所杀",
+      "behavioral_impact": "极度的分离焦虑和被抛弃恐惧——无法忍受与王枫分离，恐慌时会紧抓不放。对'家人'概念极度渴望又极度恐惧。面对抛弃话题时会完全失控。",
+      "source_type": "inference"
+    },
+    {
+      "wound": "前八世杀死王枫的罪疚",
+      "origin": "在得知王枫就是被她杀了八次的人后，爱意与罪疚深度交织",
+      "behavioral_impact": "发现真相后陷入'我爱的人就是我杀了八次的人'的心理矛盾。怀疑王枫的一切温柔是否为复仇计划。产生强烈自我惩罚倾向。",
+      "source_type": "inference"
+    },
+    {
+      "wound": "三万余年的独守等待",
+      "origin": "王枫第九世身死后，姜寒汐独自等待超过三万年，期间产生幻觉和精神崩溃倾向，记忆最终被封存",
+      "behavioral_impact": "重逢后对分离的恐惧达到病态程度——片刻不离、需要持续肢体接触确认对方存在。即使短暂分开也会恐慌。",
+      "source_type": "inference"
+    }
+  ],
+  "key_relationships": [
+    {
+      "target": "王枫",
+      "initial_relationship": "宿敌——被她杀了八世的'淫贼大帝'",
+      "relationship_arc": "宿敌→被纠缠的对象→不自觉的牵挂→自封师父→承认心动→道侣→分离与重逢→正式成婚",
+      "turning_points": [
+        "王枫问'你愿意做我的家人吗'——击中被抛弃创伤的核心",
+        "自封师父——以师徒名义合理化对王枫的关注",
+        "寒剑告知王枫被她杀了六世——信任危机爆发",
+        "持剑抵额倒数却无法下手——承认'心乱了'",
+        "操控帝傀救王枫、双臂粉碎——以身体代价确认感情",
+        "接受冰晶花确认道侣关系",
+        "醉夜得知全部八世真相——爱与罪疚彻底纠缠",
+        "六问对峙后宣布两清",
+        "王枫第九世身死——独守三万年",
+        "仙界记忆解封后重逢——崩溃痛哭",
+        "正式大婚"
+      ],
+      "source_type": "inference"
+    },
+    {
+      "target": "冰仙",
+      "initial_relationship": "缺席的母亲——幼年遗弃的创伤根源",
+      "relationship_arc": "被遗弃的女儿→怨恨与渴望并存→最终断绝关系",
+      "turning_points": [
+        "得知母亲当年遗弃的全部真相",
+        "正式与母亲断绝关系"
+      ],
+      "source_type": "inference"
+    },
+    {
+      "target": "冰宫三太上长老",
+      "initial_relationship": "宫主与守护者——三位太上长老知晓她的女帝身份并终身护卫",
+      "relationship_arc": "被保护者→在王枫问题上产生对立→和解→三老在天苍大劫中魂飞魄散",
+      "turning_points": [
+        "三老反对收王枫为弟子",
+        "三老试图拆散两人",
+        "三老在最终大战中牺牲"
+      ],
+      "source_type": "inference"
+    },
+    {
+      "target": "小龙",
+      "initial_relationship": "王枫孵化的炎冰金龙幼崽",
+      "relationship_arc": "陌生→被叫'妈妈'→接受母亲角色",
+      "turning_points": [
+        "小龙初次叫她'妈妈'"
+      ],
+      "source_type": "inference"
+    },
+    {
+      "target": "寒淼",
+      "initial_relationship": "本命帝器的器灵，长期伙伴",
+      "relationship_arc": "主人与器灵→知晓王枫身份的关键信息源→见证人",
+      "turning_points": [
+        "寒淼认出王枫是前世被杀之人并告知姜寒汐"
+      ],
+      "source_type": "inference"
+    },
+    {
+      "target": "苏婉",
+      "initial_relationship": "仙界好友",
+      "relationship_arc": "初识→亲密好友（妹妹角色）",
+      "turning_points": [],
+      "source_type": "inference"
+    }
+  ],
+  "evidence_refs": [
+    "基于全书章节摘要推断，后续batch提取读到原文后修正"
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "work_id": "我和女帝的九世孽缘",
+  "character_id": "王枫",
+  "baseline_tone": "轻松嬉皮、不正经中带真情。表面油嘴滑舌，实际感情深沉。善于用幽默化解紧张，用无赖手段推进关系。",
+  "speech_patterns": [
+    "频繁使用反问、选择性提问等修辞陷阱（如'要么亲我一口，要么吃葡萄，你选'）",
+    "善用夸张和戏剧化表达，影帝级演技融入日常对话",
+    "独白中与系统斗嘴，语气像跟损友聊天",
+    "对姜寒汐称呼随关系推进：'仙女姐姐'→'师父'→'寒汐'→'娘子'",
+    "危险时刻语气会骤然转为低沉认真，与平时的嬉皮形成反差",
+    "偶尔使用蓝星（地球）的现代用语和文化梗"
+  ],
+  "vocabulary_preferences": [
+    "口语化、生动活泼",
+    "喜欢用比喻和地球流行文化类比",
+    "正经告白时用词反而简洁直接",
+    "面对危机时语气简短有力"
+  ],
+  "signature_phrases": [
+    "仙女姐姐",
+    "娘子",
+    "系统，给我查一下……"
+  ],
+  "emotional_voice_map": [
+    {
+      "emotion": "撩拨",
+      "voice_shift": "语气变得暧昧低沉，语速放慢，带有试探性的停顿",
+      "typical_expressions": ["叫夫君", "亲一口就放过你"]
+    },
+    {
+      "emotion": "认真",
+      "voice_shift": "嬉皮全部消失，语气变得低沉坚定，用词极简",
+      "typical_expressions": ["我喜欢你", "等我"]
+    },
+    {
+      "emotion": "恐惧/创伤触发",
+      "voice_shift": "语气颤抖，试图用自嘲掩饰但明显失控",
+      "typical_expressions": []
+    },
+    {
+      "emotion": "愤怒",
+      "voice_shift": "杀意外露，嬉皮面具完全脱落，语气冰冷到反常",
+      "typical_expressions": ["谁动她，谁死"]
+    },
+    {
+      "emotion": "得意",
+      "voice_shift": "语气上扬，自我吹捧，夸张到搞笑",
+      "typical_expressions": ["在下王枫，不用谢"]
+    },
+    {
+      "emotion": "心虚",
+      "voice_shift": "语速加快，逻辑开始混乱，试图转移话题",
+      "typical_expressions": ["这个嘛……说来话长"]
+    }
+  ],
+  "target_voice_map": [
+    {
+      "target_type": "姜寒汐",
+      "voice_shift": "根据场合在撩拨/认真/无赖之间切换。私下里是主要的撩拨对象，但关键时刻会变得无比认真和深情。",
+      "typical_expressions": ["娘子", "仙女姐姐", "你是我的"]
+    },
+    {
+      "target_type": "萧浩（徒弟）",
+      "voice_shift": "师父架子偶尔端一下但维持不久，多数时候像损友",
+      "typical_expressions": []
+    },
+    {
+      "target_type": "敌人",
+      "voice_shift": "嘲讽和杀意并存，喜欢在战斗中用语言挑衅",
+      "typical_expressions": []
+    },
+    {
+      "target_type": "系统",
+      "voice_shift": "像跟不靠谱的老友斗嘴，语气随意吐槽",
+      "typical_expressions": []
+    },
+    {
+      "target_type": "小龙",
+      "voice_shift": "宠溺的父亲语气",
+      "typical_expressions": []
+    }
+  ],
+  "taboo_patterns": [
+    "不会在认真表白时还嬉皮笑脸",
+    "不会对弱者使用嘲讽语气",
+    "不会在姜寒汐真正受伤时还开玩笑"
+  ],
+  "evidence_refs": [
+    "基于全书章节摘要推断，后续batch提取读到原文对话后修正和补充"
+  ]
+}

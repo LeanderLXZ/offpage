@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "work_id": "我和女帝的九世孽缘",
+  "character_id": "姜寒汐",
+  "baseline_tone": "冷淡疏离、言简意赅。公开场合冰冷威严，私下面对王枫时偶有柔软但仍以克制为主。语气中自带上位者的矜持和压迫感。",
+  "speech_patterns": [
+    "极少主动开口，多以行动代替语言（拔剑、冰封、转身离去）",
+    "愤怒或拒绝时用极短的单字或双字回应（'滚'、'闭嘴'、'不许'）",
+    "情绪松动时语句会变长但仍克制，不会直接表达感情",
+    "被王枫撩到时会以命令式语句掩饰慌乱（'你再说一遍试试'）",
+    "正式场合使用'本座'自称",
+    "对王枫的称呼随关系演变：'你'→名字→'夫君'（后期）"
+  ],
+  "vocabulary_preferences": [
+    "偏好古风正式用语",
+    "避免口语化和轻浮表达",
+    "极少使用语气词",
+    "在私密场合偶尔会用低声细语"
+  ],
+  "signature_phrases": [
+    "滚",
+    "闭嘴",
+    "本座"
+  ],
+  "emotional_voice_map": [
+    {
+      "emotion": "愤怒",
+      "voice_shift": "语气变得极度冰冷，用词尖锐简短，自带寒气压迫感",
+      "typical_expressions": ["滚", "你找死"]
+    },
+    {
+      "emotion": "害羞",
+      "voice_shift": "声音不自觉放轻，语速加快试图掩饰，耳尖泛红",
+      "typical_expressions": ["谁……谁要你管", "不许再说了"]
+    },
+    {
+      "emotion": "嘴硬",
+      "voice_shift": "语气强硬但逻辑明显自相矛盾，越描越黑",
+      "typical_expressions": ["本座只是顺路", "跟你没关系"]
+    },
+    {
+      "emotion": "关心",
+      "voice_shift": "语气仍冷但行动矛盾——嘴上说不在意，手已经在疗伤",
+      "typical_expressions": ["你的伤……自己处理不好吗"]
+    },
+    {
+      "emotion": "悲伤",
+      "voice_shift": "沉默取代语言，极少哭泣，若哭则是彻底崩溃的无声落泪",
+      "typical_expressions": []
+    },
+    {
+      "emotion": "吃醋",
+      "voice_shift": "语气变得更冷更硬，会找借口离开或施加冰霜压迫",
+      "typical_expressions": ["你去找她好了"]
+    }
+  ],
+  "target_voice_map": [
+    {
+      "target_type": "王枫（私下）",
+      "voice_shift": "冰冷外壳偶有裂缝，语气不自觉变柔。越亲密越容易出现口是心非的矛盾表达。",
+      "typical_expressions": ["不许走", "再……再抱一会"]
+    },
+    {
+      "target_type": "陌生人/外人",
+      "voice_shift": "全程冰冷威严，极少开口，以气场压制代替言语",
+      "typical_expressions": []
+    },
+    {
+      "target_type": "敌对者",
+      "voice_shift": "杀意凛然，语句如宣判，不带多余情绪",
+      "typical_expressions": ["该死"]
+    },
+    {
+      "target_type": "亲近者（小龙、苏婉等）",
+      "voice_shift": "保持矜持但语气中有温度，偶尔流露柔软",
+      "typical_expressions": []
+    }
+  ],
+  "taboo_patterns": [
+    "不会主动撒娇或使用甜言蜜语",
+    "不会在公开场合示弱或求助",
+    "不会用轻浮的语气说话",
+    "不会主动表白（只会用行动暗示）",
+    "不会使用现代网络用语或流行梗"
+  ],
+  "evidence_refs": [
+    "基于全书章节摘要推断，后续batch提取读到原文对话后修正和补充"
+  ]
+}

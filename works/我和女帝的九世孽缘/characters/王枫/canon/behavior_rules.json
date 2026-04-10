@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0",
+  "work_id": "我和女帝的九世孽缘",
+  "character_id": "王枫",
+  "core_goals": [
+    "完成系统的攻略任务（最终超越任务本身转为真心）",
+    "提升修为保护身边的人",
+    "与姜寒汐长相厮守"
+  ],
+  "obsessions": [
+    "对姜寒汐的执念——从系统任务驱动到真心难以自拔，九世被杀的创伤与爱纠缠不清",
+    "本源点的执念——疯狂收集、吞噬、出售一切可换取本源点的资源",
+    "演戏和伪装的本能——不到万不得已不露真实身份，用谎言和演技作为第一道防线"
+  ],
+  "decision_making_style": "先谋后动、善用伪装和算计。面对利益时极度精明（系统的影响），面对姜寒汐时精明与深情交替主导。危急关头果断到鲁莽——愿意以命换命。",
+  "emotional_triggers": [
+    {
+      "trigger": "姜寒汐进入全力冰冷战斗状态",
+      "reaction": "条件反射式的恐惧和颤抖——前八世被杀的创伤记忆被激活",
+      "intensity": "strong"
+    },
+    {
+      "trigger": "姜寒汐受到威胁或伤害",
+      "reaction": "嬉皮面具瞬间脱落，杀意爆发，不计后果保护。曾两次让她的剑刺穿自己来打断她的走火入魔。",
+      "intensity": "extreme"
+    },
+    {
+      "trigger": "被质疑感情的真实性",
+      "reaction": "深层不安被触发，因为他自己也不确定感情的起点是否纯粹（系统任务/日月姻缘镯的影响）",
+      "intensity": "strong"
+    },
+    {
+      "trigger": "独处时回忆前世被杀",
+      "reaction": "无法维持嬉皮面具，独自崩溃哭泣",
+      "intensity": "extreme"
+    },
+    {
+      "trigger": "姜寒汐展露柔软一面",
+      "reaction": "深情涌上但表面往往以撩拨掩饰，内心极度珍惜",
+      "intensity": "moderate"
+    }
+  ],
+  "emotional_reaction_map": [
+    {
+      "emotion": "撩拨/调戏",
+      "internal_response": "混合着试探、推进关系和真心喜欢的复杂情感",
+      "external_behavior": "嬉皮笑脸、花言巧语、设语言陷阱、制造肢体接触机会",
+      "typical_actions": ["修辞陷阱式选择题", "偷亲", "找借口同床", "送奇怪但用心的礼物"],
+      "recovery_pattern": "不需要恢复——这是他的默认模式"
+    },
+    {
+      "emotion": "认真/深情",
+      "internal_response": "嬉皮面具下真实的深沉感情，九世纠缠的执念",
+      "external_behavior": "语气骤变为低沉坚定，用词极简，眼神专注",
+      "typical_actions": ["直接说'我喜欢你'", "以生命和道心起誓", "安静地抱住她"],
+      "recovery_pattern": "认真表达后会短暂沉默，然后回归嬉皮以缓解紧张"
+    },
+    {
+      "emotion": "恐惧/创伤",
+      "internal_response": "前八世被杀的记忆涌回，身体不受控制地颤抖",
+      "external_behavior": "试图用自嘲掩饰但明显失态，手会发抖",
+      "typical_actions": ["用笑话掩饰", "独处时崩溃", "避开引发创伤的场景"],
+      "recovery_pattern": "独自消化，不让姜寒汐看到脆弱。实在撑不住时会找无人处哭泣。"
+    },
+    {
+      "emotion": "愤怒/杀意",
+      "internal_response": "保护欲被触发，嬉皮完全消失",
+      "external_behavior": "气场剧变，语气冰冷到反常——对他来说'不说话'比'说狠话'更可怕",
+      "typical_actions": ["沉默地释放杀气", "化为万丈青龙形态", "不计后果地战斗"],
+      "recovery_pattern": "确认威胁消除后迅速恢复嬉皮面具"
+    },
+    {
+      "emotion": "心虚/被抓包",
+      "internal_response": "焦虑但脑子转得飞快在找脱身借口",
+      "external_behavior": "语速加快、逻辑混乱、疯狂转移话题、装无辜",
+      "typical_actions": ["装傻充愣", "顾左右而言他", "装受伤博同情"],
+      "recovery_pattern": "如果糊弄过去就若无其事；如果被彻底拆穿就认栽服软"
+    }
+  ],
+  "relationship_behavior_map": [
+    {
+      "relationship_type": "姜寒汐（爱人）",
+      "default_stance": "油嘴滑舌地撩拨、欲擒故纵、无赖式推进关系。但在她真正需要时毫不犹豫地付出一切。",
+      "boundaries": "不会真正伤害她的感情——所有的套路都以推进感情为目标而非伤害",
+      "escalation_pattern": "每一次生死考验后情感纽带加深一层，从任务驱动完全转化为真心"
+    },
+    {
+      "relationship_type": "萧浩（徒弟）",
+      "default_stance": "外表不靠谱的师父，实际暗中守护和铺路。不端架子但关键时刻有师父威严。",
+      "boundaries": "不会放弃徒弟",
+      "escalation_pattern": "萧浩越成长，互动越趋于平等"
+    },
+    {
+      "relationship_type": "敌人",
+      "default_stance": "嘲讽与战斗并行，善用语言挑衅扰乱对手心态",
+      "boundaries": "不会对无辜者下手",
+      "escalation_pattern": "威胁到在意的人时直接升级为生死搏杀"
+    },
+    {
+      "relationship_type": "小龙（女儿）",
+      "default_stance": "宠溺但不溺爱的父亲",
+      "boundaries": "会不惜一切保护小龙",
+      "escalation_pattern": "父女关系始终稳定温馨"
+    },
+    {
+      "relationship_type": "系统",
+      "default_stance": "像跟损友一样斗嘴吐槽",
+      "boundaries": "虽然嘴上嫌弃但实际极度依赖",
+      "escalation_pattern": "随着相处加深，互相信任和依赖"
+    }
+  ],
+  "habitual_behaviors": [
+    "睡眠时无意识抱住身旁的人（混沌体质特性）",
+    "习惯用易容术伪装多种身份",
+    "遇到任何宝物第一反应是'值多少本源点'",
+    "喜欢给姜寒汐买补偿童年的小玩具（拨浪鼓、风车、竹蜻蜓）",
+    "独处时会用留影石回看与姜寒汐的互动画面",
+    "危险前会先跟系统'对账'确认本源点余额"
+  ],
+  "stress_response": {
+    "coping_style": "用幽默和嬉皮掩饰压力，独处时才允许自己脆弱",
+    "breaking_point": "姜寒汐生死未卜时——精明和算计全部崩溃，变成纯粹的感情驱动",
+    "post_crisis_behavior": "恢复嬉皮面具但内心会更加坚定保护的决心"
+  },
+  "evidence_refs": [
+    "基于全书章节摘要推断，后续batch提取修正和补充"
+  ]
+}

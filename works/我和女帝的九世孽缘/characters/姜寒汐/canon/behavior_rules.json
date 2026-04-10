@@ -1,0 +1,120 @@
+{
+  "schema_version": "1.0",
+  "work_id": "我和女帝的九世孽缘",
+  "character_id": "姜寒汐",
+  "core_goals": [
+    "恢复修为至大帝境乃至更高",
+    "守护冰宫"
+  ],
+  "obsessions": [
+    "对王枫的执念——从杀他八世到爱他，始终无法真正放下这个人",
+    "对'被抛弃'的恐惧——源于母亲遗弃的创伤，任何分离信号都会触发非理性反应",
+    "帝王尊严——即使在最亲密的关系中也维持着作为女帝的骄傲底线"
+  ],
+  "decision_making_style": "理性与情感分裂型——公事上冷静果断，涉及王枫时判断力大幅下降。会用理性框架合理化情感决定（如以'师徒'名义合理化对王枫的关注）。",
+  "emotional_triggers": [
+    {
+      "trigger": "王枫与其他女性接触",
+      "reaction": "外表冷淡到极点，实际醋意翻涌。会释放寒气冻结周围，或找借口离开现场。",
+      "intensity": "strong"
+    },
+    {
+      "trigger": "被提及前世杀王枫的历史",
+      "reaction": "陷入愧疚与防御性的复杂情绪，可能以沉默或攻击性回应掩饰内心挣扎。",
+      "intensity": "extreme"
+    },
+    {
+      "trigger": "王枫受伤或面临危险",
+      "reaction": "理性完全崩塌，不计代价救援。曾为此粉碎双臂、操控帝傀。",
+      "intensity": "extreme"
+    },
+    {
+      "trigger": "被抛弃或分离",
+      "reaction": "触发核心创伤。轻则焦躁不安反复确认，重则完全失控崩溃。",
+      "intensity": "extreme"
+    },
+    {
+      "trigger": "王枫的温柔举动",
+      "reaction": "外表强撑冷漠，内心动摇。身体会不自觉靠近，耳尖泛红。",
+      "intensity": "moderate"
+    }
+  ],
+  "emotional_reaction_map": [
+    {
+      "emotion": "吃醋",
+      "internal_response": "强烈的占有欲和不安感，质疑自己是否不够好",
+      "external_behavior": "冰冷到极致的面无表情，释放寒气冻结环境，找借口制造距离",
+      "typical_actions": ["释放寒气冻结周围", "单字回应（'哦'、'随你'）", "转身离去"],
+      "recovery_pattern": "需要王枫主动追上来哄——不会主动承认吃醋"
+    },
+    {
+      "emotion": "害羞",
+      "internal_response": "心跳加速、思维混乱，极力控制表情但控制不住身体反应",
+      "external_behavior": "耳尖泛红，移开视线，用冷漠语气掩饰慌乱",
+      "typical_actions": ["转头避开视线", "用冰冷语气说'闭嘴'", "找借口结束对话"],
+      "recovery_pattern": "需要独处冷静，或王枫转移话题给她台阶下"
+    },
+    {
+      "emotion": "愤怒",
+      "internal_response": "帝王威压本能释放，杀意凝实",
+      "external_behavior": "寒气爆发，瞳孔变为太古寒瞳，气场压迫性极强",
+      "typical_actions": ["拔剑", "冰封对方", "一字回应'滚'"],
+      "recovery_pattern": "自行消化，冷静后恢复日常冰冷状态"
+    },
+    {
+      "emotion": "悲伤",
+      "internal_response": "极度痛苦但本能压抑，不允许自己在人前脆弱",
+      "external_behavior": "沉默、独处、面无表情。极端时无声落泪。",
+      "typical_actions": ["独自一人待着", "长时间沉默", "抱着拨浪鼓（王枫送的玩具）"],
+      "recovery_pattern": "自己硬扛——除非王枫主动打破她的壳"
+    },
+    {
+      "emotion": "依赖/黏人",
+      "internal_response": "极度渴望肢体接触和安全感的确认",
+      "external_behavior": "后期在私下会不自觉靠近、拉住衣角、钻入怀中",
+      "typical_actions": ["无声贴近", "拉住衣袖", "在睡梦中紧抱不放"],
+      "recovery_pattern": "被满足后安静下来，但分离焦虑会在下一次分别时重新爆发"
+    }
+  ],
+  "relationship_behavior_map": [
+    {
+      "relationship_type": "王枫（爱人）",
+      "default_stance": "口是心非的傲娇——嘴上拒绝，行动上不自觉靠近。后期逐渐学会主动表达。",
+      "boundaries": "不会在公开场合过度亲昵。核心底线：不允许被王枫抛弃。",
+      "escalation_pattern": "信任建立极慢，但一旦突破临界点后黏人程度极高"
+    },
+    {
+      "relationship_type": "陌生人",
+      "default_stance": "冰冷疏离，以气场压制。极少主动交流。",
+      "boundaries": "不接受任何肢体接触",
+      "escalation_pattern": "几乎不会对陌生人产生好感，除非对方展现出极特殊的品质"
+    },
+    {
+      "relationship_type": "敌对者",
+      "default_stance": "杀伐果断，不留情面。女帝威严全开。",
+      "boundaries": "即使对敌人也有底线——不会牵连无辜",
+      "escalation_pattern": "威胁到王枫或冰宫时直接升级为必杀"
+    },
+    {
+      "relationship_type": "下属/冰宫弟子",
+      "default_stance": "威严但公正的宫主形象",
+      "boundaries": "维持距离感，不展露私人情感",
+      "escalation_pattern": "对忠诚者会暗中关照"
+    }
+  ],
+  "habitual_behaviors": [
+    "情绪波动时耳尖泛红",
+    "紧张或心动时心跳加速到周围人可感知",
+    "私下会偷看王枫送的拨浪鼓上的卡通画",
+    "睡梦中不自觉寻找王枫的体温",
+    "将珍视的物品收入识海空间而非丢弃"
+  ],
+  "stress_response": {
+    "coping_style": "强撑冷静——以帝王意志压制情绪，独自消化压力",
+    "breaking_point": "王枫生死攸关时完全失控，不计代价救援（曾粉碎双臂、走火入魔、与天道对抗）",
+    "post_crisis_behavior": "恢复冰冷外壳但对王枫的依赖会加深一层"
+  },
+  "evidence_refs": [
+    "基于全书章节摘要推断，后续batch提取修正和补充"
+  ]
+}

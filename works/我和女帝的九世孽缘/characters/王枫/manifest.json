@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "character_id": "王枫",
+  "work_id": "我和女帝的九世孽缘",
+  "canonical_name": "王枫",
+  "aliases": [
+    "倭瓜男",
+    "淫贼大帝",
+    "枫天帝",
+    "十响神子",
+    "劫匪仙人",
+    "王浩帅"
+  ],
+  "build_status": "extracting",
+  "paths": {
+    "canon_root": "characters/王枫/canon",
+    "stage_catalog_path": "characters/王枫/canon/stage_catalog.json",
+    "stage_snapshot_root": "characters/王枫/canon/stage_snapshots",
+    "evidence_root": "characters/王枫/canon/evidence"
+  }
+}
