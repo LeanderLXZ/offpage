@@ -1662,11 +1662,14 @@ fix 后重新跑语义审校；如果是程序化校验发现的，fix 后重新
   再进入提取循环，避免后续 batch 全部因缺少 identity.json 而失败
 - **REVIEWING 中断恢复**：恢复到 REVIEWING 状态的 batch 时，先检查提取产物
   是否仍在磁盘上。如果文件已被回滚清除，自动重置为 PENDING 重新提取
-- **Resume 自动重置**：`--resume` 时自动将所有 blocked batch（retry 耗尽的
-  FAILED/ERROR）重置为 pending，**保留 retry_count**（不清零）。Phase 3
-  batch 重试由 targeted_fix 注入反馈信息，因此 retry 有效；Phase 4 chapter
-  重试同样注入上次错误信息。用户主动 resume 意味着愿意再给一次机会，但累积
-  retry_count 确保最终升级为 error 而非无限循环
+- **同次运行自动重试**：Phase 3 和 Phase 4 均在同次运行内自动重试
+  FAILED 的 batch/chapter（retry_count < max_retries 时直接重新处理），
+  无需用户手动 resume。所有失败路径（LLM 失败、JSON 解析失败、校验失败）
+  均递增 retry_count，超限升级为 ERROR（blocked）
+- **Resume 自动重置**：`--resume` 时自动将所有 blocked（retry 耗尽的
+  ERROR）重置为 pending，**retry_count 清零**（给用户全新的重试机会）。
+  Phase 3 batch 重试由 targeted_fix 注入反馈信息；Phase 4 chapter
+  重试同样注入上次错误信息到 prompt
 - **Progress 与 `--end-batch` 分离**（同 Phase 4 模式）：progress 文件
   始终包含完整 batch plan（Phase 2 确认时写入全量），`--end-batch` 仅作为
   运行时限制控制本次执行范围，不影响 progress 数据结构。提取循环入口额外
@@ -1818,9 +1821,9 @@ ThreadPoolExecutor，每个 worker 起一个 `claude -p` 子进程。
 | 必填字段完整 | time_in_story, location, characters_present, summary 非空 |
 | alias 匹配 | characters_present 中的名字与已知角色 alias 一致（可选——scene archive 是 work-level 全局产物，不限于提取目标角色集） |
 
-校验失败 → 重跑该章（注入上次错误信息到 prompt），每章最多重试 2 次，
-超限进 error 状态。`retry_count` 跨 resume 累积（不清零），确保最终升级到
-error 而非无限循环。
+所有失败（LLM 失败、JSON 解析失败、校验失败）→ 递增 retry_count，同次运行内
+自动重试（注入上次错误信息到 prompt），每章最多重试 2 次，超限进 error 状态。
+`--resume` 时 ERROR 章节重置为 pending 且 retry_count 清零。
 
 #### 状态机（per-chapter）
 

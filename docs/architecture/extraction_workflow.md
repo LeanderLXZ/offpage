@@ -179,7 +179,8 @@ Phase 4 与 Phase 3 完全独立——前置条件仅为 `source_batch_plan.json
 **并行**：多章并行处理（`--concurrency`，默认 10）。
 
 **质量保障**：仅程序化校验（行号有效、不重叠、覆盖全章、alias 匹配），
-不做语义审校。校验失败重跑该章（≤2 次）。
+不做语义审校。失败（LLM/解析/校验）同次运行内自动重试（≤2 次），
+超限进 ERROR 状态；`--resume` 时 ERROR 重置且 retry_count 清零。
 
 产出：
 - `works/{work_id}/rag/scene_archive.jsonl`（.gitignore，文件过大）

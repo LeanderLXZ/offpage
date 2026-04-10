@@ -224,6 +224,10 @@ that a new AI should know beyond what the architecture docs already say.
     exist on disk (`verify_passed`). Missing files are reset to pending
     and regenerated. This guards against file loss from any cause
     (rollback, manual cleanup, filesystem errors).
+40e2. Phase 3 and Phase 4 share the same retry contract: FAILED items
+    auto-retry within the same run (no manual resume needed); all
+    failure paths increment retry_count; exceeded max_retries → ERROR
+    (blocked). `--resume` resets ERROR to pending with retry_count=0.
 
 ## World Snapshot and Catalog
 
