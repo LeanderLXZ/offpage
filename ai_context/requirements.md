@@ -190,8 +190,11 @@ failing check layer with narrowed input scope. Commit clears feedback/error
 fields. Batch size max 15 chapters. Phase 4 is independent
 (only needs Phase 1 batch plan): per-chapter parallel LLM calls for scene
 boundary annotation, programmatic validation only, output to
-`works/{work_id}/rag/scene_archive.jsonl`. CLI: `--start-phase 4`,
-`--concurrency N`. Supports Claude CLI and Codex CLI backends.
+`works/{work_id}/rag/scene_archive.jsonl`. Intermediate
+`works/{work_id}/analysis/incremental/scene_archive/` and
+`.scene_archive.lock` are local ignored artifacts and are explicitly
+preserved from Phase 3 rollback. CLI: `--start-phase 4`, `--concurrency N`.
+Supports Claude CLI and Codex CLI backends.
 See `docs/requirements.md` §11.
 
 ## §12 Memory System and Retrieval
