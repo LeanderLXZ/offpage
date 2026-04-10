@@ -231,10 +231,10 @@ def upsert_stage_catalog(
             new_entry["current_world_summary"] = cws[0]
         elif isinstance(cws, str):
             new_entry["current_world_summary"] = cws
-        # historical_events summary
-        he = snapshot_data.get("historical_events")
-        if isinstance(he, list) and he:
-            new_entry["history_summary"] = he[-1] if len(he) > 0 else ""
+        # key_events: copy from snapshot (1-sentence summaries per stage)
+        ke = snapshot_data.get("key_events")
+        if isinstance(ke, list) and ke:
+            new_entry["key_events"] = ke
 
     # --- load or create catalog ---
     catalog: dict[str, Any]

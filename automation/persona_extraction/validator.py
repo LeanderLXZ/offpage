@@ -259,7 +259,8 @@ def _check_world(work_dir: Path, stage_id: str,
                 snapshot, schema_dir / "world_stage_snapshot.schema.json",
                 str(snapshot_path)))
             # Check key fields are non-empty
-            for fld in ("snapshot_summary", "evidence_refs"):
+            for fld in ("snapshot_summary", "evidence_refs",
+                        "stage_events", "key_events"):
                 val = snapshot.get(fld)
                 if not val:
                     issues.append(ValidationIssue(

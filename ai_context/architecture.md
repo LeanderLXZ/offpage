@@ -72,7 +72,8 @@ See `simulation/retrieval/load_strategy.md` for the full tier model.
   term (which processing unit); "stage" is the content/runtime term (which
   story phase). They share the same `stage_id`. Both names are kept because
   they serve different audiences.
-- World package exposes a `stage_catalog.json` with selectable timeline nodes.
+- World package exposes a `stage_catalog.json` with selectable timeline nodes
+  and cumulative `key_events` (world event timeline, assembled per-stage).
 - Character packages project the same `stage_id` into character-specific state.
 - Stage N is cumulative through 1..N; the latest stage is the active present.
 - User selects a stage at setup; it applies to target character and any
@@ -223,7 +224,8 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   2. Character extraction (N parallel LLM calls)
   3. Programmatic post-processing: L1 JSON repair + generate
      `memory_digest.jsonl` from `memory_timeline` + upsert
-     `stage_catalog.json` from snapshot metadata (0 token)
+     `stage_catalog.json` from snapshot metadata (world catalog
+     additionally accumulates `key_events` timeline) (0 token)
   4. Parallel review lanes: world + each character independently runs
      validate → semantic review → targeted fix. Lanes run in parallel
      via ThreadPoolExecutor.
@@ -261,6 +263,8 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
 
 - Each batch / phase step is a fresh `claude -p` call (no shared session
   memory)
+- Smart resume: if a batch is PENDING but extraction output already exists
+  on disk, skip LLM extraction and jump directly to post-processing
 - Context between steps is entirely file-based (progress files, previous
   output, schemas, baseline files)
 - Three-level JSON repair: programmatic regex (L1, zero tokens) → LLM

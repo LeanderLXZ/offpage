@@ -175,9 +175,11 @@ Phase 0 chunk summarization runs in parallel (`--concurrency`, default 10);
 three-level JSON repair (L1 programmatic → L2 LLM 600s → L3 full re-run);
 completion gate blocks Phase 1 if any chunk missing.
 Analysis → user confirmation → extraction loop (per batch: git preflight →
+**smart skip** [if extraction output already on disk, jump to post-processing] →
 **1+N split extraction** [world call → N parallel character calls] →
 **programmatic post-processing** [memory_digest generation + stage_catalog
-upsert, 0 token] → **parallel review lanes** [world + each character:
+upsert (world catalog accumulates `key_events` timeline), 0 token] →
+**parallel review lanes** [world + each character:
 validate → review → fix independently] → **commit gate** [programmatic
 cross-consistency, 0 token] → git commit or full batch rollback+retry) →
 Phase 3.5 cross-batch consistency check → Phase 4 scene archive. Each call
