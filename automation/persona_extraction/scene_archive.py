@@ -17,10 +17,11 @@ Final output:
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, FIRST_COMPLETED, wait
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -713,17 +714,28 @@ def _run_parallel(
     concurrency: int,
     known_aliases: set[str] | None,
 ) -> None:
-    """Run chapter processing in parallel."""
+    """Run chapter processing in parallel with circuit breaker."""
     start_time = time.monotonic()
     completed = 0
     failed = 0
     total = len(pending)
 
+    # Circuit breaker: if recent_failures >= threshold within the window,
+    # pause all workers before submitting new tasks.
+    recent_failures: list[float] = []  # timestamps of recent failures
+    BREAKER_WINDOW = 60.0    # look-back window in seconds
+    BREAKER_THRESHOLD = 8    # failures within window to trigger pause
+    BREAKER_PAUSE = 180      # seconds to wait when tripped
+
     print(f"\n  Processing {total} chapters with {concurrency} workers...\n")
 
+    pending_iter = iter(pending)
+
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
-        futures = {}
-        for chapter_id in pending:
+        futures: dict = {}
+
+        # Seed initial batch
+        for chapter_id in itertools.islice(pending_iter, concurrency):
             future = executor.submit(
                 _process_chapter,
                 project_root, work_id, chapter_id,
@@ -731,29 +743,55 @@ def _run_parallel(
             )
             futures[future] = chapter_id
 
-        for future in as_completed(futures):
-            chapter_id = futures[future]
-            try:
-                cid, success, error_msg = future.result()
-            except Exception as exc:
-                cid = chapter_id
-                success = False
-                error_msg = str(exc)
-                entry = progress.chapters[cid]
-                entry.state = ChapterState.ERROR
-                entry.error_message = error_msg
-                entry.last_updated = _now_iso()
+        while futures:
+            done, _ = wait(futures, return_when=FIRST_COMPLETED)
 
-            if success:
-                completed += 1
-                print(f"    [OK] {cid}  ({completed}/{total})")
-            else:
-                failed += 1
-                print(f"    [FAIL] {cid}: {error_msg[:100]}")
+            for future in done:
+                chapter_id = futures.pop(future)
+                try:
+                    cid, success, error_msg = future.result()
+                except Exception as exc:
+                    cid = chapter_id
+                    success = False
+                    error_msg = str(exc)
+                    entry = progress.chapters[cid]
+                    entry.state = ChapterState.ERROR
+                    entry.error_message = error_msg
+                    entry.last_updated = _now_iso()
 
-            # Periodic save
-            if (completed + failed) % 10 == 0:
+                if success:
+                    completed += 1
+                    print(f"    [OK] {cid}  ({completed}/{total})")
+                else:
+                    failed += 1
+                    print(f"    [FAIL] {cid}: {error_msg[:100]}")
+                    recent_failures.append(time.monotonic())
+
+                # Periodic save
+                if (completed + failed) % 10 == 0:
+                    progress.save(project_root)
+
+            # Circuit breaker check before submitting new tasks
+            now = time.monotonic()
+            recent_failures = [t for t in recent_failures
+                               if now - t < BREAKER_WINDOW]
+            if len(recent_failures) >= BREAKER_THRESHOLD:
+                print(f"\n  [BREAKER] {len(recent_failures)} failures in "
+                      f"{BREAKER_WINDOW:.0f}s. Pausing {BREAKER_PAUSE}s...")
                 progress.save(project_root)
+                time.sleep(BREAKER_PAUSE)
+                recent_failures.clear()
+                print("  [BREAKER] Resuming...")
+
+            # Submit new tasks to fill vacant slots
+            for next_chapter in itertools.islice(
+                    pending_iter, concurrency - len(futures)):
+                future = executor.submit(
+                    _process_chapter,
+                    project_root, work_id, next_chapter,
+                    backend, progress, known_aliases,
+                )
+                futures[future] = next_chapter
 
     # Final save
     progress.save(project_root)

@@ -320,12 +320,24 @@ def create_backend(name: str, project_root: Path, *,
 # Rate-limit aware wrapper
 # ---------------------------------------------------------------------------
 
+def _is_fast_empty_failure(result: LLMResult) -> bool:
+    """Detect CLI launch failures: fast return + empty/generic error."""
+    if result.success:
+        return False
+    if result.duration_seconds is not None and result.duration_seconds < 5:
+        err = (result.error or "").strip()
+        # "exit 1: " or "exit 1:" with empty stderr
+        if err.startswith("exit") and err.rstrip(": ").replace("exit", "").strip().isdigit():
+            return True
+    return False
+
+
 def run_with_retry(backend: LLMBackend, prompt: str, *,
                    allowed_tools: list[str] | None = None,
                    max_retries: int = 3,
                    cooldown_seconds: int = 60,
                    timeout_seconds: int = 600) -> LLMResult:
-    """Run prompt with automatic retry on rate-limit errors."""
+    """Run prompt with automatic retry on rate-limit and fast-fail errors."""
     for attempt in range(1, max_retries + 1):
         result = backend.run(prompt, allowed_tools=allowed_tools,
                              timeout_seconds=timeout_seconds)
@@ -343,6 +355,16 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
                 logger.warning("Rate limited (attempt %d/%d). "
                                "Waiting %ds before retry...",
                                attempt, max_retries, wait)
+                time.sleep(wait)
+                continue
+        # Fast empty failure (CLI launch error) — retryable with backoff
+        if _is_fast_empty_failure(result):
+            if attempt < max_retries:
+                wait = 30 * (2 ** (attempt - 1))  # 30s, 60s, 120s
+                logger.warning("Fast empty failure (attempt %d/%d, %.1fs). "
+                               "Waiting %ds before retry...",
+                               attempt, max_retries,
+                               result.duration_seconds or 0, wait)
                 time.sleep(wait)
                 continue
         # Non-retryable error
