@@ -13,7 +13,6 @@ Load before the first reply:
 - world manifest
 - world stage catalog
 - selected world stage snapshot
-- selected stage relationship snapshot
 - minimum world foundation rules
 - target character identity (`identity.json`, incl. `core_wounds`, `key_relationships`)
 - target character failure modes (`failure_modes.json`)
@@ -65,7 +64,6 @@ Load only if the turn needs it:
 - `world/locations/{location_id}/...`
 - `world/factions/{faction_id}.json`
 - `world/history/timeline.jsonl`
-- older `world/social/stage_relationships/{stage_id}.json`
 - past stage snapshots (`canon/stage_snapshots/{past_stage_id}.json` — for
   deep historical recall of past-stage voice, behavior, or relationship details)
 - `users/{user_id}/relationship_core/pinned_memories.jsonl`

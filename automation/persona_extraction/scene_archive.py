@@ -157,13 +157,16 @@ class SceneArchiveProgress:
                    for e in self.chapters.values())
 
     def reset_failed(self) -> int:
-        """Reset failed/error chapters to pending (for --resume)."""
+        """Reset failed/error chapters to pending (for --resume).
+
+        Preserves retry_count so cumulative retries eventually escalate to
+        ERROR (permanent skip), preventing infinite retry loops.
+        """
         count = 0
         for entry in self.chapters.values():
             if entry.state in (ChapterState.FAILED, ChapterState.ERROR):
                 entry.state = ChapterState.PENDING
-                entry.retry_count = 0
-                entry.error_message = ""
+                # Keep retry_count — do NOT reset to 0
                 count += 1
         return count
 
@@ -303,9 +306,11 @@ def _process_chapter(
     if total_lines == 0:
         return chapter_id, False, "Chapter file is empty"
 
-    # Build prompt
+    # Build prompt (inject prior error if retrying)
+    prior_error = entry.error_message if entry.retry_count > 0 else ""
     prompt = build_scene_split_prompt(
-        project_root, work_id, chapter_id, lines)
+        project_root, work_id, chapter_id, lines,
+        prior_error=prior_error)
 
     # Update state
     entry.state = ChapterState.SPLITTING

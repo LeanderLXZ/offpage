@@ -60,11 +60,12 @@ that a new AI should know beyond what the architecture docs already say.
     Each batch may have a different chapter count (target 10, min 5, max 15).
     Batch N = stage N candidate. Stage N is cumulative through 1..N.
 13. Once active characters are confirmed, Phase 2.5 produces world foundation
-    and character baselines (identity.json, manifest.json) from full-book
-    context. Then **1+N split extraction** per batch: one world call, then
-    N parallel character calls. Batch 1 additionally creates
-    voice/behavior/boundary baselines (need raw text). All batches may correct
-    any existing baseline. Targeted character supplement only when gaps remain.
+    and all character baselines (identity.json, manifest.json, voice_rules.json,
+    behavior_rules.json, boundaries.json, failure_modes.json) from full-book
+    context as skeleton drafts (source_type: inference). Then **1+N split
+    extraction** per batch: one world call, then N parallel character calls.
+    All batches may correct any existing baseline (upgrading inference → canon).
+    Targeted character supplement only when gaps remain.
 14. Any batch may revise any already-written asset across the whole work
     package, not only the current target.
 15. Do not generate per-batch report files. Update progress files in-place.

@@ -42,7 +42,7 @@
    **缺少任何一个维度 = 扮演缺陷。** 例如缺 emotional_voice_map → 愤怒/吃醋/委屈时语气无法区分；缺 target_voice_map 或内容过少 → 面对不同角色时说话方式千篇一律；缺 target_behavior_map → 面对不同角色时行为无差异化；缺某角色 relationship → 面对该角色时态度混乱；core_goals 和 obsessions 混为一谈 → 角色行为动机模糊，理性与非理性不分；缺 character_arc → 角色在多阶段对话中丧失整体演变方向感
    
    **未出场角色的继承规则**：本批中某个重要角色未出场，但前一阶段快照中有该角色的 target_voice_map、target_behavior_map、relationships 条目时，必须从前一阶段 **原样继承** 到本阶段快照中。不可因为"本批没出现"就删除。没有新原文时不加新例句，但已有条目完整保留。
-3. **Baseline 修正**：identity.json 和 world foundation 已在全书分析阶段产出初稿。首批需新建 voice_rules.json、behavior_rules.json、boundaries.json、failure_modes.json（这些需要原文细节）。所有 baseline（包括已有的 identity.json 和 world foundation）在任何批次中如发现原文与初稿不符，应直接修正。Baseline 是提取锚点，不在运行时加载
+3. **Baseline 修正**：所有 baseline 文件（identity.json、voice_rules.json、behavior_rules.json、boundaries.json、failure_modes.json）及 world foundation 已在 Phase 2.5 全书分析阶段产出初稿（标注 source_type: inference）。任何批次中如发现原文与初稿不符，应直接修正。Baseline 记录跨阶段稳定的角色基底，阶段性变化写入 stage_snapshot
 4. **信息来源标注**：所有结构化数据必须标注 source_type（canon/inference/ambiguous）。inference 和 ambiguous 必须附带说明
 5. **证据引用**：每个结论必须有 evidence_refs（紧凑章节引用格式，如 `0001`, `0011-0013`）
 6. **中文标识**：中文作品的 work_id, character_id, stage_id, 路径段都使用中文
@@ -60,8 +60,6 @@
 - `world/stage_catalog.json` — 追加本阶段条目
 - `world/stage_snapshots/{stage_id}.json` — 当前阶段世界快照（遵循 world_stage_snapshot.schema.json）
 - `world/foundation/` — 如有基础设定修正
-- `world/social/stage_relationships/{stage_id}.json` — 动态关系
-- 按需：events, locations, factions, cast
 
 ## 角色层输出（每个目标角色）
 
@@ -69,11 +67,12 @@
 
 每个角色本批应产出或更新：
 
-**首批额外创建**（如果 {is_first_batch}）：
-- `characters/{{char_id}}/canon/voice_rules.json` — 需原文对话和语气细节
-- `characters/{{char_id}}/canon/behavior_rules.json` — 需原文行为描写
-- `characters/{{char_id}}/canon/boundaries.json` — 需原文细节判断
-- `characters/{{char_id}}/canon/failure_modes.json` — 需原文细节判断
+**所有 baseline 文件已在 Phase 2.5 产出骨架初稿**（source_type: inference）。
+任何批次可修正和补充：
+- `characters/{{char_id}}/canon/voice_rules.json`
+- `characters/{{char_id}}/canon/behavior_rules.json`
+- `characters/{{char_id}}/canon/boundaries.json`
+- `characters/{{char_id}}/canon/failure_modes.json`
 
 注意：`identity.json` 和 `manifest.json` 已在全书分析阶段产出初稿（已存在于文件系统中）。首批应读取并审核，如发现与原文不符则修正。
 

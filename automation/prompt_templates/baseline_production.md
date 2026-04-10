@@ -118,6 +118,68 @@
 core_wounds 和 key_relationships 基于全书摘要可以产出较准确的初稿——全书
 视野有利于识别贯穿故事的创伤和关系弧线。
 
+### voice_rules.json
+
+位置：`{work_dir}/characters/{{char_id}}/canon/voice_rules.json`
+
+必须遵循 `schemas/voice_rules.schema.json`。
+
+这是角色**跨阶段稳定的基线语言风格**，记录角色的本性风格，而非某一阶段的
+语气变化。阶段性的语气转变由 stage_snapshot 覆盖。
+
+基于全书摘要产出骨架初稿：
+- `baseline_tone`：基线语气基调
+- `speech_patterns`：标志性语言模式（如口头禅、句式特点）
+- `register_range`：语域范围
+- `target_voice_map`：对不同角色的语气差异（如果摘要中能判断）
+
+所有条目标注 `source_type: "inference"`。后续 batch 提取读到原文对话后修正
+和补充——原文细节会把 inference 升级为 canon 或添加更具体的例句。
+
+### behavior_rules.json
+
+位置：`{work_dir}/characters/{{char_id}}/canon/behavior_rules.json`
+
+必须遵循 `schemas/behavior_rules.schema.json`。
+
+这是角色**跨阶段稳定的基线行为模式**，记录角色的本性行为，而非某一阶段的
+行为偏移。阶段性的行为变化由 stage_snapshot 覆盖。
+
+基于全书摘要产出骨架初稿：
+- `core_goals`：核心驱动目标
+- `obsessions`：执念
+- `relationship_behavior_map`：对不同关系的行为模式
+
+所有条目标注 `source_type: "inference"`。后续 batch 修正和补充。
+
+### boundaries.json
+
+位置：`{work_dir}/characters/{{char_id}}/canon/boundaries.json`
+
+必须遵循 `schemas/boundaries.schema.json`。
+
+这是角色的**底线禁忌**——可能在极端剧情中被突破，但本质上稳定。
+
+基于全书摘要产出骨架初稿：
+- `hard_boundaries`：绝对底线（运行时加载）
+- `soft_boundaries`：可变边界
+
+所有条目标注 `source_type: "inference"`。后续 batch 修正和补充。
+
+### failure_modes.json
+
+位置：`{work_dir}/characters/{{char_id}}/canon/failure_modes.json`
+
+必须遵循 `schemas/failure_modes.schema.json`。
+
+这是角色的**易崩模式**——根源性弱点，跨阶段稳定（运行时加载）。
+
+基于全书摘要产出骨架初稿：
+- `common_failures`：常见的角色崩坏模式
+- `trigger_patterns`：触发条件
+
+所有条目标注 `source_type: "inference"`。后续 batch 修正和补充。
+
 ### manifest.json
 
 位置：`{work_dir}/characters/{{char_id}}/manifest.json`

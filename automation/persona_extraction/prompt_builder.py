@@ -158,7 +158,9 @@ def build_baseline_prompt(
     files: list[str] = []
 
     # Schemas needed
-    for schema in ("identity.schema.json", "character_manifest.schema.json"):
+    for schema in ("identity.schema.json", "character_manifest.schema.json",
+                   "voice_rules.schema.json", "behavior_rules.schema.json",
+                   "boundaries.schema.json", "failure_modes.schema.json"):
         files.append(f"- `{project_root / 'schemas' / schema}`")
 
     # Analysis outputs
@@ -727,6 +729,8 @@ def build_scene_split_prompt(
     work_id: str,
     chapter_id: str,
     lines: list[str],
+    *,
+    prior_error: str = "",
 ) -> str:
     """Build prompt for scene splitting of a single chapter."""
     template = _load_template("scene_split.md")
@@ -734,10 +738,20 @@ def build_scene_split_prompt(
     # Build numbered text
     numbered = "\n".join(f"{i + 1}\t{line}" for i, line in enumerate(lines))
 
+    retry_note = ""
+    if prior_error:
+        retry_note = (
+            f"\n## 重试说明\n\n"
+            f"上一次尝试校验失败，错误信息如下：\n\n"
+            f"```\n{prior_error}\n```\n\n"
+            f"请特别注意修正以上问题。"
+        )
+
     context = {
         "work_id": work_id,
         "chapter_id": chapter_id,
         "chapter_text": numbered,
+        "retry_note": retry_note,
     }
 
     return _render_template(template, context)

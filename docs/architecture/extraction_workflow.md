@@ -76,14 +76,18 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 - `world/foundation/foundation.json` — 世界基础设定初稿
 - `characters/{character_id}/canon/identity.json` — 角色身份初稿
 - `characters/{character_id}/manifest.json` — 角色 manifest
+- `characters/{character_id}/canon/voice_rules.json` — 基线语言风格骨架
+- `characters/{character_id}/canon/behavior_rules.json` — 基线行为模式骨架
+- `characters/{character_id}/canon/boundaries.json` — 角色底线禁忌骨架
+- `characters/{character_id}/canon/failure_modes.json` — 角色易崩模式骨架
 
-这些是初稿——后续批次读到原文细节时可修正。全书视野使这些 baseline
-比仅靠 batch 1 产出更准确。voice_rules、behavior_rules、boundaries
-等需要原文细节的文件留到 Phase 3 batch 1 创建。
+这些 baseline 记录**跨阶段稳定的角色基底**，全部标注 `source_type:
+inference`，后续 batch 修正和补充。阶段性变化由 stage_snapshot 覆盖。
 
-**出口验证**：Phase 2.5 完成后运行 `validate_baseline()`，校验
-identity.json / manifest.json / foundation.json 的 schema 合规性和
-required 字段非空。验证失败阻断 Phase 3。
+**出口验证**：Phase 2.5 完成后运行 `validate_baseline()`，校验所有
+baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
+（error），voice_rules/behavior_rules/boundaries/failure_modes 为建议
+（warning）。验证失败阻断 Phase 3。
 
 ### 6. 1+N 分层批次提取
 
@@ -95,8 +99,6 @@ required 字段非空。验证失败阻断 Phase 3。
 
 - `world/stage_snapshots/{stage_id}.json` — 当前阶段的世界快照
 - `world/foundation/` — 如有修正
-- `world/social/stage_relationships/{stage_id}.json` — 动态关系
-- 按需：events、locations、factions、maps
 
 **对应提示词**：`automation/prompt_templates/world_extraction.md`
 
@@ -234,15 +236,17 @@ CLI：`--start-phase 4` 可独立运行 Phase 4
 
 ## Baseline 文件的角色
 
-Baseline 文件在提取流程中有两个用途：
+Baseline 文件记录**跨阶段稳定的角色基底**（本性风格、本性行为、底线禁忌、
+易崩模式等），在提取流程中有两个用途：
 
-1. **阶段 1 的起点**：batch 1 提取时先填充 baseline，然后据此生成阶段 1
-   的自包含快照
-2. **后续批次的参照锚点**：提取者用 baseline 来判断"相比初始状态，
-   当前阶段有什么变化"，帮助准确描述 stage_delta
+1. **提取参照锚点**：Phase 2.5 产出全书视野骨架（source_type: inference），
+   后续 batch 据此修正和补充（升级为 canon）
+2. **跨阶段稳定参照**：提取者用 baseline 判断"角色的本性是什么"，阶段性
+   变化写入 stage_snapshot，不写入 baseline
 
-**Baseline 不在运行时加载**——运行时只加载 identity.json、failure_modes.json、
-hard_boundaries 和所选阶段的自包含快照。
+**运行时加载**：identity.json、failure_modes.json、hard_boundaries + 所选
+阶段的自包含快照。voice_rules.json 和 behavior_rules.json 不在运行时加载
+（voice 和 behavior 状态在 stage_snapshot 中自包含）。
 
 ## 批次间的增量规则
 
