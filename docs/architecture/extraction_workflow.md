@@ -181,7 +181,9 @@ Phase 4 与 Phase 3 完全独立——前置条件仅为 `source_batch_plan.json
 产出：
 - `works/{work_id}/rag/scene_archive.jsonl`（.gitignore，文件过大）
 - 中间文件：`works/{work_id}/analysis/incremental/scene_archive/`
-  （`.scene_archive.lock` + `progress.json` + `splits/`，均为本地忽略）
+  （`.scene_archive.lock` + `progress.json` + `splits/`，均为本地忽略，
+  不得被 git track）。resume 时校验 passed 章节的 split 文件是否存在，
+  缺失则重置为 pending 重新生成
 
 `scene_id` 格式：`scene_{chapter}_{seq}`（如 `scene_0015_003`）。
 

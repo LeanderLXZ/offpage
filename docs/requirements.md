@@ -1818,8 +1818,14 @@ works/{work_id}/
 - `--end-batch N` 限制只处理前 N 个 batch 对应的章节范围
 - 已有的 `splits/` 临时文件作为断点，不重复处理
 - failed/error 章节在 `--resume` 时自动重置为 pending
+- **split 文件存在性校验**：resume 时，对 progress 中标记为 passed 的章节
+  验证对应的 `splits/{chapter}.json` 是否实际存在。缺失则重置为 pending
+  重新生成，防止文件丢失导致最终 merge 失败
 - Phase 4 使用独立 `.scene_archive.lock`；lock 与 `scene_archive/`
-  中间产物均为本地忽略文件，不受 Phase 3 rollback 清理影响
+  中间产物均为本地忽略文件（.gitignore），**不得被 git track**。
+  如 extraction 分支上已有 tracked 的 split 文件，需 `git rm --cached`
+  移除跟踪。否则 Phase 3 回滚（`git checkout -- .`）会覆盖 tracked 的
+  split 文件，导致已通过的章节产物丢失
 
 #### Phase 选择
 

@@ -167,6 +167,23 @@ class SceneArchiveProgress:
                 count += 1
         return count
 
+    def verify_passed(self, project_root: Path) -> int:
+        """Reset passed chapters whose split file is missing on disk.
+
+        Returns the number of chapters reset to pending.
+        """
+        splits = self.splits_dir(project_root)
+        count = 0
+        for entry in self.chapters.values():
+            if entry.state == ChapterState.PASSED:
+                split_path = splits / f"{entry.chapter_id}.json"
+                if not split_path.exists():
+                    entry.state = ChapterState.PENDING
+                    entry.retry_count = 0
+                    entry.error_message = ""
+                    count += 1
+        return count
+
     def stats(self) -> dict[str, int]:
         counts: dict[str, int] = {}
         for entry in self.chapters.values():
@@ -615,11 +632,15 @@ def _run_scene_archive_inner(
         if cid not in progress.chapters:
             progress.chapters[cid] = ChapterEntry(chapter_id=cid)
 
-    # On resume, reset failed chapters
+    # On resume, reset failed chapters and verify passed splits exist
     if resume:
         reset_count = progress.reset_failed()
         if reset_count > 0:
             print(f"  Reset {reset_count} failed/error chapters to pending")
+        missing_count = progress.verify_passed(project_root)
+        if missing_count > 0:
+            print(f"  Reset {missing_count} passed chapters with missing "
+                  f"split files to pending")
 
     # Filter to chapters that need work
     pending = [cid for cid in chapters_to_process

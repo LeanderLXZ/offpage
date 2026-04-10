@@ -212,10 +212,16 @@ that a new AI should know beyond what the architecture docs already say.
     failures occur within a 60s window, all workers pause for 180s before
     resuming. This prevents failure storms under systemic issues.
 40d. Phase 4 intermediate state (`.scene_archive.lock` and
-    `works/{work_id}/analysis/incremental/scene_archive/`) is local and
-    git-ignored, and Phase 3 rollback explicitly excludes it from
-    repo-wide `git clean -fd`. This prevents unrelated Phase 3 failures
-    from deleting Phase 4 resume state or partial scene splits.
+    `works/{work_id}/analysis/incremental/scene_archive/`) **must not be
+    git-tracked**. They are in `.gitignore`; if an extraction branch
+    already tracks them, `git rm --cached` is required. Without this,
+    `git checkout -- .` during Phase 3 rollback restores tracked splits
+    to their last committed version, silently destroying newer split
+    files. Phase 3 rollback also excludes them from `git clean -fd`.
+40e. Phase 4 resume verifies that passed chapters' split files actually
+    exist on disk (`verify_passed`). Missing files are reset to pending
+    and regenerated. This guards against file loss from any cause
+    (rollback, manual cleanup, filesystem errors).
 
 ## Repository
 

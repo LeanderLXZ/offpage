@@ -90,8 +90,10 @@ No runtime implementation code yet.
   `--concurrency` for parallelism. Output: `works/{work_id}/rag/`.
   Independent PID lock (`.scene_archive.lock`) — can run parallel
   with Phase 3. Intermediate `analysis/incremental/scene_archive/`
-  is git-ignored and preserved from Phase 3 rollback. Global circuit
-  breaker: 60s window, ≥8 failures → pause 180s
+  is git-ignored (must not be tracked) and preserved from Phase 3
+  rollback. Resume verifies split files exist on disk — missing files
+  reset to pending. Global circuit breaker: 60s window, ≥8 failures →
+  pause 180s
 - Prompt templates: analysis, world extraction, character extraction,
   world semantic review, character semantic review, targeted fix,
   scene split (coordinated_extraction.md kept for legacy; unified

@@ -192,9 +192,10 @@ fields. Batch size max 15 chapters. Phase 4 is independent
 boundary annotation, programmatic validation only, output to
 `works/{work_id}/rag/scene_archive.jsonl`. Intermediate
 `works/{work_id}/analysis/incremental/scene_archive/` and
-`.scene_archive.lock` are local ignored artifacts and are explicitly
-preserved from Phase 3 rollback. CLI: `--start-phase 4`, `--concurrency N`.
-Supports Claude CLI and Codex CLI backends.
+`.scene_archive.lock` are local ignored artifacts (must not be git-tracked),
+explicitly preserved from Phase 3 rollback. Resume verifies split files
+exist on disk — missing files reset to pending. CLI: `--start-phase 4`,
+`--concurrency N`. Supports Claude CLI and Codex CLI backends.
 See `docs/requirements.md` §11.
 
 ## §12 Memory System and Retrieval
