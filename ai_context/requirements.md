@@ -192,8 +192,8 @@ failing check layer with narrowed input scope. Commit clears feedback/error
 fields. Batch size max 15 chapters. Phase 4 is independent
 (only needs Phase 1 batch plan): per-chapter parallel LLM calls for scene
 boundary annotation, programmatic validation only, output to
-`works/{work_id}/rag/scene_archive.jsonl`. Intermediate
-`works/{work_id}/analysis/incremental/scene_archive/` and
+`works/{work_id}/retrieval/scene_archive.jsonl`. Intermediate
+`works/{work_id}/analysis/scene_splits/` and
 `.scene_archive.lock` are local ignored artifacts (must not be git-tracked),
 explicitly preserved from Phase 3 rollback. Resume verifies split files
 exist on disk — missing files reset to pending. CLI: `--start-phase 4`,
@@ -229,7 +229,7 @@ Phase 1 batch plan). Per-chapter parallel, programmatic validation only.
 
 Tech: `jieba` (segmentation), `sqlite FTS5` (primary), `bge-large-zh-v1.5`
 (optional embedding fallback). Single SQLite file, no separate vector DB.
-Artifacts under `works/{work_id}/rag/`, not committed (.gitignore). Vocab
+Artifacts under `works/{work_id}/retrieval/`, not committed (.gitignore). Vocab
 dict at `works/{work_id}/indexes/vocab_dict.txt`, committed.
 
 See `docs/requirements.md` §12.

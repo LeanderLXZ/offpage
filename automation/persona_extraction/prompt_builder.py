@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .progress import BatchEntry, ExtractionProgress
+from .progress import BatchEntry, PipelineProgress
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ def build_summarization_prompt(
         chapter_files.append(f"- `{source_dir}/chapters/{ch:04d}.txt`")
 
     summaries_dir = (project_root / "works" / work_id
-                     / "analysis" / "incremental" / "chapter_summaries")
+                     / "analysis" / "chapter_summaries")
     output_path = summaries_dir / f"chunk_{chunk_index:03d}.json"
 
     context = {
@@ -115,7 +115,7 @@ def build_analysis_prompt(
             chapter_count = len(chapter_index.get("chapters", []))
 
     summaries_dir = (project_root / "works" / work_id
-                     / "analysis" / "incremental" / "chapter_summaries")
+                     / "analysis" / "chapter_summaries")
 
     context = {
         "work_id": work_id,
@@ -167,12 +167,12 @@ def build_baseline_prompt(
     # Analysis outputs
     for name in ("world_overview.json", "candidate_characters.json",
                  "source_batch_plan.json"):
-        p = work_dir / "analysis" / "incremental" / name
+        p = work_dir / "analysis" / name
         if p.exists():
             files.append(f"- `{p}`")
 
     # Chapter summaries (for reference)
-    summaries_dir = work_dir / "analysis" / "incremental" / "chapter_summaries"
+    summaries_dir = work_dir / "analysis" / "chapter_summaries"
     if summaries_dir.exists():
         for p in sorted(summaries_dir.glob("chunk_*.json")):
             files.append(f"- `{p}`")
@@ -199,9 +199,10 @@ def build_baseline_prompt(
 
 def build_extraction_prompt(
     project_root: Path,
-    progress: ExtractionProgress,
+    progress: PipelineProgress,
     batch: BatchEntry,
     *,
+    batches: list[BatchEntry] | None = None,
     reviewer_feedback: str = "",
 ) -> str:
     """Legacy: build prompt for coordinated world + character extraction.
@@ -217,7 +218,7 @@ def build_extraction_prompt(
     source_dir = project_root / "sources" / "works" / work_id
 
     # Determine previous batch output for style reference
-    prev_batch = _find_previous_committed_batch(progress, batch)
+    prev_batch = _find_previous_committed_batch(batches or [], batch)
     prev_world_snapshot = ""
     prev_char_snapshots: dict[str, str] = {}
     if prev_batch:
@@ -271,9 +272,10 @@ def build_extraction_prompt(
 
 def build_world_extraction_prompt(
     project_root: Path,
-    progress: ExtractionProgress,
+    progress: PipelineProgress,
     batch: BatchEntry,
     *,
+    batches: list[BatchEntry] | None = None,
     reviewer_feedback: str = "",
 ) -> str:
     """Build prompt for world-only extraction (Phase A of 1+N)."""
@@ -283,7 +285,7 @@ def build_world_extraction_prompt(
     work_dir = project_root / "works" / work_id
     source_dir = project_root / "sources" / "works" / work_id
 
-    prev_batch = _find_previous_committed_batch(progress, batch)
+    prev_batch = _find_previous_committed_batch(batches or [], batch)
     prev_world_snapshot = ""
     if prev_batch:
         ws_path = (work_dir / "world" / "stage_snapshots"
@@ -321,10 +323,11 @@ def build_world_extraction_prompt(
 
 def build_character_extraction_prompt(
     project_root: Path,
-    progress: ExtractionProgress,
+    progress: PipelineProgress,
     batch: BatchEntry,
     character_id: str,
     *,
+    batches: list[BatchEntry] | None = None,
     world_snapshot_path: str = "",
     reviewer_feedback: str = "",
 ) -> str:
@@ -336,7 +339,7 @@ def build_character_extraction_prompt(
     source_dir = project_root / "sources" / "works" / work_id
     char_dir = work_dir / "characters" / character_id / "canon"
 
-    prev_batch = _find_previous_committed_batch(progress, batch)
+    prev_batch = _find_previous_committed_batch(batches or [], batch)
     prev_char_snapshot = ""
     if prev_batch:
         cs_path = (char_dir / "stage_snapshots"
@@ -385,10 +388,11 @@ def build_character_extraction_prompt(
 
 def build_reviewer_prompt(
     project_root: Path,
-    progress: ExtractionProgress,
+    progress: PipelineProgress,
     batch: BatchEntry,
     programmatic_report: str,
     *,
+    batches: list[BatchEntry] | None = None,
     lane_type: str = "all",
     lane_character_id: str | None = None,
 ) -> str:
@@ -401,7 +405,7 @@ def build_reviewer_prompt(
     work_id = progress.work_id
     work_dir = project_root / "works" / work_id
 
-    prev_batch = _find_previous_committed_batch(progress, batch)
+    prev_batch = _find_previous_committed_batch(batches or [], batch)
 
     # --- Build explicit file list for the lane ---
     review_files: list[str] = []
@@ -478,10 +482,11 @@ def build_reviewer_prompt(
 
 def build_targeted_fix_prompt(
     project_root: Path,
-    progress: ExtractionProgress,
+    progress: PipelineProgress,
     batch: BatchEntry,
     findings: str,
     *,
+    batches: list[BatchEntry] | None = None,
     lane_type: str = "all",
     lane_character_id: str | None = None,
 ) -> str:
@@ -526,8 +531,7 @@ def build_targeted_fix_prompt(
             evidence.append(f"- `{ch_file.relative_to(project_root)}`")
 
     # Only include chapter summary chunks covering this batch's range
-    summaries_dir = (work_dir / "analysis" / "incremental"
-                     / "chapter_summaries")
+    summaries_dir = work_dir / "analysis" / "chapter_summaries"
     if summaries_dir.exists():
         for p in sorted(summaries_dir.glob("chunk_*.json")):
             if _chunk_covers_range(p, start, end):
@@ -551,10 +555,10 @@ def build_targeted_fix_prompt(
 # ---------------------------------------------------------------------------
 
 def _find_previous_committed_batch(
-    progress: ExtractionProgress, current: BatchEntry
+    batches: list[BatchEntry], current: BatchEntry
 ) -> BatchEntry | None:
     """Find the most recent committed batch before the current one."""
-    for b in reversed(progress.batches):
+    for b in reversed(batches):
         if b.batch_id == current.batch_id:
             continue
         if b.state.value == "committed":
@@ -772,7 +776,7 @@ def _build_quality_requirements(
 ) -> str:
     """Build a markdown table of per-target min examples from importance."""
     candidates_path = (project_root / "works" / work_id / "analysis"
-                       / "incremental" / "candidate_characters.json")
+                       / "candidate_characters.json")
     candidates = _read_json(candidates_path)
     if not candidates:
         return ("| target | importance | 最低 examples |\n"

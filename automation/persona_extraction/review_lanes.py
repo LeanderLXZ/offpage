@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .llm_backend import LLMBackend
-    from .progress import BatchEntry, ExtractionProgress
+    from .progress import BatchEntry, PipelineProgress
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class LaneResult:
 
 def run_parallel_review(
     project_root: Path,
-    progress: "ExtractionProgress",
+    progress: "PipelineProgress",
     batch: "BatchEntry",
     backend: "LLMBackend",
     reviewer_backend: "LLMBackend",
@@ -113,7 +113,7 @@ def _execute_single_lane(
     lane_id: str,
     lane_type: str,
     project_root: Path,
-    progress: "ExtractionProgress",
+    progress: "PipelineProgress",
     batch: "BatchEntry",
     backend: "LLMBackend",
     reviewer_backend: "LLMBackend",

@@ -89,9 +89,9 @@ No runtime implementation code yet.
 - Phase 4 scene archive (`scene_archive.py`): per-chapter parallel
   LLM calls for scene boundary annotation, programmatic validation,
   full_text extraction by line number. `--start-phase 4` standalone,
-  `--concurrency` for parallelism. Output: `works/{work_id}/rag/`.
+  `--concurrency` for parallelism. Output: `works/{work_id}/retrieval/`.
   Independent PID lock (`.scene_archive.lock`) — can run parallel
-  with Phase 3. Intermediate `analysis/incremental/scene_archive/`
+  with Phase 3. Intermediate `analysis/scene_splits/`
   is git-ignored (must not be tracked) and preserved from Phase 3
   rollback. Resume verifies split files exist on disk — missing files
   reset to pending. Global circuit breaker: 60s window, ≥8 failures →
@@ -182,7 +182,7 @@ No runtime implementation code yet.
 - `ai_context/` is English for AI handoff
 - Real user packages stay local (not committed)
 - Full novels, databases, indexes, large artifacts not committed
-- `works/*/analysis/incremental/` and `works/*/indexes/` are git-tracked
+- `works/*/analysis/` and `works/*/indexes/` are git-tracked
 - `docs/logs/` is write-mostly; do not proactively read
 - No per-batch report files; use progress files in-place
 - Batches split by natural story boundaries (target 10 ch, min 5, max 15)

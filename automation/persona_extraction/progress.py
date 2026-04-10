@@ -1,9 +1,14 @@
 """Extraction progress tracking and state machine.
 
-Progress file lives at:
-  works/{work_id}/analysis/incremental/extraction_progress.json
+Progress files live under:
+  works/{work_id}/analysis/progress/
 
-State machine per batch:
+  pipeline.json         — phase-level completion status
+  phase0_summaries.json — Phase 0 chunk progress
+  phase3_batches.json   — Phase 3 batch state machine
+  phase4_scenes.json    — Phase 4 per-chapter progress (managed by scene_archive.py)
+
+State machine per batch (Phase 3):
   pending → extracting → extracted → post_processing → reviewing
                 │                                        │  │
                 └→ error                                 │  └→ fixing → passed → committed
@@ -24,6 +29,204 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _progress_dir(project_root: Path, work_id: str) -> Path:
+    return project_root / "works" / work_id / "analysis" / "progress"
+
+
+# ---------------------------------------------------------------------------
+# Pipeline progress (phase-level)
+# ---------------------------------------------------------------------------
+
+# Phase states
+PHASE_PENDING = "pending"
+PHASE_RUNNING = "running"
+PHASE_DONE = "done"
+
+# Canonical phase keys
+PHASE_KEYS = (
+    "phase_0", "phase_1", "phase_2", "phase_2_5",
+    "phase_3", "phase_3_5", "phase_4",
+)
+
+
+@dataclass
+class PipelineProgress:
+    """Top-level pipeline status — tracks which phases are done."""
+    work_id: str
+    extraction_branch: str = ""
+    target_characters: list[str] = field(default_factory=list)
+    phases: dict[str, str] = field(default_factory=dict)
+    created_at: str = ""
+    last_updated: str = ""
+
+    def __post_init__(self):
+        # Ensure all phase keys exist
+        for key in PHASE_KEYS:
+            self.phases.setdefault(key, PHASE_PENDING)
+
+    def phase_state(self, key: str) -> str:
+        return self.phases.get(key, PHASE_PENDING)
+
+    def set_phase(self, key: str, state: str) -> None:
+        self.phases[key] = state
+        self.last_updated = _now_iso()
+
+    def mark_done(self, key: str) -> None:
+        self.set_phase(key, PHASE_DONE)
+
+    def is_done(self, key: str) -> bool:
+        return self.phase_state(key) == PHASE_DONE
+
+    # ---- Persistence ----
+
+    @staticmethod
+    def _path(project_root: Path, work_id: str) -> Path:
+        return _progress_dir(project_root, work_id) / "pipeline.json"
+
+    def save(self, project_root: Path) -> Path:
+        path = self._path(project_root, self.work_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.last_updated = _now_iso()
+        data = {
+            "work_id": self.work_id,
+            "extraction_branch": self.extraction_branch,
+            "target_characters": self.target_characters,
+            "phases": self.phases,
+            "created_at": self.created_at,
+            "last_updated": self.last_updated,
+        }
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        logger.info("Pipeline progress saved: %s", path)
+        return path
+
+    @classmethod
+    def load(cls, project_root: Path, work_id: str) -> PipelineProgress | None:
+        path = cls._path(project_root, work_id)
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return cls(
+                work_id=data["work_id"],
+                extraction_branch=data.get("extraction_branch", ""),
+                target_characters=data.get("target_characters", []),
+                phases=data.get("phases", {}),
+                created_at=data.get("created_at", ""),
+                last_updated=data.get("last_updated", ""),
+            )
+        except (json.JSONDecodeError, OSError, KeyError) as exc:
+            logger.warning("Failed to load pipeline progress: %s", exc)
+            return None
+
+
+# ---------------------------------------------------------------------------
+# Phase 0 progress (chunk-level)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ChunkEntry:
+    chunk_id: str
+    chapters: str           # e.g. "0001-0025"
+    state: str = "pending"  # pending | done | failed
+    retry_count: int = 0
+    error_message: str = ""
+    last_updated: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "chapters": self.chapters,
+            "state": self.state,
+            "retry_count": self.retry_count,
+            "error_message": self.error_message,
+            "last_updated": self.last_updated,
+        }
+
+    @classmethod
+    def from_dict(cls, chunk_id: str, d: dict[str, Any]) -> ChunkEntry:
+        return cls(
+            chunk_id=chunk_id,
+            chapters=d.get("chapters", ""),
+            state=d.get("state", "pending"),
+            retry_count=d.get("retry_count", 0),
+            error_message=d.get("error_message", ""),
+            last_updated=d.get("last_updated", ""),
+        )
+
+
+@dataclass
+class Phase0Progress:
+    """Phase 0 chunk-level progress."""
+    work_id: str
+    total_chapters: int = 0
+    chunk_size: int = 25
+    total_chunks: int = 0
+    chunks: dict[str, ChunkEntry] = field(default_factory=dict)
+    last_updated: str = ""
+
+    def all_done(self) -> bool:
+        return all(c.state == "done" for c in self.chunks.values())
+
+    def done_count(self) -> int:
+        return sum(1 for c in self.chunks.values() if c.state == "done")
+
+    # ---- Persistence ----
+
+    @staticmethod
+    def _path(project_root: Path, work_id: str) -> Path:
+        return _progress_dir(project_root, work_id) / "phase0_summaries.json"
+
+    def save(self, project_root: Path) -> Path:
+        path = self._path(project_root, self.work_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.last_updated = _now_iso()
+        data = {
+            "work_id": self.work_id,
+            "total_chapters": self.total_chapters,
+            "chunk_size": self.chunk_size,
+            "total_chunks": self.total_chunks,
+            "chunks": {
+                cid: entry.to_dict()
+                for cid, entry in self.chunks.items()
+            },
+            "last_updated": self.last_updated,
+        }
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        return path
+
+    @classmethod
+    def load(cls, project_root: Path, work_id: str) -> Phase0Progress | None:
+        path = cls._path(project_root, work_id)
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            prog = cls(
+                work_id=data["work_id"],
+                total_chapters=data.get("total_chapters", 0),
+                chunk_size=data.get("chunk_size", 25),
+                total_chunks=data.get("total_chunks", 0),
+                last_updated=data.get("last_updated", ""),
+            )
+            for cid, entry_data in data.get("chunks", {}).items():
+                prog.chunks[cid] = ChunkEntry.from_dict(cid, entry_data)
+            return prog
+        except (json.JSONDecodeError, OSError, KeyError) as exc:
+            logger.warning("Failed to load Phase 0 progress: %s", exc)
+            return None
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 batch state machine
+# ---------------------------------------------------------------------------
 
 class BatchState(str, Enum):
     PENDING = "pending"
@@ -121,17 +324,11 @@ class BatchEntry:
 
 
 @dataclass
-class ExtractionProgress:
-    """Full extraction progress for a work."""
+class Phase3Progress:
+    """Phase 3 batch extraction progress."""
     work_id: str
-    target_characters: list[str] = field(default_factory=list)
     batch_size: int = 10
-    extraction_branch: str = ""
     batches: list[BatchEntry] = field(default_factory=list)
-    analysis_done: bool = False
-    characters_confirmed: bool = False
-    baseline_done: bool = False
-    created_at: str = ""
     last_updated: str = ""
 
     # ---- Queries ----
@@ -208,62 +405,93 @@ class ExtractionProgress:
 
     # ---- Persistence ----
 
-    def progress_path(self, project_root: Path) -> Path:
-        return (project_root / "works" / self.work_id
-                / "analysis" / "incremental" / "extraction_progress.json")
+    @staticmethod
+    def _path(project_root: Path, work_id: str) -> Path:
+        return _progress_dir(project_root, work_id) / "phase3_batches.json"
 
     def save(self, project_root: Path) -> Path:
-        path = self.progress_path(project_root)
+        path = self._path(project_root, self.work_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         self.last_updated = _now_iso()
-        path.write_text(json.dumps(self.to_dict(), ensure_ascii=False,
-                                   indent=2),
-                        encoding="utf-8")
-        logger.info("Progress saved: %s", path)
+        data = {
+            "work_id": self.work_id,
+            "batch_size": self.batch_size,
+            "batches": [b.to_dict() for b in self.batches],
+            "last_updated": self.last_updated,
+        }
+        path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        logger.info("Phase 3 progress saved: %s", path)
         return path
 
     @classmethod
-    def load(cls, project_root: Path, work_id: str) -> ExtractionProgress | None:
-        path = (project_root / "works" / work_id
-                / "analysis" / "incremental" / "extraction_progress.json")
+    def load(cls, project_root: Path, work_id: str) -> Phase3Progress | None:
+        path = cls._path(project_root, work_id)
         if not path.exists():
             return None
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            return cls.from_dict(data)
+            return cls(
+                work_id=data["work_id"],
+                batch_size=data.get("batch_size", 10),
+                batches=[BatchEntry.from_dict(b)
+                         for b in data.get("batches", [])],
+                last_updated=data.get("last_updated", ""),
+            )
         except (json.JSONDecodeError, OSError, KeyError) as exc:
-            logger.warning("Failed to load progress from %s: %s", path, exc)
+            logger.warning("Failed to load Phase 3 progress: %s", exc)
             return None
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "work_id": self.work_id,
-            "target_characters": self.target_characters,
-            "batch_size": self.batch_size,
-            "extraction_branch": self.extraction_branch,
-            "batches": [b.to_dict() for b in self.batches],
-            "analysis_done": self.analysis_done,
-            "characters_confirmed": self.characters_confirmed,
-            "baseline_done": self.baseline_done,
-            "created_at": self.created_at,
-            "last_updated": self.last_updated,
-        }
 
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> ExtractionProgress:
-        return cls(
-            work_id=d["work_id"],
-            target_characters=d.get("target_characters", []),
-            batch_size=d.get("batch_size", 10),
-            extraction_branch=d.get("extraction_branch", ""),
-            batches=[BatchEntry.from_dict(b) for b in d.get("batches", [])],
-            analysis_done=d.get("analysis_done", False),
-            characters_confirmed=d.get("characters_confirmed", False),
-            baseline_done=d.get("baseline_done", False),
-            created_at=d.get("created_at", ""),
-            last_updated=d.get("last_updated", ""),
-        )
+# ---------------------------------------------------------------------------
+# Legacy migration helper
+# ---------------------------------------------------------------------------
 
+def migrate_legacy_progress(
+    project_root: Path, work_id: str,
+) -> tuple[PipelineProgress, Phase3Progress] | None:
+    """Migrate old extraction_progress.json → pipeline.json + phase3_batches.json.
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    Returns the new objects if migration happened, None if no legacy file found.
+    """
+    legacy_path = (project_root / "works" / work_id
+                   / "analysis" / "incremental" / "extraction_progress.json")
+    if not legacy_path.exists():
+        # Also check analysis/ directly (partially migrated)
+        legacy_path = (project_root / "works" / work_id
+                       / "analysis" / "extraction_progress.json")
+        if not legacy_path.exists():
+            return None
+
+    try:
+        data = json.loads(legacy_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    pipeline = PipelineProgress(
+        work_id=data["work_id"],
+        extraction_branch=data.get("extraction_branch", ""),
+        target_characters=data.get("target_characters", []),
+        created_at=data.get("created_at", ""),
+    )
+    # Map legacy bool flags to phase states
+    if data.get("analysis_done"):
+        pipeline.mark_done("phase_1")
+    if data.get("characters_confirmed"):
+        pipeline.mark_done("phase_2")
+    if data.get("baseline_done"):
+        pipeline.mark_done("phase_2_5")
+
+    phase3 = Phase3Progress(
+        work_id=data["work_id"],
+        batch_size=data.get("batch_size", 10),
+        batches=[BatchEntry.from_dict(b) for b in data.get("batches", [])],
+    )
+
+    # Save new files
+    pipeline.save(project_root)
+    phase3.save(project_root)
+
+    logger.info("Migrated legacy progress: %s", legacy_path)
+    return pipeline, phase3

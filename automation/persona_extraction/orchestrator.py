@@ -24,6 +24,7 @@ import signal
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +40,17 @@ from .json_repair import try_repair_json_file
 from .llm_backend import LLMBackend, LLMResult, run_with_retry
 from .post_processing import run_batch_post_processing
 from .process_guard import PidLock, fmt_memory, get_rss_mb
-from .progress import BatchEntry, BatchState, ExtractionProgress
+from .progress import (
+    BatchEntry,
+    BatchState,
+    ChunkEntry,
+    Phase0Progress,
+    Phase3Progress,
+    PipelineProgress,
+    migrate_legacy_progress,
+    PHASE_DONE,
+    PHASE_RUNNING,
+)
 from .prompt_builder import (
     build_analysis_prompt,
     build_baseline_prompt,
@@ -241,7 +252,8 @@ class ExtractionOrchestrator:
         self.max_runtime_minutes = max_runtime_minutes
         self.start_phase = start_phase
         self.concurrency = concurrency
-        self.progress: ExtractionProgress | None = None
+        self.pipeline: PipelineProgress | None = None
+        self.phase3: Phase3Progress | None = None
         self._interrupted = False
         self._start_time = time.monotonic()
         self._lock = PidLock(project_root, work_id)
@@ -254,8 +266,10 @@ class ExtractionOrchestrator:
         logger.warning("Signal %d received. Saving progress and exiting...",
                        signum)
         self._interrupted = True
-        if self.progress:
-            self.progress.save(self.project_root)
+        if self.phase3:
+            self.phase3.save(self.project_root)
+        if self.pipeline:
+            self.pipeline.save(self.project_root)
         self._lock.release()
         sys.exit(130)
 
@@ -357,7 +371,7 @@ class ExtractionOrchestrator:
 
     def _extraction_output_exists(
         self,
-        progress: ExtractionProgress,
+        target_characters: list[str],
         batch: BatchEntry,
     ) -> bool:
         """Check if extraction output already exists on disk for a batch.
@@ -366,7 +380,7 @@ class ExtractionOrchestrator:
         stage_snapshots exist, indicating the extraction step can be
         skipped (smart resume).
         """
-        work_dir = self.project_root / "works" / progress.work_id
+        work_dir = self.project_root / "works" / self.work_id
         stage_id = batch.stage_id
 
         # World snapshot must exist
@@ -376,7 +390,7 @@ class ExtractionOrchestrator:
             return False
 
         # All target character snapshots must exist
-        for char_id in progress.target_characters:
+        for char_id in target_characters:
             char_ss = (work_dir / "characters" / char_id / "canon"
                        / "stage_snapshots" / f"{stage_id}.json")
             if not char_ss.exists():
@@ -401,7 +415,7 @@ class ExtractionOrchestrator:
             sys.exit(1)
 
         summaries_dir = (self.project_root / "works" / self.work_id
-                         / "analysis" / "incremental" / "chapter_summaries")
+                         / "analysis" / "chapter_summaries")
         summaries_dir.mkdir(parents=True, exist_ok=True)
 
         # Build chunk list: (idx, start, end) all 1-based
@@ -413,6 +427,27 @@ class ExtractionOrchestrator:
             chunks.append((idx, start, end))
 
         total_chunks = len(chunks)
+
+        # Load or create Phase 0 progress
+        phase0 = Phase0Progress.load(
+            self.project_root, self.work_id)
+        if phase0 is None:
+            phase0 = Phase0Progress(
+                work_id=self.work_id,
+                total_chapters=total_chapters,
+                chunk_size=self.chunk_size,
+                total_chunks=total_chunks,
+            )
+        # Ensure all chunks are tracked
+        for idx, start, end in chunks:
+            chunk_id = f"chunk_{idx:03d}"
+            if chunk_id not in phase0.chunks:
+                phase0.chunks[chunk_id] = ChunkEntry(
+                    chunk_id=chunk_id,
+                    chapters=f"{start:04d}-{end:04d}",
+                )
+        phase0.save(self.project_root)
+
         print(f"  Total chapters: {total_chapters}")
         print(f"  Chunk size: {self.chunk_size}")
         print(f"  Total chunks: {total_chunks}")
@@ -420,7 +455,16 @@ class ExtractionOrchestrator:
         # Filter out already-completed chunks
         pending: list[tuple[int, int, int]] = []
         for idx, start, end in chunks:
-            output_path = summaries_dir / f"chunk_{idx:03d}.json"
+            chunk_id = f"chunk_{idx:03d}"
+            entry = phase0.chunks.get(chunk_id)
+            output_path = summaries_dir / f"{chunk_id}.json"
+
+            # Check progress + file existence
+            if entry and entry.state == "done" and output_path.exists():
+                print(f"  [{idx}/{total_chunks}] {chunk_id} "
+                      f"({start:04d}-{end:04d}) — already done, skipping")
+                continue
+
             if output_path.exists():
                 existing = _load_json(output_path)
                 if existing is None:
@@ -431,17 +475,25 @@ class ExtractionOrchestrator:
                     )
                     if ok:
                         existing = _load_json(output_path)
-                        print(f"  [{idx}/{total_chunks}] chunk_{idx:03d} "
+                        print(f"  [{idx}/{total_chunks}] {chunk_id} "
                               f"({start:04d}-{end:04d}) — repaired ({desc}), "
                               f"skipping")
                 if existing and existing.get("summaries"):
-                    print(f"  [{idx}/{total_chunks}] chunk_{idx:03d} "
+                    # File exists but progress not marked — fix it
+                    if entry:
+                        entry.state = "done"
+                        phase0.save(self.project_root)
+                    print(f"  [{idx}/{total_chunks}] {chunk_id} "
                           f"({start:04d}-{end:04d}) — already done, skipping")
                     continue
             pending.append((idx, start, end))
 
         if not pending:
             print(f"\n[OK] All {total_chunks} chunks already complete.")
+            # Mark pipeline phase_0 done
+            if self.pipeline:
+                self.pipeline.mark_done("phase_0")
+                self.pipeline.save(self.project_root)
             return summaries_dir
 
         print(f"  To process: {len(pending)}")
@@ -468,24 +520,35 @@ class ExtractionOrchestrator:
 
             for future in as_completed(futures):
                 idx, start, end = futures[future]
+                chunk_id = f"chunk_{idx:03d}"
                 try:
                     chunk_idx, success, msg = future.result()
                 except Exception as exc:
                     chunk_idx, success, msg = idx, False, str(exc)
 
+                entry = phase0.chunks.get(chunk_id)
                 if success:
                     completed += 1
+                    if entry:
+                        entry.state = "done"
+                        entry.last_updated = ""  # save() updates timestamp
+                    phase0.save(self.project_root)
                     if msg:  # partial
-                        print(f"    [WARN] chunk_{idx:03d} "
+                        print(f"    [WARN] {chunk_id} "
                               f"({start:04d}-{end:04d}): {msg}  "
                               f"({completed}/{total_pending})")
                     else:
-                        print(f"    [OK] chunk_{idx:03d} "
+                        print(f"    [OK] {chunk_id} "
                               f"({start:04d}-{end:04d})  "
                               f"({completed}/{total_pending})")
                 else:
                     failed += 1
-                    print(f"    [FAIL] chunk_{idx:03d}: {msg[:120]}")
+                    if entry:
+                        entry.state = "failed"
+                        entry.error_message = msg[:500]
+                        entry.retry_count += 1
+                    phase0.save(self.project_root)
+                    print(f"    [FAIL] {chunk_id}: {msg[:120]}")
 
         elapsed = time.monotonic() - start_time
         print(f"\n  Completed: {completed}/{total_pending}  "
@@ -508,6 +571,11 @@ class ExtractionOrchestrator:
 
         print(f"\n[OK] Summarization: {all_done}/{total_chunks} chunks")
 
+        # Mark pipeline phase_0 done
+        if self.pipeline:
+            self.pipeline.mark_done("phase_0")
+            self.pipeline.save(self.project_root)
+
         return summaries_dir
 
     # ------------------------------------------------------------------
@@ -523,7 +591,7 @@ class ExtractionOrchestrator:
         """
         MAX_ANALYSIS_RETRIES = 2
         work_dir = self.project_root / "works" / self.work_id
-        inc_dir = work_dir / "analysis" / "incremental"
+        inc_dir = work_dir / "analysis"
         correction_feedback = ""
 
         for attempt in range(1, MAX_ANALYSIS_RETRIES + 2):
@@ -590,6 +658,11 @@ class ExtractionOrchestrator:
                     sys.exit(1)
             else:
                 break  # no plan produced, let downstream handle
+
+        # Mark pipeline phase_1 done
+        if self.pipeline:
+            self.pipeline.mark_done("phase_1")
+            self.pipeline.save(self.project_root)
 
         return {
             "batch_plan": batch_plan,
@@ -675,10 +748,10 @@ class ExtractionOrchestrator:
                   "Fix the errors above before proceeding.")
             sys.exit(1)
 
-        # Mark baseline as done in progress so resume skips it
-        if self.progress:
-            self.progress.baseline_done = True
-            self.progress.save(self.project_root)
+        # Mark baseline as done in pipeline so resume skips it
+        if self.pipeline:
+            self.pipeline.mark_done("phase_2_5")
+            self.pipeline.save(self.project_root)
 
         print("\n[OK] Baseline production complete.")
 
@@ -692,7 +765,7 @@ class ExtractionOrchestrator:
         *,
         preset_characters: list[str] | None = None,
         preset_end_batch: int | None = None,
-    ) -> ExtractionProgress:
+    ) -> tuple[PipelineProgress, Phase3Progress]:
         """Interactive user confirmation of characters and parameters."""
         print("\n" + "=" * 60)
         print("  Phase 2: User Confirmation")
@@ -744,11 +817,18 @@ class ExtractionOrchestrator:
 
         batch_size = batch_plan.get("default_batch_size", 10)
 
-        progress = ExtractionProgress(
+        pipeline = PipelineProgress(
             work_id=self.work_id,
-            target_characters=selected,
-            batch_size=batch_size,
             extraction_branch=f"extraction/{self.work_id}",
+            target_characters=selected,
+        )
+        pipeline.mark_done("phase_1")
+        pipeline.mark_done("phase_2")
+        pipeline.save(self.project_root)
+
+        phase3 = Phase3Progress(
+            work_id=self.work_id,
+            batch_size=batch_size,
             batches=[
                 BatchEntry(
                     batch_id=b["batch_id"],
@@ -758,68 +838,99 @@ class ExtractionOrchestrator:
                 )
                 for b in batches_data  # full plan, not truncated
             ],
-            analysis_done=True,
-            characters_confirmed=True,
         )
+        phase3.save(self.project_root)
 
-        progress.save(self.project_root)
-        self.progress = progress
+        self.pipeline = pipeline
+        self.phase3 = phase3
 
         run_label = (f"first {preset_end_batch}" if preset_end_batch
                      else "all")
         print(f"\n[OK] Configuration saved.")
         print(f"     Characters: {selected}")
-        print(f"     Batches: {len(progress.batches)} total "
+        print(f"     Batches: {len(phase3.batches)} total "
               f"(this run: {run_label})")
-        print(f"     Branch: {progress.extraction_branch}")
-        return progress
+        print(f"     Branch: {pipeline.extraction_branch}")
+        return pipeline, phase3
 
     # ------------------------------------------------------------------
     # Phase 3: Extraction loop
     # ------------------------------------------------------------------
 
-    def run_extraction_loop(self, progress: ExtractionProgress | None = None,
-                            *, max_batches: int = 0,
-                            ) -> None:
+    def run_extraction_loop(
+        self,
+        pipeline: PipelineProgress | None = None,
+        phase3: Phase3Progress | None = None,
+        *,
+        max_batches: int | None = None,
+    ) -> None:
         """Main extraction loop: iterate through batches.
 
         Args:
-            max_batches: Stop after this many batches complete (0 = all).
+            pipeline: Pipeline progress (uses self.pipeline if None).
+            phase3: Phase 3 batch progress (uses self.phase3 if None).
+            max_batches: Stop after this many batches complete.
+                         None = all, 0 = baseline only.
         """
-        progress = progress or self.progress
-        if not progress:
+        pipeline = pipeline or self.pipeline
+        phase3 = phase3 or self.phase3
+        if not pipeline or not phase3:
             print("[ERROR] No progress loaded. Run analysis first.")
             sys.exit(1)
 
-        self.progress = progress
+        self.pipeline = pipeline
+        self.phase3 = phase3
 
         # Expand batches from batch plan if --end-batch increased
-        self._ensure_batches_from_plan(progress, max_batches)
+        self._ensure_batches_from_plan(phase3, max_batches)
+
+        # --end-batch 0 means baseline only — skip extraction loop
+        if max_batches is not None and max_batches == 0:
+            # Still need baseline
+            force_baseline = True
+        else:
+            force_baseline = self.start_phase == "2.5"
+
+        # Force baseline if --start-phase 2.5
+        if force_baseline:
+            pipeline.set_phase("phase_2_5", PHASE_RUNNING)
+            pipeline.save(self.project_root)
 
         # Check if baseline production was completed — if not, run it now
-        if not progress.baseline_done:
-            work_dir = self.project_root / "works" / progress.work_id
+        work_dir = self.project_root / "works" / pipeline.work_id
+        fixed_rel = (work_dir / "world" / "foundation"
+                     / "fixed_relationships.json")
+        if not pipeline.is_done("phase_2_5") or (
+                force_baseline and not fixed_rel.exists()):
             foundation = work_dir / "world" / "foundation" / "foundation.json"
             identities_ok = all(
-                (work_dir / "characters" / c / "canon" / "identity.json").exists()
-                for c in progress.target_characters
+                (work_dir / "characters" / c / "canon" / "identity.json"
+                 ).exists()
+                for c in pipeline.target_characters
             )
-            if foundation.exists() and identities_ok:
+            if (foundation.exists() and identities_ok
+                    and fixed_rel.exists() and not force_baseline):
                 # Files exist from a prior partial run — mark done
                 print("  [OK] Baseline files already present, marking done.")
-                progress.baseline_done = True
-                progress.save(self.project_root)
+                pipeline.mark_done("phase_2_5")
+                pipeline.save(self.project_root)
             else:
                 print("  [WARN] Baseline not completed. Running Phase 2.5...")
-                self.run_baseline_production(progress.target_characters)
+                self.run_baseline_production(pipeline.target_characters)
                 # Commit baseline so extraction starts with clean tree
                 sha = commit_batch(self.project_root,
                                    "baseline", "Phase 2.5 baseline (recovery)")
                 if sha:
                     print(f"  [OK] Baseline committed as {sha}")
 
+        # --end-batch 0: baseline only, stop here
+        if max_batches is not None and max_batches == 0:
+            print("\n[STOP] --end-batch 0: baseline only, skipping "
+                  "extraction loop.")
+            return
+
         # Auto-reset blocked batches on resume — user chose to retry
-        for b in progress.batches:
+        for b in phase3.batches:
             if b.state in (BatchState.FAILED, BatchState.ERROR):
                 if b.retry_count >= b.max_retries:
                     print(f"  [RESET] {b.batch_id} was blocked "
@@ -828,19 +939,19 @@ class ExtractionOrchestrator:
                     b.state = BatchState.PENDING
                     b.retry_count = 0
                     b.error_message = ""
-                    progress.save(self.project_root)
+                    phase3.save(self.project_root)
 
-        completed_before = progress.completed_batch_count()
-        tracker = ProgressTracker(len(progress.batches), completed_before)
+        completed_before = phase3.completed_batch_count()
+        tracker = ProgressTracker(len(phase3.batches), completed_before)
 
         print(f"\n{'=' * 60}")
         print(f"  Phase 3: Extraction Loop")
         print(f"{'=' * 60}")
-        print(f"  Work: {progress.work_id}")
-        print(f"  Characters: {progress.target_characters}")
+        print(f"  Work: {pipeline.work_id}")
+        print(f"  Characters: {pipeline.target_characters}")
         print(f"  Total batches: {tracker.total}")
         print(f"  Completed: {completed_before}")
-        if max_batches > 0:
+        if max_batches is not None and max_batches > 0:
             to_run = max(0, max_batches - completed_before)
             print(f"  Target: {max_batches} (up to {to_run} this run)")
         else:
@@ -848,9 +959,9 @@ class ExtractionOrchestrator:
         print(f"{'=' * 60}")
 
         # Create extraction branch
-        if progress.extraction_branch:
+        if pipeline.extraction_branch:
             if not create_extraction_branch(self.project_root,
-                                            progress.extraction_branch):
+                                            pipeline.extraction_branch):
                 print("[ERROR] Cannot create extraction branch.")
                 sys.exit(1)
 
@@ -863,16 +974,16 @@ class ExtractionOrchestrator:
             if self._check_runtime_limit():
                 break
 
-            if (max_batches > 0
+            if (max_batches is not None and max_batches > 0
                     and tracker.completed >= max_batches):
                 print(f"\n[STOP] Reached max_batches limit "
                       f"({tracker.completed}/{max_batches}).")
                 reached_limit = True
                 break
 
-            batch = progress.next_pending_batch()
+            batch = phase3.next_pending_batch()
             if batch is None:
-                if progress.all_committed():
+                if phase3.all_committed():
                     print("\n[DONE] All batches completed!")
                     reached_limit = True
                 else:
@@ -880,18 +991,19 @@ class ExtractionOrchestrator:
                           "Check progress for blocked/error batches.")
                 break
 
-            self._process_batch(progress, batch, tracker)
+            self._process_batch(phase3, pipeline, batch, tracker)
 
         # Post-loop: run Phase 3.5/4 when target was reached
         if reached_limit:
-            self._run_consistency_check(progress)
-            self._offer_squash_merge(progress)
+            self._run_consistency_check()
+            self._offer_squash_merge()
             self._run_scene_archive(
-                end_batch=max_batches, resume=True)
+                end_batch=max_batches or 0, resume=True)
 
         tracker.print_summary()
 
-    def _process_batch(self, progress: ExtractionProgress,
+    def _process_batch(self, phase3: Phase3Progress,
+                       pipeline: PipelineProgress,
                        batch: BatchEntry,
                        tracker: ProgressTracker) -> None:
         """Process a single batch through the full pipeline."""
@@ -906,7 +1018,7 @@ class ExtractionOrchestrator:
                 return
             batch.transition(BatchState.RETRYING)
             batch.retry_count += 1
-            progress.save(self.project_root)
+            phase3.save(self.project_root)
 
         if batch.state == BatchState.ERROR:
             if batch.retry_count >= batch.max_retries:
@@ -917,14 +1029,14 @@ class ExtractionOrchestrator:
             rollback_to_head(self.project_root)
             batch.retry_count += 1
             batch.transition(BatchState.PENDING)
-            progress.save(self.project_root)
+            phase3.save(self.project_root)
 
         if batch.state == BatchState.EXTRACTING:
             print("  [RESUME] Interrupted during extraction, "
                   "rolling back and restarting...")
             rollback_to_head(self.project_root)
             batch.state = BatchState.PENDING
-            progress.save(self.project_root)
+            phase3.save(self.project_root)
 
         if batch.state == BatchState.FIXING:
             # Interrupted during targeted fix — the fix may be partial.
@@ -937,32 +1049,36 @@ class ExtractionOrchestrator:
             tracker.start_step()
             tracker.print_step(1, 7, "Git preflight")
             problems = preflight_check(
-                self.project_root, progress.extraction_branch or None,
-                ignore_patterns=["extraction_progress.json", "__pycache__"])
+                self.project_root, pipeline.extraction_branch or None,
+                ignore_patterns=["extraction_progress.json",
+                                 "pipeline.json", "phase3_batches.json",
+                                 "__pycache__"])
             if problems:
                 for p in problems:
                     print(f"    [PROBLEM] {p}")
                 batch.transition(BatchState.ERROR)
                 batch.error_message = "; ".join(problems)
-                progress.save(self.project_root)
+                phase3.save(self.project_root)
                 return
             tracker.print_step_done(1, 7, "Git preflight")
 
             # --- Smart skip: if extraction output already on disk ---
-            if self._extraction_output_exists(progress, batch):
+            if self._extraction_output_exists(
+                    pipeline.target_characters, batch):
                 print(f"  [SKIP] Extraction output already on disk for "
                       f"{batch.batch_id}, jumping to post-processing")
                 batch.transition(BatchState.EXTRACTED)
-                progress.save(self.project_root)
+                phase3.save(self.project_root)
             else:
                 # --- Step 2: World extraction (Phase A) ---
                 tracker.start_step()
                 tracker.print_step(2, 7, "World extraction")
                 batch.transition(BatchState.EXTRACTING)
-                progress.save(self.project_root)
+                phase3.save(self.project_root)
 
                 world_prompt = build_world_extraction_prompt(
-                    self.project_root, progress, batch,
+                    self.project_root, pipeline, batch,
+                    batches=phase3.batches,
                     reviewer_feedback=batch.last_reviewer_feedback)
 
                 world_result = run_with_retry(self.backend, world_prompt,
@@ -976,20 +1092,20 @@ class ExtractionOrchestrator:
                     batch.transition(BatchState.ERROR)
                     batch.error_message = (
                         f"world: {world_result.error or 'unknown'}")
-                    progress.save(self.project_root)
+                    phase3.save(self.project_root)
                     return
                 tracker.print_step_done(2, 7, "World extraction")
 
                 # --- Step 3: Character extraction (Phase B, parallel) ---
                 tracker.start_step()
-                n_chars = len(progress.target_characters)
+                n_chars = len(pipeline.target_characters)
                 tracker.print_step(3, 7,
                                    f"Character extraction "
                                    f"({n_chars} parallel)")
 
                 # Determine world snapshot path for character prompts
                 work_dir = (self.project_root / "works"
-                            / progress.work_id)
+                            / pipeline.work_id)
                 ws_path = (work_dir / "world" / "stage_snapshots"
                            / f"{batch.stage_id}.json")
                 world_snapshot_rel = ""
@@ -1003,7 +1119,8 @@ class ExtractionOrchestrator:
                     char_id: str,
                 ) -> tuple[str, LLMResult]:
                     char_prompt = build_character_extraction_prompt(
-                        self.project_root, progress, batch, char_id,
+                        self.project_root, pipeline, batch, char_id,
+                        batches=phase3.batches,
                         world_snapshot_path=world_snapshot_rel,
                         reviewer_feedback=batch.last_reviewer_feedback)
                     result = run_with_retry(
@@ -1015,7 +1132,7 @@ class ExtractionOrchestrator:
                         max_workers=n_chars) as executor:
                     futures = {
                         executor.submit(_extract_character, c): c
-                        for c in progress.target_characters
+                        for c in pipeline.target_characters
                     }
                     for future in as_completed(futures):
                         char_id, result = future.result()
@@ -1031,7 +1148,7 @@ class ExtractionOrchestrator:
                     rollback_to_head(self.project_root)
                     batch.transition(BatchState.ERROR)
                     batch.error_message = "; ".join(char_errors)
-                    progress.save(self.project_root)
+                    phase3.save(self.project_root)
                     return
 
                 tracker.record_step(ProgressTracker.STEP_EXTRACTION)
@@ -1040,28 +1157,28 @@ class ExtractionOrchestrator:
                                         f"({n_chars})")
 
                 batch.transition(BatchState.EXTRACTED)
-                progress.save(self.project_root)
+                phase3.save(self.project_root)
 
         # --- Step 4: Programmatic post-processing ---
         if batch.state in (BatchState.EXTRACTED, BatchState.POST_PROCESSING):
             if batch.state == BatchState.EXTRACTED:
                 batch.transition(BatchState.POST_PROCESSING)
-                progress.save(self.project_root)
+                phase3.save(self.project_root)
 
             tracker.start_step()
             tracker.print_step(4, 7, "Post-processing (digest + catalog)")
 
             # Determine batch order (0-based index in batches list)
             batch_order = next(
-                (i for i, b in enumerate(progress.batches)
+                (i for i, b in enumerate(phase3.batches)
                  if b.batch_id == batch.batch_id), 0)
 
             pp_issues = run_batch_post_processing(
                 project_root=self.project_root,
-                work_id=progress.work_id,
+                work_id=pipeline.work_id,
                 stage_id=batch.stage_id,
                 batch_order=batch_order,
-                character_ids=progress.target_characters,
+                character_ids=pipeline.target_characters,
                 chapter_range=batch.chapters,
             )
 
@@ -1076,39 +1193,41 @@ class ExtractionOrchestrator:
                                     f"{len(pp_issues)} issues")
 
             batch.transition(BatchState.REVIEWING)
-            progress.save(self.project_root)
+            phase3.save(self.project_root)
 
         # --- Step 5: Parallel review lanes (V+R+F per entity) ---
         if batch.state == BatchState.REVIEWING:
             # Safety check: verify extraction output still exists on disk
-            work_dir = self.project_root / "works" / progress.work_id
+            work_dir = self.project_root / "works" / pipeline.work_id
             has_output = any(
                 (work_dir / "characters" / c / "canon" / "stage_snapshots")
                 .exists()
-                for c in progress.target_characters
+                for c in pipeline.target_characters
             )
             if not has_output:
                 print("  [RESUME] Extraction output missing for REVIEWING "
                       "batch, rolling back and restarting...")
                 rollback_to_head(self.project_root)
                 batch.state = BatchState.PENDING
-                progress.save(self.project_root)
+                phase3.save(self.project_root)
                 return
 
             tracker.start_step()
-            n_lanes = 1 + len(progress.target_characters)
+            n_lanes = 1 + len(pipeline.target_characters)
             tracker.print_step(5, 7,
                                f"Parallel review lanes ({n_lanes} lanes)")
 
             lane_results = run_parallel_review(
                 project_root=self.project_root,
-                progress=progress,
+                progress=pipeline,
                 batch=batch,
                 backend=self.backend,
                 reviewer_backend=self.reviewer_backend,
                 validate_fn=validate_lane,
-                build_reviewer_fn=build_reviewer_prompt,
-                build_fix_fn=build_targeted_fix_prompt,
+                build_reviewer_fn=partial(
+                    build_reviewer_prompt, batches=phase3.batches),
+                build_fix_fn=partial(
+                    build_targeted_fix_prompt, batches=phase3.batches),
                 parse_verdict_fn=_parse_verdict,
                 is_fixable_fn=_is_fixable,
                 run_with_retry_fn=run_with_retry,
@@ -1139,7 +1258,7 @@ class ExtractionOrchestrator:
                 print("    [FAIL] Rolling back for retry...")
                 rollback_to_head(self.project_root)
                 batch.transition(BatchState.FAILED)
-                progress.save(self.project_root)
+                phase3.save(self.project_root)
                 return
 
             tracker.record_step(ProgressTracker.STEP_REVIEW)
@@ -1152,9 +1271,9 @@ class ExtractionOrchestrator:
 
             gate_passed, gate_issues = run_commit_gate(
                 project_root=self.project_root,
-                work_id=progress.work_id,
+                work_id=pipeline.work_id,
                 stage_id=batch.stage_id,
-                character_ids=progress.target_characters,
+                character_ids=pipeline.target_characters,
                 lane_results=lane_results,
             )
 
@@ -1165,12 +1284,12 @@ class ExtractionOrchestrator:
                 rollback_to_head(self.project_root)
                 batch.last_reviewer_feedback = "\n".join(gate_issues)
                 batch.transition(BatchState.FAILED)
-                progress.save(self.project_root)
+                phase3.save(self.project_root)
                 return
 
             tracker.print_step_done(6, 7, "Commit gate", "PASS")
             batch.transition(BatchState.PASSED)
-            progress.save(self.project_root)
+            phase3.save(self.project_root)
 
         # --- Step 7: Git commit ---
         if batch.state == BatchState.PASSED:
@@ -1185,7 +1304,7 @@ class ExtractionOrchestrator:
             # Transition and save BEFORE git commit so the committed
             # progress file is included in the same commit.
             batch.transition(BatchState.COMMITTED)
-            progress.save(self.project_root)
+            phase3.save(self.project_root)
 
             sha = commit_batch(self.project_root,
                                batch.batch_id, batch.stage_id)
@@ -1194,7 +1313,7 @@ class ExtractionOrchestrator:
                 batch.committed_sha = sha
                 # Save again with the SHA (this will be uncommitted
                 # on disk but consistent on next resume)
-                progress.save(self.project_root)
+                phase3.save(self.project_root)
                 tracker.print_step_done(7, 7, "Git commit", sha)
             else:
                 tracker.print_step_done(7, 7, "Git commit",
@@ -1202,18 +1321,19 @@ class ExtractionOrchestrator:
 
             tracker.finish_batch()
 
-    def _run_consistency_check(self, progress: ExtractionProgress) -> None:
+    def _run_consistency_check(self) -> None:
         """Run Phase 3.5 cross-batch consistency check."""
+        assert self.pipeline and self.phase3
         print("\n--- Phase 3.5: Cross-batch consistency check ---")
-        stage_ids = [b.stage_id for b in progress.batches
+        stage_ids = [b.stage_id for b in self.phase3.batches
                      if b.state.value == "committed"]
-        char_ids = progress.target_characters or []
+        char_ids = self.pipeline.target_characters or []
 
         report = run_consistency_check(
-            self.project_root, progress.work_id, char_ids, stage_ids)
+            self.project_root, self.pipeline.work_id, char_ids, stage_ids)
 
         # Save report
-        save_report(report, self.project_root, progress.work_id)
+        save_report(report, self.project_root, self.pipeline.work_id)
 
         # Print summary
         errors = sum(1 for i in report.issues if i.severity == "error")
@@ -1241,9 +1361,10 @@ class ExtractionOrchestrator:
             resume=resume,
         )
 
-    def _offer_squash_merge(self, progress: ExtractionProgress) -> None:
+    def _offer_squash_merge(self) -> None:
         """After all batches complete, offer to squash-merge to main."""
-        branch = progress.extraction_branch
+        assert self.pipeline and self.phase3
+        branch = self.pipeline.extraction_branch
         if not branch:
             return
 
@@ -1263,9 +1384,9 @@ class ExtractionOrchestrator:
                   f"git commit")
             return
 
-        chars = ", ".join(progress.target_characters)
-        n = len(progress.batches)
-        message = (f"Extraction complete: {progress.work_id} "
+        chars = ", ".join(self.pipeline.target_characters)
+        n = len(self.phase3.batches)
+        message = (f"Extraction complete: {self.pipeline.work_id} "
                    f"({n} stages, {chars})\n\n"
                    f"Squash-merged from {branch}.\n"
                    f"Automated extraction via persona-extraction orchestrator.")
@@ -1285,8 +1406,8 @@ class ExtractionOrchestrator:
 
     def _ensure_batches_from_plan(
         self,
-        progress: ExtractionProgress,
-        max_batches: int = 0,
+        phase3: Phase3Progress,
+        max_batches: int | None = None,
     ) -> None:
         """Ensure progress contains all target batches from the batch plan.
 
@@ -1295,19 +1416,22 @@ class ExtractionOrchestrator:
         batch states are preserved.
         """
         plan_path = (self.project_root / "works" / self.work_id
-                     / "analysis" / "incremental" / "source_batch_plan.json")
+                     / "analysis" / "source_batch_plan.json")
         if not plan_path.exists():
             return
 
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
         full_batches = plan.get("batches", [])
 
-        current_count = len(progress.batches)
-        added = progress.expand_batches(full_batches, max_batches=max_batches)
+        current_count = len(phase3.batches)
+        effective_max = max_batches if (max_batches is not None
+                                        and max_batches > 0) else 0
+        added = phase3.expand_batches(full_batches,
+                                      max_batches=effective_max)
         if added > 0:
-            progress.save(self.project_root)
+            phase3.save(self.project_root)
             print(f"  [EXPAND] Added {added} new batches from batch plan "
-                  f"({current_count} → {len(progress.batches)})")
+                  f"({current_count} → {len(phase3.batches)})")
 
     # ------------------------------------------------------------------
     # Full pipeline
@@ -1320,45 +1444,65 @@ class ExtractionOrchestrator:
         preset_end_batch: int | None = None,
     ) -> None:
         """Run the complete pipeline: analysis → confirm → extract."""
-        # Check for existing progress
-        existing = ExtractionProgress.load(self.project_root, self.work_id)
-        if existing and existing.characters_confirmed:
+        # Check for legacy progress and migrate if needed
+        legacy_result = migrate_legacy_progress(
+            self.project_root, self.work_id)
+        if legacy_result:
+            pipeline, phase3 = legacy_result
+            print(f"[MIGRATE] Migrated legacy progress for {self.work_id}.")
+        else:
+            # Try loading new-format progress
+            pipeline = PipelineProgress.load(
+                self.project_root, self.work_id)
+            phase3 = Phase3Progress.load(
+                self.project_root, self.work_id)
+
+        if pipeline and phase3 and pipeline.is_done("phase_2"):
             print(f"Found existing progress for {self.work_id}.")
-            print(f"  Completed: {existing.completed_batch_count()}"
-                  f"/{len(existing.batches)}")
+            print(f"  Completed: {phase3.completed_batch_count()}"
+                  f"/{len(phase3.batches)}")
             # Auto-resume when characters are preset (non-interactive mode)
             if preset_characters:
                 print("  Auto-resuming (preset characters provided).")
-                self.progress = existing
+                self.pipeline = pipeline
+                self.phase3 = phase3
                 self.run_extraction_loop(
-                    existing,
-                    max_batches=preset_end_batch or 0)
+                    pipeline, phase3,
+                    max_batches=preset_end_batch)
                 return
             resume = input("Resume from existing progress? [Y/n]: ").strip()
             if resume.lower() != "n":
-                self.progress = existing
+                self.pipeline = pipeline
+                self.phase3 = phase3
                 self.run_extraction_loop(
-                    existing,
-                    max_batches=preset_end_batch or 0)
+                    pipeline, phase3,
+                    max_batches=preset_end_batch)
                 return
 
         # Fresh start: summarize → analyze → confirm → baseline → extract
+        # Create pipeline early so Phase 0/1 can track their status
+        if not pipeline:
+            pipeline = PipelineProgress(work_id=self.work_id)
+            pipeline.save(self.project_root)
+        self.pipeline = pipeline
+
         self.run_summarization()
         analysis = self.run_analysis()
-        progress = self.confirm_with_user(
+        pipeline, phase3 = self.confirm_with_user(
             analysis,
             preset_characters=preset_characters,
             preset_end_batch=preset_end_batch,
         )
 
-        self.progress = progress
+        self.pipeline = pipeline
+        self.phase3 = phase3
 
         # Create extraction branch and commit pre-extraction output
-        if progress.extraction_branch:
+        if pipeline.extraction_branch:
             create_extraction_branch(self.project_root,
-                                     progress.extraction_branch)
+                                     pipeline.extraction_branch)
 
-        self.run_baseline_production(progress.target_characters)
+        self.run_baseline_production(pipeline.target_characters)
 
         # Commit baseline output so Phase 3 starts with a clean working tree
         sha = commit_batch(self.project_root,
@@ -1366,8 +1510,8 @@ class ExtractionOrchestrator:
         if sha:
             print(f"  [OK] Baseline committed as {sha}")
 
-        self.run_extraction_loop(progress,
-                                max_batches=preset_end_batch or 0)
+        self.run_extraction_loop(pipeline, phase3,
+                                 max_batches=preset_end_batch)
 
 
 # ---------------------------------------------------------------------------

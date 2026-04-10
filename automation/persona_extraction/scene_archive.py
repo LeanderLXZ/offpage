@@ -5,14 +5,14 @@ scene boundary annotations (start/end line numbers + metadata).  The program
 then extracts full_text from the original chapter file using those line
 numbers.  Multiple chapters run in parallel via ThreadPoolExecutor.
 
-Progress is tracked independently from Phase 3 in:
-  works/{work_id}/analysis/incremental/scene_archive/progress.json
+Progress is tracked in:
+  works/{work_id}/analysis/progress/phase4_scenes.json
 
 Intermediate per-chapter results are stored in:
-  works/{work_id}/analysis/incremental/scene_archive/splits/{chapter}.json
+  works/{work_id}/analysis/scene_splits/{chapter}.json
 
 Final output:
-  works/{work_id}/rag/scene_archive.jsonl
+  works/{work_id}/retrieval/scene_archive.jsonl
 """
 
 from __future__ import annotations
@@ -88,15 +88,13 @@ class SceneArchiveProgress:
     merged: bool = False
     last_updated: str = ""
 
-    def progress_dir(self, project_root: Path) -> Path:
-        return (project_root / "works" / self.work_id
-                / "analysis" / "incremental" / "scene_archive")
-
     def progress_path(self, project_root: Path) -> Path:
-        return self.progress_dir(project_root) / "progress.json"
+        return (project_root / "works" / self.work_id
+                / "analysis" / "progress" / "phase4_scenes.json")
 
     def splits_dir(self, project_root: Path) -> Path:
-        return self.progress_dir(project_root) / "splits"
+        return (project_root / "works" / self.work_id
+                / "analysis" / "scene_splits")
 
     def save(self, project_root: Path) -> Path:
         path = self.progress_path(project_root)
@@ -122,7 +120,7 @@ class SceneArchiveProgress:
     def load(cls, project_root: Path, work_id: str,
              ) -> SceneArchiveProgress | None:
         path = (project_root / "works" / work_id / "analysis"
-                / "incremental" / "scene_archive" / "progress.json")
+                / "progress" / "phase4_scenes.json")
         if not path.exists():
             return None
         try:
@@ -459,9 +457,9 @@ def merge_scene_archive(
         return False, "source_batch_plan.json not found or empty"
 
     splits_dir = progress.splits_dir(project_root)
-    rag_dir = project_root / "works" / work_id / "rag"
-    rag_dir.mkdir(parents=True, exist_ok=True)
-    output_path = rag_dir / "scene_archive.jsonl"
+    retrieval_dir = project_root / "works" / work_id / "retrieval"
+    retrieval_dir.mkdir(parents=True, exist_ok=True)
+    output_path = retrieval_dir / "scene_archive.jsonl"
 
     # Collect all scenes in chapter order
     all_scenes: list[dict[str, Any]] = []
@@ -702,7 +700,7 @@ def _run_scene_archive_inner(
     progress.save(project_root)
 
     total_scenes = _count_jsonl_lines(
-        project_root / "works" / work_id / "rag" / "scene_archive.jsonl")
+        project_root / "works" / work_id / "retrieval" / "scene_archive.jsonl")
     print(f"  [OK] scene_archive.jsonl written "
           f"({total_scenes} scenes, {len(chapters_to_process)} chapters)")
     return True

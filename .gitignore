@@ -1,9 +1,9 @@
-# Extraction runtime artifacts (lock, log, summaries)
-works/*/analysis/incremental/.extraction.lock
-works/*/analysis/incremental/.scene_archive.lock
-works/*/analysis/incremental/extraction.log
-works/*/analysis/incremental/chapter_summaries/
-works/*/analysis/incremental/scene_archive/
+# Extraction runtime artifacts (lock, progress, summaries, splits)
+works/*/analysis/.extraction.lock
+works/*/analysis/.scene_archive.lock
+works/*/analysis/progress/
+works/*/analysis/chapter_summaries/
+works/*/analysis/scene_splits/
 
 # Large novel corpus and derived source data
 sources/raw/*
@@ -16,8 +16,8 @@ sources/works/*/chunks/
 sources/works/*/metadata/
 sources/works/*/rag/
 
-# Scene archive and retrieval artifacts (large, generated)
-works/*/rag/
+# Retrieval artifacts (large, generated at runtime)
+works/*/retrieval/
 
 # Evidence artifacts (large intermediate outputs)
 analysis/evidence/*

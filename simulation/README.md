@@ -152,7 +152,7 @@ For the user layer, keep a clear split:
 Two retrieval libraries support the runtime:
 
 1. **scene_archive** — original text split by scene (work-level, stored under
-   `works/{work_id}/rag/scene_archive.jsonl`)
+   `works/{work_id}/retrieval/scene_archive.jsonl`)
 2. **memory_timeline** — character subjective memories (character-level,
    stored under `works/{work_id}/characters/{character_id}/canon/memory_timeline/`)
 

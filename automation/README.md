@@ -101,7 +101,7 @@ python -m automation.persona_extraction "<work_id>" \
     --resume --background --max-runtime 360
 
 # 跟踪日志
-tail -f works/<work_id>/analysis/incremental/extraction.log
+tail -f works/<work_id>/analysis/progress/extraction.log
 
 # 停止（优雅退出，保存进度并释放锁）
 kill <PID>
@@ -126,7 +126,7 @@ python -m automation.persona_extraction "<work_id>" --resume --max-runtime 120
 拒绝启动并显示已有进程信息。锁文件位于：
 
 ```
-works/{work_id}/analysis/incremental/.extraction.lock
+works/{work_id}/analysis/.extraction.lock
 ```
 
 进程正常退出或被 `kill` 时自动释放锁。如果进程异常死亡（如 OOM），下次
@@ -181,14 +181,19 @@ automation/
 
 ## 进度文件
 
-自动生成在 `works/{work_id}/analysis/incremental/extraction_progress.json`。
+进度文件存储在 `works/{work_id}/analysis/progress/` 下：
 
-状态机：
+- `pipeline.json` — 流水线总进度（各 phase 完成状态）
+- `phase0_summaries.json` — Phase 0 各 chunk 状态
+- `phase3_batches.json` — Phase 3 各 batch 状态机
+- `phase4_scenes.json` — Phase 4 各章节状态
+
+Phase 3 batch 状态机：
 
 ```
-pending → extracting → extracted → reviewing → passed → committed
-              │                       │
-              └→ error                └→ failed → retrying → extracting
+pending → extracting → extracted → post_processing → reviewing → passed → committed
+              │                                          │
+              └→ error                                   └→ failed → retrying → extracting
 ```
 
 ## JSON 自动修复
@@ -245,7 +250,7 @@ importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。
 
 Phase 4 与 Phase 3 完全独立——使用独立 PID 锁 `.scene_archive.lock`，
 可与 Phase 3 并行运行。Phase 4 自身不做 git 操作；其中间目录
-`works/{work_id}/analysis/incremental/scene_archive/` 和 lock 文件均为
+`works/{work_id}/analysis/scene_splits/` 和 lock 文件均为
 本地忽略产物（**不得被 git track**），Phase 3 的 rollback 不会清掉它们。
 resume 时会校验 passed 章节的 split 文件是否实际存在，缺失的自动重新生成。
 前置条件仅为 `source_batch_plan.json`（Phase 1 产物）。
@@ -270,12 +275,13 @@ python -m persona_extraction "<work_id>" -r .. \
 - 多章并行执行（`--concurrency`，默认 10）
 - 仅程序化校验（行号有效、不重叠、覆盖全章；alias 匹配可选——scene archive
   是 work-level 产物，不限于提取目标角色集）
-- 全部完成后合并为 `works/{work_id}/rag/scene_archive.jsonl`
+- 全部完成后合并为 `works/{work_id}/retrieval/scene_archive.jsonl`
 - `scene_id` 格式：`scene_{chapter}_{seq}`（如 `scene_0015_003`）
 
 **产出**：
-- 最终：`works/{work_id}/rag/scene_archive.jsonl`（.gitignore）
-- 中间：`works/{work_id}/analysis/incremental/scene_archive/`
-  （`.scene_archive.lock` + progress + splits，.gitignore）
+- 最终：`works/{work_id}/retrieval/scene_archive.jsonl`（.gitignore）
+- 中间：`works/{work_id}/analysis/scene_splits/`（每章一个 JSON，.gitignore）
+- 进度：`works/{work_id}/analysis/progress/phase4_scenes.json`
+- 锁：`works/{work_id}/analysis/.scene_archive.lock`
 
 代码：`persona_extraction/scene_archive.py`

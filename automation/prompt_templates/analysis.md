@@ -67,7 +67,7 @@
 - **大世界线**：故事的大时代/篇章划分（如"天苍篇→仙界篇→蓝星篇"），每个大阶段的核心冲突和环境特征
 - **核心设定规则**：影响剧情走向的关键世界规则（如转世机制、天道规则等）
 
-输出文件：`{work_dir}/analysis/incremental/world_overview.json`
+输出文件：`{work_dir}/analysis/world_overview.json`
 
 JSON 结构：
 
@@ -116,7 +116,7 @@ JSON 结构：
 - 参考摘要中的 `potential_boundary` 标记，但不要机械地以它为唯一依据——你需要从全局剧情结构出发做最终判断
 - **自检**：完成 batch plan 后，逐一检查每个 batch 的 `chapter_count`。如有任何一个 ≤4 或 ≥16，必须调整切分点直到全部 batch 满足 5-15 章约束
 
-输出文件：`{work_dir}/analysis/incremental/source_batch_plan.json`
+输出文件：`{work_dir}/analysis/source_batch_plan.json`
 
 JSON 结构：
 
@@ -155,7 +155,7 @@ JSON 结构：
 - 预估重要程度（主角/重要配角/次要配角）
 - 建议是否建包（是/否/待定）
 
-输出文件：`{work_dir}/analysis/incremental/candidate_characters.json`
+输出文件：`{work_dir}/analysis/candidate_characters.json`
 
 JSON 结构：
 

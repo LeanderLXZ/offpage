@@ -37,7 +37,7 @@ python -m automation.persona_extraction "<work_id>" \
     --resume --background --max-runtime 360
 
 # Follow log
-tail -f works/<work_id>/analysis/incremental/extraction.log
+tail -f works/<work_id>/analysis/progress/extraction.log
 ```
 
 Optional: `pip install jsonschema` for programmatic schema validation (the
