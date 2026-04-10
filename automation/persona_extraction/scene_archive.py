@@ -144,7 +144,7 @@ class SceneArchiveProgress:
         """Return chapter IDs that need processing."""
         actionable = {ChapterState.PENDING, ChapterState.SPLITTING,
                       ChapterState.SPLIT, ChapterState.VALIDATING,
-                      ChapterState.RETRYING}
+                      ChapterState.RETRYING, ChapterState.FAILED}
         return [cid for cid, e in sorted(self.chapters.items())
                 if e.state in actionable]
 
@@ -157,16 +157,18 @@ class SceneArchiveProgress:
                    for e in self.chapters.values())
 
     def reset_failed(self) -> int:
-        """Reset failed/error chapters to pending (for --resume).
+        """Reset blocked (ERROR) chapters to pending (for --resume).
 
-        Preserves retry_count so cumulative retries eventually escalate to
-        ERROR (permanent skip), preventing infinite retry loops.
+        FAILED chapters auto-retry within the same run, so only ERROR
+        (exceeded max_retries) needs reset here.  Resets retry_count to 0
+        so the user gets a fresh set of retries — matches Phase 3 behavior.
         """
         count = 0
         for entry in self.chapters.values():
-            if entry.state in (ChapterState.FAILED, ChapterState.ERROR):
+            if entry.state == ChapterState.ERROR:
                 entry.state = ChapterState.PENDING
-                # Keep retry_count — do NOT reset to 0
+                entry.retry_count = 0
+                entry.error_message = ""
                 count += 1
         return count
 
@@ -284,6 +286,18 @@ def validate_scene_split(
 # Single chapter processing
 # ---------------------------------------------------------------------------
 
+def _mark_failed(entry: ChapterEntry, msg: str) -> str:
+    """Increment retry_count and set FAILED or ERROR. Returns msg."""
+    entry.retry_count += 1
+    if entry.retry_count > entry.max_retries:
+        entry.state = ChapterState.ERROR
+    else:
+        entry.state = ChapterState.FAILED
+    entry.error_message = msg
+    entry.last_updated = _now_iso()
+    return msg
+
+
 def _process_chapter(
     project_root: Path,
     work_id: str,
@@ -321,10 +335,7 @@ def _process_chapter(
 
     if not result.success:
         msg = result.error or "LLM call failed"
-        entry.state = ChapterState.FAILED
-        entry.error_message = msg
-        entry.last_updated = _now_iso()
-        return chapter_id, False, msg
+        return chapter_id, False, _mark_failed(entry, msg)
 
     entry.state = ChapterState.SPLIT
     entry.last_updated = _now_iso()
@@ -338,10 +349,7 @@ def _process_chapter(
 
     if scenes is None:
         msg = "Failed to parse LLM output as JSON array"
-        entry.state = ChapterState.FAILED
-        entry.error_message = msg
-        entry.last_updated = _now_iso()
-        return chapter_id, False, msg
+        return chapter_id, False, _mark_failed(entry, msg)
 
     # Validate
     entry.state = ChapterState.VALIDATING
@@ -350,15 +358,8 @@ def _process_chapter(
     errors = validate_scene_split(scenes, total_lines, known_aliases)
 
     if errors:
-        entry.retry_count += 1
-        if entry.retry_count > entry.max_retries:
-            entry.state = ChapterState.ERROR
-            entry.error_message = "; ".join(errors)
-        else:
-            entry.state = ChapterState.FAILED
-            entry.error_message = "; ".join(errors)
-        entry.last_updated = _now_iso()
-        return chapter_id, False, "; ".join(errors)
+        msg = "; ".join(errors)
+        return chapter_id, False, _mark_failed(entry, msg)
 
     # Save intermediate result
     splits_dir = progress.splits_dir(project_root)
@@ -641,7 +642,7 @@ def _run_scene_archive_inner(
     if resume:
         reset_count = progress.reset_failed()
         if reset_count > 0:
-            print(f"  Reset {reset_count} failed/error chapters to pending")
+            print(f"  Reset {reset_count} blocked (ERROR) chapters to pending")
         missing_count = progress.verify_passed(project_root)
         if missing_count > 0:
             print(f"  Reset {missing_count} passed chapters with missing "
