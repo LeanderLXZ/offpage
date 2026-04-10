@@ -116,6 +116,7 @@ def run_consistency_check(
     issues.extend(_check_target_map_counts(
         work_dir, character_ids, stage_ids, importance_map))
     issues.extend(_check_stage_id_alignment(work_dir, character_ids, stage_ids))
+    issues.extend(_check_world_event_digest(work_dir, stage_ids))
 
     error_count = sum(1 for i in issues if i.severity == "error")
     warning_count = sum(1 for i in issues if i.severity == "warning")
@@ -293,18 +294,23 @@ def _check_relationship_continuity(
 
             curr_rels: dict[str, dict] = {}
             for rel in snapshot.get("relationships", []):
-                target = rel.get("target", rel.get("target_id", ""))
-                curr_rels[target] = rel
+                # Schema: target_character_id is the canonical key
+                target = rel.get("target_character_id",
+                                 rel.get("target_label", ""))
+                if target:
+                    curr_rels[target] = rel
 
             if prev_rels:
                 for target, rel in curr_rels.items():
                     if target in prev_rels:
                         prev = prev_rels[target]
-                        # Check if attitude/trust changed
-                        for fld in ("attitude", "trust_level", "intimacy_level"):
+                        # Check if attitude/trust/intimacy changed
+                        # Schema fields: attitude (str), trust (int), intimacy (int)
+                        for fld in ("attitude", "trust", "intimacy"):
                             old_val = prev.get(fld)
                             new_val = rel.get(fld)
-                            if old_val and new_val and old_val != new_val:
+                            if old_val is not None and new_val is not None \
+                                    and old_val != new_val:
                                 events = rel.get("driving_events", [])
                                 if not events:
                                     issues.append(ConsistencyIssue(
@@ -529,5 +535,56 @@ def _check_stage_id_alignment(
                     "error", "stage_alignment",
                     f"{char_id}/stage_snapshots",
                     f"stage_snapshot file missing for '{sid}'"))
+
+    return issues
+
+
+def _check_world_event_digest(
+    work_dir: Path, stage_ids: list[str],
+) -> list[ConsistencyIssue]:
+    """Verify world_event_digest ↔ world snapshot key_events correspondence.
+
+    For each stage:
+    - Digest must have entries for the stage
+    - Entry count must match key_events count in the world snapshot
+    """
+    issues: list[ConsistencyIssue] = []
+
+    digest_path = work_dir / "world" / "world_event_digest.jsonl"
+    digest_entries = _load_jsonl(digest_path)
+
+    # Group digest entries by stage_id
+    digest_by_stage: dict[str, list[dict]] = {}
+    for entry in digest_entries:
+        sid = entry.get("stage_id", "")
+        if sid:
+            digest_by_stage.setdefault(sid, []).append(entry)
+
+    for stage_id in stage_ids:
+        # Load world snapshot key_events
+        snap_path = work_dir / "world" / "stage_snapshots" / f"{stage_id}.json"
+        snapshot = _load_json(snap_path)
+        if snapshot is None:
+            # Missing snapshot is caught by _check_stage_id_alignment
+            continue
+
+        key_events = snapshot.get("key_events", [])
+        n_events = len([e for e in key_events
+                        if isinstance(e, str) and e.strip()])
+
+        stage_digest = digest_by_stage.get(stage_id, [])
+
+        if not stage_digest and n_events > 0:
+            issues.append(ConsistencyIssue(
+                "error", "world_event_digest",
+                f"world/{stage_id}",
+                f"world_event_digest has no entries for stage "
+                f"(expected {n_events} from key_events)"))
+        elif len(stage_digest) != n_events:
+            issues.append(ConsistencyIssue(
+                "warning", "world_event_digest",
+                f"world/{stage_id}",
+                f"world_event_digest has {len(stage_digest)} entries "
+                f"but key_events has {n_events} items"))
 
     return issues

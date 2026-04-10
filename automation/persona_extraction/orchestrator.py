@@ -994,10 +994,14 @@ class ExtractionOrchestrator:
 
         # Post-loop: run Phase 3.5/4 when target was reached
         if reached_limit:
-            self._run_consistency_check()
+            consistency_ok = self._run_consistency_check()
             self._offer_squash_merge()
-            self._run_scene_archive(
-                end_batch=max_batches or 0, resume=True)
+            if consistency_ok:
+                self._run_scene_archive(
+                    end_batch=max_batches or 0, resume=True)
+            else:
+                print("\n  Phase 4 skipped — fix consistency errors first, "
+                      "then re-run with --resume.")
 
         tracker.print_summary()
 
@@ -1295,8 +1299,12 @@ class ExtractionOrchestrator:
 
             tracker.finish_batch()
 
-    def _run_consistency_check(self) -> None:
-        """Run Phase 3.5 cross-batch consistency check."""
+    def _run_consistency_check(self) -> bool:
+        """Run Phase 3.5 cross-batch consistency check.
+
+        Returns True if no error-level issues found (safe to proceed).
+        Returns False if errors exist (should block Phase 4).
+        """
         assert self.pipeline and self.phase3
         print("\n--- Phase 3.5: Cross-batch consistency check ---")
         stage_ids = [b.stage_id for b in self.phase3.batches
@@ -1316,14 +1324,16 @@ class ExtractionOrchestrator:
               f"{len(report.issues) - errors - warnings} info")
 
         if errors > 0:
-            print("  [WARNING] Errors found — review consistency_report.json "
-                  "before proceeding to Phase 4.")
+            print("  [BLOCKED] Errors found — Phase 4 blocked. "
+                  "Review consistency_report.json and fix before retrying.")
             for issue in report.issues:
                 if issue.severity == "error":
                     print(f"    [ERROR] [{issue.category}] {issue.location}: "
                           f"{issue.message}")
-        else:
-            print("  [OK] No blocking issues found.")
+            return False
+
+        print("  [OK] No blocking issues found.")
+        return True
 
     def _run_scene_archive(self, *, end_batch: int = 0,
                            resume: bool = True) -> None:

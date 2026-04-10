@@ -243,11 +243,12 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   or `stage_catalog.json` — self-contained snapshot contract is embedded in
   the prompt; digest and catalog are programmatically maintained.
 - **Phase 3.5 — Cross-batch consistency check**: after all Phase 3 batches
-  commit, run 8 programmatic checks (zero tokens): alias consistency, field
+  commit, run 9 programmatic checks (zero tokens): alias consistency, field
   completeness, relationship continuity, source_type distribution,
   evidence_refs coverage, memory_digest correspondence, target_map counts,
-  stage_id alignment. Optional LLM adjudication for flagged items only.
-  Errors block Phase 4. Report: `consistency_report.json`.
+  stage_id alignment, world_event_digest correspondence. Optional LLM
+  adjudication for flagged items only. Errors block Phase 4.
+  Report: `consistency_report.json`.
 - **Phase 4 — Scene archive**: independent from Phase 3; only requires
   `source_batch_plan.json` (Phase 1 product). Per-chapter LLM calls mark
   scene boundaries + metadata (start/end line, time, location, characters,

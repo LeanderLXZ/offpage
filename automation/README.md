@@ -239,7 +239,7 @@ L2 超时默认 600s（`repair_timeout` 参数可配置）。
 
 ## Phase 3.5：跨批次一致性检查
 
-Phase 3 全部 batch 提交后自动运行。包含 8 项程序化检查（零 token），
+Phase 3 全部 batch 提交后自动运行。包含 9 项程序化检查（零 token），
 可选 LLM 裁定标记项。产出 `consistency_report.json`。有 error 级别问题时
 阻断 Phase 4，需人工处理后继续。target_map 样本数检查使用
 importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。
@@ -248,8 +248,8 @@ importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。
 
 ## Phase 4：场景切分
 
-Phase 4 与 Phase 3 完全独立——使用独立 PID 锁 `.scene_archive.lock`，
-可与 Phase 3 并行运行。Phase 4 自身不做 git 操作；其中间目录
+Phase 4 与 Phase 3 数据独立——使用独立 PID 锁 `.scene_archive.lock`，
+可与 Phase 3 并行运行（`--start-phase 4`）。Phase 4 自身不做 git 操作；其中间目录
 `works/{work_id}/analysis/scene_splits/` 和 lock 文件均为
 本地忽略产物（**不得被 git track**），Phase 3 的 rollback 不会清掉它们。
 resume 时会校验 passed 章节的 split 文件是否实际存在，缺失的自动重新生成。
