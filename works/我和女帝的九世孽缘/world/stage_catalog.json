@@ -13,6 +13,18 @@
         "from": "0001",
         "to": "0010"
       }
+    },
+    {
+      "stage_id": "阶段02_离开<stage_title>",
+      "order": 1,
+      "title": "离开<stage_title>",
+      "summary": "柳村狩猎队被发现困于<stage_title>地下钻洞鼠的复杂地道系统中，在Character B与Character A配合下击杀钻洞鼠、解救六名猎人，柳村饥荒与人员危机暂时解除。夜间邪祟威胁显著升级，一只聚灵境八层的骨马骷髅将突破柳树结界首次攻入柳村，被联手击杀。<stage_title>的地理真相被揭示：整片森林位于悬崖围起的低地盆地中，邪祟仅限于崖下活动，疑为一片诅咒之地。Character B与Character A先后攀越悬崖离开<stage_title>，各自踏上旅途。",
+      "snapshot_path": "stage_snapshots/阶段02_离开<stage_title>.json",
+      "timeline_anchor": "Character B第九世复活后约十余日，<stage_title>阶段末期",
+      "chapter_scope": {
+        "from": "0011",
+        "to": "0019"
+      }
     }
   ]
 }
