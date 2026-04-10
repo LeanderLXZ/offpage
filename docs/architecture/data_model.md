@@ -74,7 +74,7 @@ sources/works/{work_id}/
 - `scenes/`
 - `chunks/`
 - `metadata/`
-- `rag/`
+- `rag/` — 保留（源工作包内的可选检索/分块数据）
 
 ### 原始包构建规范
 
@@ -109,10 +109,10 @@ sources/works/{work_id}/
 
 8. **（可选）** 在 `chunks/` 下创建面向检索的分块，供后续 RAG 或 embedding 工作流使用。
 
-9. **（可选）** 检索资产由 Phase 4 产出至 `works/{work_id}/rag/`：
+9. **（可选）** 检索资产由 Phase 4 产出至 `works/{work_id}/retrieval/`：
 
    ```
-   works/{work_id}/rag/
+   works/{work_id}/retrieval/
      ├── scene_archive.jsonl       # 按场景切分的原文档案（Phase 4 产出，.gitignore）
      └── fts.sqlite                # 运行时检索数据库（启动时从 JSONL 导入）
                                    #   - scene_archive 表 + FTS5 索引

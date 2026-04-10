@@ -100,7 +100,7 @@ Layer summary:
   full user histories, large runtime artifacts
 - Schemas, templates, code, docs, and config are fine to commit
 - Real user packages under `users/` stay local
-- `works/*/analysis/incremental/` and `works/*/indexes/` are git-tracked
+- `works/*/analysis/` and `works/*/indexes/` are git-tracked
 - Only commit at coherent milestones
 
 ## Project-Specific Guidance

@@ -21,7 +21,7 @@ For full details see `docs/architecture/system_overview.md` and
 
 1. **Source** (`sources/works/{work_id}/`) — raw text, normalized chapters,
    metadata
-2. **Extraction** (`works/{work_id}/analysis/`) — incremental batch extraction,
+2. **Extraction** (`works/{work_id}/analysis/`) — batch extraction progress,
    evidence, conflicts
 3. **World** (`works/{work_id}/world/`) — world foundation, stages, events,
    locations, factions, cast
@@ -137,7 +137,7 @@ Three layers with distinct granularity, no redundancy:
 3. **scene_archive** — original text split by scene. Eight fields:
    `scene_id`, `stage_id`, `chapter`, `time_in_story`, `location`,
    `characters_present`, `summary`, `full_text`. Work-level asset, not
-   per-character. Stored under `works/{work_id}/rag/scene_archive.jsonl`.
+   per-character. Stored under `works/{work_id}/retrieval/scene_archive.jsonl`.
    Loaded: stage 1..N summaries + N full_text scenes around current stage
    at startup; rest via FTS5/embedding on-demand.
 
@@ -207,7 +207,7 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   LLM call. Three-level JSON repair (L1 programmatic → L2 LLM 600s →
   L3 full re-run, max 1). Completion gate: all chunks must succeed
   before Phase 1 proceeds. Produces per-chapter structured summaries
-  under `analysis/incremental/chapter_summaries/`.
+  under `analysis/chapter_summaries/`.
 - **Phase 1 — Global analysis** (from summaries): cross-chunk character
   identity merging → world overview (`world_overview.json`) → batch plan
   (`source_batch_plan.json`) → candidate characters
@@ -253,12 +253,13 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   summary); program extracts `full_text` from source using line numbers.
   Multiple chapters run in parallel (`--concurrency`, default 10).
   Programmatic validation only (line coverage, no overlap, alias matching).
-  Output: `works/{work_id}/rag/scene_archive.jsonl` (.gitignore).
+  Output: `works/{work_id}/retrieval/scene_archive.jsonl` (.gitignore).
   `scene_id` format: `scene_{chapter}_{seq}` (e.g. `scene_0015_003`).
   Intermediate state: `.scene_archive.lock` +
-  `works/{work_id}/analysis/incremental/scene_archive/` (local ignored,
+  `works/{work_id}/analysis/scene_splits/` (local ignored,
   must not be git-tracked; preserved from Phase 3 rollback). Resume
   verifies split files exist — missing resets to pending.
+  Progress: `works/{work_id}/analysis/progress/phase4_scenes.json`.
   CLI: `--start-phase 4` runs Phase 4 standalone.
 
 ### Key design

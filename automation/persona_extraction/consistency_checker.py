@@ -134,8 +134,8 @@ def save_report(
     project_root: Path,
     work_id: str,
 ) -> Path:
-    """Save the consistency report to the incremental directory."""
-    path = (project_root / "works" / work_id / "analysis" / "incremental"
+    """Save the consistency report to the analysis directory."""
+    path = (project_root / "works" / work_id / "analysis"
             / "consistency_report.json")
     path.write_text(
         json.dumps(report.to_dict(), ensure_ascii=False, indent=2),

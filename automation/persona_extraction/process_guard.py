@@ -46,7 +46,7 @@ class PidLock:
     """File-based PID lock for a work extraction run.
 
     Default lock file location:
-      works/{work_id}/analysis/incremental/.extraction.lock
+      works/{work_id}/analysis/.extraction.lock
 
     Use ``lock_name`` to create independent locks (e.g. ".scene_archive.lock").
     """
@@ -54,7 +54,7 @@ class PidLock:
     def __init__(self, project_root: Path, work_id: str,
                  lock_name: str = ".extraction.lock"):
         self.lock_path = (project_root / "works" / work_id
-                          / "analysis" / "incremental" / lock_name)
+                          / "analysis" / lock_name)
 
     def is_held(self) -> dict | None:
         """Check if lock is held by a live process.
@@ -132,7 +132,7 @@ def launch_background(
     Returns the child PID.
     """
     log_path = (project_root / "works" / work_id
-                / "analysis" / "incremental" / "extraction.log")
+                / "analysis" / "progress" / "extraction.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Build command: same as current invocation but without --background

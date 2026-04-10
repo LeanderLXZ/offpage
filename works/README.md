@@ -54,12 +54,18 @@ works/{work_id}/
         stage_snapshots/{stage_id}.json
 
   analysis/
-    incremental/
-      extraction_status.md
-      source_batch_plan.md
-      candidate_characters_initial.md
-      world_batch_progress.md
-      character_batch_progress/{character_id}.md
+    world_overview.json
+    source_batch_plan.json
+    candidate_characters.json
+    consistency_report.json
+    progress/
+      pipeline.json
+      phase0_summaries.json
+      phase3_batches.json
+      phase4_scenes.json
+      extraction.log
+    chapter_summaries/
+    scene_splits/
     evidence/
     conflicts/
 
@@ -165,7 +171,13 @@ works/{work_id}/
 
 与该作品相关的分析产物与证据：
 
-- `incremental/` — 增量抽取进度与状态文件
+- `progress/` — 流水线进度文件（pipeline.json, phase0/3/4 进度, extraction.log）
+- `chapter_summaries/` — Phase 0 章节摘要（每 chunk 一个 JSON）
+- `scene_splits/` — Phase 4 中间产物（每章一个 JSON，.gitignore）
+- `world_overview.json` — Phase 1 世界观概览
+- `source_batch_plan.json` — Phase 1 分批规划
+- `candidate_characters.json` — Phase 1 候选角色
+- `consistency_report.json` — Phase 3.5 一致性检查报告
 - `evidence/` — 证据引用材料
 - `conflicts/` — 矛盾与修订记录
 
@@ -212,9 +224,8 @@ works/{work_id}/
 
 ## 增量抽取建议
 
-- 如果 `analysis/incremental/extraction_status.md` 存在，后续 agent 应优先
-  读取它来确定继续哪个 batch
-- 每次有实质进度变化时，优先更新 `analysis/incremental/` 下的进度文件
+- 后续 agent 应优先读取 `analysis/progress/pipeline.json` 来确定当前阶段
+- 每次有实质进度变化时，优先更新 `analysis/progress/` 下的进度文件
 - work-local 进度推进默认不需要同步改 `ai_context/` 或 `docs/logs/`，除非
   连带改变了仓库级规则或架构
 

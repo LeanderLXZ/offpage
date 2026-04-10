@@ -11,7 +11,7 @@ from .git_utils import preflight_check
 from .llm_backend import create_backend
 from .orchestrator import ExtractionOrchestrator
 from .process_guard import launch_background
-from .progress import ExtractionProgress
+from .progress import Phase3Progress, PipelineProgress, migrate_legacy_progress
 from .scene_archive import run_scene_archive
 
 # Phase 4 does not need git preflight (no commits) and uses its own lock.
@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> None:
         "--end-batch",
         type=int,
         default=None,
-        help="Stop after batch N (0 = all)",
+        help="Stop after batch N completes (0 = baseline only, omit = all)",
     )
     parser.add_argument(
         "--start-phase",
@@ -202,12 +202,22 @@ def main(argv: list[str] | None = None) -> None:
 
     try:
         if args.resume:
-            progress = ExtractionProgress.load(project_root, args.work_id)
-            if not progress:
-                print(f"[ERROR] No existing progress for '{args.work_id}'.")
-                sys.exit(1)
-            orch.run_extraction_loop(progress,
-                                     max_batches=args.end_batch or 0)
+            # Try new format first, then legacy migration
+            pipeline = PipelineProgress.load(project_root, args.work_id)
+            phase3 = Phase3Progress.load(project_root, args.work_id)
+            if not pipeline or not phase3:
+                migrated = migrate_legacy_progress(
+                    project_root, args.work_id)
+                if migrated:
+                    pipeline, phase3 = migrated
+                    print("  [MIGRATE] Converted legacy progress to new format.")
+                else:
+                    print(f"[ERROR] No existing progress for '{args.work_id}'.")
+                    sys.exit(1)
+            orch.pipeline = pipeline
+            orch.phase3 = phase3
+            orch.run_extraction_loop(pipeline, phase3,
+                                     max_batches=args.end_batch)
         else:
             orch.run_full(
                 preset_characters=args.characters,

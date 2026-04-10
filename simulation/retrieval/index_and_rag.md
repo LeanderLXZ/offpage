@@ -235,7 +235,7 @@ CREATE VIRTUAL TABLE memory_fts USING fts5(
 
 ```
 works/{work_id}/
-  ├── rag/
+  ├── retrieval/
   │   ├── scene_archive.jsonl     # 原文场景档案（Phase 4 产出，.gitignore）
   │   └── fts.sqlite              # 运行时检索数据库（启动时构建）
   ├── characters/{character_id}/canon/

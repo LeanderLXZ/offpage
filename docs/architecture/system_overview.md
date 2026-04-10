@@ -124,7 +124,7 @@
 自动化提取流程：
 
 0. **阶段 0 — 章节归纳**：按分组（chunk，约 25 章/组）逐组归纳，产出每章
-   结构化摘要。存储在 `analysis/incremental/chapter_summaries/`
+   结构化摘要。存储在 `analysis/chapter_summaries/`
 1. **阶段 1 — 全书分析**（基于摘要）：跨 chunk 角色身份合并 → 世界观概览
    (`world_overview.json`) → 剧情阶段划分 (`source_batch_plan.json`) →
    候选角色识别 (`candidate_characters.json`)

@@ -178,9 +178,9 @@ that a new AI should know beyond what the architecture docs already say.
     source. Parallel execution (`--concurrency`, default 10). Programmatic
     validation only (no semantic review). `scene_id` = `scene_{chapter}_{seq}`.
 37. Retrieval artifacts (fts.sqlite, scene_archive.jsonl) live under
-    `works/{work_id}/rag/` and are not committed to git (.gitignore).
+    `works/{work_id}/retrieval/` and are not committed to git (.gitignore).
     Intermediate Phase 4 splits under
-    `works/{work_id}/analysis/incremental/scene_archive/`. Lightweight
+    `works/{work_id}/analysis/scene_splits/`. Lightweight
     indexes and vocab dict go to `works/{work_id}/indexes/`.
 38. Proactive character association: engine extracts context-state keywords
     (current location, recent events, emotion, conversation partner) for
@@ -214,7 +214,7 @@ that a new AI should know beyond what the architecture docs already say.
     failures occur within a 60s window, all workers pause for 180s before
     resuming. This prevents failure storms under systemic issues.
 40d. Phase 4 intermediate state (`.scene_archive.lock` and
-    `works/{work_id}/analysis/incremental/scene_archive/`) **must not be
+    `works/{work_id}/analysis/scene_splits/`) **must not be
     git-tracked**. They are in `.gitignore`; if an extraction branch
     already tracks them, `git rm --cached` is required. Without this,
     `git checkout -- .` during Phase 3 rollback restores tracked splits
@@ -263,7 +263,7 @@ that a new AI should know beyond what the architecture docs already say.
 
 41. Keep the repo lightweight. Do not commit novels, databases, indexes, large
     artifacts, or real user packages.
-42. `works/*/analysis/incremental/` and `works/*/indexes/` are git-tracked as
+42. `works/*/analysis/` and `works/*/indexes/` are git-tracked as
     canonical work assets.
 43. `docs/logs/` is write-mostly historical. Do not proactively read.
 44. `prompts/` contains only manual-scenario prompts (ingest, review,

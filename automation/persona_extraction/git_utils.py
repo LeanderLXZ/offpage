@@ -13,10 +13,11 @@ logger = logging.getLogger(__name__)
 ROLLBACK_CLEAN_EXCLUDES = [
     "__pycache__",
     "*.pyc",
-    # Preserve Phase 4 scene archive progress and split artifacts even when
+    # Preserve progress, Phase 4 scene splits, and lock files even when
     # Phase 3 performs a repo-wide rollback.
-    "works/*/analysis/incremental/.scene_archive.lock",
-    "works/*/analysis/incremental/scene_archive/",
+    "works/*/analysis/.scene_archive.lock",
+    "works/*/analysis/scene_splits/",
+    "works/*/analysis/progress/",
 ]
 
 

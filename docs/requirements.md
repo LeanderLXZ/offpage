@@ -1228,17 +1228,19 @@ Baseline 文件（voice_rules、behavior_rules、boundaries）仍然存在，
 │          ▼                                                      │
 │  ┌─ Phase 0 ─ 章节归纳 (多 chunk 并行, --concurrency) ┐         │
 │  │                                                    │         │
+│  │  进度: analysis/progress/phase0_summaries.json      │         │
+│  │                                                    │         │
 │  │  for each chunk (并行, --concurrency 默认 10):      │         │
 │  │  ┌──────────────────────────────────────────────┐  │         │
 │  │  │ ① 读取 chunk 内全部章节原文                   │  │         │
 │  │  │ ② claude -p → 每章结构化摘要 JSON             │  │         │
 │  │  │ ③ 写后验证 + L1→L2 JSON 修复                  │  │         │
 │  │  │ ④ FAIL → L3 全量重跑（重新归纳，最多 1 次）   │  │         │
-│  │  │ ⑤ PASS → 保留文件; FAIL → 删除 + 报告         │  │         │
+│  │  │ ⑤ PASS → 更新进度; FAIL → 删除 + 报告         │  │         │
 │  │  └──────────────────────────────────────────────┘  │         │
 │  │                                                    │         │
-│  │  已完成的 chunk 文件自动跳过（断点恢复）            │         │
-│  │  全部完成后门控检查：有缺失 chunk → 阻断 Phase 1   │         │
+│  │  双重恢复：进度文件 + chunk 文件存在检测            │         │
+│  │  全部完成后门控 → 更新 pipeline.json → Phase 1      │         │
 │  └──────────────────────┬─────────────────────────────┘         │
 │                         ▼                                       │
 │  ┌─ Phase 1 ─ 全书分析 (claude -p) ───────────────┐             │
@@ -1657,9 +1659,10 @@ fix 后重新跑语义审校；如果是程序化校验发现的，fix 后重新
   ERROR 并回滚。与 rate limit 明确区分，避免浪费重试配额
 - 最大重试次数 2 次（全量重试），超过标记为 blocked
 - 脚本崩溃 → 重启后从 progress 文件恢复
-- **Baseline 恢复**：progress 文件追踪 `baseline_done` 状态。`--resume` 时
-  如果 baseline 未完成（Phase 2.5 产出缺失），自动补跑 baseline production
-  再进入提取循环，避免后续 batch 全部因缺少 identity.json 而失败
+- **Baseline 恢复**：`pipeline.json` 追踪 Phase 2.5 完成状态。`--resume` 时
+  如果 baseline 未完成（Phase 2.5 产出缺失——包括 foundation.json、
+  fixed_relationships.json、identity.json），自动补跑 baseline production
+  再进入提取循环。`--start-phase 2.5` 强制重跑 baseline（忽略完成标记）
 - **REVIEWING 中断恢复**：恢复到 REVIEWING 状态的 batch 时，先检查提取产物
   是否仍在磁盘上。如果文件已被回滚清除，自动重置为 PENDING 重新提取
 - **同次运行自动重试**：Phase 3 和 Phase 4 均在同次运行内自动重试
@@ -1670,19 +1673,19 @@ fix 后重新跑语义审校；如果是程序化校验发现的，fix 后重新
   ERROR）重置为 pending，**retry_count 清零**（给用户全新的重试机会）。
   Phase 3 batch 重试由 targeted_fix 注入反馈信息；Phase 4 chapter
   重试同样注入上次错误信息到 prompt
-- **Progress 与 `--end-batch` 分离**（同 Phase 4 模式）：progress 文件
+- **Progress 与 `--end-batch` 分离**（同 Phase 4 模式）：`phase3_batches.json`
   始终包含完整 batch plan（Phase 2 确认时写入全量），`--end-batch` 仅作为
-  运行时限制控制本次执行范围，不影响 progress 数据结构。提取循环入口额外
-  执行防御性补全（从 batch plan 追加缺失 batch），应对 plan 更新或手动编辑
-  progress 等边缘情况
+  运行时限制控制本次执行范围（`None`=全部，`0`=仅 baseline 不跑 batch），
+  不影响进度数据结构。提取循环入口额外执行防御性补全（从 batch plan 追加
+  缺失 batch），应对 plan 更新或手动编辑 progress 等边缘情况
 
 ### 11.6 Git 集成
 
 - 每个 batch 通过审校后自动 git commit
 - 回滚 = git checkout + git clean 全仓库范围（不仅限于 works/），
   确保 LLM agent 在任意目录写入的残留文件都被清除；但会显式保留
-  `works/{work_id}/analysis/incremental/scene_archive/` 和
-  `.scene_archive.lock`，避免 Phase 3 回滚误删 Phase 4 的中间产物与断点状态
+  `works/{work_id}/analysis/scene_splits/`、`analysis/progress/` 和
+  `.scene_archive.lock`，避免 Phase 3 回滚误删 Phase 4 的中间产物与进度状态
 - 提取在独立分支（`extraction/{work_id}`）进行，每个 batch 单独 commit
   以保持最细粒度的回滚能力
 - 全部提取完成后，squash merge 回主分支——main 上只出现一个干净的提取
@@ -1769,7 +1772,7 @@ Phase 3 全部 batch 提交后，运行跨批次一致性检查。
 
 #### 产出
 
-- `works/{work_id}/analysis/incremental/consistency_report.json`
+- `works/{work_id}/analysis/consistency_report.json`
 - 控制台打印摘要（error/warning/info 计数）
 - 有 error 级别问题时阻断 Phase 4（需人工处理后继续）
 
@@ -1838,26 +1841,25 @@ pending → splitting → split → validating → passed
 
 ```
 works/{work_id}/
-├── rag/
+├── retrieval/
 │   └── scene_archive.jsonl        ← 最终产物（.gitignore，文件过大）
-├── analysis/incremental/
+├── analysis/
 │   ├── .scene_archive.lock        ← Phase 4 独立 PID 锁（.gitignore）
-│   └── scene_archive/             ← 中间产物 + 进度（.gitignore，本地断点恢复）
-│       ├── progress.json          ← Phase 4 进度追踪
-│       └── splits/
-│           ├── 0001.json          ← 每章的场景标注
-│           └── ...
+│   ├── scene_splits/              ← 中间产物（.gitignore，本地断点恢复）
+│   │   ├── 0001.json              ← 每章的场景标注
+│   │   └── ...
+│   └── progress/
+│       └── phase4_scenes.json     ← Phase 4 进度追踪
 ```
 
-运行时检索数据库 `fts.sqlite` 同样放在 `works/{work_id}/rag/`。
+运行时检索数据库 `fts.sqlite` 同样放在 `works/{work_id}/retrieval/`。
 
 #### 进度追踪
 
-独立于 Phase 3 的 `extraction_progress.json`，使用单独的 progress 文件：
+Phase 4 进度在 `analysis/progress/phase4_scenes.json`：
 
 ```json
 {
-  "phase": "scene_archive",
   "work_id": "<work_id>",
   "total_chapters": 500,
   "chapters": {
@@ -1884,22 +1886,35 @@ works/{work_id}/
 
 - `--resume` 读 Phase 4 progress，跳过已 passed 的章节
 - `--end-batch N` 限制只处理前 N 个 batch 对应的章节范围
-- 已有的 `splits/` 临时文件作为断点，不重复处理
+- 已有的 `scene_splits/` 临时文件作为断点，不重复处理
 - failed/error 章节在 `--resume` 时自动重置为 pending（保留 `retry_count`，
   不清零；当累积重试超过 `max_retries` 时升级为 error 永久跳过）
 - **split 文件存在性校验**：resume 时，对 progress 中标记为 passed 的章节
   验证对应的 `splits/{chapter}.json` 是否实际存在。缺失则重置为 pending
   重新生成，防止文件丢失导致最终 merge 失败
-- Phase 4 使用独立 `.scene_archive.lock`；lock 与 `scene_archive/`
-  中间产物均为本地忽略文件（.gitignore），**不得被 git track**。
-  如 extraction 分支上已有 tracked 的 split 文件，需 `git rm --cached`
-  移除跟踪。否则 Phase 3 回滚（`git checkout -- .`）会覆盖 tracked 的
-  split 文件，导致已通过的章节产物丢失
+- Phase 4 使用独立 `.scene_archive.lock`；lock、`scene_splits/`
+  中间产物和 `progress/` 目录均为本地忽略文件（.gitignore），
+  **不得被 git track**。如 extraction 分支上已有 tracked 的 split 文件，
+  需 `git rm --cached` 移除跟踪。否则 Phase 3 回滚（`git checkout -- .`）
+  会覆盖 tracked 的 split 文件，导致已通过的章节产物丢失
 
-#### Phase 选择
+#### Phase 选择与进度管理
 
-CLI 新增 `--start-phase` 参数（0/1/2/2.5/3/3.5/4），默认 auto（自动检测）。
-每个 phase 结束时在 progress 中写完成标记，已完成的 phase 自动跳过。
+CLI `--start-phase` 参数（0/1/2/2.5/3/3.5/4），默认 auto（自动检测）。
+
+进度文件统一存放在 `works/{work_id}/analysis/progress/`：
+
+- `pipeline.json` — 总 pipeline 状态（phase 级完成标记），`--start-phase`
+  读取此文件判断跳转，指定具体 phase 时强制重跑该 phase
+- `phase0_summaries.json` — Phase 0 chunk 级显式进度，chunk 完成后
+  更新状态；启动时同时检查 chunk 文件存在性（双重保障）
+- `phase3_batches.json` — Phase 3 batch 状态机（完整 batch plan +
+  per-batch 状态、重试计数、commit SHA）
+- `phase4_scenes.json` — Phase 4 per-chapter 场景切分进度
+- `extraction.log` — 运行时日志（.gitignore）
+
+`--end-batch` 语义：`None`（未指定）=全部，`0`=仅 baseline 不跑 batch，
+正整数=跑 N 个 batch。
 
 ---
 
@@ -2255,7 +2270,7 @@ works/{work_id}/world/world_event_digest.jsonl
 
 **存储位置**：
 ```
-works/{work_id}/rag/scene_archive.jsonl
+works/{work_id}/retrieval/scene_archive.jsonl
 ```
 
 不提交 git（文件过大，.gitignore）。运行时检索数据库 `fts.sqlite` 同目录。
@@ -2309,7 +2324,7 @@ scene_archive 是作品级资产，不按角色拆分（同一场景可能涉及
 scene_archive 在 **Phase 4**（独立阶段）提取，与 Phase 3 完全独立：
 - 前置条件仅需 `source_batch_plan.json`（Phase 1 产物），不依赖 Phase 3 产出
 - 使用独立 PID 锁 `.scene_archive.lock`；中间目录
-  `analysis/incremental/scene_archive/` 为本地忽略产物，可在断点恢复时复用
+  `analysis/scene_splits/` 为本地忽略产物，可在断点恢复时复用
 - 每章一次 LLM 调用：读原文 → 标注场景边界和元数据（不含 full_text）
 - 程序根据行号从原文提取 full_text，补充 scene_id 和 stage_id
 - 多章并行执行（`--concurrency` 控制，默认 10）
@@ -2488,7 +2503,7 @@ LLM 的 system prompt 中应包含：
 
 ```
 works/{work_id}/
-  ├── rag/
+  ├── retrieval/
   │   ├── scene_archive.jsonl     # 原文场景档案（提取产出，JSONL，.gitignore）
   │   └── fts.sqlite              # 运行时检索数据库（启动时从 JSONL 导入）
   │                               #   - scene_archive 表 + FTS5 索引
@@ -2496,11 +2511,14 @@ works/{work_id}/
   │                               #   - 可选：summary_embedding BLOB 列
   ├── characters/{character_id}/canon/
   │   └── memory_timeline/        # 角色主观记忆（已有，JSON 数组格式）
-  ├── analysis/incremental/
-  │   ├── .scene_archive.lock     # Phase 4 独立 PID 锁（.gitignore）
-  │   └── scene_archive/          # Phase 4 中间产物 + 进度（.gitignore）
-  │       ├── progress.json       # Phase 4 进度追踪
-  │       └── splits/             # 每章的场景标注临时文件
+  ├── analysis/
+  │   ├── scene_splits/           # Phase 4 中间产物（.gitignore）
+  │   └── progress/               # 进度管理（.gitignore）
+  │       ├── pipeline.json       # 总 pipeline 状态
+  │       ├── phase0_summaries.json
+  │       ├── phase3_batches.json
+  │       ├── phase4_scenes.json
+  │       └── extraction.log
   └── indexes/
       ├── scene_index.json        # 轻量场景索引（可提交 git）
       └── vocab_dict.txt          # 专有名词表（jieba 自定义词典格式）
