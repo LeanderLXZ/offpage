@@ -223,21 +223,22 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   baselines) for each target character. These are drafts — any subsequent
   batch may correct them.
 - **Phase 3 — Coordinated batch extraction**: per-batch loop:
-  1. World extraction (1 LLM call)
-  2. Character extraction (N parallel LLM calls)
-  3. Programmatic post-processing: L1 JSON repair + generate
+  1. World + character extraction (1+N LLM calls, **all parallel within
+     batch** — no dependency between world and characters)
+  2. Programmatic post-processing: L1 JSON repair + generate
      `memory_digest.jsonl` from `memory_timeline` + generate
      `world_event_digest.jsonl` from world snapshot `key_events` +
      upsert `stage_catalog.json` from snapshot metadata (0 token)
-  4. Parallel review lanes: world + each character independently runs
+  3. Parallel review lanes: world + each character independently runs
      validate → semantic review → targeted fix. Lanes run in parallel
      via ThreadPoolExecutor.
-  5. Commit gate (提交门控): programmatic cross-consistency check
+  4. Commit gate (提交门控): programmatic cross-consistency check
      (stage_id alignment, world-character consistency). All lanes must
      pass; any failure → full batch rollback.
-  6. Git commit.
-  All batches may correct any existing baseline (Phase 2.5 produces skeleton
-  drafts of voice_rules, behavior_rules, boundaries, failure_modes).
+  5. Git commit.
+  Every batch may correct any existing baseline (not just batch 1).
+  Character extraction does NOT read world snapshot — both read the same
+  source chapters independently; cross-consistency verified at commit gate.
   Extraction prompts do NOT read `baseline_merge.md`, `memory_digest.jsonl`,
   or `stage_catalog.json` — self-contained snapshot contract is embedded in
   the prompt; digest and catalog are programmatically maintained.

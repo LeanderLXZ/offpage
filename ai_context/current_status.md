@@ -52,6 +52,11 @@ No runtime implementation code yet.
 - LLM backend abstraction supporting Claude CLI and Codex CLI
 - Progress tracking with state machine (pending → extracting → extracted →
   post_processing → reviewing → passed → committed)
+- **Batch-internal parallelism**: world + N character extractions run
+  fully parallel within each batch (1+N LLM calls via ThreadPoolExecutor).
+  Character extraction does not read world snapshot — both read the same
+  source text independently; cross-consistency verified at commit gate.
+  Every batch can correct and supplement baseline files (not just batch 1).
 - Programmatic post-processing (`post_processing.py`): after extraction,
   automatically generates `memory_digest.jsonl` from `memory_timeline` and
   maintains `stage_catalog.json` from snapshot metadata (world catalog
@@ -104,7 +109,8 @@ No runtime implementation code yet.
   reads `simulation/contracts/baseline_merge.md`). Prompt dynamically
   injects importance-based quality requirements (min examples per target).
   Extraction prompts do not read or write `memory_digest.jsonl` or
-  `stage_catalog.json` (programmatic now)
+  `stage_catalog.json` (programmatic now). Character extraction prompt
+  does not read world snapshot (parallel with world extraction)
 - Breakpoint recovery via progress file; token/context limit errors
   distinguished from rate limits (not retried — same prompt will fail again).
   Fast empty failures (<5s + empty stderr) also retried with exponential

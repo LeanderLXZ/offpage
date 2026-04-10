@@ -88,7 +88,7 @@ def validate_batch(
         issues.extend(_check_character(
             work_dir, char_id, stage_id, schema_dir, importance_map))
 
-    # ---- Baseline file checks (first batch creates them) ----
+    # ---- Baseline file checks (Phase 2.5 creates, any batch may update) ----
     for char_id in character_ids:
         issues.extend(_check_baselines(work_dir, char_id, schema_dir))
 
@@ -537,7 +537,7 @@ def _check_baselines(work_dir: Path, char_id: str,
     for data_file, schema_file in baseline_checks:
         data_path = char_dir / data_file
         if not data_path.exists():
-            # Baselines may not exist until first batch
+            # Baselines created in Phase 2.5; may not exist if skipped
             continue
         data = _load_json(data_path)
         if data is not None:
