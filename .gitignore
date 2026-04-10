@@ -1,7 +1,9 @@
 # Extraction runtime artifacts (lock, log, summaries)
 works/*/analysis/incremental/.extraction.lock
+works/*/analysis/incremental/.scene_archive.lock
 works/*/analysis/incremental/extraction.log
 works/*/analysis/incremental/chapter_summaries/
+works/*/analysis/incremental/scene_archive/
 
 # Large novel corpus and derived source data
 sources/raw/*

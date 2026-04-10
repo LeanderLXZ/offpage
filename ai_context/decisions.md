@@ -199,6 +199,24 @@ that a new AI should know beyond what the architecture docs already say.
     L3 full re-run (last resort). See `automation/persona_extraction/
     json_repair.py`.
 
+## Resilience
+
+40a. Phase 4 uses an independent PID lock (`.scene_archive.lock`), allowing
+    it to run in parallel with Phase 3 (`.extraction.lock`). Phase 4 does
+    not perform git operations and has no data dependency on Phase 3 output.
+40b. Fast empty failures (CLI exit code ≠ 0, duration <5s, empty stderr)
+    are retried with exponential backoff (30s → 60s → 120s) in
+    `run_with_retry`. This prevents wasted rapid-fire retries when the
+    CLI itself fails to launch.
+40c. Phase 4 `_run_parallel` includes a global circuit breaker: if ≥8
+    failures occur within a 60s window, all workers pause for 180s before
+    resuming. This prevents failure storms under systemic issues.
+40d. Phase 4 intermediate state (`.scene_archive.lock` and
+    `works/{work_id}/analysis/incremental/scene_archive/`) is local and
+    git-ignored, and Phase 3 rollback explicitly excludes it from
+    repo-wide `git clean -fd`. This prevents unrelated Phase 3 failures
+    from deleting Phase 4 resume state or partial scene splits.
+
 ## Repository
 
 41. Keep the repo lightweight. Do not commit novels, databases, indexes, large

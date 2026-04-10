@@ -10,6 +10,16 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+ROLLBACK_CLEAN_EXCLUDES = [
+    "__pycache__",
+    "*.pyc",
+    # Preserve Phase 4 scene archive progress and split artifacts even when
+    # Phase 3 performs a repo-wide rollback.
+    "works/*/analysis/incremental/.scene_archive.lock",
+    "works/*/analysis/incremental/scene_archive/",
+]
+
+
 @dataclass
 class GitStatus:
     clean: bool
@@ -162,16 +172,18 @@ def rollback_to_head(project_root: Path) -> bool:
     """Discard all uncommitted changes (hard reset to HEAD).
 
     Restores tracked files and removes untracked files across the whole
-    repo (not just works/).  Excludes __pycache__ and .pyc artefacts.
+    repo (not just works/). Excludes caches plus Phase 4 scene archive
+    lock/progress artefacts so independent scene splitting state survives
+    a Phase 3 rollback.
     """
     result = _git(["checkout", "--", "."], project_root)
-    # Clean untracked files repo-wide, excluding caches
-    clean = _git(["clean", "-fd",
-                  "--exclude=__pycache__",
-                  "--exclude=*.pyc"], project_root)
+    clean_args = ["clean", "-fd"]
+    for pattern in ROLLBACK_CLEAN_EXCLUDES:
+        clean_args.append(f"--exclude={pattern}")
+    clean = _git(clean_args, project_root)
     success = result.returncode == 0 and clean.returncode == 0
     if success:
-        logger.info("Rolled back to HEAD (full-repo clean)")
+        logger.info("Rolled back to HEAD (full-repo clean, scene_archive preserved)")
     else:
         logger.error("Rollback failed: checkout=%s clean=%s",
                      result.stderr, clean.stderr)

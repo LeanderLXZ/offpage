@@ -243,8 +243,11 @@ importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。
 
 ## Phase 4：场景切分
 
-Phase 4 与 Phase 3 完全独立——无 PID 锁（不做 git 操作），可与 Phase 3
-并行运行。前置条件仅为 `source_batch_plan.json`（Phase 1 产物）。
+Phase 4 与 Phase 3 完全独立——使用独立 PID 锁 `.scene_archive.lock`，
+可与 Phase 3 并行运行。Phase 4 自身不做 git 操作；其中间目录
+`works/{work_id}/analysis/incremental/scene_archive/` 和 lock 文件均为
+本地忽略产物，Phase 3 的 rollback 不会清掉它们。前置条件仅为
+`source_batch_plan.json`（Phase 1 产物）。
 
 **运行方式**：
 
@@ -271,6 +274,7 @@ python -m persona_extraction "<work_id>" -r .. \
 
 **产出**：
 - 最终：`works/{work_id}/rag/scene_archive.jsonl`（.gitignore）
-- 中间：`works/{work_id}/analysis/incremental/scene_archive/`（进度 + splits）
+- 中间：`works/{work_id}/analysis/incremental/scene_archive/`
+  （`.scene_archive.lock` + progress + splits，.gitignore）
 
 代码：`persona_extraction/scene_archive.py`

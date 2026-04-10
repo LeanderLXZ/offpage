@@ -1614,7 +1614,9 @@ fix 后重新跑语义审校；如果是程序化校验发现的，fix 后重新
 
 - 每个 batch 通过审校后自动 git commit
 - 回滚 = git checkout + git clean 全仓库范围（不仅限于 works/），
-  确保 LLM agent 在任意目录写入的残留文件都被清除
+  确保 LLM agent 在任意目录写入的残留文件都被清除；但会显式保留
+  `works/{work_id}/analysis/incremental/scene_archive/` 和
+  `.scene_archive.lock`，避免 Phase 3 回滚误删 Phase 4 的中间产物与断点状态
 - 提取在独立分支（`extraction/{work_id}`）进行，每个 batch 单独 commit
   以保持最细粒度的回滚能力
 - 全部提取完成后，squash merge 回主分支——main 上只出现一个干净的提取
@@ -1771,7 +1773,8 @@ works/{work_id}/
 ├── rag/
 │   └── scene_archive.jsonl        ← 最终产物（.gitignore，文件过大）
 ├── analysis/incremental/
-│   └── scene_archive/             ← 中间产物 + 进度
+│   ├── .scene_archive.lock        ← Phase 4 独立 PID 锁（.gitignore）
+│   └── scene_archive/             ← 中间产物 + 进度（.gitignore，本地断点恢复）
 │       ├── progress.json          ← Phase 4 进度追踪
 │       └── splits/
 │           ├── 0001.json          ← 每章的场景标注
@@ -1815,6 +1818,8 @@ works/{work_id}/
 - `--end-batch N` 限制只处理前 N 个 batch 对应的章节范围
 - 已有的 `splits/` 临时文件作为断点，不重复处理
 - failed/error 章节在 `--resume` 时自动重置为 pending
+- Phase 4 使用独立 `.scene_archive.lock`；lock 与 `scene_archive/`
+  中间产物均为本地忽略文件，不受 Phase 3 rollback 清理影响
 
 #### Phase 选择
 
@@ -2194,6 +2199,8 @@ scene_archive 是作品级资产，不按角色拆分（同一场景可能涉及
 
 scene_archive 在 **Phase 4**（独立阶段）提取，与 Phase 3 完全独立：
 - 前置条件仅需 `source_batch_plan.json`（Phase 1 产物），不依赖 Phase 3 产出
+- 使用独立 PID 锁 `.scene_archive.lock`；中间目录
+  `analysis/incremental/scene_archive/` 为本地忽略产物，可在断点恢复时复用
 - 每章一次 LLM 调用：读原文 → 标注场景边界和元数据（不含 full_text）
 - 程序根据行号从原文提取 full_text，补充 scene_id 和 stage_id
 - 多章并行执行（`--concurrency` 控制，默认 10）
@@ -2381,7 +2388,8 @@ works/{work_id}/
   ├── characters/{character_id}/canon/
   │   └── memory_timeline/        # 角色主观记忆（已有，JSON 数组格式）
   ├── analysis/incremental/
-  │   └── scene_archive/          # Phase 4 中间产物 + 进度
+  │   ├── .scene_archive.lock     # Phase 4 独立 PID 锁（.gitignore）
+  │   └── scene_archive/          # Phase 4 中间产物 + 进度（.gitignore）
   │       ├── progress.json       # Phase 4 进度追踪
   │       └── splits/             # 每章的场景标注临时文件
   └── indexes/

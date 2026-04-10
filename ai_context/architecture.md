@@ -251,7 +251,9 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   Programmatic validation only (line coverage, no overlap, alias matching).
   Output: `works/{work_id}/rag/scene_archive.jsonl` (.gitignore).
   `scene_id` format: `scene_{chapter}_{seq}` (e.g. `scene_0015_003`).
-  Intermediate splits: `works/{work_id}/analysis/incremental/scene_archive/`.
+  Intermediate state: `.scene_archive.lock` +
+  `works/{work_id}/analysis/incremental/scene_archive/` (local ignored;
+  preserved from Phase 3 rollback).
   CLI: `--start-phase 4` runs Phase 4 standalone.
 
 ### Key design
@@ -271,6 +273,9 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   extraction branch can be deleted
 - Supports Claude CLI and Codex CLI backends
 - `--start-phase` selects starting phase; completed phases auto-skip
+- Phase 3 and Phase 4 use independent PID locks — can run in parallel
+- Fast empty failure backoff (30s exponential) + Phase 4 circuit breaker
+  (≥8 failures / 60s → 180s pause)
 
 See `automation/README.md` and `docs/requirements.md` §9–§12 for details.
 See `docs/architecture/schema_reference.md` for schema documentation.

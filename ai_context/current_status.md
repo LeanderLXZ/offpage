@@ -87,7 +87,11 @@ No runtime implementation code yet.
 - Phase 4 scene archive (`scene_archive.py`): per-chapter parallel
   LLM calls for scene boundary annotation, programmatic validation,
   full_text extraction by line number. `--start-phase 4` standalone,
-  `--concurrency` for parallelism. Output: `works/{work_id}/rag/`
+  `--concurrency` for parallelism. Output: `works/{work_id}/rag/`.
+  Independent PID lock (`.scene_archive.lock`) — can run parallel
+  with Phase 3. Intermediate `analysis/incremental/scene_archive/`
+  is git-ignored and preserved from Phase 3 rollback. Global circuit
+  breaker: 60s window, ≥8 failures → pause 180s
 - Prompt templates: analysis, world extraction, character extraction,
   world semantic review, character semantic review, targeted fix,
   scene split (coordinated_extraction.md kept for legacy; unified
@@ -98,7 +102,9 @@ No runtime implementation code yet.
   Extraction prompts do not read or write `memory_digest.jsonl` or
   `stage_catalog.json` (programmatic now)
 - Breakpoint recovery via progress file; token/context limit errors
-  distinguished from rate limits (not retried — same prompt will fail again)
+  distinguished from rate limits (not retried — same prompt will fail again).
+  Fast empty failures (<5s + empty stderr) also retried with exponential
+  backoff (30s → 60s → 120s)
 - Baseline recovery: `baseline_done` tracked in progress; `--resume`
   auto-detects incomplete baseline and re-runs Phase 2.5
 - Phase 2.5 exit validation: `validate_baseline()` checks schema
@@ -106,8 +112,10 @@ No runtime implementation code yet.
   before allowing Phase 3 to start
 - REVIEWING state recovery: verifies extraction output exists on disk
   before continuing review; resets to PENDING if files missing
-- Process guard: PID lockfile (prevents duplicate runs), startup git
-  preflight check, SIGINT/SIGTERM graceful shutdown
+- Process guard: PID lockfile (prevents duplicate runs; Phase 3 uses
+  `.extraction.lock`, Phase 4 uses `.scene_archive.lock` — independent),
+  startup git preflight check (Phase 3 only), SIGINT/SIGTERM graceful
+  shutdown
 - Background mode (`--background`): survives SSH disconnect, log to
   `extraction.log`, requires `--resume` or `--characters`
 - Runtime limit (`--max-runtime`): graceful stop after N minutes
