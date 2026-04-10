@@ -252,8 +252,9 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   Output: `works/{work_id}/rag/scene_archive.jsonl` (.gitignore).
   `scene_id` format: `scene_{chapter}_{seq}` (e.g. `scene_0015_003`).
   Intermediate state: `.scene_archive.lock` +
-  `works/{work_id}/analysis/incremental/scene_archive/` (local ignored;
-  preserved from Phase 3 rollback).
+  `works/{work_id}/analysis/incremental/scene_archive/` (local ignored,
+  must not be git-tracked; preserved from Phase 3 rollback). Resume
+  verifies split files exist — missing resets to pending.
   CLI: `--start-phase 4` runs Phase 4 standalone.
 
 ### Key design
