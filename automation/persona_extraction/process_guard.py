@@ -45,13 +45,16 @@ def fmt_memory(mb: float | None) -> str:
 class PidLock:
     """File-based PID lock for a work extraction run.
 
-    Lock file location:
+    Default lock file location:
       works/{work_id}/analysis/incremental/.extraction.lock
+
+    Use ``lock_name`` to create independent locks (e.g. ".scene_archive.lock").
     """
 
-    def __init__(self, project_root: Path, work_id: str):
+    def __init__(self, project_root: Path, work_id: str,
+                 lock_name: str = ".extraction.lock"):
         self.lock_path = (project_root / "works" / work_id
-                          / "analysis" / "incremental" / ".extraction.lock")
+                          / "analysis" / "incremental" / lock_name)
 
     def is_held(self) -> dict | None:
         """Check if lock is held by a live process.

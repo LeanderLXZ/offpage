@@ -28,6 +28,7 @@ from typing import Any
 
 from .llm_backend import LLMBackend, run_with_retry
 from .json_repair import programmatic_repair
+from .process_guard import PidLock
 from .prompt_builder import build_scene_split_prompt
 
 logger = logging.getLogger(__name__)
@@ -545,6 +546,41 @@ def run_scene_archive(
     print("\n" + "=" * 60)
     print("  Phase 4: Scene Archive")
     print("=" * 60)
+
+    # Independent PID lock — allows Phase 4 to run parallel with Phase 3
+    lock = PidLock(project_root, work_id,
+                   lock_name=".scene_archive.lock")
+    existing = lock.is_held()
+    if existing:
+        pid = existing.get("pid", "?")
+        started = existing.get("started", "?")
+        print(f"[ERROR] Another Phase 4 process is already running:")
+        print(f"  PID: {pid}  Started: {started}")
+        print(f"  If the process is dead, remove the lock:")
+        print(f"  rm \"{lock.lock_path}\"")
+        return False
+    if not lock.acquire():
+        print("[ERROR] Failed to acquire scene archive lock.")
+        return False
+
+    try:
+        return _run_scene_archive_inner(
+            project_root, work_id, backend,
+            concurrency=concurrency, end_batch=end_batch, resume=resume)
+    finally:
+        lock.release()
+
+
+def _run_scene_archive_inner(
+    project_root: Path,
+    work_id: str,
+    backend: LLMBackend,
+    *,
+    concurrency: int = 10,
+    end_batch: int = 0,
+    resume: bool = False,
+) -> bool:
+    """Inner implementation after lock is acquired."""
 
     # Check precondition: source_batch_plan.json
     plan_path = (project_root / "works" / work_id / "analysis"
