@@ -14,7 +14,7 @@ from .process_guard import launch_background
 from .progress import ExtractionProgress
 from .scene_archive import run_scene_archive
 
-# Phase 4 does not need git preflight (no commits), but shares the lock.
+# Phase 4 does not need git preflight (no commits) and uses its own lock.
 VALID_PHASES = ("auto", "0", "1", "2", "2.5", "3", "3.5", "4")
 
 
@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> None:
               f"project root (no schemas/ directory).")
         sys.exit(1)
 
-    # --- Phase 4 standalone path (no lock — no git operations) ---
+    # --- Phase 4 standalone path (independent lock, no git operations) ---
     if args.start_phase == "4":
         if args.background:
             extra = [a for a in sys.argv[1:] if a != "--background"]
