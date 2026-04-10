@@ -648,7 +648,7 @@ class ExtractionOrchestrator:
                     print(f"  [OK] {char_id}/{fname} produced.")
                 else:
                     print(f"  [WARN] {char_id}/{fname} not found "
-                          f"(batch 1 will create from scratch).")
+                          f"(Phase 2.5 should create).")
 
         if missing_critical:
             print(f"\n[ERROR] Missing critical baseline files: "
