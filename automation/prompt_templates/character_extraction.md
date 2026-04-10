@@ -131,7 +131,7 @@
 | failure_modes.json | `failure_modes` (数组键) | `common_failures` |
 | boundaries.json hard_boundaries 条目 | `consequence` | `reason` |
 | behavior_rules.json | `relationship_defaults` | `relationship_behavior_map`（数组格式） |
-| stage_catalog.json | 缺 `order`/`short_summary`/`snapshot_path` | 每个 stage 条目**必须**包含这三个字段 |
+| stage_catalog.json | 缺 `order`/`summary`/`snapshot_path` | 每个 stage 条目**必须**包含这三个字段 |
 | stage_catalog.json | 缺 `schema_version`/`character_id` | 顶层**必须**包含 |
 | manifest.json | `stage_snapshot_root` 指向 `canon/stages` | 正确路径：`canon/stage_snapshots` |
 | behavior_state / behavior_rules | `core_drives`（旧字段） | 新提取使用 `core_goals` + `obsessions`；旧字段向后兼容保留 |

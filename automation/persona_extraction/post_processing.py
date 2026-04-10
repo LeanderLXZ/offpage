@@ -2,8 +2,9 @@
 
 After LLM extraction produces stage_snapshots and memory_timelines,
 this module programmatically maintains derived files:
-  - memory_digest.jsonl  (compressed index of memory_timeline)
-  - stage_catalog.json   (stage directory with upsert semantics)
+  - memory_digest.jsonl        (compressed index of memory_timeline)
+  - world_event_digest.jsonl   (compressed index of world key_events)
+  - stage_catalog.json         (stage directory index, bootstrap only)
 
 These were previously written by the LLM agent, consuming tokens and
 risking format drift. Programmatic generation is deterministic, idempotent,
@@ -164,6 +165,126 @@ def _timeline_to_digest(entry: dict, stage_id: str) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# world_event_digest.jsonl generation
+# ---------------------------------------------------------------------------
+
+def generate_world_event_digest(
+    snapshot_path: Path,
+    digest_path: Path,
+    stage_id: str,
+    schema_dir: Path | None = None,
+) -> list[str]:
+    """Generate world_event_digest entries from a world stage_snapshot.
+
+    Reads ``key_events`` from the world stage_snapshot and produces one
+    digest entry per event.  Existing entries for other stages are preserved;
+    entries matching ``stage_id`` are replaced (upsert semantics).
+
+    Returns a list of warning/error messages (empty = success).
+    """
+    issues: list[str] = []
+
+    if not snapshot_path.exists():
+        issues.append(f"world snapshot not found: {snapshot_path}")
+        return issues
+
+    try:
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, ValueError) as e:
+        issues.append(f"Cannot parse world snapshot: {e}")
+        return issues
+
+    key_events = snapshot.get("key_events", [])
+    if not isinstance(key_events, list) or not key_events:
+        issues.append(f"No key_events in world snapshot for stage '{stage_id}'")
+        return issues
+
+    # Build a short stage tag for event_id (e.g. "S01" from "阶段01_xxx")
+    stage_short = _extract_stage_short(stage_id)
+    timeline_anchor = snapshot.get("timeline_anchor", "")
+
+    # Build new entries
+    new_entries: list[dict] = []
+    for i, event_text in enumerate(key_events):
+        if not isinstance(event_text, str) or not event_text.strip():
+            continue
+        entry: dict[str, Any] = {
+            "event_id": f"WE-{stage_short}-{i + 1:03d}",
+            "stage_id": stage_id,
+            "event_summary": event_text.strip(),
+        }
+        if timeline_anchor:
+            entry["time_in_story"] = timeline_anchor
+        new_entries.append(entry)
+
+    if not new_entries:
+        issues.append(f"No digest entries generated for stage '{stage_id}'")
+        return issues
+
+    # Validate against schema
+    if schema_dir and _jsonschema:
+        schema_path = schema_dir / "world_event_digest_entry.schema.json"
+        if schema_path.exists():
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            for j, entry in enumerate(new_entries):
+                try:
+                    _jsonschema.validate(entry, schema)
+                except _jsonschema.ValidationError as e:
+                    path_str = ".".join(
+                        str(p) for p in e.absolute_path) or "(root)"
+                    issues.append(
+                        f"world_event_digest entry [{j}] schema error at "
+                        f"{path_str}: {e.message}")
+
+    # Upsert into existing digest
+    existing_lines: list[dict] = []
+    if digest_path.exists():
+        text = digest_path.read_text(encoding="utf-8").strip()
+        if text:
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    existing_lines.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+
+    # Remove old entries for this stage_id
+    kept = [e for e in existing_lines if e.get("stage_id") != stage_id]
+
+    # Deduplicate by event_id
+    seen_ids: set[str] = set()
+    deduped_new: list[dict] = []
+    for entry in new_entries:
+        eid = entry.get("event_id", "")
+        if eid not in seen_ids:
+            seen_ids.add(eid)
+            deduped_new.append(entry)
+
+    final = kept + deduped_new
+
+    # Write
+    digest_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(digest_path, "w", encoding="utf-8") as f:
+        for entry in final:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    logger.info("world_event_digest: wrote %d entries for stage '%s' "
+                "(%d total lines)", len(deduped_new), stage_id, len(final))
+    return issues
+
+
+def _extract_stage_short(stage_id: str) -> str:
+    """Extract short stage tag like 'S01' from '阶段01_xxx'."""
+    import re
+    m = re.search(r"(\d+)", stage_id)
+    if m:
+        return f"S{int(m.group(1)):02d}"
+    return stage_id[:6]
+
+
+# ---------------------------------------------------------------------------
 # stage_catalog.json maintenance
 # ---------------------------------------------------------------------------
 
@@ -204,7 +325,7 @@ def upsert_stage_catalog(
         "stage_id": stage_id,
         "order": order,
         "title": snapshot_data.get("title", stage_id),
-        "short_summary": snapshot_data.get("snapshot_summary", stage_id),
+        "summary": snapshot_data.get("snapshot_summary", stage_id),
         "snapshot_path": snapshot_path_rel,
     }
 
@@ -222,19 +343,6 @@ def upsert_stage_catalog(
             val = snapshot_data.get(src_field)
             if val and isinstance(val, str):
                 new_entry[cat_field] = val
-
-    # World catalog extra summary fields
-    if character_id is None:
-        # current_world_state as summary (take first item if array)
-        cws = snapshot_data.get("current_world_state")
-        if isinstance(cws, list) and cws:
-            new_entry["current_world_summary"] = cws[0]
-        elif isinstance(cws, str):
-            new_entry["current_world_summary"] = cws
-        # key_events: copy from snapshot (1-sentence summaries per stage)
-        ke = snapshot_data.get("key_events")
-        if isinstance(ke, list) and ke:
-            new_entry["key_events"] = ke
 
     # --- load or create catalog ---
     catalog: dict[str, Any]
@@ -316,7 +424,7 @@ def run_batch_post_processing(
     """Run all programmatic post-processing for a completed batch.
 
     Called after world + character extraction succeeds, before review.
-    Generates memory_digest entries and updates stage_catalogs.
+    Generates memory_digest, world_event_digest, and updates stage_catalogs.
 
     Returns a list of issues (empty = all clean).
     """
@@ -353,6 +461,17 @@ def run_batch_post_processing(
                 schema_dir=schema_dir,
             )
             issues.extend(f"[world catalog] {i}" for i in catalog_issues)
+
+            # world_event_digest
+            wed_path = work_dir / "world" / "world_event_digest.jsonl"
+            wed_issues = generate_world_event_digest(
+                snapshot_path=world_snapshot_path,
+                digest_path=wed_path,
+                stage_id=stage_id,
+                schema_dir=schema_dir,
+            )
+            issues.extend(
+                f"[world event digest] {i}" for i in wed_issues)
     else:
         issues.append(f"World snapshot not found: {world_snapshot_path}")
 

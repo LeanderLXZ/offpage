@@ -305,7 +305,7 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
 
 在对话开始时，系统应加载：
 
-`世界 foundation + 选定的世界阶段快照 + 阶段关系快照 + 角色不变层（identity + failure_modes + hard_boundaries）+ 选定阶段的自包含快照 + memory_timeline 近期 2 阶段全量 + memory_digest.jsonl 全量 + scene_archive 摘要 + 用户绑定 + 长期档案 + 关系核心 + 当前 context + 近期 session 状态`
+`世界 foundation（含 fixed_relationships）+ 选定的世界阶段快照 + world_event_digest 1..N + 角色不变层（identity + failure_modes + hard_boundaries）+ 选定阶段的自包含快照 + memory_timeline 近期 2 阶段全量 + memory_digest 1..N 过滤 + scene_archive 摘要 + 用户绑定 + 长期档案 + 关系核心 + 当前 context + 近期 session 状态`
 
 注意：角色 baseline（voice_rules、behavior_rules、boundaries 的 soft 部分）
 **不在运行时加载**。运行时角色状态完全由自包含的 stage_snapshot 提供。
@@ -313,11 +313,12 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
 推荐的加载拆分：
 
 - 启动必需：
-  - 世界 foundation + 选定的世界阶段快照 + 阶段关系快照
+  - 世界 foundation（`foundation.json` + `fixed_relationships.json`）+ 选定的世界阶段快照
+  - `world_event_digest.jsonl`：stage 1..N 过滤加载（世界事件时间线）
   - 角色不变层：identity.json、failure_modes.json、hard_boundaries
   - 选定阶段的**自包含** stage_snapshot（voice/behavior/boundary/relationships 全含）
   - memory_timeline：近期 2 阶段（N + N-1）全量
-  - memory_digest.jsonl：全量（压缩索引，覆盖全历史，远期感知）
+  - memory_digest.jsonl：stage 1..N 过滤加载（压缩索引，远期感知）
   - scene_archive：stage 1..N 摘要 + 当前阶段附近 N 个 full_text（默认 N=5）
   - vocab_dict.txt → jieba 自定义词典
   - 用户摘要层状态（role_binding、long_term_profile、relationship_core）
@@ -336,13 +337,15 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
 
 阶段选择应基于一个作品级的阶段轴，而非各角色独立的自由格式标签。
 
-世界资产包应暴露一个作品级的 `stage_catalog.json`，包含：
+世界资产包应暴露一个作品级的 `stage_catalog.json`（仅用于 bootstrap 阶段选择，
+运行时不加载），包含：
 
 - 阶段 ID
 - 阶段标题
-- 面向用户的单行摘要
+- 面向用户的单行摘要（`summary`）
 - 累计章节范围或等效的源覆盖范围
-- 该阶段活跃世界状况的提示
+
+世界事件时间线由 `world_event_digest.jsonl` 提供（运行时 stage 1..N 过滤加载）。
 
 角色资产包应为这些相同的 `stage_id` 值暴露投射，包括：
 

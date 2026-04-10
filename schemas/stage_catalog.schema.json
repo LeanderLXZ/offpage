@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/stage_catalog.schema.json",
-  "title": "阶段目录",
+  "title": "角色阶段目录",
+  "description": "角色阶段索引，仅用于 bootstrap 阶段选择，运行时不加载。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -39,7 +40,7 @@
           "stage_id",
           "order",
           "title",
-          "short_summary",
+          "summary",
           "snapshot_path"
         ],
         "properties": {
@@ -58,10 +59,10 @@
           "timeline_anchor": {
             "type": "string"
           },
-          "short_summary": {
+          "summary": {
             "type": "string",
             "minLength": 1,
-            "description": "供用户在运行时选择阶段时展示的一句话摘要。"
+            "description": "供 bootstrap 阶段选择时展示的摘要。"
           },
           "experience_summary": {
             "type": "string"

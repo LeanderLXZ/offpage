@@ -102,9 +102,10 @@ that a new AI should know beyond what the architecture docs already say.
     extraction) is a fresh `claude -p` call with no shared session memory.
     Context between steps is entirely file-based.
 24a. Extraction prompts do NOT read `simulation/contracts/baseline_merge.md`,
-    `memory_digest.jsonl`, or `stage_catalog.json`. The self-contained
-    snapshot contract is embedded directly in the extraction prompt.
-    `memory_digest.jsonl` and `stage_catalog.json` are maintained
+    `memory_digest.jsonl`, `world_event_digest.jsonl`, or
+    `stage_catalog.json`. The self-contained snapshot contract is embedded
+    directly in the extraction prompt. `memory_digest.jsonl`,
+    `world_event_digest.jsonl`, and `stage_catalog.json` are maintained
     programmatically by `post_processing.py` (0 token, idempotent).
 25. Three-layer quality check per batch: programmatic validation (free) +
     per-lane semantic review (independent LLM agent) + commit gate
@@ -130,9 +131,9 @@ that a new AI should know beyond what the architecture docs already say.
     10 chapters). stage_id should be a meaningful Chinese name.
 28. The orchestrator pre-computes the file read list for each call (world /
     character). Only the most recent snapshot and memory_timeline are included
-    (not full history). `memory_digest.jsonl`, `stage_catalog.json`, and
-    `baseline_merge.md` are excluded from the read list. Agents should not
-    explore freely.
+    (not full history). `memory_digest.jsonl`, `world_event_digest.jsonl`,
+    `stage_catalog.json`, and `baseline_merge.md` are excluded from the read
+    list. Agents should not explore freely.
 
 ## Memory System and Retrieval
 
@@ -230,14 +231,22 @@ that a new AI should know beyond what the architecture docs already say.
     (`stage_events` for detail, `key_events` for 1-sentence summaries).
     No cumulative history — previous design had `historical_events`
     growing unbounded. `evidence_refs` simplified to chapter number list
-    (e.g. `["0001", "0002"]`), no detailed descriptions; per-event
-    `[NNNN]` inline tags provide fine-grained sourcing.
+    (e.g. `["0001", "0002"]`), no detailed descriptions. Body fields
+    (`stage_events`, `key_events` etc.) do not need inline `[NNNN]`
+    chapter tags — `evidence_refs` already provides sourcing.
 
-40g. World `stage_catalog` accumulates `key_events` per stage entry.
-    Runtime reads all stages' `key_events` in order to build the
-    complete world event timeline — no need to load every stage snapshot.
-    Programmatic: `post_processing.py` copies `key_events` from snapshot
-    to catalog (0 token).
+40g. `world_event_digest.jsonl` accumulates world events across stages.
+    Programmatic: `post_processing.py` reads `key_events` from world
+    stage snapshot → generates digest entries (0 token, idempotent).
+    Runtime loads stage 1..N filtered (N = user-selected stage).
+    `stage_catalog.json` is demoted to bootstrap stage selector only
+    (not loaded at runtime); its `summary` field (renamed from
+    `short_summary`) drives the stage picker UI.
+
+40g2. `fixed_relationships.json` in `world/foundation/` records structural
+    bonds (blood, lineage, faction membership) that are not stage-dependent.
+    Phase 2.5 produces a skeleton; subsequent batches may correct it.
+    Loaded at runtime as Tier 0 alongside `foundation.json`.
 
 40h. Smart resume: if a batch is PENDING but extraction output already
     exists on disk (world + all character stage_snapshots), the

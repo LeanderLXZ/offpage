@@ -15,9 +15,9 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 ### world_stage_catalog.schema.json
 
-**用途**：世界阶段目录，列出作品的所有可选阶段。含累积 `key_events` 时间线。
+**用途**：世界阶段目录，列出作品的所有可选阶段。仅用于 bootstrap 阶段选择，运行时不加载。
 **位置**：`works/{work_id}/world/stage_catalog.json`
-**关键字段**：stages[].stage_id, stages[].title, stages[].short_summary, stages[].key_events
+**关键字段**：stages[].stage_id, stages[].title, stages[].summary
 
 ---
 
@@ -29,12 +29,38 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 - `snapshot_summary` — 阶段的世界状态概述
 - `foundation_corrections` — 对基础设定的修正
 - `stage_events` — 本阶段事件（详细，仅本阶段）
-- `key_events` — 本阶段重要事件摘要（1 句话级别，供 stage_catalog 累积）
+- `key_events` — 本阶段重要事件摘要（1 句话级别，供 world_event_digest.jsonl 程序化累积）
 - `current_world_state` — 当前阶段的世界总体状态
 - `relationship_shifts` — 关注的人物关系转变
 - `character_status_changes` — 人物状态变化（生死、等级等）
 - `location_changes`, `map_changes` — 地理变化
 - `evidence_refs` — 章节号列表
+
+---
+
+### fixed_relationships.schema.json
+
+**用途**：世界级固定关系网络（血缘、宗族、师徒、势力从属等不随阶段变化的结构性关系）。
+**位置**：`works/{work_id}/world/foundation/fixed_relationships.json`
+**关键字段**：relationships[].relationship_id, relationships[].type, relationships[].parties, relationships[].description
+**生命周期**：Phase 2.5 产出骨架，后续批次可修正。运行时 Tier 0 加载。
+
+---
+
+### world_event_digest_entry.schema.json
+
+**用途**：世界事件压缩摘要条目——从世界 stage_snapshot `key_events` 程序化生成的精简索引。
+**位置**：`works/{work_id}/world/world_event_digest.jsonl`
+**格式**：JSONL，每行一条事件摘要。
+**运行时**：启动时 stage 1..N 过滤加载（N = 用户选定阶段），为 LLM 提供世界事件时间线感知。
+
+**关键字段**：
+- `event_id` — 格式 `WE-{stage_short}-{seq}`
+- `stage_id` — 所属阶段
+- `event_summary` — 事件精简摘要
+- `time_in_story` — 故事内时间（可选）
+- `location` — 事件地点（可选）
+- `involved_characters` — 涉及的角色（可选）
 
 ---
 
@@ -183,7 +209,7 @@ core_wounds 记录最底层的创伤根源。
 **用途**：记忆压缩摘要条目——从 memory_timeline 自动提取的精简索引。
 **位置**：`characters/{character_id}/canon/memory_digest.jsonl`
 **格式**：JSONL，每行一条压缩摘要。
-**运行时**：启动时全量加载，为 LLM 提供远期历史感知（~60-80 tokens/条）。
+**运行时**：启动时 stage 1..N 过滤加载（N = 用户选定阶段），为 LLM 提供远期历史感知（~60-80 tokens/条）。
 
 **关键字段**：
 - `memory_id` — 与 memory_timeline 条目的 memory_id 一一对应
@@ -270,4 +296,4 @@ core_wounds 记录最底层的创伤根源。
 | behavior_rules.json | 提取锚点 | **不加载** |
 | boundaries.json | 提取锚点（hard_boundaries 加载） | hard_boundaries **加载** |
 | stage_snapshot | 每批产出 | **加载**（核心） |
-| memory_timeline | 每批产出 | 近期 2 阶段全量 + memory_digest 概览 + FTS5 按需 |
+| memory_timeline | 每批产出 | 近期 2 阶段全量 + memory_digest 1..N 过滤 + FTS5 按需 |

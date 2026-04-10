@@ -161,7 +161,7 @@ jieba 分词 + 名词表匹配（<10ms）
 
 **memory_timeline**：
 - 近期 2 个阶段（N + N-1）全量加载
-- `memory_digest.jsonl` 全量加载（压缩索引，覆盖全历史，~60-80 tokens/条）
+- `memory_digest.jsonl` stage 1..N 过滤加载（压缩索引，~60-80 tokens/条）
 - 其余条目通过 FTS5 按需检索
 
 **scene_archive**：

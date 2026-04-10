@@ -9,14 +9,16 @@ Compile the minimum useful packet for the first reply.
 1. Read `works/{work_id}/manifest.json` if present.
 2. Read `works/{work_id}/indexes/load_profiles.json` if present.
 3. Read `works/{work_id}/world/manifest.json`.
-4. Read `works/{work_id}/world/stage_catalog.json`.
-5. Read selected `world/stage_snapshots/{stage_id}.json`.
-6. Read the minimum `world/foundation/` files required for global rules.
+4. Read selected `world/stage_snapshots/{stage_id}.json`.
+5. Read `works/{work_id}/world/foundation/foundation.json`.
+5b. Read `works/{work_id}/world/foundation/fixed_relationships.json`.
+6. Read `works/{work_id}/world/world_event_digest.jsonl` filtered to
+   stage 1..N (N = user-selected stage).
 8. Read target character baseline.
 9. Read target character selected-stage snapshot.
 10. Read target character memory_timeline: recent 2 stages (N + N-1) full.
-10b. Read target character `memory_digest.jsonl` in full (compressed index
-    of all stages, for distant-history awareness).
+10b. Read target character `memory_digest.jsonl` filtered to stage 1..N
+    (N = user-selected stage, for distant-history awareness).
 11. Load scene_archive summaries for stages 1..N where target character is
     in `characters_present`.
 12. Load scene_archive full_text for N scenes (default N=5) around the
@@ -47,7 +49,7 @@ Compile the minimum useful packet for the first reply.
    top of repo-level defaults.
 6. Do not load full active or archived `transcript.jsonl` files at startup.
 7. Memory_timeline beyond the 2 recent stages is not loaded at startup.
-   `memory_digest.jsonl` provides compressed awareness of all historical
+   `memory_digest.jsonl` (stage 1..N filtered) provides compressed awareness of historical
    stages; detailed entries are available via FTS5/embedding on-demand.
 8. Scene_archive full_text is only loaded for the N scenes nearest the current
    stage — other scenes are available via FTS5/embedding on-demand retrieval,

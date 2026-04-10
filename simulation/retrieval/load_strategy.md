@@ -11,9 +11,9 @@ Load before the first reply:
 
 - work manifest
 - world manifest
-- world stage catalog
 - selected world stage snapshot
-- minimum world foundation rules
+- world foundation (`foundation.json` + `fixed_relationships.json`)
+- `world_event_digest.jsonl` stage 1..N filtered (N = user-selected stage)
 - target character identity (`identity.json`, incl. `core_wounds`, `key_relationships`)
 - target character failure modes (`failure_modes.json`)
 - target character hard boundaries (`boundaries.json` → `hard_boundaries` only)
@@ -29,9 +29,9 @@ Load before the first reply:
   `stage_snapshots/` to find the most recent snapshot containing that target
   entry. This is a safety net — normal path is self-contained snapshots.
 - target character memory timeline: recent 2 stages (N + N-1) full text
-- target character `memory_digest.jsonl`: compressed index of all stages,
-  loaded in full for distant-history awareness (each entry ~60-80 tokens;
-  auto-generated from memory_timeline)
+- target character `memory_digest.jsonl`: compressed index, stage 1..N
+  filtered (N = user-selected stage) for distant-history awareness
+  (each entry ~60-80 tokens; auto-generated from memory_timeline)
 - user profile summary
 - active persona summary when used
 - user role binding

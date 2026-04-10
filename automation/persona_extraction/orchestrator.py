@@ -632,6 +632,14 @@ class ExtractionOrchestrator:
             missing_critical.append("world/foundation/foundation.json")
             print("  [MISS] World foundation not found.")
 
+        fixed_rel = (work_dir / "world" / "foundation"
+                     / "fixed_relationships.json")
+        if fixed_rel.exists():
+            print("  [OK] World fixed_relationships produced.")
+        else:
+            print("  [WARN] World fixed_relationships.json not found "
+                  "(Phase 2.5 should create).")
+
         for char_id in target_characters:
             canon_dir = work_dir / "characters" / char_id / "canon"
             identity = canon_dir / "identity.json"

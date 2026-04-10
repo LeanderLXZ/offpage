@@ -45,13 +45,15 @@ For full details see `docs/architecture/system_overview.md` and
 
 Startup loads (in order):
 
-1. World foundation (`foundation.json`) + selected world-stage snapshot
+1. World foundation (`foundation.json` + `fixed_relationships.json`)
+   + selected world-stage snapshot
 2. Target character `identity.json` (incl. `core_wounds`, `key_relationships`)
    + `failure_modes.json` + selected self-contained stage snapshot
    (voice/behavior/boundary/relationship state all included; no baseline
    merge needed)
 3. Memory_timeline: recent 2 stages (N + N-1) full text
-3b. Memory_digest.jsonl: compressed index of all stages (distant-history awareness)
+3b. Memory_digest.jsonl: stage 1..N filtered (distant-history awareness)
+3c. World_event_digest.jsonl: stage 1..N filtered (world event timeline)
 4. Scene_archive: stage 1..N summaries + current-stage-area N full_text scenes
 5. Vocab dict (`works/{work_id}/indexes/vocab_dict.txt`) into jieba
 6. User role binding + long-term profile + relationship core
@@ -71,8 +73,9 @@ See `simulation/retrieval/load_strategy.md` for the full tier model.
   term (which processing unit); "stage" is the content/runtime term (which
   story phase). They share the same `stage_id`. Both names are kept because
   they serve different audiences.
-- World package exposes a `stage_catalog.json` with selectable timeline nodes
-  and cumulative `key_events` (world event timeline, assembled per-stage).
+- World package exposes a `stage_catalog.json` (bootstrap stage selector,
+  not loaded at runtime) and `world_event_digest.jsonl` (incremental world
+  event timeline, loaded at startup filtered to stage 1..N).
 - Character packages project the same `stage_id` into character-specific state.
 - Stage N is cumulative through 1..N; the latest stage is the active present.
 - User selects a stage at setup; it applies to target character and any
@@ -215,16 +218,17 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   confirms batch boundaries.
 - **Phase 2.5 — Baseline production**: with full-book context and
   confirmed characters, produce world foundation
-  (`world/foundation/foundation.json`) and character baselines
-  (`identity.json`, `manifest.json`) for each target character. These are
-  drafts — any subsequent batch may correct them.
+  (`world/foundation/foundation.json`, `fixed_relationships.json`) and
+  character baselines (`identity.json`, `manifest.json` + 4 skeleton
+  baselines) for each target character. These are drafts — any subsequent
+  batch may correct them.
 - **Phase 3 — Coordinated batch extraction**: per-batch loop:
   1. World extraction (1 LLM call)
   2. Character extraction (N parallel LLM calls)
   3. Programmatic post-processing: L1 JSON repair + generate
-     `memory_digest.jsonl` from `memory_timeline` + upsert
-     `stage_catalog.json` from snapshot metadata (world catalog
-     additionally accumulates `key_events` timeline) (0 token)
+     `memory_digest.jsonl` from `memory_timeline` + generate
+     `world_event_digest.jsonl` from world snapshot `key_events` +
+     upsert `stage_catalog.json` from snapshot metadata (0 token)
   4. Parallel review lanes: world + each character independently runs
      validate → semantic review → targeted fix. Lanes run in parallel
      via ThreadPoolExecutor.

@@ -12,8 +12,11 @@ works/{work_id}/
   world/
     manifest.json
     stage_catalog.json
+    world_event_digest.jsonl
     stage_snapshots/{stage_id}.json
     foundation/
+      foundation.json
+      fixed_relationships.json
       setting.json
       cosmology.json
       power_system.json
@@ -75,7 +78,8 @@ works/{work_id}/
 世界基础设定包，包含：
 
 - `stage_catalog.json` — 剧情阶段目录，每个阶段包含一句话总结
-  （`short_summary`）供用户选择
+  （`summary`）供用户选择（仅 bootstrap 阶段选择，运行时不加载）
+- `world_event_digest.jsonl` — 世界事件压缩摘要时间线（程序化维护）
 - `stage_snapshots/` — 每个阶段的世界状态快照，内容涵盖：
   - 对基础设定的修正与补充
   - 累积历史事件
@@ -84,7 +88,7 @@ works/{work_id}/
   - 人物状态变化（生死、恋爱、等级等随时间变化的状态）
   - 地理与地图变化
   - 悬而未决的谜题
-- `foundation/` — 稳定的世界规则（设定、宇宙观、力量体系）
+- `foundation/` — 稳定的世界规则（设定、宇宙观、力量体系）及固定关系网络
 - `history/` — 历史时间线
 - `events/` — 作品级共享大事件（不含角色侧小场景）
 - `state/` — 动态世界状态快照
@@ -92,9 +96,10 @@ works/{work_id}/
 - `factions/` — 势力与机构
 - `maps/` — 地图结构与地理推测
 - `cast/` — 作品级角色索引与简要摘要（聚焦主角团和高频配角）
-关系信息不设独立目录：固定关系记录在 `characters/{char_id}/canon/identity.json`
-的 `key_relationships` 中；阶段性关系变化记录在 `world/stage_snapshots/` 的
-`relationship_shifts` 字段中。
+关系信息不设独立目录：世界级固定关系记录在
+`world/foundation/fixed_relationships.json`；角色侧核心关系弧线记录在
+`characters/{char_id}/canon/identity.json` 的 `key_relationships` 中；
+阶段性关系变化记录在 `world/stage_snapshots/` 的 `relationship_shifts` 字段中。
 
 ### characters/
 
@@ -140,7 +145,7 @@ works/{work_id}/
   - 知识泄漏风险（角色不该知道但 AI 容易泄漏的信息）
   - schema: `schemas/failure_modes.schema.json`
 - `stage_catalog.json` — 角色阶段目录，每个阶段包含一句话总结
-  （`short_summary`）供用户选择
+  （`summary`）供用户选择（仅 bootstrap 阶段选择，运行时不加载）
 - `stage_snapshots/` — 角色在每个阶段的投影快照，内容涵盖：
   - 从上个阶段至今经历的事件
   - 当前状态（生死、恋爱、等级等随时间变化的状态）
@@ -186,7 +191,8 @@ works/{work_id}/
 - 用户侧角色漂移、关系变化和对话历史应归入 `users/{user_id}/`
 - 世界材料是活的 canon 资产 — 后续章节可以修订和扩充
 - 只有源文本证据可以修订世界 canon，用户对话不可以
-- 运行时应加载所有 fixed_relationships 加上当前所选 stage 的 stage_relationships
+- 运行时加载 `fixed_relationships.json`（Tier 0）；阶段性关系变化由
+  `stage_snapshots/` 中的 `relationship_shifts` 提供
 
 ## 剧情阶段模型
 
@@ -199,8 +205,10 @@ works/{work_id}/
   与用户对话。世界状态同理——只有当前阶段的快照反映"此刻"的世界
 - 世界和角色各自维护独立的 `stage_catalog.json` + `stage_snapshots/`，
   共享同一套 `stage_id`
-- 每个阶段条目包含 `short_summary`（一句话总结），用于用户在开始对话时
+- 每个阶段条目包含 `summary`（一句话总结），用于用户在开始对话时
   选择角色所处的剧情阶段
+- `stage_catalog.json` 仅用于 bootstrap 阶段选择，运行时不加载
+- `world_event_digest.jsonl` 提供世界事件时间线，运行时 stage 1..N 过滤加载
 
 ## 增量抽取建议
 
