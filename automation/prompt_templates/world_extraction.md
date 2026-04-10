@@ -24,10 +24,10 @@
 1. **仅产出世界层**：本次调用只负责世界信息，角色信息由后续独立调用处理
 2. **世界层边界**：世界层只记录影响世界状态的大事件和主要角色参与的公共事件，小事件和个人视角归角色层
 3. **信息来源标注**：所有结构化数据必须标注 source_type（canon/inference/ambiguous）。inference 和 ambiguous 必须附带说明
-4. **证据引用**：每条事件内嵌章节引用 `[NNNN]`（不需要 "canon; " 前缀）。`evidence_refs` 字段为本阶段涉及的章节号列表（如 `["0001", "0002"]`）
+4. **证据引用**：`evidence_refs` 字段为本阶段涉及的章节号列表（如 `["0001", "0002"]`）。正文字段（stage_events、current_world_state 等）**不需要**逐条标注 `[NNNN]`
 5. **中文标识**：中文作品的 work_id, stage_id, 路径段都使用中文
 6. **时间性**：当前阶段写清"现在"，不要混成扁平总结
-7. **仅本阶段事件**：`stage_events` 和 `key_events` 只记录本 batch 章节范围内发生的事件，不重复前序阶段已记录的内容。跨阶段时间线由 stage_catalog 程序化累积
+7. **仅本阶段事件**：`stage_events` 和 `key_events` 只记录本 batch 章节范围内发生的事件，不重复前序阶段已记录的内容。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积
 
 ## 世界层输出
 

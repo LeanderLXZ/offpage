@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/world_stage_catalog.schema.json",
   "title": "世界阶段目录",
+  "description": "阶段索引，仅用于 bootstrap 阶段选择，运行时不加载。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -32,7 +33,7 @@
           "stage_id",
           "order",
           "title",
-          "short_summary",
+          "summary",
           "snapshot_path"
         ],
         "properties": {
@@ -50,10 +51,10 @@
           "timeline_anchor": {
             "type": "string"
           },
-          "short_summary": {
+          "summary": {
             "type": "string",
             "minLength": 1,
-            "description": "供用户选择阶段时展示的一句话摘要。"
+            "description": "世界事件概要（本阶段世界发生了什么），供 bootstrap 阶段选择时展示。"
           },
           "chapter_scope": {
             "type": "object",
@@ -65,16 +66,6 @@
               "to": {
                 "type": "string"
               }
-            }
-          },
-          "current_world_summary": {
-            "type": "string"
-          },
-          "key_events": {
-            "type": "array",
-            "description": "本阶段重要事件摘要（从 world stage_snapshot 的 key_events 复制）。runtime 按 order 顺序读取所有 stage 的 key_events 即拼出完整世界事件时间线。",
-            "items": {
-              "type": "string"
             }
           },
           "snapshot_path": {

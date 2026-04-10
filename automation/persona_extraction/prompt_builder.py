@@ -160,7 +160,8 @@ def build_baseline_prompt(
     # Schemas needed
     for schema in ("identity.schema.json", "character_manifest.schema.json",
                    "voice_rules.schema.json", "behavior_rules.schema.json",
-                   "boundaries.schema.json", "failure_modes.schema.json"):
+                   "boundaries.schema.json", "failure_modes.schema.json",
+                   "fixed_relationships.schema.json"):
         files.append(f"- `{project_root / 'schemas' / schema}`")
 
     # Analysis outputs

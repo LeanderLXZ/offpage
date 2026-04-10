@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/world_event_digest_entry.schema.json",
+  "title": "世界事件摘要条目",
+  "description": "世界级重要事件的增量索引条目。从 world stage_snapshot 的 key_events 自动生成。启动时按 stage 范围过滤加载。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "stage_id",
+    "event_summary"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "唯一标识符，格式 WE-{stage_short}-{seq}。"
+    },
+    "stage_id": {
+      "type": "string",
+      "description": "所属阶段。"
+    },
+    "event_summary": {
+      "type": "string",
+      "description": "事件摘要（1 句话级别）。"
+    },
+    "time_in_story": {
+      "type": "string",
+      "description": "故事内时间锚点。"
+    },
+    "location": {
+      "type": "string",
+      "description": "事件发生地点。"
+    },
+    "involved_characters": {
+      "type": "array",
+      "description": "涉及的角色名列表。",
+      "items": { "type": "string" }
+    }
+  }
+}

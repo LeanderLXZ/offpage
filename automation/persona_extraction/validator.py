@@ -170,6 +170,26 @@ def validate_baseline(
             issues.append(ValidationIssue(
                 "error", str(foundation_path), "work_id is empty"))
 
+    # fixed_relationships.json (warn only — non-critical)
+    fixed_rel_path = (work_dir / "world" / "foundation"
+                      / "fixed_relationships.json")
+    if not fixed_rel_path.exists():
+        issues.append(ValidationIssue(
+            "warning", str(fixed_rel_path),
+            "fixed_relationships.json not produced "
+            "(Phase 2.5 should create)"))
+    else:
+        try_repair_json_file(fixed_rel_path)
+        fr_data = _load_json(fixed_rel_path)
+        if fr_data is None:
+            issues.append(ValidationIssue(
+                "error", str(fixed_rel_path), "Invalid JSON"))
+        else:
+            issues.extend(_validate_schema(
+                fr_data,
+                schema_dir / "fixed_relationships.schema.json",
+                str(fixed_rel_path)))
+
     # Per-character baseline checks
     for char_id in character_ids:
         char_dir = work_dir / "characters" / char_id / "canon"
