@@ -2,5 +2,18 @@
   "schema_version": "1.0",
   "character_id": "Character A",
   "work_id": "<work_id>",
-  "stages": []
+  "stages": [
+    {
+      "stage_id": "阶段01_<stage_title>初遇",
+      "order": 0,
+      "title": "<stage_title>初遇——破境重修的<character>与第九世的宿敌",
+      "summary": "Character A在与Character B第八世大战后因身体和道心严重损伤选择破境重修。降生时被虚空错乱传送至<stage_title>而非预定的北境。修为尽失（凡人），仅靠封印帝器寒剑和少量护身法宝自保。降生时被一个'倭瓜男'（实为易容的Character B）偷看和袭击，前大帝的尊严受到极大侮辱。之后与未易容的Character B（她不知是同一人）在柳村共处，从对方的善意行为中初次体验到了来自陌生人的无条件关怀——被送食物、被让出床铺、被治伤照料。这种在她几万年人生中从未有过的经历令她困惑和好奇，但她仍然保持高度警惕和冰冷的外壳。",
+      "snapshot_path": "canon/stage_snapshots/阶段01_<stage_title>初遇.json",
+      "timeline_anchor": "Character B第九世复活后不久，Character A破境重修降生于<stage_title>",
+      "chapter_scope": {
+        "from": "0001",
+        "to": "0010"
+      }
+    }
+  ]
 }

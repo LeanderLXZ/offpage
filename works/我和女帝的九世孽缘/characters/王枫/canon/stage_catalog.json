@@ -2,5 +2,18 @@
   "schema_version": "1.0",
   "character_id": "Character B",
   "work_id": "<work_id>",
-  "stages": []
+  "stages": [
+    {
+      "stage_id": "阶段01_<stage_title>初遇",
+      "order": 0,
+      "title": "第九世复活·<stage_title>初遇",
+      "summary": "Character B耗尽系统全部本源后复活为第九世（最后一条命），修为归零跌至淬体境。初以为宿敌Character A已陨落而狂喜痛哭，却在<stage_title>中再次遭遇破境重修为凡人的她。试图杀她未果（护身法宝防护），易容为倭瓜男试图侵犯也被反击。系统发布核心任务'攻略极冰<character>Character A'，奖励突破至无敌境界，Character B转而以嬉皮无赖外加真诚善举的双面策略接近她。同时帮助柳村猎兽喂养饥民、驱除恶鬼救治伤员，逐渐在村中建立信任。独处时前八世被杀的创伤仍会涌上来——在柳树上独自哭泣。",
+      "snapshot_path": "canon/stage_snapshots/阶段01_<stage_title>初遇.json",
+      "timeline_anchor": "第九世复活后·<stage_title>柳村（距第八世大战已过万年）",
+      "chapter_scope": {
+        "from": "0001",
+        "to": "0010"
+      }
+    }
+  ]
 }
