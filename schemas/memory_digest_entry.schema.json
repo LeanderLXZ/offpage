@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/memory_digest_entry.schema.json",
   "title": "记忆摘要条目",
-  "description": "memory_timeline 的压缩索引条目。启动时全量加载，供 LLM 感知全历史记忆并判断是否需要 FTS5 检索详情。从 memory_timeline 条目自动生成。",
+  "description": "memory_timeline 的压缩索引条目。启动时 stage 1..N 过滤加载（N = 用户选定阶段），供 LLM 感知历史记忆并判断是否需要 FTS5 检索详情。从 memory_timeline 条目自动生成。",
   "type": "object",
   "additionalProperties": false,
   "required": [
