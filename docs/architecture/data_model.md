@@ -74,7 +74,7 @@ sources/works/{work_id}/
 - `scenes/`
 - `chunks/`
 - `metadata/`
-- `rag/` — 保留（源工作包内的可选检索/分块数据）
+- ~~`rag/`~~ — 已移除，运行时检索数据现位于 `works/{work_id}/retrieval/`
 
 ### 原始包构建规范
 
@@ -439,7 +439,9 @@ works/{work_id}/analysis/
 
 推荐内容：
 
-- `incremental/`
+- `progress/` — 流水线进度文件
+- `chapter_summaries/` — Phase 0 章节摘要
+- `scene_splits/` — Phase 4 中间产物
 - `evidence/`
 - `conflicts/`
 

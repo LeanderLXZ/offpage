@@ -420,7 +420,7 @@ def _build_chapter_to_stage_map(
 ) -> dict[str, str]:
     """Build chapter_id → stage_id mapping from source_batch_plan.json."""
     plan_path = (project_root / "works" / work_id / "analysis"
-                 / "incremental" / "source_batch_plan.json")
+                 / "source_batch_plan.json")
     if not plan_path.exists():
         return {}
 
@@ -606,7 +606,7 @@ def _run_scene_archive_inner(
 
     # Check precondition: source_batch_plan.json
     plan_path = (project_root / "works" / work_id / "analysis"
-                 / "incremental" / "source_batch_plan.json")
+                 / "source_batch_plan.json")
     if not plan_path.exists():
         print("[ERROR] source_batch_plan.json not found. "
               "Phase 1 must complete first.")
