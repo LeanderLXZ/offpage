@@ -3,8 +3,8 @@
 ## Project Stage
 
 Architecture scaffold created. First real work package onboarded. Automated
-extraction orchestrator built and partially tested (batch_001 committed).
-No runtime implementation code yet.
+extraction orchestrator built and under iterative testing. No runtime
+implementation code yet.
 
 ## What Exists
 
@@ -83,7 +83,7 @@ No runtime implementation code yet.
 - Git integration: extraction branch, per-batch commits, auto-rollback
   (full-repo scope), squash-merge to main on completion
 - Phase 3.5 cross-batch consistency checker (`consistency_checker.py`):
-  8 programmatic checks (zero tokens) after all batches commit;
+  9 programmatic checks (zero tokens) after all batches commit;
   importance-based thresholds for target_map example counts
   (主角≥5, 重要配角≥3, others≥1)
 - Resume auto-reset: blocked batches automatically reset to pending on
@@ -167,8 +167,7 @@ No runtime implementation code yet.
 
 ## Current Gaps
 
-- First batch extracted but no finished character package yet (39 batches
-  remaining)
+- Batch extraction in progress — no finished character package yet
 - No real user package yet (only template)
 - No simulation-engine service implementation
 - No terminal adapter implementation
@@ -180,7 +179,7 @@ No runtime implementation code yet.
   locations, maps, state snapshots)
 - Character baseline files (relationships.json, bible.md) still lack schemas
 - No final roleplay prompt produced
-- Automated extraction pipeline partially tested (batch_001 end-to-end pass)
+- Automated extraction pipeline built, iterative testing in progress
 
 ## Rules In Effect
 

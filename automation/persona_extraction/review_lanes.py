@@ -192,10 +192,20 @@ def _execute_single_lane(
             lane_id=lane_id, lane_type=lane_type,
             passed=False, error=f"Fix failed: {fix_result.error}")
 
-    # --- Step 4: Re-run semantic review after fix ---
+    # --- Step 4: Re-validate + re-review after fix ---
     re_report = validate_fn(
         project_root, progress.work_id, batch.stage_id,
         char_ids, lane_type, lane_char)
+
+    # Gate: if programmatic validation still fails after fix, don't bother
+    # with semantic review — the fix introduced structural/schema errors.
+    if not re_report.passed:
+        logger.warning("%s Post-fix validation still FAIL: %s",
+                       lane_label, re_report.summary())
+        return LaneResult(
+            lane_id=lane_id, lane_type=lane_type,
+            passed=False,
+            error=f"Post-fix validation failed: {re_report.summary()}")
 
     re_reviewer_prompt = build_reviewer_fn(
         project_root, progress, batch, re_report.summary(),

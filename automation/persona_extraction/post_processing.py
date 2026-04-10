@@ -173,12 +173,19 @@ def generate_world_event_digest(
     digest_path: Path,
     stage_id: str,
     schema_dir: Path | None = None,
+    *,
+    character_names: list[str] | None = None,
 ) -> list[str]:
     """Generate world_event_digest entries from a world stage_snapshot.
 
     Reads ``key_events`` from the world stage_snapshot and produces one
     digest entry per event.  Existing entries for other stages are preserved;
     entries matching ``stage_id`` are replaced (upsert semantics).
+
+    Args:
+        character_names: Known character names (canonical + aliases) for
+            best-effort ``involved_characters`` extraction via substring
+            matching against event text.
 
     Returns a list of warning/error messages (empty = success).
     """
@@ -204,17 +211,23 @@ def generate_world_event_digest(
     timeline_anchor = snapshot.get("timeline_anchor", "")
 
     # Build new entries
+    names = character_names or []
     new_entries: list[dict] = []
     for i, event_text in enumerate(key_events):
         if not isinstance(event_text, str) or not event_text.strip():
             continue
+        summary = event_text.strip()
         entry: dict[str, Any] = {
             "event_id": f"WE-{stage_short}-{i + 1:03d}",
             "stage_id": stage_id,
-            "event_summary": event_text.strip(),
+            "event_summary": summary,
         }
         if timeline_anchor:
             entry["time_in_story"] = timeline_anchor
+        # Best-effort involved_characters: match known names in event text
+        involved = [n for n in names if n in summary]
+        if involved:
+            entry["involved_characters"] = involved
         new_entries.append(entry)
 
     if not new_entries:
@@ -462,13 +475,33 @@ def run_batch_post_processing(
             )
             issues.extend(f"[world catalog] {i}" for i in catalog_issues)
 
-            # world_event_digest
+            # world_event_digest — resolve character names for best-effort
+            # involved_characters extraction
+            char_names: list[str] = []
+            for cid in character_ids:
+                id_path = (work_dir / "characters" / cid
+                           / "canon" / "identity.json")
+                if id_path.exists():
+                    try:
+                        id_data = json.loads(
+                            id_path.read_text(encoding="utf-8"))
+                        cn = id_data.get("canonical_name", "")
+                        if cn:
+                            char_names.append(cn)
+                        for alias in id_data.get("aliases", []):
+                            aname = alias.get("name", "")
+                            if aname and aname != cn:
+                                char_names.append(aname)
+                    except (json.JSONDecodeError, OSError):
+                        pass
+
             wed_path = work_dir / "world" / "world_event_digest.jsonl"
             wed_issues = generate_world_event_digest(
                 snapshot_path=world_snapshot_path,
                 digest_path=wed_path,
                 stage_id=stage_id,
                 schema_dir=schema_dir,
+                character_names=char_names,
             )
             issues.extend(
                 f"[world event digest] {i}" for i in wed_issues)
