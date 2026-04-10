@@ -14,7 +14,6 @@ sources/works/*/chapters/
 sources/works/*/scenes/
 sources/works/*/chunks/
 sources/works/*/metadata/
-sources/works/*/rag/
 
 # Retrieval artifacts (large, generated at runtime)
 works/*/retrieval/

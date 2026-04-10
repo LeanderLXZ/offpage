@@ -16,7 +16,6 @@ sources/
       scenes/
       chunks/
       metadata/
-      rag/
 ```
 
 Guidelines:
@@ -25,4 +24,3 @@ Guidelines:
   before they are organized into work-specific folders.
 - `raw/` preserves original input files and should not be rewritten.
 - `normalized/`, `chapters/`, `scenes/`, and `chunks/` are derived views.
-- `rag/` is reserved for indexes, embeddings, and retrieval metadata.

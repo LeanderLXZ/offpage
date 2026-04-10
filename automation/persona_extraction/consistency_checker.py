@@ -5,7 +5,7 @@ Runs after all Phase 3 batches complete. Performs programmatic checks
 validation cannot detect: alias drift, relationship jumps, annotation
 degradation, etc.
 
-Produces ``consistency_report.json`` under the work's incremental dir.
+Produces ``consistency_report.json`` under the work's analysis dir.
 """
 
 from __future__ import annotations
@@ -95,7 +95,7 @@ def run_consistency_check(
 
     # Load importance map for example count thresholds
     imp_path = (project_root / "works" / work_id / "analysis"
-                / "incremental" / "candidate_characters.json")
+                / "candidate_characters.json")
     importance_map: dict[str, str] = {}
     if imp_path.exists():
         try:

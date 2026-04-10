@@ -55,7 +55,7 @@ def _load_importance_map(project_root: Path, work_id: str) -> dict[str, str]:
     Returns {character_name: importance} e.g. {"角色A": "主角", "角色B": "重要配角"}.
     """
     path = (project_root / "works" / work_id / "analysis"
-            / "incremental" / "candidate_characters.json")
+            / "candidate_characters.json")
     if not path.exists():
         return {}
     try:
