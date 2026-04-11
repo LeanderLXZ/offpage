@@ -19,7 +19,7 @@
     {
       "name": "傻小子",
       "type": "称呼",
-      "effective_stages": ["阶段02_离开<stage_title>"],
+      "effective_stages": ["阶段02_离开<stage_title>", "阶段03_荒野求生"],
       "source": "Character A在看到Character B告别信后在心中对他的称呼——'原来那傻小子叫Character B'"
     },
     {
