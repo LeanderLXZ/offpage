@@ -107,10 +107,10 @@
         "to": { "type": "string" }
       }
     },
-    "experienced_events": {
+    "stage_events": {
       "type": "array",
-      "description": "截至当前阶段，角色已经历过的关键事件。",
-      "items": { "type": "string" }
+      "description": "仅本阶段发生的关键事件清单（不累积历史），每条为 ≤ 80 字的 1 句话摘要。历史跨阶段视图由 world_event_digest / memory_timeline 提供。",
+      "items": { "type": "string", "maxLength": 80 }
     },
     "current_status": {
       "type": "array",

@@ -140,22 +140,31 @@ that a new AI should know beyond what the architecture docs already say.
 29. Three-layer memory: stage_snapshot (aggregated state, current stage only),
     memory_timeline (subjective process per event, first-person summary),
     scene_archive (original text split by scene). No separate dialogue corpus.
-30. memory_timeline entries include `time_in_story`, `location`, `scene_refs`
-    (linking back to scene_archive). Not raw text — first-person subjective
-    summaries with psychological detail and causal reasoning. No hard length
-    limit; entry count controlled by importance filtering.
-31. scene_archive entries include `time_in_story` and `location` for temporal
-    and spatial retrieval. Eight fields total. Work-level asset, not
-    per-character. One scene never crosses a chapter boundary. `stage_id`
-    derived from chapter number via batch plan.
-32. Startup loads: memory_timeline recent 2 stages (N + N-1) full text +
-    memory_digest.jsonl (compressed index of all stages, ~60-80 tokens/entry,
-    for distant-history awareness); scene_archive summaries for all relevant
-    stages + N full_text scenes around current stage (default N=5); vocab dict
-    into jieba. FTS5 on memory_timeline provides on-demand detail retrieval
-    for distant stages; no separate embedding needed for memory_timeline
-    (scene_archive embedding covers semantic queries via scene_refs
-    back-reference).
+30. memory_timeline entries include `memory_id` (pattern `M-S###-##`),
+    `time`, `location`, `scene_refs` (linking back to scene_archive),
+    `event_summary` (≤50 chars — the digest's direct source),
+    `subjective_experience` (unbounded, first-person with psychological
+    detail and causal reasoning). Entry count controlled by importance
+    filtering.
+31. scene_archive entries use `scene_id` (pattern `SC-S###-##`) plus
+    `time`, `location`, `characters_present`, `summary`, `full_text`,
+    `chapter`, `stage_id`. Work-level asset, not per-character. One
+    scene never crosses a chapter boundary. `stage_id` is **authoritative
+    from `source_batch_plan.json`** — scene_archive.jsonl is fully
+    regenerated on each merge; per-stage seq counter guarantees unique
+    IDs.
+32. Startup loads: memory_timeline recent 2 stages (N + N-1) full text;
+    `memory_digest.jsonl` stage 1..N (~30-40 tokens/entry:
+    `{memory_id, summary ≤50, importance, time?, location?}` — stage
+    encoded in `M-S###` prefix for loader filtering); scene_archive
+    full_text for the most recent `scene_fulltext_window` scenes
+    (**default 10**; configurable via `load_profiles.json`). Scene
+    **summaries are NOT loaded at startup** — they live in FTS5 and
+    surface on demand. Identity is loaded with a field whitelist
+    (strips `evidence_refs` and large nested evidence arrays at load
+    time; no schema change, no Phase 2/2.5 rerun required). Vocab
+    dict into jieba. FTS5 covers distant memory and scene retrieval;
+    no separate embedding needed for memory_timeline.
 33. Two-level retrieval funnel:
     Level 1 (default, <20ms): jieba segmentation + work-level vocab dict
     matching + FTS5 query → top-K summaries injected into main LLM prompt.
@@ -173,10 +182,13 @@ that a new AI should know beyond what the architecture docs already say.
     cross-batch drift that per-batch validation cannot detect (e.g. alias
     mismatches, relationship discontinuity, lazy source_type annotation).
 36. scene_archive is produced in Phase 4, independent from Phase 3 (only
-    requires `source_batch_plan.json` from Phase 1). Per-chapter LLM calls
-    output scene boundary annotations; program extracts full_text from
-    source. Parallel execution (`--concurrency`, default 10). Programmatic
-    validation only (no semantic review). `scene_id` = `scene_{chapter}_{seq}`.
+    requires `source_batch_plan.json` from Phase 1 — treated as the
+    authoritative stage-id source). Per-chapter LLM calls output scene
+    boundary annotations; program extracts full_text from source.
+    Parallel execution (`--concurrency`, default 10). Programmatic
+    validation only (no semantic review). `scene_id` format:
+    `SC-S{stage:03d}-{seq:02d}` (e.g. `SC-S003-07`), with per-stage
+    seq counter; supports up to 999 stages × 99 scenes/stage.
 37. Retrieval artifacts (fts.sqlite, scene_archive.jsonl) live under
     `works/{work_id}/retrieval/` and are not committed to git (.gitignore).
     Intermediate Phase 4 splits under
@@ -231,21 +243,37 @@ that a new AI should know beyond what the architecture docs already say.
 
 ## World Snapshot and Catalog
 
-40f. World `stage_snapshot` only records **current stage** events
-    (`stage_events` for detail, `key_events` for 1-sentence summaries).
-    No cumulative history — previous design had `historical_events`
-    growing unbounded. `evidence_refs` simplified to chapter number list
-    (e.g. `["0001", "0002"]`), no detailed descriptions. Body fields
-    (`stage_events`, `key_events` etc.) do not need inline `[NNNN]`
-    chapter tags — `evidence_refs` already provides sourcing.
+40f. World `stage_snapshot` only records **current stage** events via
+    `stage_events` (**single source of truth, each entry ≤80 chars**).
+    The old `key_events` field is removed — `stage_events` is now the
+    direct source for `world_event_digest.jsonl`, eliminating
+    duplication. No cumulative history in snapshot (previous design had
+    `historical_events` growing unbounded); cross-stage timeline lives
+    in `world_event_digest.jsonl`. `evidence_refs` simplified to
+    chapter number list (e.g. `["0001", "0002"]`).
 
 40g. `world_event_digest.jsonl` accumulates world events across stages.
-    Programmatic: `post_processing.py` reads `key_events` from world
-    stage snapshot → generates digest entries (0 token, idempotent).
-    Runtime loads stage 1..N filtered (N = user-selected stage).
-    `stage_catalog.json` is demoted to bootstrap stage selector only
-    (not loaded at runtime); its `summary` field (renamed from
-    `short_summary`) drives the stage picker UI.
+    Programmatic: `post_processing.py` reads `stage_events` from world
+    stage snapshot → generates digest entries
+    `{event_id (E-S###-##), summary ≤80, importance, time?, location?,
+    involved_characters?}` (0 token, idempotent). 5-level importance
+    inferred by keyword (trivial/minor/significant/critical/defining),
+    defaulting to significant. Runtime loads stage 1..N filtered; stage
+    is parsed from `event_id` prefix. `stage_catalog.json` is demoted
+    to bootstrap stage selector only (not loaded at runtime).
+
+40h. Character `stage_snapshot.stage_events` (renamed from
+    `experienced_events`) holds **only this batch's** events, not
+    accumulated history. Each entry ≤80 chars. Cross-stage history is
+    carried by `memory_timeline` + `memory_digest.jsonl` +
+    `world_event_digest.jsonl`, not the snapshot.
+
+40i. Schema v4 ID convention: `{TYPE}-S{stage:03d}-{seq:02d}` for
+    memory_digest (`M-`), world_event_digest (`E-`), scene_archive
+    (`SC-`). 3-digit stage supports ≤999 stages; 2-digit seq supports
+    ≤99 per stage. Stage is encoded in the ID so digest/archive entries
+    omit redundant `stage_id` fields — runtime loader filters via
+    regex `S(\d{3})`. `time_in_story` renamed to `time` globally.
 
 40g2. `fixed_relationships.json` in `world/foundation/` records structural
     bonds (blood, lineage, faction membership) that are not stage-dependent.

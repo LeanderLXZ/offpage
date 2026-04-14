@@ -276,7 +276,9 @@ python -m persona_extraction "<work_id>" -r .. \
 - 仅程序化校验（行号有效、不重叠、覆盖全章；alias 匹配可选——scene archive
   是 work-level 产物，不限于提取目标角色集）
 - 全部完成后合并为 `works/{work_id}/retrieval/scene_archive.jsonl`
-- `scene_id` 格式：`scene_{chapter}_{seq}`（如 `scene_0015_003`）
+- `scene_id` 格式：`SC-S{stage:03d}-{seq:02d}`（如 `SC-S003-07`）；阶段号从
+  `source_batch_plan.json` 查得（batch_plan 是唯一真源），seq 在每阶段内
+  从 01 递增（上限 99）
 
 **产出**：
 - 最终：`works/{work_id}/retrieval/scene_archive.jsonl`（.gitignore）

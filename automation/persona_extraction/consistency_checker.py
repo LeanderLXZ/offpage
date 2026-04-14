@@ -542,49 +542,66 @@ def _check_stage_id_alignment(
 def _check_world_event_digest(
     work_dir: Path, stage_ids: list[str],
 ) -> list[ConsistencyIssue]:
-    """Verify world_event_digest ↔ world snapshot key_events correspondence.
+    """Verify world_event_digest ↔ world snapshot stage_events correspondence.
 
     For each stage:
     - Digest must have entries for the stage
-    - Entry count must match key_events count in the world snapshot
+    - Entry count must match stage_events count in the world snapshot
+    - Digest entries carry no stage_id field; stage is parsed from event_id
+      prefix ``E-S###-##``.
     """
+    import re
+    _stage_num_re = re.compile(r"S(\d{3})")
+
+    def _stage_num(stage_id: str) -> int | None:
+        m = _stage_num_re.search(stage_id)
+        if m:
+            return int(m.group(1))
+        digits = re.search(r"(\d+)", stage_id)
+        return int(digits.group(1)) if digits else None
+
+    def _event_stage_num(entry: dict) -> int | None:
+        eid = entry.get("event_id", "")
+        m = _stage_num_re.search(eid)
+        return int(m.group(1)) if m else None
+
     issues: list[ConsistencyIssue] = []
 
     digest_path = work_dir / "world" / "world_event_digest.jsonl"
     digest_entries = _load_jsonl(digest_path)
 
-    # Group digest entries by stage_id
-    digest_by_stage: dict[str, list[dict]] = {}
+    # Group digest entries by stage number (parsed from event_id)
+    digest_by_stage_num: dict[int, list[dict]] = {}
     for entry in digest_entries:
-        sid = entry.get("stage_id", "")
-        if sid:
-            digest_by_stage.setdefault(sid, []).append(entry)
+        n = _event_stage_num(entry)
+        if n is not None:
+            digest_by_stage_num.setdefault(n, []).append(entry)
 
     for stage_id in stage_ids:
-        # Load world snapshot key_events
         snap_path = work_dir / "world" / "stage_snapshots" / f"{stage_id}.json"
         snapshot = _load_json(snap_path)
         if snapshot is None:
-            # Missing snapshot is caught by _check_stage_id_alignment
             continue
 
-        key_events = snapshot.get("key_events", [])
-        n_events = len([e for e in key_events
+        stage_events = snapshot.get("stage_events", [])
+        n_events = len([e for e in stage_events
                         if isinstance(e, str) and e.strip()])
 
-        stage_digest = digest_by_stage.get(stage_id, [])
+        snum = _stage_num(stage_id)
+        stage_digest = (digest_by_stage_num.get(snum, [])
+                        if snum is not None else [])
 
         if not stage_digest and n_events > 0:
             issues.append(ConsistencyIssue(
                 "error", "world_event_digest",
                 f"world/{stage_id}",
                 f"world_event_digest has no entries for stage "
-                f"(expected {n_events} from key_events)"))
+                f"(expected {n_events} from stage_events)"))
         elif len(stage_digest) != n_events:
             issues.append(ConsistencyIssue(
                 "warning", "world_event_digest",
                 f"world/{stage_id}",
                 f"world_event_digest has {len(stage_digest)} entries "
-                f"but key_events has {n_events} items"))
+                f"but stage_events has {n_events} items"))
 
     return issues

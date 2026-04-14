@@ -27,7 +27,7 @@
 4. **证据引用**：`evidence_refs` 字段为本阶段涉及的章节号列表（如 `["0001", "0002"]`）。正文字段（stage_events、current_world_state 等）**不需要**逐条标注 `[NNNN]`
 5. **中文标识**：中文作品的 work_id, stage_id, 路径段都使用中文
 6. **时间性**：当前阶段写清"现在"，不要混成扁平总结
-7. **仅本阶段事件**：`stage_events` 和 `key_events` 只记录本 batch 章节范围内发生的事件，不重复前序阶段已记录的内容。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积
+7. **仅本阶段事件**：`stage_events` 只记录本 batch 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 ≤ 80 字的 1 句话摘要**（既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源——不再单独维护 `key_events` 字段）。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积
 
 ## 世界层输出
 
@@ -44,9 +44,8 @@
 
 如果存在前一阶段的输出，请先读取它，并确保本批产出在以下维度与之保持一致：
 
-- stage_events 条目的粒度和详细度
-- key_events 的摘要风格（1 句话级别）
-- current_world_state 的描述风格
+- `stage_events` 条目的粒度（≤ 80 字的 1 句话摘要）
+- `current_world_state` 的描述风格
 - 每条事件内嵌 `[NNNN]` 章节引用
 - source_type 已标注
 
@@ -56,7 +55,7 @@
 
 1. **Schema 确认**：你是否在本 batch 内重读过要写入文件对应的 schema？
    如果没有，**现在重读**。不要凭记忆填字段——schema 是权威。
-2. **前批对照**：本 batch 的输出在字段详细度、术语、stage_events/key_events
+2. **前批对照**：本 batch 的输出在字段详细度、术语、`stage_events`
    粒度、source_type 分布上是否与前一 batch 一致？
 
 ### 边界禁令
@@ -74,5 +73,5 @@
 4. 所有文件都通过 schema 校验
 5. evidence_refs 为章节号列表（如 `["0001", "0002"]`），非空
 6. source_type 已标注
-7. stage_events 仅包含本阶段事件，key_events 为重要事件的 1 句话摘要
+7. `stage_events` 仅包含本阶段事件，每条为 ≤ 80 字的 1 句话摘要（digest 直接复用）
 {retry_note}
