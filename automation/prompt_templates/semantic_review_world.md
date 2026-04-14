@@ -26,22 +26,22 @@
 
 如果前一批有输出（`{prev_stage_id}`），对比：
 
-1. stage_events 条目的粒度和详细度是否相近
-2. key_events 是否为 1 句话级别摘要
-3. current_world_state 描述风格是否一致
-4. evidence_refs（章节号列表）是否完整
-5. 如果任何维度出现明显退化（比前批减少 50% 以上），标记为 FAIL
+1. stage_events 条目的粒度是否相近，每条是否为 ≤ 80 字的 1 句话摘要
+2. current_world_state 描述风格是否一致
+3. evidence_refs（章节号列表）是否完整
+4. 如果任何维度出现明显退化（比前批减少 50% 以上），标记为 FAIL
 
 ### B. 数据边界正确性
 
-6. 世界层是否只记录了大事件？是否有小场景、个人经历误入世界层？
-7. 是否有 inference 被标为 canon？
+5. 世界层是否只记录了大事件？是否有小场景、个人经历误入世界层？
+6. 是否有 inference 被标为 canon？
+7. stage_events 是否只包含本阶段事件，未重复前序阶段？（跨阶段时间线由 world_event_digest.jsonl 累积，不在 snapshot 内）
 
 ### C. 信息充分性
 
 8. snapshot_summary 是否存在且有意义？
 9. current_world_state 是否覆盖本批重大变化？
-10. stage_events 是否完整记录本阶段事件？key_events 是否覆盖重要事件？
+10. stage_events 是否完整覆盖本阶段重要事件？（移除了 key_events 字段，stage_events 是唯一事件清单来源）
 
 ### D. 时间性
 
@@ -60,7 +60,6 @@ FINDINGS:
 
 STYLE_CONSISTENCY:
 - stage_events: OK/退化
-- key_events: OK/退化
 - current_world_state: OK/退化
 - evidence_refs: OK/退化
 

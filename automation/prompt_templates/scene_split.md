@@ -22,7 +22,7 @@
 
 ## 元数据要求
 
-- `time_in_story`：故事内时间，保留原文的时间表述（可以是模糊的）
+- `time`：故事内时间，保留原文的时间表述（可以是模糊的）。字段名统一为 `time`（不再使用 `time_in_story`）
 - `location`：场景发生的地点
 - `characters_present`：在场的角色列表，使用角色的常用名称
 - `summary`：客观第三人称事件梗概（简短，1-3 句话）
@@ -36,7 +36,7 @@
   {
     "scene_start_line": 1,
     "scene_end_line": 45,
-    "time_in_story": "故事内时间描述",
+    "time": "故事内时间描述",
     "location": "场景地点",
     "characters_present": ["角色A", "角色B"],
     "summary": "客观第三人称事件梗概"

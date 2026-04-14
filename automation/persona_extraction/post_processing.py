@@ -3,8 +3,15 @@
 After LLM extraction produces stage_snapshots and memory_timelines,
 this module programmatically maintains derived files:
   - memory_digest.jsonl        (compressed index of memory_timeline)
-  - world_event_digest.jsonl   (compressed index of world key_events)
+  - world_event_digest.jsonl   (compressed index of world stage_events)
   - stage_catalog.json         (stage directory index, bootstrap only)
+
+Digest IDs follow the unified ``{TYPE}-S{stage:03d}-{seq:02d}`` format:
+  - memory_digest: ``M-S001-01``   (from memory_timeline memory_id)
+  - world_event_digest: ``E-S001-01``  (generated per stage_events[i])
+
+``stage_id`` is no longer stored in digest entries — it is carried by the
+``S###`` segment of the ID and parsed by the runtime loader on startup.
 
 These were previously written by the LLM agent, consuming tokens and
 risking format drift. Programmatic generation is deterministic, idempotent,
@@ -15,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +32,39 @@ try:
     import jsonschema as _jsonschema
 except ImportError:
     _jsonschema = None
+
+
+# ---------------------------------------------------------------------------
+# Stage ID parsing (shared across digest generators)
+# ---------------------------------------------------------------------------
+
+_STAGE_NUM_RE = re.compile(r"(\d+)")
+_ID_STAGE_RE = re.compile(r"^[A-Z]+-S(\d{3})-\d{2}$")
+
+
+def _parse_stage_number(stage_id: str) -> int:
+    """Extract the leading numeric stage index from a stage_id string.
+
+    Accepts forms like ``阶段01_xxx``, ``stage_05``, ``S12``, ``5``.
+    Returns 0 if no digits are found (caller may still reject the stage).
+    """
+    m = _STAGE_NUM_RE.search(stage_id)
+    return int(m.group(1)) if m else 0
+
+
+def _stage_segment(stage_id: str) -> str:
+    """Render the 3-digit ``S###`` segment used in digest IDs."""
+    return f"S{_parse_stage_number(stage_id):03d}"
+
+
+def _stage_from_id(entry_id: str) -> int | None:
+    """Parse the stage number back out of a digest ID (``M-S###-##``).
+
+    Returns ``None`` when the ID does not match the unified format, so
+    callers can treat it as "unknown stage" and skip gracefully.
+    """
+    m = _ID_STAGE_RE.match(entry_id or "")
+    return int(m.group(1)) if m else None
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +131,10 @@ def generate_memory_digest(
                         f"{e.message}")
 
     # --- upsert into existing digest ---
+    # Key is memory_id (digest no longer stores stage_id). Any existing
+    # entry whose memory_id stage segment matches the current stage is
+    # replaced; other stages are preserved.
+    current_stage_num = _parse_stage_number(stage_id)
     existing_lines: list[dict] = []
     if digest_path.exists():
         text = digest_path.read_text(encoding="utf-8").strip()
@@ -103,8 +148,10 @@ def generate_memory_digest(
                 except json.JSONDecodeError:
                     pass  # drop malformed lines
 
-    # Remove old entries for this stage_id
-    kept = [e for e in existing_lines if e.get("stage_id") != stage_id]
+    kept = [
+        e for e in existing_lines
+        if _stage_from_id(e.get("memory_id", "")) != current_stage_num
+    ]
 
     # Deduplicate by memory_id within new entries
     seen_ids: set[str] = set()
@@ -115,7 +162,6 @@ def generate_memory_digest(
             seen_ids.add(mid)
             deduped_new.append(entry)
 
-    # Append new entries
     final = kept + deduped_new
 
     # --- write ---
@@ -130,36 +176,34 @@ def generate_memory_digest(
 
 
 def _timeline_to_digest(entry: dict, stage_id: str) -> dict | None:
-    """Map a single memory_timeline entry to a memory_digest entry."""
+    """Map a single memory_timeline entry to a memory_digest entry.
+
+    New digest shape (v4):
+      ``memory_id`` / ``time`` / ``location`` / ``summary`` / ``importance``
+
+    ``stage_id``, ``emotional_tags``, ``involved_targets`` are intentionally
+    dropped — the stage number is carried by the ID itself, and the other
+    two fields are recoverable by FTS5-fetching the timeline entry.
+    """
     memory_id = entry.get("memory_id")
     if not memory_id:
         return None
 
     digest: dict[str, Any] = {
         "memory_id": memory_id,
-        "stage_id": entry.get("stage_id", stage_id),
-        "event_summary": entry.get("event_summary", ""),
-        "memory_importance": entry.get("memory_importance", "minor"),
+        "summary": entry.get("event_summary", ""),
+        "importance": entry.get("memory_importance", "minor"),
     }
 
-    # Optional fields — copy if present
-    for field in ("time_in_story", "location"):
-        val = entry.get(field)
-        if val:
-            digest[field] = val
+    # ``time`` (renamed from legacy ``time_in_story``; prefer the new key
+    # but tolerate old extracts during the transition)
+    time_val = entry.get("time") or entry.get("time_in_story")
+    if time_val:
+        digest["time"] = time_val
 
-    # emotional_tags: copy emotional_impact directly
-    emotional_impact = entry.get("emotional_impact")
-    if emotional_impact:
-        digest["emotional_tags"] = emotional_impact
-
-    # involved_targets: extract target names from relationship_impact
-    rel_impact = entry.get("relationship_impact")
-    if isinstance(rel_impact, list) and rel_impact:
-        targets = [r.get("target") for r in rel_impact
-                   if isinstance(r, dict) and r.get("target")]
-        if targets:
-            digest["involved_targets"] = targets
+    location = entry.get("location")
+    if location:
+        digest["location"] = location
 
     return digest
 
@@ -167,6 +211,41 @@ def _timeline_to_digest(entry: dict, stage_id: str) -> dict | None:
 # ---------------------------------------------------------------------------
 # world_event_digest.jsonl generation
 # ---------------------------------------------------------------------------
+
+_DEFINING_KEYWORDS = (
+    "灭世", "天劫", "亡国", "立国", "屠城", "末日", "圣战", "大战",
+    "真相", "死亡", "陨落", "崩塌", "重生", "归一", "统一", "剧变",
+)
+_CRITICAL_KEYWORDS = (
+    "背叛", "决裂", "追杀", "伏击", "政变", "奇袭", "突袭", "重伤",
+    "失踪", "觉醒", "突破", "重创", "围攻", "叛乱",
+)
+_TRIVIAL_KEYWORDS = ("路过", "闲谈", "小憩", "日常", "琐事", "闲逛")
+_MINOR_KEYWORDS = ("抵达", "离开", "整理", "准备", "对话", "相遇")
+
+
+def _infer_importance(summary: str) -> str:
+    """Best-effort mapping from a stage_events line to the 5-level enum.
+
+    The heuristic stays conservative — unknown text falls back to
+    ``significant`` so events never silently disappear from
+    importance-filtered retrieval.
+    """
+    text = summary or ""
+    for kw in _DEFINING_KEYWORDS:
+        if kw in text:
+            return "defining"
+    for kw in _CRITICAL_KEYWORDS:
+        if kw in text:
+            return "critical"
+    for kw in _TRIVIAL_KEYWORDS:
+        if kw in text:
+            return "trivial"
+    for kw in _MINOR_KEYWORDS:
+        if kw in text:
+            return "minor"
+    return "significant"
+
 
 def generate_world_event_digest(
     snapshot_path: Path,
@@ -178,9 +257,12 @@ def generate_world_event_digest(
 ) -> list[str]:
     """Generate world_event_digest entries from a world stage_snapshot.
 
-    Reads ``key_events`` from the world stage_snapshot and produces one
-    digest entry per event.  Existing entries for other stages are preserved;
-    entries matching ``stage_id`` are replaced (upsert semantics).
+    Reads ``stage_events`` from the world stage_snapshot and produces one
+    digest entry per event. ``key_events`` has been folded into
+    ``stage_events`` — each line is already a ≤80-char 1-sentence summary.
+    Existing entries for other stages are preserved; entries matching the
+    current stage number are replaced (upsert semantics keyed on
+    ``event_id`` rather than a stored ``stage_id``).
 
     Args:
         character_names: Known character names (canonical + aliases) for
@@ -201,30 +283,28 @@ def generate_world_event_digest(
         issues.append(f"Cannot parse world snapshot: {e}")
         return issues
 
-    key_events = snapshot.get("key_events", [])
-    if not isinstance(key_events, list) or not key_events:
-        issues.append(f"No key_events in world snapshot for stage '{stage_id}'")
+    stage_events = snapshot.get("stage_events", [])
+    if not isinstance(stage_events, list) or not stage_events:
+        issues.append(
+            f"No stage_events in world snapshot for stage '{stage_id}'")
         return issues
 
-    # Build a short stage tag for event_id (e.g. "S01" from "阶段01_xxx")
-    stage_short = _extract_stage_short(stage_id)
+    stage_seg = _stage_segment(stage_id)
     timeline_anchor = snapshot.get("timeline_anchor", "")
 
-    # Build new entries
     names = character_names or []
     new_entries: list[dict] = []
-    for i, event_text in enumerate(key_events):
+    for i, event_text in enumerate(stage_events):
         if not isinstance(event_text, str) or not event_text.strip():
             continue
         summary = event_text.strip()
         entry: dict[str, Any] = {
-            "event_id": f"WE-{stage_short}-{i + 1:03d}",
-            "stage_id": stage_id,
-            "event_summary": summary,
+            "event_id": f"E-{stage_seg}-{i + 1:02d}",
+            "summary": summary,
+            "importance": _infer_importance(summary),
         }
         if timeline_anchor:
-            entry["time_in_story"] = timeline_anchor
-        # Best-effort involved_characters: match known names in event text
+            entry["time"] = timeline_anchor
         involved = [n for n in names if n in summary]
         if involved:
             entry["involved_characters"] = involved
@@ -249,7 +329,8 @@ def generate_world_event_digest(
                         f"world_event_digest entry [{j}] schema error at "
                         f"{path_str}: {e.message}")
 
-    # Upsert into existing digest
+    # Upsert — key on the stage segment of event_id, not a stored stage_id
+    current_stage_num = _parse_stage_number(stage_id)
     existing_lines: list[dict] = []
     if digest_path.exists():
         text = digest_path.read_text(encoding="utf-8").strip()
@@ -263,10 +344,11 @@ def generate_world_event_digest(
                 except json.JSONDecodeError:
                     pass
 
-    # Remove old entries for this stage_id
-    kept = [e for e in existing_lines if e.get("stage_id") != stage_id]
+    kept = [
+        e for e in existing_lines
+        if _stage_from_id(e.get("event_id", "")) != current_stage_num
+    ]
 
-    # Deduplicate by event_id
     seen_ids: set[str] = set()
     deduped_new: list[dict] = []
     for entry in new_entries:
@@ -286,15 +368,6 @@ def generate_world_event_digest(
     logger.info("world_event_digest: wrote %d entries for stage '%s' "
                 "(%d total lines)", len(deduped_new), stage_id, len(final))
     return issues
-
-
-def _extract_stage_short(stage_id: str) -> str:
-    """Extract short stage tag like 'S01' from '阶段01_xxx'."""
-    import re
-    m = re.search(r"(\d+)", stage_id)
-    if m:
-        return f"S{int(m.group(1)):02d}"
-    return stage_id[:6]
 
 
 # ---------------------------------------------------------------------------

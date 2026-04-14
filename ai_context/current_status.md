@@ -58,10 +58,13 @@ implementation code yet.
   source text independently; cross-consistency verified at commit gate.
   Every batch can correct and supplement baseline files (not just batch 1).
 - Programmatic post-processing (`post_processing.py`): after extraction,
-  automatically generates `memory_digest.jsonl` from `memory_timeline` and
-  maintains `stage_catalog.json` from snapshot metadata (world catalog
-  additionally accumulates `key_events` per stage for event timeline)
-  (0 token, idempotent)
+  automatically generates `memory_digest.jsonl` from `memory_timeline`,
+  `world_event_digest.jsonl` from world snapshot `stage_events` (≤80 char
+  per entry, 5-level importance inferred by keyword), and maintains
+  `stage_catalog.json` from snapshot metadata (0 token, idempotent).
+  IDs use `{TYPE}-S{stage:03d}-{seq:02d}` format (e.g. `M-S003-02`,
+  `E-S001-05`); stage is encoded in the ID so digest entries omit
+  redundant `stage_id` fields, and the runtime loader filters via regex.
 - Parallel review lanes (`review_lanes.py`): world + each character gets
   an independent validate → review → fix pipeline, running in parallel.
   Commit gate (提交门控) performs programmatic cross-consistency check
@@ -152,9 +155,10 @@ implementation code yet.
 - Proactive character association: engine extracts context-state keywords
   (location, recent events, emotion) for jieba matching each turn, enabling
   the character to naturally recall related memories without being asked.
-- memory_timeline schema updated: added `time_in_story`, `location`,
-  `scene_refs` fields.
-- scene_archive schema defined (8 fields including `time_in_story`, `location`).
+- memory_timeline schema uses `time`, `location`, `scene_refs` fields;
+  `memory_id` pattern `M-S###-##`; `event_summary` ≤50 chars.
+- scene_archive schema uses `scene_id` (pattern `SC-S###-##`), `time`,
+  `location`, plus scene boundaries and `characters_present`.
 - scene_archive produced in Phase 4 (independent stage, after Phase 3.5).
 - Tech: `jieba` (segmentation), `sqlite FTS5` (primary), `bge-large-zh-v1.5`
   (optional embedding fallback). Single SQLite file, no separate vector DB.
