@@ -41,7 +41,7 @@
 
 8. snapshot_summary 是否存在且有意义？
 9. current_world_state 是否覆盖本批重大变化？
-10. stage_events 是否完整覆盖本阶段重要事件？（移除了 key_events 字段，stage_events 是唯一事件清单来源）
+10. stage_events 是否完整覆盖本阶段重要事件？（stage_events 是唯一事件清单来源，每条 ≤ 80 字 1 句话摘要）
 
 ### D. 时间性
 

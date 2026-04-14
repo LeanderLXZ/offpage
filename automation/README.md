@@ -159,9 +159,9 @@ automation/
 │   ├── character_extraction.md     ← 角色层提取（与世界并行）
 │   ├── semantic_review_world.md    ← 世界层语义审校（per-lane）
 │   ├── semantic_review_character.md ← 角色层语义审校（per-lane）
-│   ├── semantic_review.md          ← 统一审校（legacy/兜底）
+│   ├── semantic_review.md          ← 统一审校兜底模板
 │   ├── targeted_fix.md             ← 定点修复
-│   ├── coordinated_extraction.md   ← (legacy, 保留兼容)
+│   ├── coordinated_extraction.md   ← reviewer / targeted-fix 共享的读取清单来源
 │   └── scene_split.md
 └── persona_extraction/             ← Python 包
     ├── __init__.py

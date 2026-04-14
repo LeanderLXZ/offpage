@@ -28,7 +28,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **关键字段**：
 - `snapshot_summary` — 阶段的世界状态概述
 - `foundation_corrections` — 对基础设定的修正
-- `stage_events` — 本阶段事件（**唯一事件清单**，每条为 ≤ 80 字的 1 句话摘要；既是快照内容又是 `world_event_digest.jsonl` 的直接来源；旧 `key_events` 字段已移除）
+- `stage_events` — 本阶段事件（**唯一事件清单**，每条为 ≤ 80 字的 1 句话摘要；既是快照内容又是 `world_event_digest.jsonl` 的直接来源）
 - `current_world_state` — 当前阶段的世界总体状态
 - `relationship_shifts` — 关注的人物关系转变
 - `character_status_changes` — 人物状态变化（生死、等级等）
@@ -114,10 +114,10 @@ core_wounds 记录最底层的创伤根源。
 **位置**：`characters/{character_id}/canon/behavior_rules.json`
 **运行时**：**不加载**。运行时使用 stage_snapshot 中的 `behavior_state`。
 
-**目标与执念拆分**：原 `core_drives` 已拆分为 `core_goals`（理性目标）和
-`obsessions`（执念——非理性的心结）。旧字段向后兼容保留，新提取应使用拆分
-字段。stage_snapshot 中的 `behavior_state` 和 `emotional_baseline` 做对应
-拆分（`core_goals`/`obsessions`、`active_goals`/`active_obsessions`）。
+**目标与执念分离**：`core_goals`（理性目标，可权衡调整）与
+`obsessions`（非理性心结，不受权衡控制）是两个独立字段。stage_snapshot
+中的 `behavior_state` 同样维护 `core_goals` / `obsessions`，
+`emotional_baseline` 维护 `active_goals` / `active_obsessions`。
 
 ---
 
@@ -188,7 +188,7 @@ core_wounds 记录最底层的创伤根源。
 
 **关键字段**：
 - `memory_id` — 格式 `M-S{stage:03d}-{seq:02d}`（例：`M-S003-02`）
-- `time` — 故事内时间（旧 `time_in_story` 已废弃）
+- `time` — 故事内时间（可选）
 - `location` — 事件发生地点
 - `event_summary` — 客观发生了什么（**≤ 50 字**——memory_digest 的直接来源）
 - `subjective_experience` — 角色对事件的主观体验（第一人称视角，核心字段，不限长度）
@@ -217,8 +217,6 @@ core_wounds 记录最底层的创伤根源。
 - `importance` — 5 级重要度（`trivial` / `minor` / `significant` / `critical` / `defining`）
 - `time` — 故事内时间（可选）
 - `location` — 事件地点（可选）
-
-**已移除字段**：`stage_id`（由 memory_id 前缀推导）、`emotional_tags`、`involved_targets`（降噪；细节走 FTS5）。
 
 ---
 

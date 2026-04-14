@@ -22,13 +22,6 @@
       "type": "string",
       "minLength": 1
     },
-    "core_drives": {
-      "type": "array",
-      "description": "【已拆分】向后兼容保留。新提取应使用 core_goals + obsessions。如果同时存在 core_drives 和 core_goals/obsessions，以后者为准。",
-      "items": {
-        "type": "string"
-      }
-    },
     "core_goals": {
       "type": "array",
       "description": "角色的理性目标——角色有意识追求的、可以权衡利弊调整优先级的目标。例如：'恢复修为至大帝境'、'提升修为'、'保护弱者'。",

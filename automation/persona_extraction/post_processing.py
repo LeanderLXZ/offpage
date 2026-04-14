@@ -10,12 +10,9 @@ Digest IDs follow the unified ``{TYPE}-S{stage:03d}-{seq:02d}`` format:
   - memory_digest: ``M-S001-01``   (from memory_timeline memory_id)
   - world_event_digest: ``E-S001-01``  (generated per stage_events[i])
 
-``stage_id`` is no longer stored in digest entries — it is carried by the
-``S###`` segment of the ID and parsed by the runtime loader on startup.
-
-These were previously written by the LLM agent, consuming tokens and
-risking format drift. Programmatic generation is deterministic, idempotent,
-and free (0 token).
+Digest entries carry the stage in the ``S###`` segment of the ID; the
+runtime loader parses it there. Generation is deterministic, idempotent,
+and token-free.
 """
 
 from __future__ import annotations
@@ -131,9 +128,9 @@ def generate_memory_digest(
                         f"{e.message}")
 
     # --- upsert into existing digest ---
-    # Key is memory_id (digest no longer stores stage_id). Any existing
-    # entry whose memory_id stage segment matches the current stage is
-    # replaced; other stages are preserved.
+    # Key is memory_id; the stage segment of the ID decides which entries
+    # belong to the current stage. Matching entries are replaced; other
+    # stages are preserved.
     current_stage_num = _parse_stage_number(stage_id)
     existing_lines: list[dict] = []
     if digest_path.exists():
@@ -178,12 +175,9 @@ def generate_memory_digest(
 def _timeline_to_digest(entry: dict, stage_id: str) -> dict | None:
     """Map a single memory_timeline entry to a memory_digest entry.
 
-    New digest shape (v4):
-      ``memory_id`` / ``time`` / ``location`` / ``summary`` / ``importance``
-
-    ``stage_id``, ``emotional_tags``, ``involved_targets`` are intentionally
-    dropped — the stage number is carried by the ID itself, and the other
-    two fields are recoverable by FTS5-fetching the timeline entry.
+    Digest fields: ``memory_id``, ``summary``, ``importance`` (required);
+    ``time``, ``location`` (optional). The stage number is carried by the
+    ``memory_id`` prefix; other timeline fields are recoverable via FTS5.
     """
     memory_id = entry.get("memory_id")
     if not memory_id:
@@ -195,9 +189,7 @@ def _timeline_to_digest(entry: dict, stage_id: str) -> dict | None:
         "importance": entry.get("memory_importance", "minor"),
     }
 
-    # ``time`` (renamed from legacy ``time_in_story``; prefer the new key
-    # but tolerate old extracts during the transition)
-    time_val = entry.get("time") or entry.get("time_in_story")
+    time_val = entry.get("time")
     if time_val:
         digest["time"] = time_val
 
@@ -257,12 +249,11 @@ def generate_world_event_digest(
 ) -> list[str]:
     """Generate world_event_digest entries from a world stage_snapshot.
 
-    Reads ``stage_events`` from the world stage_snapshot and produces one
-    digest entry per event. ``key_events`` has been folded into
-    ``stage_events`` — each line is already a ≤80-char 1-sentence summary.
+    Reads ``stage_events`` from the world stage_snapshot (each entry a
+    ≤80-char 1-sentence summary) and produces one digest entry per event.
     Existing entries for other stages are preserved; entries matching the
     current stage number are replaced (upsert semantics keyed on
-    ``event_id`` rather than a stored ``stage_id``).
+    ``event_id``; stage is carried by the ``S###`` segment of the ID).
 
     Args:
         character_names: Known character names (canonical + aliases) for

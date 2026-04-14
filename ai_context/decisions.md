@@ -42,11 +42,10 @@ that a new AI should know beyond what the architecture docs already say.
     impact) and `key_relationships` (relationship arcs with initial state,
     evolution summary, turning points). These are loaded at runtime
     alongside the stage snapshot.
-12b. `behavior_state.core_drives` is split into `core_goals` (rational,
-    re-prioritizable targets) and `obsessions` (irrational fixations tied
-    to trauma or emotion, not subject to cost-benefit reasoning). The same
-    split applies in `emotional_baseline`: `active_desires` → `active_goals`
-    + `active_obsessions`. Old fields kept for backward compatibility.
+12b. `behavior_state` separates `core_goals` (rational, re-prioritizable
+    targets) from `obsessions` (irrational fixations tied to trauma or
+    emotion, not subject to cost-benefit reasoning). `emotional_baseline`
+    mirrors the same split with `active_goals` + `active_obsessions`.
 12c. `character_arc` in stage_snapshot provides a bird's-eye view from
     stage 1 to the current stage (arc_summary, arc_stages key nodes,
     current_position). Complements `stage_delta` which covers only the
@@ -243,14 +242,12 @@ that a new AI should know beyond what the architecture docs already say.
 
 ## World Snapshot and Catalog
 
-40f. World `stage_snapshot` only records **current stage** events via
+40f. World `stage_snapshot` records only **current stage** events via
     `stage_events` (**single source of truth, each entry ≤80 chars**).
-    The old `key_events` field is removed — `stage_events` is now the
-    direct source for `world_event_digest.jsonl`, eliminating
-    duplication. No cumulative history in snapshot (previous design had
-    `historical_events` growing unbounded); cross-stage timeline lives
-    in `world_event_digest.jsonl`. `evidence_refs` simplified to
-    chapter number list (e.g. `["0001", "0002"]`).
+    `stage_events` is the direct source for `world_event_digest.jsonl`;
+    no cumulative history lives in the snapshot — cross-stage timeline
+    is held by `world_event_digest.jsonl`. `evidence_refs` is a chapter
+    number list (e.g. `["0001", "0002"]`).
 
 40g. `world_event_digest.jsonl` accumulates world events across stages.
     Programmatic: `post_processing.py` reads `stage_events` from world
@@ -262,18 +259,18 @@ that a new AI should know beyond what the architecture docs already say.
     is parsed from `event_id` prefix. `stage_catalog.json` is demoted
     to bootstrap stage selector only (not loaded at runtime).
 
-40h. Character `stage_snapshot.stage_events` (renamed from
-    `experienced_events`) holds **only this batch's** events, not
-    accumulated history. Each entry ≤80 chars. Cross-stage history is
-    carried by `memory_timeline` + `memory_digest.jsonl` +
+40h. Character `stage_snapshot.stage_events` holds **only this batch's**
+    events, not accumulated history. Each entry ≤80 chars. Cross-stage
+    history is carried by `memory_timeline` + `memory_digest.jsonl` +
     `world_event_digest.jsonl`, not the snapshot.
 
-40i. Schema v4 ID convention: `{TYPE}-S{stage:03d}-{seq:02d}` for
-    memory_digest (`M-`), world_event_digest (`E-`), scene_archive
-    (`SC-`). 3-digit stage supports ≤999 stages; 2-digit seq supports
-    ≤99 per stage. Stage is encoded in the ID so digest/archive entries
-    omit redundant `stage_id` fields — runtime loader filters via
-    regex `S(\d{3})`. `time_in_story` renamed to `time` globally.
+40i. ID convention: `{TYPE}-S{stage:03d}-{seq:02d}` for memory_digest
+    (`M-`), world_event_digest (`E-`), scene_archive (`SC-`). 3-digit
+    stage supports ≤999 stages; 2-digit seq supports ≤99 per stage. Stage
+    is encoded in the ID — digest/archive entries carry no separate
+    `stage_id` field; the runtime loader filters via regex `S(\d{3})`.
+    Story-time field is named `time` across scene_archive,
+    memory_timeline, and digest entries.
 
 40g2. `fixed_relationships.json` in `world/foundation/` records structural
     bonds (blood, lineage, faction membership) that are not stage-dependent.
