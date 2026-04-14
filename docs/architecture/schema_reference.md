@@ -28,8 +28,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **关键字段**：
 - `snapshot_summary` — 阶段的世界状态概述
 - `foundation_corrections` — 对基础设定的修正
-- `stage_events` — 本阶段事件（详细，仅本阶段）
-- `key_events` — 本阶段重要事件摘要（1 句话级别，供 world_event_digest.jsonl 程序化累积）
+- `stage_events` — 本阶段事件（**唯一事件清单**，每条为 ≤ 80 字的 1 句话摘要；既是快照内容又是 `world_event_digest.jsonl` 的直接来源；旧 `key_events` 字段已移除）
 - `current_world_state` — 当前阶段的世界总体状态
 - `relationship_shifts` — 关注的人物关系转变
 - `character_status_changes` — 人物状态变化（生死、等级等）
@@ -49,16 +48,16 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 ### world_event_digest_entry.schema.json
 
-**用途**：世界事件压缩摘要条目——从世界 stage_snapshot `key_events` 程序化生成的精简索引。
+**用途**：世界事件压缩摘要条目——从世界 stage_snapshot `stage_events` 程序化生成的精简索引。
 **位置**：`works/{work_id}/world/world_event_digest.jsonl`
 **格式**：JSONL，每行一条事件摘要。
-**运行时**：启动时 stage 1..N 过滤加载（N = 用户选定阶段），为 LLM 提供世界事件时间线感知。
+**运行时**：启动时 stage 1..N 过滤加载（loader 从 `event_id` 的 `S###` 前缀解析阶段号，不依赖单独的 `stage_id` 字段）。
 
 **关键字段**：
-- `event_id` — 格式 `WE-{stage_short}-{seq}`
-- `stage_id` — 所属阶段
-- `event_summary` — 事件精简摘要
-- `time_in_story` — 故事内时间（可选）
+- `event_id` — 格式 `E-S{stage:03d}-{seq:02d}`（例：`E-S003-02`）；阶段号编码在 ID 中
+- `summary` — 事件精简摘要（**≤ 80 字**）
+- `importance` — 5 级重要度（`trivial` / `minor` / `significant` / `critical` / `defining`）
+- `time` — 故事内时间（可选）
 - `location` — 事件地点（可选）
 - `involved_characters` — 涉及的角色（可选）
 
@@ -188,10 +187,11 @@ core_wounds 记录最底层的创伤根源。
 `memory_digest.jsonl` 摘要感知，详情通过 FTS5 按需检索。
 
 **关键字段**：
-- `time_in_story` — 故事内时间
+- `memory_id` — 格式 `M-S{stage:03d}-{seq:02d}`（例：`M-S003-02`）
+- `time` — 故事内时间（旧 `time_in_story` 已废弃）
 - `location` — 事件发生地点
-- `event_summary` — 客观发生了什么
-- `subjective_experience` — 角色对事件的主观体验（第一人称视角，核心字段）
+- `event_summary` — 客观发生了什么（**≤ 50 字**——memory_digest 的直接来源）
+- `subjective_experience` — 角色对事件的主观体验（第一人称视角，核心字段，不限长度）
 - `emotional_impact` — 情感影响
 - `misunderstanding` — 是否产生了误解
 - `concealment` — 是否选择隐瞒
@@ -209,17 +209,16 @@ core_wounds 记录最底层的创伤根源。
 **用途**：记忆压缩摘要条目——从 memory_timeline 自动提取的精简索引。
 **位置**：`characters/{character_id}/canon/memory_digest.jsonl`
 **格式**：JSONL，每行一条压缩摘要。
-**运行时**：启动时 stage 1..N 过滤加载（N = 用户选定阶段），为 LLM 提供远期历史感知（~60-80 tokens/条）。
+**运行时**：启动时 stage 1..N 过滤加载（loader 从 `memory_id` 的 `S###` 前缀解析阶段号，不依赖单独的 `stage_id` 字段）；目标 ~30-40 tokens/条。
 
 **关键字段**：
-- `memory_id` — 与 memory_timeline 条目的 memory_id 一一对应
-- `stage_id` — 所属阶段
-- `time_in_story` — 故事内时间
-- `location` — 事件地点
-- `event_summary` — 事件精简摘要
-- `emotional_tags` — 情感标签
-- `memory_importance` — 重要程度
-- `involved_targets` — 涉及的角色
+- `memory_id` — 格式 `M-S{stage:03d}-{seq:02d}`；与 memory_timeline 条目的 `memory_id` 一一对应
+- `summary` — 事件精简摘要（**≤ 50 字**；复制自 memory_timeline 的 `event_summary`）
+- `importance` — 5 级重要度（`trivial` / `minor` / `significant` / `critical` / `defining`）
+- `time` — 故事内时间（可选）
+- `location` — 事件地点（可选）
+
+**已移除字段**：`stage_id`（由 memory_id 前缀推导）、`emotional_tags`、`involved_targets`（降噪；细节走 FTS5）。
 
 ---
 

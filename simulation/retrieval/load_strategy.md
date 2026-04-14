@@ -13,8 +13,14 @@ Load before the first reply:
 - world manifest
 - selected world stage snapshot
 - world foundation (`foundation.json` + `fixed_relationships.json`)
-- `world_event_digest.jsonl` stage 1..N filtered (N = user-selected stage)
-- target character identity (`identity.json`, incl. `core_wounds`, `key_relationships`)
+- `world_event_digest.jsonl` stage 1..N filtered (N = user-selected stage).
+  Each entry is `{event_id, summary (≤80 chars), importance,
+  involved_characters?, time?, location?}` — stage is encoded in
+  `event_id` prefix `E-S###`; loader filters via regex
+- target character identity (`identity.json`, loader-level field whitelist
+  filter — loads canonical_name/aliases/background/core_wounds/key_relationships;
+  **strips `evidence_refs` and large nested evidence fields at load time** to
+  cut Tier 0 tokens without schema churn; no Phase 2/2.5 rerun required)
 - target character failure modes (`failure_modes.json`)
 - target character hard boundaries (`boundaries.json` → `hard_boundaries` only)
 - target character selected-stage snapshot (self-contained: voice, behavior,
@@ -30,8 +36,11 @@ Load before the first reply:
   entry. This is a safety net — normal path is self-contained snapshots.
 - target character memory timeline: recent 2 stages (N + N-1) full text
 - target character `memory_digest.jsonl`: compressed index, stage 1..N
-  filtered (N = user-selected stage) for distant-history awareness
-  (each entry ~60-80 tokens; auto-generated from memory_timeline)
+  filtered (N = user-selected stage) for distant-history awareness.
+  Each entry is `{memory_id, summary (≤50 chars), importance, time?,
+  location?}` — stage is encoded in the `memory_id` prefix `M-S###`, so
+  the loader filters via regex (no redundant `stage_id` field). Target
+  ~30-40 tokens per entry; 49 stages × ~15 entries ≈ 22-29K tokens.
 - user profile summary
 - active persona summary when used
 - user role binding
@@ -50,11 +59,19 @@ Load before the first reply:
 
 ### Tier 0: Scene Archive Startup
 
-- Load scene_archive **summaries** for stages 1..N where target character is
-  in `characters_present` (lightweight overview of all relevant scenes)
-- Load scene_archive **full_text** for N scenes (default N=5) around the
-  current stage where target character is in `characters_present`
-  (for fine-grained reasoning and voice style anchoring)
+- Scene archive **summaries are NOT loaded at startup** — they are an on-demand
+  FTS5 index only, not part of Tier 0. Memory_digest + world_event_digest
+  already give the LLM an event-level overview; scene summaries would duplicate
+  that at much higher token cost.
+- Load scene_archive **full_text** for the most recent `scene_fulltext_window`
+  scenes (**default 10**, configurable via
+  `works/{work_id}/indexes/load_profiles.json::scene_fulltext_window`) where
+  the target character is in `characters_present`. These serve as voice /
+  style anchors for the immediately preceding narrative. Older scenes stay
+  in FTS5 and are pulled on demand (Tier 1).
+- `scene_id` format: `SC-S{stage:03d}-{seq:02d}` (e.g. `SC-S003-07`). Stage
+  is encoded in the ID; the loader filters recent scenes by parsing this
+  prefix.
 
 ## Tier 1: Structured Expansion
 
@@ -72,7 +89,9 @@ Load only if the turn needs it:
 - `users/{user_id}/conversation_library/archives/{archive_id}/context_summary.json`
 - `users/{user_id}/conversation_library/archives/{archive_id}/key_moments.jsonl`
 - FTS5 scene_archive retrieval (jieba + vocab dict → FTS5, filtered by
-  `characters_present`, `stage_id`, `time_in_story`, `location`)
+  `characters_present`, `stage_id`, `time`, `location`). Scene summaries
+  live here — they are not in Tier 0 and surface only when the query hits
+  the index.
 - FTS5 memory_timeline retrieval (for entries beyond the 2 recent stages
   not loaded at startup; memory_digest provides awareness, FTS5 provides
   detail when the LLM needs it)
@@ -95,7 +114,7 @@ Recommended trigger mapping:
 - character dialogue style reinforcement
   - search scene_archive filtered by `characters_present` and `stage_id`
 - specific scene recall
-  - search scene_archive by semantic query, time_in_story, or location
+  - search scene_archive by semantic query, `time`, or `location`
 - user shared-memory recall
   - pinned memories, current context shared memory, or older context summaries
 - archived conversation recall
@@ -167,7 +186,9 @@ raw chapter files.
 2. work indexes under `works/{work_id}/indexes/`
 3. concise summaries and stage snapshots
 4. memory_digest (startup-loaded overview) → memory_timeline (FTS5/embedding on-demand)
-5. scene_archive entries (startup-loaded summaries/full_text, then FTS5/embedding on-demand)
+5. scene_archive entries (startup-loaded full_text for recent
+   `scene_fulltext_window` scenes only; summaries live in FTS5 and are
+   pulled on demand)
 6. detailed canon files and summary-layer user history
 7. full user transcript when needed
 8. raw source text

@@ -23,10 +23,10 @@
 
 ```json
 {
-  "scene_id": "scene_{chapter}_{seq}",
+  "scene_id": "SC-S{stage:03d}-{seq:02d}",
   "stage_id": "{stage_id}",
   "chapter": "{chapter_identifier}",
-  "time_in_story": "故事内时间",
+  "time": "故事内时间",
   "location": "场景发生地点",
   "characters_present": ["{character_id}", "..."],
   "summary": "客观第三人称事件梗概",
@@ -34,15 +34,17 @@
 }
 ```
 
-切分规则：以自然场景边界切分，一个场景不跨章节边界，`stage_id` 由章节号
-查 batch plan 得出。
+切分规则：以自然场景边界切分，一个场景不跨章节边界。`stage_id` 由章节号
+查 `source_batch_plan.json` 得出（batch_plan 是唯一真源；scene_archive
+每次合并均按 batch_plan 重建）。`scene_id` 将阶段号编码在前缀中
+（`SC-S003-07` 表示阶段 3 的第 7 个场景）。
 
 ### memory_timeline（角色主观记忆线）
 
 每条条目是角色第一人称主观视角的归纳（不是原文复制），包含
-`time_in_story`、`location`、`event_summary`、`subjective_experience`、
-`emotional_impact`、`memory_importance`、`scene_refs` 等字段。
-篇幅由事件复杂度决定，不设限。
+`memory_id`（`M-S###-##`）、`time`、`location`、`event_summary`
+（≤ 50 字）、`subjective_experience`（不限长度）、`emotional_impact`、
+`memory_importance`、`scene_refs` 等字段。
 
 详见 `schemas/memory_timeline_entry.schema.json`。
 
@@ -191,10 +193,10 @@ scene_archive 的 `full_text` 也可作为 Tier 3 原文验证来源。
 ```sql
 -- 场景档案表
 CREATE TABLE scene_archive (
-    scene_id TEXT PRIMARY KEY,
+    scene_id TEXT PRIMARY KEY,  -- SC-S{stage:03d}-{seq:02d}
     stage_id TEXT NOT NULL,
     chapter TEXT,
-    time_in_story TEXT,
+    time TEXT,                  -- renamed from legacy time_in_story
     location TEXT,
     characters_present TEXT,  -- JSON array
     summary TEXT NOT NULL,
@@ -211,14 +213,14 @@ CREATE VIRTUAL TABLE scene_fts USING fts5(
 
 -- 记忆时间线表（检索副本）
 CREATE TABLE memory_timeline (
-    memory_id TEXT PRIMARY KEY,
+    memory_id TEXT PRIMARY KEY,  -- M-S{stage:03d}-{seq:02d}
     character_id TEXT NOT NULL,
-    stage_id TEXT NOT NULL,
-    time_in_story TEXT,
+    stage_id TEXT NOT NULL,      -- redundant with memory_id prefix; kept for SQL filtering
+    time TEXT,                   -- renamed from legacy time_in_story
     location TEXT,
-    event_summary TEXT,
+    event_summary TEXT,          -- ≤ 50 chars
     subjective_experience TEXT,
-    memory_importance TEXT,
+    memory_importance TEXT,      -- 5 levels: trivial/minor/significant/critical/defining
     scene_refs TEXT,           -- JSON array
     summary_embedding BLOB    -- 可选，embedding 向量
 );

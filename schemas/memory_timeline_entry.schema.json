@@ -14,17 +14,17 @@
   "properties": {
     "memory_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "记忆条目唯一标识。"
+      "pattern": "^M-S[0-9]{3}-[0-9]{2}$",
+      "description": "记忆条目唯一标识，格式 M-S{stage:03d}-{seq:02d}。阶段号由 S### 段承载；digest 按此过滤加载，不再冗余 stage_id。"
     },
     "stage_id": {
       "type": "string",
       "minLength": 1,
-      "description": "这条记忆属于哪个剧情阶段。"
+      "description": "这条记忆属于哪个剧情阶段（timeline 本文保留，方便目录索引与目视校验；digest 从 memory_id 解析，不再存此字段）。"
     },
-    "time_in_story": {
+    "time": {
       "type": "string",
-      "description": "故事内时间。格式不必严格统一，保留原文的时间表述即可。例如：第三世·天剑宗大比前夕、两年后、大婚当日。"
+      "description": "故事内时间。格式不必严格统一，保留原文的时间表述即可（例如：某节前夕、两年后、大婚当日）。"
     },
     "location": {
       "type": "string",
@@ -32,7 +32,8 @@
     },
     "event_summary": {
       "type": "string",
-      "description": "客观层面发生了什么事。用第三人称简要描述。"
+      "maxLength": 50,
+      "description": "客观层面发生了什么事。用第三人称简要描述，≤ 50 字——digest 直接复制此字段，提取阶段必须保证字数限制。"
     },
     "subjective_experience": {
       "type": "string",

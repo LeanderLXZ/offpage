@@ -19,10 +19,11 @@ Compile the minimum useful packet for the first reply.
 10. Read target character memory_timeline: recent 2 stages (N + N-1) full.
 10b. Read target character `memory_digest.jsonl` filtered to stage 1..N
     (N = user-selected stage, for distant-history awareness).
-11. Load scene_archive summaries for stages 1..N where target character is
-    in `characters_present`.
-12. Load scene_archive full_text for N scenes (default N=5) around the
-    current stage where target character is in `characters_present`.
+11. Load scene_archive full_text for the most recent
+    `scene_fulltext_window` scenes (default 10; configurable via
+    `works/{work_id}/indexes/load_profiles.json`) where the target
+    character is in `characters_present`. **Summaries are NOT loaded at
+    startup** — they live in the FTS5 index and are retrieved on demand.
 13. Load vocab dict (`works/{work_id}/indexes/vocab_dict.txt`) into jieba
     as custom dictionary for per-turn keyword matching.
 14. Read `users/{user_id}/profile.json`.
@@ -51,9 +52,10 @@ Compile the minimum useful packet for the first reply.
 7. Memory_timeline beyond the 2 recent stages is not loaded at startup.
    `memory_digest.jsonl` (stage 1..N filtered) provides compressed awareness of historical
    stages; detailed entries are available via FTS5/embedding on-demand.
-8. Scene_archive full_text is only loaded for the N scenes nearest the current
-   stage — other scenes are available via FTS5/embedding on-demand retrieval,
-   with their summaries already loaded for context.
+8. Scene_archive full_text is only loaded for the most recent
+   `scene_fulltext_window` scenes (default 10). Summaries are **not** loaded
+   at startup — both older full_text and all summaries live in the FTS5
+   index and surface on demand.
 9. Vocab dict is loaded into jieba at startup for per-turn keyword matching.
    This enables the two-level retrieval funnel (jieba+FTS5 → embedding
    fallback) described in `simulation/retrieval/index_and_rag.md`.
