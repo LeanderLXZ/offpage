@@ -53,7 +53,7 @@
     },
     "stage_events": {
       "type": "array",
-      "description": "本阶段发生的事件（仅本阶段，不累积历史），每条为 ≤ 80 字的 1 句话摘要。既作为快照中的事件清单，也是 world_event_digest.jsonl 程序化累积的直接来源——不再单独维护 key_events 字段。不需要逐条标注章节引用。",
+      "description": "本阶段发生的事件（仅本阶段，不累积历史），每条为 ≤ 80 字的 1 句话摘要。既作为快照中的事件清单，也是 world_event_digest.jsonl 程序化累积的直接来源。不需要逐条标注章节引用。",
       "items": {
         "type": "string",
         "maxLength": 80

@@ -74,7 +74,8 @@ sources/works/{work_id}/
 - `scenes/`
 - `chunks/`
 - `metadata/`
-- ~~`rag/`~~ — 已移除，运行时检索数据现位于 `works/{work_id}/retrieval/`
+
+运行时检索数据位于 `works/{work_id}/retrieval/`，不在原始包结构中。
 
 ### 原始包构建规范
 
@@ -124,7 +125,7 @@ sources/works/{work_id}/
    `scene_id` 格式：`SC-S{stage:03d}-{seq:02d}`（如 `SC-S003-07`），阶段号
    由 `source_batch_plan.json` 查得（batch_plan 是唯一真源，scene_archive
    每次合并均按 batch_plan 重建）。每个场景条目包含 `scene_id`、`stage_id`、
-   `chapter`、`time`（旧 `time_in_story` 已废弃）、`location`、
+   `chapter`、`time`（故事内时间）、`location`、
    `characters_present`、`summary`、`full_text`。
 
    运行时检索使用两级漏斗：jieba 分词 + 专有名词表 + FTS5（默认）→
@@ -190,7 +191,9 @@ works/{work_id}/world/
 
 - `manifest.json`
 - `stage_catalog.json`
-- `stage_snapshots/{stage_id}.json`
+- `stage_snapshots/{stage_id}.json` — 世界当前阶段状态；`stage_events`
+  **只记录该阶段发生的事件**（每条 ≤80 字一句话摘要），不累积历史。
+  跨阶段事件时间线由 `world_event_digest.jsonl` 承担。
 - `foundation/foundation.json` — Phase 2.5 产出的统一基础设定
   （未来可拆分为 setting.json、cosmology.json、power_system.json 等）
 - `foundation/fixed_relationships.json` — 世界级固定关系网络
@@ -282,11 +285,14 @@ works/{work_id}/characters/{character_id}/
 - `manifest.json`
 - `canon/identity.json` — 含 core_wounds（核心创伤）、key_relationships（核心人物关系弧线）
 - `canon/voice_rules.json` — 提取锚点，不在运行时加载
-- `canon/behavior_rules.json` — 提取锚点，不在运行时加载；core_drives 已拆分为 core_goals + obsessions
+- `canon/behavior_rules.json` — 提取锚点，不在运行时加载；包含 `core_goals` 与 `obsessions` 两个字段
 - `canon/boundaries.json` — 提取锚点（hard_boundaries 运行时加载）
 - `canon/failure_modes.json`
 - `canon/stage_catalog.json`
-- `canon/stage_snapshots/{stage_id}.json` — **自包含**，运行时核心
+- `canon/stage_snapshots/{stage_id}.json` — **自包含**，运行时核心；
+  `stage_events` **仅记录该批次发生的事件**（每条 ≤80 字），不累积历史。
+  跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
+  `world_event_digest.jsonl` 承担。
 - `canon/memory_timeline/{stage_id}.json`
 - `canon/memory_digest.jsonl` — 压缩摘要索引，stage 1..N 过滤加载
 

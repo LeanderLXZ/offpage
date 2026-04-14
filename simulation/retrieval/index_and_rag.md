@@ -196,7 +196,7 @@ CREATE TABLE scene_archive (
     scene_id TEXT PRIMARY KEY,  -- SC-S{stage:03d}-{seq:02d}
     stage_id TEXT NOT NULL,
     chapter TEXT,
-    time TEXT,                  -- renamed from legacy time_in_story
+    time TEXT,                  -- 故事内时间
     location TEXT,
     characters_present TEXT,  -- JSON array
     summary TEXT NOT NULL,
@@ -216,7 +216,7 @@ CREATE TABLE memory_timeline (
     memory_id TEXT PRIMARY KEY,  -- M-S{stage:03d}-{seq:02d}
     character_id TEXT NOT NULL,
     stage_id TEXT NOT NULL,      -- redundant with memory_id prefix; kept for SQL filtering
-    time TEXT,                   -- renamed from legacy time_in_story
+    time TEXT,                   -- 故事内时间
     location TEXT,
     event_summary TEXT,          -- ≤ 50 chars
     subjective_experience TEXT,

@@ -27,7 +27,7 @@
 4. **证据引用**：`evidence_refs` 字段为本阶段涉及的章节号列表（如 `["0001", "0002"]`）。正文字段（stage_events、current_world_state 等）**不需要**逐条标注 `[NNNN]`
 5. **中文标识**：中文作品的 work_id, stage_id, 路径段都使用中文
 6. **时间性**：当前阶段写清"现在"，不要混成扁平总结
-7. **仅本阶段事件**：`stage_events` 只记录本 batch 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 ≤ 80 字的 1 句话摘要**（既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源——不再单独维护 `key_events` 字段）。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积
+7. **仅本阶段事件**：`stage_events` 只记录本 batch 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 ≤ 80 字的 1 句话摘要**，既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）
 
 ## 世界层输出
 

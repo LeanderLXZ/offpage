@@ -153,11 +153,6 @@
           "type": "array",
           "items": { "type": "string" }
         },
-        "active_desires": {
-          "type": "array",
-          "description": "【已拆分】向后兼容保留。新提取应使用 active_goals + active_obsessions。",
-          "items": { "type": "string" }
-        },
         "active_goals": {
           "type": "array",
           "description": "当前阶段活跃的理性目标。",
@@ -298,11 +293,6 @@
       "description": "当前阶段的完整行为规则状态。自包含，无需与 baseline behavior_rules 合并。",
       "additionalProperties": false,
       "properties": {
-        "core_drives": {
-          "type": "array",
-          "description": "【已拆分】向后兼容保留。新提取应使用 core_goals + obsessions。",
-          "items": { "type": "string" }
-        },
         "core_goals": {
           "type": "array",
           "description": "当前阶段的理性目标——角色有意识追求的、可权衡调整的目标。",
