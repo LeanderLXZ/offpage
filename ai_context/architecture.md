@@ -54,7 +54,8 @@ Startup loads (in order):
 3. Memory_timeline: recent 2 stages (N + N-1) full text
 3b. Memory_digest.jsonl: stage 1..N filtered (distant-history awareness)
 3c. World_event_digest.jsonl: stage 1..N filtered (world event timeline)
-4. Scene_archive: stage 1..N summaries + current-stage-area N full_text scenes
+4. Scene_archive: most recent `scene_fulltext_window` full_text scenes
+   (**default 10**; summaries are NOT loaded — they live in FTS5 only)
 5. Vocab dict (`works/{work_id}/indexes/vocab_dict.txt`) into jieba
 6. User role binding + long-term profile + relationship core
 7. Current context manifest + character_state + relationship_state + shared
@@ -129,17 +130,21 @@ Three layers with distinct granularity, no redundancy:
 
 2. **memory_timeline** — subjective process per event ("After he took that
    sword for me, I started to waver"). First-person, summarized (not raw
-   text). Each entry includes `time_in_story`, `location`, `scene_refs`.
+   text). Each entry: `memory_id` (`M-S###-##`), `time`, `location`,
+   `event_summary` (≤50 chars), `subjective_experience`, `scene_refs`.
    Loaded: recent 2 stages (N + N-1) full at startup; distant stages via
-   `memory_digest.jsonl` (compressed index, ~60-80 tokens/entry, loaded in
-   full for awareness) + FTS5/embedding on-demand for detail.
+   `memory_digest.jsonl` (compressed index, ~30-40 tokens/entry —
+   `{memory_id, summary ≤50, importance, time?, location?}`, stage encoded
+   in the ID prefix for loader filtering) + FTS5/embedding on-demand for
+   detail.
 
-3. **scene_archive** — original text split by scene. Eight fields:
-   `scene_id`, `stage_id`, `chapter`, `time_in_story`, `location`,
+3. **scene_archive** — original text split by scene. Fields: `scene_id`
+   (`SC-S###-##`), `stage_id`, `chapter`, `time`, `location`,
    `characters_present`, `summary`, `full_text`. Work-level asset, not
    per-character. Stored under `works/{work_id}/retrieval/scene_archive.jsonl`.
-   Loaded: stage 1..N summaries + N full_text scenes around current stage
-   at startup; rest via FTS5/embedding on-demand.
+   Loaded: only the most recent `scene_fulltext_window` (default 10)
+   `full_text` scenes for the target at startup; **summaries are NOT in
+   Tier 0** — they live in FTS5 and surface on demand.
 
 ## Inter-Character Relationship Evolution
 
@@ -227,7 +232,9 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
      batch** — no dependency between world and characters)
   2. Programmatic post-processing: L1 JSON repair + generate
      `memory_digest.jsonl` from `memory_timeline` + generate
-     `world_event_digest.jsonl` from world snapshot `key_events` +
+     `world_event_digest.jsonl` from world snapshot `stage_events`
+     (5-level importance inferred by keyword; IDs use
+     `{TYPE}-S{stage:03d}-{seq:02d}` so stage is encoded in the ID) +
      upsert `stage_catalog.json` from snapshot metadata (0 token)
   3. Parallel review lanes: world + each character independently runs
      validate → semantic review → targeted fix. Lanes run in parallel
@@ -256,7 +263,9 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   Multiple chapters run in parallel (`--concurrency`, default 10).
   Programmatic validation only (line coverage, no overlap, alias matching).
   Output: `works/{work_id}/retrieval/scene_archive.jsonl` (.gitignore).
-  `scene_id` format: `scene_{chapter}_{seq}` (e.g. `scene_0015_003`).
+  `scene_id` format: `SC-S{stage:03d}-{seq:02d}` (e.g. `SC-S003-07`);
+  stage number is looked up from `source_batch_plan.json` (authoritative
+  source). scene_archive.jsonl is fully regenerated on each merge.
   Intermediate state: `.scene_archive.lock` +
   `works/{work_id}/analysis/scene_splits/` (local ignored,
   must not be git-tracked; preserved from Phase 3 rollback). Resume

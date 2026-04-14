@@ -20,6 +20,7 @@ from __future__ import annotations
 import itertools
 import json
 import logging
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, FIRST_COMPLETED, wait
 from dataclasses import dataclass, field
@@ -214,7 +215,7 @@ def validate_scene_split(
         return errors
 
     required_fields = {"scene_start_line", "scene_end_line",
-                       "time_in_story", "location",
+                       "time", "location",
                        "characters_present", "summary"}
 
     prev_end = 0
@@ -256,7 +257,7 @@ def validate_scene_split(
         prev_end = end
 
         # Empty fields
-        for fld in ("time_in_story", "location", "summary"):
+        for fld in ("time", "location", "summary"):
             if not scene.get(fld):
                 errors.append(f"{prefix}: {fld} is empty")
 
@@ -440,12 +441,28 @@ def _build_chapter_to_stage_map(
     return mapping
 
 
+_STAGE_NUM_RE = re.compile(r"(\d+)")
+
+
+def _stage_number(stage_id: str) -> int:
+    """Extract the leading numeric stage index from ``阶段01_xxx`` style IDs."""
+    m = _STAGE_NUM_RE.search(stage_id or "")
+    return int(m.group(1)) if m else 0
+
+
 def merge_scene_archive(
     project_root: Path,
     work_id: str,
     progress: SceneArchiveProgress,
 ) -> tuple[bool, str]:
     """Merge all per-chapter splits into scene_archive.jsonl.
+
+    ``source_batch_plan.json`` is the **single source of truth** for
+    ``stage_id``: any pre-existing ``scene_archive.jsonl`` is entirely
+    overwritten so stale stage names (e.g. from an earlier Phase 1 run)
+    cannot leak through. ``scene_id`` is assigned as
+    ``SC-S{stage:03d}-{seq:02d}`` with ``seq`` growing monotonically within
+    a stage following chapter order + intra-chapter scene order.
 
     Returns (success, error_message).
     """
@@ -456,14 +473,16 @@ def merge_scene_archive(
     if not chapter_to_stage:
         return False, "source_batch_plan.json not found or empty"
 
+    known_stage_ids = set(chapter_to_stage.values())
+
     splits_dir = progress.splits_dir(project_root)
     retrieval_dir = project_root / "works" / work_id / "retrieval"
     retrieval_dir.mkdir(parents=True, exist_ok=True)
     output_path = retrieval_dir / "scene_archive.jsonl"
 
-    # Collect all scenes in chapter order
     all_scenes: list[dict[str, Any]] = []
     scene_ids_seen: set[str] = set()
+    stage_seq_counter: dict[str, int] = {}
 
     for chapter_id in sorted(progress.chapters.keys()):
         split_path = splits_dir / f"{chapter_id}.json"
@@ -476,15 +495,35 @@ def merge_scene_archive(
         lines = chapter_path.read_text(encoding="utf-8").splitlines()
 
         stage_id = chapter_to_stage.get(chapter_id, "")
+        if not stage_id:
+            return False, (
+                f"Chapter {chapter_id} has no stage_id in "
+                f"source_batch_plan.json (batch plan is authoritative)")
+        if stage_id not in known_stage_ids:
+            return False, (
+                f"Chapter {chapter_id} mapped to unknown stage_id "
+                f"'{stage_id}' (batch plan mismatch)")
 
-        for seq, scene in enumerate(scenes, 1):
-            scene_id = f"scene_{chapter_id}_{seq:03d}"
+        stage_num = _stage_number(stage_id)
+        if stage_num <= 0 or stage_num > 999:
+            return False, (
+                f"stage_id '{stage_id}' yields invalid stage number "
+                f"{stage_num} (must be 1..999)")
 
+        for scene in scenes:
+            seq = stage_seq_counter.get(stage_id, 0) + 1
+            stage_seq_counter[stage_id] = seq
+            if seq > 99:
+                return False, (
+                    f"stage '{stage_id}' exceeds 99 scenes — ID format "
+                    f"SC-S###-## supports max 99 per stage; split the "
+                    f"stage or regenerate batch plan")
+
+            scene_id = f"SC-S{stage_num:03d}-{seq:02d}"
             if scene_id in scene_ids_seen:
                 return False, f"Duplicate scene_id: {scene_id}"
             scene_ids_seen.add(scene_id)
 
-            # Extract full_text from lines
             start = scene.get("scene_start_line", 1) - 1  # 0-indexed
             end = scene.get("scene_end_line", len(lines))
             full_text = "\n".join(lines[start:end])
@@ -493,7 +532,7 @@ def merge_scene_archive(
                 "scene_id": scene_id,
                 "stage_id": stage_id,
                 "chapter": chapter_id,
-                "time_in_story": scene.get("time_in_story", ""),
+                "time": scene.get("time", scene.get("time_in_story", "")),
                 "location": scene.get("location", ""),
                 "characters_present": scene.get("characters_present", []),
                 "summary": scene.get("summary", ""),
@@ -501,12 +540,11 @@ def merge_scene_archive(
             }
             all_scenes.append(entry)
 
-    # Write JSONL
+    # Fully rewrite scene_archive.jsonl — batch_plan is the truth source
     with open(output_path, "w", encoding="utf-8") as f:
         for entry in all_scenes:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-    # Final integrity check
     chapters_covered = {s["chapter"] for s in all_scenes}
     expected = set(progress.chapters.keys())
     missing = expected - chapters_covered

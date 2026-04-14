@@ -177,8 +177,9 @@ completion gate blocks Phase 1 if any chunk missing.
 Analysis → user confirmation → extraction loop (per batch: git preflight →
 **smart skip** [if extraction output already on disk, jump to post-processing] →
 **1+N split extraction** [world call → N parallel character calls] →
-**programmatic post-processing** [memory_digest generation + stage_catalog
-upsert (world catalog accumulates `key_events` timeline), 0 token] →
+**programmatic post-processing** [memory_digest + world_event_digest
+generation (IDs `{TYPE}-S{stage:03d}-{seq:02d}`; importance inferred
+by keyword), stage_catalog upsert, 0 token] →
 **parallel review lanes** [world + each character:
 validate → review → fix independently] → **commit gate** [programmatic
 cross-consistency, 0 token] → git commit or full batch rollback+retry) →
@@ -202,11 +203,13 @@ See `docs/requirements.md` §11.
 
 ## §12 Memory System and Retrieval
 
-Three-layer memory: stage_snapshot (aggregated state, current stage only) →
-memory_timeline (first-person subjective process per event, with
-`time_in_story`, `location`, `scene_refs`; no length limit) → scene_archive
-(original text split by scene, 8 fields including `time_in_story` and
-`location`; work-level, not per-character).
+Three-layer memory: stage_snapshot (aggregated state, current stage only;
+`stage_events` holds **only this batch's** events, each ≤80 chars) →
+memory_timeline (first-person subjective process per event; `memory_id`
+pattern `M-S###-##`, `time`, `location`, `event_summary` ≤50 chars,
+`subjective_experience` unbounded, `scene_refs`) → scene_archive
+(original text split by scene; `scene_id` pattern `SC-S###-##`, `time`,
+`location`, `characters_present`; work-level, not per-character).
 
 Two-level retrieval funnel on scene_archive + memory_timeline:
 Level 1 (default, <20ms): jieba + work-level vocab dict + FTS5 → top-K
@@ -218,11 +221,17 @@ Proactive character association: engine also extracts context-state keywords
 (location, recent events, emotion) for jieba matching, so the character
 can naturally recall related memories without being asked.
 
-Startup: memory_timeline recent 2 stages (N + N-1) full +
-memory_digest.jsonl (compressed index of all stages, ~60-80 tokens/entry);
-scene_archive summaries for stages 1..N + N full_text scenes around current
-stage (default N=5); vocab dict into jieba. Distant memory detail via FTS5
-on-demand (no separate embedding needed for memory_timeline).
+Startup: memory_timeline recent 2 stages (N + N-1) full;
+`memory_digest.jsonl` stage 1..N (each entry ~30-40 tokens:
+`{memory_id, summary ≤50, importance, time?, location?}` — stage encoded
+in the ID prefix for loader filtering); `world_event_digest.jsonl` stage
+1..N (`{event_id, summary ≤80, importance, involved_characters?,
+time?, location?}`); scene_archive full_text for the most recent
+`scene_fulltext_window` scenes (**default 10**, configurable via
+`works/{work_id}/indexes/load_profiles.json`). Scene summaries are
+**not** in Tier 0 — they live in FTS5 and surface on demand. Identity
+is loaded with a field whitelist (no `evidence_refs`/large nested arrays).
+Vocab dict into jieba. Distant memory and scene detail via FTS5 on-demand.
 
 scene_archive produced in Phase 4 (independent from Phase 3, only needs
 Phase 1 batch plan). Per-chapter parallel, programmatic validation only.
