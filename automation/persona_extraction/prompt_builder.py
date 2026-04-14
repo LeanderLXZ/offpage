@@ -205,11 +205,11 @@ def build_extraction_prompt(
     batches: list[BatchEntry] | None = None,
     reviewer_feedback: str = "",
 ) -> str:
-    """Legacy: build prompt for coordinated world + character extraction.
+    """Build prompt for coordinated world + character extraction.
 
-    No longer called by the orchestrator (replaced by 1+N split), but kept
-    because the reviewer and targeted-fix prompts still reference
-    ``_build_read_list`` which delegates here.
+    Not invoked by the main extraction orchestrator (which uses 1+N split
+    lanes), but retained as the shared read-list builder for reviewer and
+    targeted-fix prompts.
     """
     template = _load_template("coordinated_extraction.md")
 
@@ -396,7 +396,7 @@ def build_reviewer_prompt(
     """Build prompt for semantic review.
 
     Args:
-        lane_type: "world", "character", or "all" (legacy).
+        lane_type: "world", "character", or "all" (full-batch fallback).
         lane_character_id: Required when lane_type is "character".
     """
     work_id = progress.work_id
@@ -490,7 +490,7 @@ def build_targeted_fix_prompt(
     """Build prompt for targeted fix of specific reviewer findings.
 
     Args:
-        lane_type: "world", "character", or "all" (legacy).
+        lane_type: "world", "character", or "all" (full-batch fallback).
         lane_character_id: Required when lane_type is "character".
     """
     template = _load_template("targeted_fix.md")

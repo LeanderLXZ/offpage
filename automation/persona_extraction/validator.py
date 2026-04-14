@@ -19,7 +19,6 @@ from .json_repair import try_repair_json_file, try_repair_jsonl_file
 
 _MEMORY_ID_RE = re.compile(r"^M-S(\d{3})-(\d{2})$")
 _EVENT_ID_RE = re.compile(r"^E-S(\d{3})-(\d{2})$")
-_SCENE_ID_RE = re.compile(r"^SC-S(\d{3})-(\d{2})$")
 _STAGE_NUM_RE = re.compile(r"S(\d{3})")
 _MEMORY_SUMMARY_MAX = 50
 _EVENT_SUMMARY_MAX = 80
@@ -552,28 +551,6 @@ def _check_snapshot_depth(snapshot: dict,
                 f"relationship '{target}' missing "
                 f"relationship_history_summary"))
 
-    # --- goals/obsessions split check ---
-    if bs:
-        has_old = bool(bs.get("core_drives"))
-        has_new = bool(bs.get("core_goals")) or bool(bs.get("obsessions"))
-        if has_old and not has_new:
-            issues.append(ValidationIssue(
-                "warning", label,
-                "behavior_state uses legacy 'core_drives' — "
-                "new extractions should use 'core_goals' + 'obsessions'"))
-
-    eb = snapshot.get("emotional_baseline") or {}
-    if eb:
-        has_old_desires = bool(eb.get("active_desires"))
-        has_new_desires = (bool(eb.get("active_goals"))
-                          or bool(eb.get("active_obsessions")))
-        if has_old_desires and not has_new_desires:
-            issues.append(ValidationIssue(
-                "warning", label,
-                "emotional_baseline uses legacy 'active_desires' — "
-                "new extractions should use 'active_goals' + "
-                "'active_obsessions'"))
-
     # --- character_arc check (stages after the first) ---
     stage_delta = snapshot.get("stage_delta")
     character_arc = snapshot.get("character_arc")
@@ -637,18 +614,6 @@ def _check_baselines(work_dir: Path, char_id: str,
                     "warning", str(identity_path),
                     "key_relationships is empty — identity should "
                     "include cross-story relationship arcs"))
-            # Check goals/obsessions split in behavior_rules
-            br_path = char_dir / "behavior_rules.json"
-            if br_path.exists():
-                br = _load_json(br_path)
-                if br and br.get("core_drives") and not (
-                        br.get("core_goals") or br.get("obsessions")):
-                    issues.append(ValidationIssue(
-                        "warning", str(br_path),
-                        "behavior_rules uses legacy 'core_drives' — "
-                        "new extractions should use 'core_goals' + "
-                        "'obsessions'"))
-
     return issues
 
 
@@ -766,8 +731,8 @@ def _check_memory_digest(path: Path, stage_id: str,
             text = path.read_text(encoding="utf-8").strip()
 
     # Derive current batch's stage number from the stage_id (e.g. 阶段01 → 1).
-    # Digest entries no longer carry stage_id — the S### segment of memory_id
-    # is authoritative.
+    # Stage for digest entries is carried by the S### segment of memory_id
+    # (authoritative); no separate stage_id field is stored.
     current_stage_num: int | None = None
     m = _STAGE_NUM_RE.search(stage_id)
     if m:

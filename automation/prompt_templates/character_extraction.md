@@ -42,7 +42,7 @@
    - `knowledge_scope`：知道什么、不知道什么、不确定什么
    - `misunderstandings`、`concealments`
    - `emotional_baseline`（含 **active_goals** 理性目标、**active_obsessions** 执念、active_fears、active_wounds）、`current_personality`、`current_mood`、`current_status`
-   - `stage_events`（**仅本阶段**发生的关键事件清单，每条 ≤ 80 字的 1 句话摘要；不累积历史，历史由 memory_timeline 和 world_event_digest 承载）
+   - `stage_events`（**仅本阶段**发生的关键事件清单，每条 ≤ 80 字的 1 句话摘要；不累积历史，历史由 memory_timeline 和 world_event_digest 承载）。如果本阶段内有该角色亲历或深度影响其处境的世界事件（对照世界 stage_snapshot.stage_events），必须以角色视角写入此清单，不可遗漏
    - `stage_delta`：从上一阶段的变化
    - `character_arc`：角色从阶段 1 到当前阶段的 **整体弧线概览**——`arc_summary`（一句话弧线摘要）、`arc_stages`（关键节点列表，每个含 stage_id 和描述）、`current_position`（当前在弧线中的位置和趋势）。第一个阶段可省略或仅写起点状态
    
@@ -128,8 +128,6 @@
 | stage_catalog.json | 缺 `order`/`summary`/`snapshot_path` | 每个 stage 条目**必须**包含这三个字段 |
 | stage_catalog.json | 缺 `schema_version`/`character_id` | 顶层**必须**包含 |
 | manifest.json | `stage_snapshot_root` 指向 `canon/stages` | 正确路径：`canon/stage_snapshots` |
-| behavior_state / behavior_rules | `core_drives`（旧字段） | 新提取使用 `core_goals` + `obsessions`；旧字段向后兼容保留 |
-| emotional_baseline | `active_desires`（旧字段） | 新提取使用 `active_goals` + `active_obsessions`；旧字段向后兼容保留 |
 | 所有 baseline 文件 | 顶层 `description` 字段 | **不要添加**——schema 设置了 `additionalProperties: false` |
 
 ### 边界禁令
@@ -171,9 +169,10 @@
 
 memory_timeline 是角色扮演时回忆、联想、情感反应的核心数据源。每条记忆应做到：
 
-- **memory_id**：必须使用统一格式 `M-S{stage:03d}-{seq:02d}`（例：`M-S001-01`）。`S###` 是 3 位阶段号（支持 ≤ 999 阶段），`##` 是同一阶段内的顺序号（从 01 起递增，上限 99）。digest 由此 ID 解析阶段归属，不再冗余存 `stage_id`
-- **time**：故事内时间（字段名统一为 `time`，不再使用 `time_in_story`）
+- **memory_id**：格式 `M-S{stage:03d}-{seq:02d}`（例：`M-S001-01`）。`S###` 是 3 位阶段号（支持 ≤ 999 阶段），`##` 是同阶段内的顺序号（从 01 递增，上限 99）。digest 由此 ID 解析阶段归属
+- **time**：故事内时间
 - **event_summary**：客观描述应包含关键要素（谁、做了什么、在什么情境下），但**必须 ≤ 50 字**——这是 memory_digest 的直接来源，提取阶段负责字数控制。更详细的经过写在 `subjective_experience`
+- **memory_importance**：5 级枚举 `trivial / minor / significant / critical / defining`，依据事件对角色的心理或命运影响程度判定
 - **subjective_experience**（最关键字段）：用角色第一人称视角深入展开。至少 3-5 句，重要事件可以更长（不受 50 字限制）
 - **emotional_impact**：具体描述情绪变化的层次和原因
 - **knowledge_gained**：列出角色从此事件获得的具体认知
