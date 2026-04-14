@@ -200,7 +200,7 @@ Phase 4（见 §11.4.2）；`--start-phase 4` 可跳过此门控独立运行。P
 - `scene_id` — `SC-S{stage:03d}-{seq:02d}` 格式
 - `stage_id` — 由章节号查 batch plan 得出（程序化；batch_plan 是唯一真源）
 - `chapter` — 所属章节
-- `time` — 故事内时间（旧 `time_in_story` 已废弃）
+- `time` — 故事内时间
 - `location` — 场景发生地点
 - `characters_present` — 在场角色列表
 - `summary` — 客观第三人称事件梗概

@@ -26,16 +26,16 @@ implementation code yet.
     psychological traumas) + `key_relationships` (cross-story relationship
     arcs with evolution and turning points)
   - `voice_rules.schema.json` — per-emotion, per-target voice model
-  - `behavior_rules.schema.json` — per-emotion reaction patterns, triggers;
-    `core_drives` split into `core_goals` + `obsessions`
+  - `behavior_rules.schema.json` — per-emotion reaction patterns, triggers,
+    `core_goals` (rational) + `obsessions` (non-rational) split
   - `memory_timeline_entry.schema.json` — subjective memory with
     misunderstanding/concealment tracking
   - `boundaries.schema.json` — hard/soft boundaries, common misconceptions
   - `failure_modes.schema.json` — AI roleplay failure prevention
-  - `stage_snapshot.schema.json` — enhanced with misunderstandings,
-    concealments, stage_delta, `character_arc` (bird's-eye arc from stage 1
-    to current), `core_goals`/`obsessions` split in behavior_state,
-    `active_goals`/`active_obsessions` split in emotional_baseline
+  - `stage_snapshot.schema.json` — misunderstandings, concealments,
+    stage_delta, `character_arc` (bird's-eye arc from stage 1 to current),
+    `behavior_state` with `core_goals` + `obsessions`, `emotional_baseline`
+    with `active_goals` + `active_obsessions`
 - User package template at `users/_template/`
 
 ### First Work Package
@@ -106,14 +106,12 @@ implementation code yet.
   pause 180s
 - Prompt templates: analysis, world extraction, character extraction,
   world semantic review, character semantic review, targeted fix,
-  scene split (coordinated_extraction.md kept for legacy; unified
-  semantic_review.md kept for backward compat). Character extraction
-  prompt embeds self-contained snapshot contract directly (no longer
-  reads `simulation/contracts/baseline_merge.md`). Prompt dynamically
-  injects importance-based quality requirements (min examples per target).
-  Extraction prompts do not read or write `memory_digest.jsonl` or
-  `stage_catalog.json` (programmatic now). Character extraction prompt
-  does not read world snapshot (parallel with world extraction)
+  scene split. Character extraction prompt embeds the self-contained
+  snapshot contract directly and dynamically injects importance-based
+  quality requirements (min examples per target). Extraction prompts do
+  not read or write `memory_digest.jsonl` or `stage_catalog.json`
+  (programmatic). Character extraction prompt does not read the world
+  snapshot — it runs in parallel with world extraction
 - Breakpoint recovery via progress file; token/context limit errors
   distinguished from rate limits (not retried — same prompt will fail again).
   Fast empty failures (<5s + empty stderr) also retried with exponential
@@ -175,8 +173,6 @@ implementation code yet.
 - No real user package yet (only template)
 - No simulation-engine service implementation
 - No terminal adapter implementation
-- Phase 4 (scene archive) extraction implemented; integration bugs fixed
-  (lock bypass, chapter parsing, stage_id mapping, character validation)
 - No retrieval implementation yet (design finalized, pending extraction
   completion)
 - World schemas incomplete (no formal schema for foundation, timeline, events,

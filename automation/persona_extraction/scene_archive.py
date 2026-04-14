@@ -532,7 +532,7 @@ def merge_scene_archive(
                 "scene_id": scene_id,
                 "stage_id": stage_id,
                 "chapter": chapter_id,
-                "time": scene.get("time", scene.get("time_in_story", "")),
+                "time": scene.get("time", ""),
                 "location": scene.get("location", ""),
                 "characters_present": scene.get("characters_present", []),
                 "summary": scene.get("summary", ""),
