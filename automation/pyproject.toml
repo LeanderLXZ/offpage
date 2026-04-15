@@ -3,7 +3,10 @@ name = "persona-extraction"
 version = "0.1.0"
 description = "Automated stage extraction orchestrator for persona-engine"
 requires-python = ">=3.11"
+dependencies = [
+    "jsonschema>=4.0",
+]
 
-# jsonschema is the only external dependency.
-# Install it once: pip install jsonschema
-# The validator works without it (skips schema checks) so it's optional.
+# jsonschema is a REQUIRED hard dependency. The commit gate and Phase 2.5
+# exit validation rely on it to guarantee identical gate strength on every
+# machine; see docs/requirements.md §11.4 "第一层：程序化校验".

@@ -100,7 +100,13 @@ Layer summary:
   full user histories, large runtime artifacts
 - Schemas, templates, code, docs, and config are fine to commit
 - Real user packages under `users/` stay local
-- `works/*/analysis/` and `works/*/indexes/` are git-tracked
+- Under `works/*/analysis/`, only durable analysis products are git-tracked:
+  `world_overview.json`, `stage_plan.json`, `candidate_characters.json`,
+  `consistency_report.json`. `progress/`, `chapter_summaries/`,
+  `scene_splits/`, `evidence/*` are local-only runtime artifacts (see
+  `.gitignore` for the authoritative list). `works/*/indexes/`,
+  `works/*/world/` and `works/*/characters/` are git-tracked canon assets;
+  `works/*/retrieval/` is local-only.
 - Only commit at coherent milestones
 
 ## Project-Specific Guidance

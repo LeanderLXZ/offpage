@@ -10,11 +10,14 @@ Progress files live under:
 
 State machine per stage (Phase 3):
   pending → extracting → extracted → post_processing → reviewing
-                │                                        │  │
-                └→ error                                 │  └→ fixing → passed → committed
-                                                         │               │
-                                                         └→ failed ──────┘
-                                                              └→ retrying → extracting
+                │                                          │
+                └→ error                                   ├→ passed → committed
+                                                           │              │
+                                                           └→ failed ─────┘
+                                                                  └→ retrying → extracting
+
+Targeted fix is handled inside a review lane (validate → review → fix →
+re-verify) and does not surface as a stage-level state.
 """
 
 from __future__ import annotations
@@ -229,6 +232,12 @@ class Phase0Progress:
 # ---------------------------------------------------------------------------
 
 class StageState(str, Enum):
+    """Phase 3 stage states.
+
+    Review-lane ``targeted fix`` is handled internally within a lane
+    (validate → review → fix → re-verify); it is NOT a stage-level state.
+    ``FAILED`` here already covers post-review rollback paths.
+    """
     PENDING = "pending"
     EXTRACTING = "extracting"
     EXTRACTED = "extracted"
@@ -236,7 +245,6 @@ class StageState(str, Enum):
     REVIEWING = "reviewing"
     PASSED = "passed"
     COMMITTED = "committed"
-    FIXING = "fixing"
     FAILED = "failed"
     RETRYING = "retrying"
     ERROR = "error"
@@ -250,10 +258,8 @@ _TRANSITIONS: dict[StageState, set[StageState]] = {
     StageState.EXTRACTED:        {StageState.POST_PROCESSING,
                                   StageState.REVIEWING},  # REVIEWING kept for compat
     StageState.POST_PROCESSING:  {StageState.REVIEWING, StageState.ERROR},
-    StageState.REVIEWING:        {StageState.PASSED, StageState.FAILED,
-                                  StageState.FIXING},
-    StageState.FIXING:           {StageState.PASSED, StageState.FAILED},
-    StageState.PASSED:           {StageState.COMMITTED},
+    StageState.REVIEWING:        {StageState.PASSED, StageState.FAILED},
+    StageState.PASSED:           {StageState.COMMITTED, StageState.FAILED},
     StageState.COMMITTED:        set(),  # terminal
     StageState.FAILED:           {StageState.RETRYING},
     StageState.RETRYING:         {StageState.EXTRACTING, StageState.EXTRACTED,
@@ -343,8 +349,8 @@ class Phase3Progress:
                 continue
             # In-progress states (interrupted run) — resume immediately
             if b.state in (StageState.EXTRACTING, StageState.EXTRACTED,
-                           StageState.REVIEWING, StageState.FIXING,
-                           StageState.RETRYING):
+                           StageState.POST_PROCESSING, StageState.REVIEWING,
+                           StageState.PASSED, StageState.RETRYING):
                 return b
             # Pending — normal next stage
             if b.state == StageState.PENDING:

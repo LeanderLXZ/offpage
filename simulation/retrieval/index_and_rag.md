@@ -167,8 +167,9 @@ jieba 分词 + 名词表匹配（<10ms）
 - 其余条目通过 FTS5 按需检索
 
 **scene_archive**：
-- stage 1..N 中与选定角色相关的所有场景 summary
-- 当前阶段前后与选定角色相关的 N 个场景 full_text（默认 N=5）
+- 最近 `scene_fulltext_window` 条 full_text（默认 10，可通过
+  `load_profiles.json` 覆盖）
+- **摘要不在启动期加载**——仅存在于 FTS5 索引，按需检索命中
 
 **专有名词表**：
 - 启动时加载 `works/{work_id}/indexes/vocab_dict.txt` 到内存

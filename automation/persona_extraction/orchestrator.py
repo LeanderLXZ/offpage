@@ -963,7 +963,8 @@ class ExtractionOrchestrator:
                 print("[ERROR] Cannot create extraction branch.")
                 sys.exit(1)
 
-        reached_limit = False
+        stopped_by_limit = False   # --end-stage 前缀试跑命中
+        all_done = False           # 全部 stage 均已 COMMITTED
 
         while True:
             if self._interrupted:
@@ -976,14 +977,14 @@ class ExtractionOrchestrator:
                     and tracker.completed >= max_stages):
                 print(f"\n[STOP] Reached max_stages limit "
                       f"({tracker.completed}/{max_stages}).")
-                reached_limit = True
+                stopped_by_limit = True
                 break
 
             stage = phase3.next_pending_stage()
             if stage is None:
                 if phase3.all_committed():
                     print("\n[DONE] All stages completed!")
-                    reached_limit = True
+                    all_done = True
                 else:
                     print("\n[BLOCKED] No actionable stages. "
                           "Check progress for blocked/error stages.")
@@ -991,16 +992,29 @@ class ExtractionOrchestrator:
 
             self._process_stage(phase3, pipeline, stage, tracker)
 
-        # Post-loop: run Phase 3.5/4 when target was reached
-        if reached_limit:
+        # Post-loop: Phase 3.5 / squash-merge / Phase 4 only when all stages
+        # are COMMITTED. A --end-stage prefix run stops short and skips every
+        # finalization step — the user must re-run without --end-stage.
+        # See requirements.md §11.5 "--end-stage 语义（严格前缀运行）".
+        if all_done:
             consistency_ok = self._run_consistency_check()
             self._offer_squash_merge()
             if consistency_ok:
-                self._run_scene_archive(
-                    end_stage=max_stages or 0, resume=True)
+                self._run_scene_archive(end_stage=0, resume=True)
             else:
                 print("\n  Phase 4 skipped — fix consistency errors first, "
                       "then re-run with --resume.")
+        elif stopped_by_limit:
+            remaining = sum(
+                1 for s in phase3.stages
+                if s.state != StageState.COMMITTED
+            )
+            print(f"\n  [PREFIX-RUN] Stopped at --end-stage limit with "
+                  f"{remaining} stage(s) remaining.")
+            print("  Phase 3.5 / squash-merge / Phase 4 are skipped until "
+                  "all stages commit.")
+            print("  Re-run without --end-stage (or with a larger value) "
+                  "to finalize.")
 
         tracker.print_summary()
 
@@ -1040,11 +1054,13 @@ class ExtractionOrchestrator:
             stage.state = StageState.PENDING
             phase3.save(self.project_root)
 
-        if stage.state == StageState.FIXING:
-            # Interrupted during targeted fix — the fix may be partial.
-            # Re-enter the FIXING step and let it re-run the fix agent.
-            print("  [RESUME] Interrupted during targeted fix, "
-                  "will retry fix...")
+        if stage.state == StageState.PASSED:
+            # Interrupted after lanes + gate PASS but before git commit.
+            # Extraction products still exist on disk; drop straight into the
+            # git-commit step at the bottom of this method so the state
+            # converges to COMMITTED (or FAILED if commit can't produce a SHA).
+            print("  [RESUME] Interrupted after gate PASS, "
+                  "jumping to git commit step.")
 
         if stage.state in (StageState.RETRYING, StageState.PENDING):
             # --- Step 1: Git preflight ---
@@ -1273,28 +1289,34 @@ class ExtractionOrchestrator:
             tracker.start_step()
             tracker.print_step(6, 6, "Git commit")
 
-            # Clear feedback/error fields on successful commit
+            # Attempt the git commit first. Only after a real SHA comes back
+            # do we transition to COMMITTED. If commit_stage returns None
+            # (empty diff or commit failure), treat the stage as FAILED and
+            # preserve the progress file so the next resume can retry.
+            # See requirements.md §11.4b "提交顺序契约".
+            sha = commit_stage(self.project_root, stage.stage_id)
+            tracker.record_step(ProgressTracker.STEP_COMMIT)
+
+            if not sha:
+                print("    [FAIL] Git commit returned no SHA "
+                      "(empty diff or commit failure).")
+                stage.transition(StageState.FAILED)
+                stage.error_message = (
+                    "git commit produced no object — aborting COMMITTED "
+                    "transition")
+                phase3.save(self.project_root)
+                tracker.print_step_done(6, 6, "Git commit", "no-op/failed")
+                return
+
+            # Commit succeeded — now transition state and clear feedback.
+            stage.committed_sha = sha
             stage.last_reviewer_feedback = ""
             stage.error_message = ""
             stage.fail_source = ""
-
-            # Transition and save BEFORE git commit so the committed
-            # progress file is included in the same commit.
             stage.transition(StageState.COMMITTED)
             phase3.save(self.project_root)
 
-            sha = commit_stage(self.project_root, stage.stage_id)
-            tracker.record_step(ProgressTracker.STEP_COMMIT)
-            if sha:
-                stage.committed_sha = sha
-                # Save again with the SHA (this will be uncommitted
-                # on disk but consistent on next resume)
-                phase3.save(self.project_root)
-                tracker.print_step_done(6, 6, "Git commit", sha)
-            else:
-                tracker.print_step_done(6, 6, "Git commit",
-                                        "no changes")
-
+            tracker.print_step_done(6, 6, "Git commit", sha)
             tracker.finish_stage()
 
     def _run_consistency_check(self) -> bool:

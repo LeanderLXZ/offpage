@@ -58,8 +58,8 @@ Startup loads (in order):
    (**default 10**; summaries are NOT loaded — they live in FTS5 only)
 5. Vocab dict (`works/{work_id}/indexes/vocab_dict.txt`) into jieba
 6. User role binding + long-term profile + relationship core
-7. Current context manifest + character_state + relationship_state + shared
-   memory
+7. Current context manifest + character_state (single per-context file that
+   also carries relationship_delta and context_memories)
 8. Recent session summaries
 
 On-demand: events, locations, factions, history, full transcripts, archive
@@ -239,10 +239,16 @@ multi-stage extraction via CLI calls (`claude -p` or `codex`).
   3. Parallel review lanes: world + each character independently runs
      validate → semantic review → targeted fix. Lanes run in parallel
      via ThreadPoolExecutor.
-  4. Commit gate (提交门控): programmatic cross-consistency check
-     (stage_id alignment, world-character consistency). All lanes must
-     pass; any failure → full stage rollback.
-  5. Git commit.
+  4. Commit gate (提交门控): structural + identifier-level check only
+     (snapshot existence, `stage_id` field alignment, catalog/digest
+     coverage; digest stage parsed from `memory_id` prefix — no
+     `stage_id` field per schema). Warn-only cross-entity reference
+     resolution against world cast + character aliases. Content-level
+     conflict detection is the character lane's responsibility.
+     Any lane FAIL or hard gate FAIL → full stage rollback.
+  5. Git commit — commit-ordering contract: git commit first, then
+     transition `PASSED → COMMITTED` only on non-empty SHA; empty SHA
+     reverts to `FAILED` so resume retries. Prevents fake-committed drift.
   Every stage may correct any existing baseline (not just stage 1).
   Character extraction does NOT read world snapshot — both read the same
   source chapters independently; cross-consistency verified at commit gate.
@@ -295,6 +301,11 @@ multi-stage extraction via CLI calls (`claude -p` or `codex`).
 - Phase 3 and Phase 4 use independent PID locks — can run in parallel
 - Fast empty failure backoff (30s exponential) + Phase 4 circuit breaker
   (≥8 failures / 60s → 180s pause)
+- `--end-stage` strict prefix: Phase 3.5 / squash-merge prompt / Phase 4
+  only after all stages are `COMMITTED`; a prefix run exits with a
+  "re-run without --end-stage" hint and skips all finalization steps
+- `jsonschema` is a HARD dependency of the automation package; validator
+  raises ImportError when missing (no silent gate downgrade)
 
 See `automation/README.md` and `docs/requirements.md` §9–§12 for details.
 See `docs/architecture/schema_reference.md` for schema documentation.

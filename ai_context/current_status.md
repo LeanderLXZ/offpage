@@ -67,10 +67,17 @@ implementation code yet.
   redundant `stage_id` fields, and the runtime loader filters via regex.
 - Parallel review lanes (`review_lanes.py`): world + each character gets
   an independent validate → review → fix pipeline, running in parallel.
-  Commit gate (提交门控) performs programmatic cross-consistency check
-  before stage commit. All lanes must pass; any failure → full stage rollback.
-- Two-layer quality check per lane: programmatic (jsonschema) + semantic
-  (LLM reviewer with narrowed input scope)
+  Commit gate (提交门控) is structural + identifier level only — it verifies
+  snapshot existence, stage_id field alignment, catalog/digest entry coverage,
+  and runs a warn-only cross-entity reference resolution (world snapshot
+  mentions resolve via world cast or active character aliases). Content-level
+  world-vs-character conflicts remain the character lane semantic reviewer's
+  job. Memory digest gate parses the stage segment out of `memory_id`
+  (`M-S{stage:03d}-`), not from a `stage_id` field — the schema forbids
+  that field. All lanes must pass; any failure → full stage rollback.
+- Two-layer quality check per lane: programmatic (`jsonschema` is a HARD
+  dependency — see `automation/pyproject.toml`) + semantic (LLM reviewer
+  with narrowed input scope)
 - Failure triage: reviewer findings classified as fixable (≤5 specific field
   errors) → targeted fix agent (minimal edits + re-validate); systemic
   (file missing, structural, understanding-level) → full rollback + retry
@@ -84,7 +91,13 @@ implementation code yet.
   JSON repair failure. Completion gate blocks Phase 1 if any chunk missing.
   Completed chunk files auto-skipped on resume.
 - Git integration: extraction branch, per-stage commits, auto-rollback
-  (full-repo scope), squash-merge to main on completion
+  (full-repo scope), squash-merge to main on completion. Commit ordering
+  contract: `git commit` first — only a non-empty SHA transitions the stage
+  to `COMMITTED`. Empty/failed commit → stage reverts to `FAILED` so resume
+  can retry (prevents "progress says committed, git has no object" drift).
+  `--end-stage` has strict prefix semantics: Phase 3.5, squash-merge prompt,
+  and Phase 4 only run after **all** stages are `COMMITTED`. Prefix runs
+  print a "re-run without --end-stage to finalize" hint and exit.
 - Phase 3.5 cross-stage consistency checker (`consistency_checker.py`):
   9 programmatic checks (zero tokens) after all stages commit;
   importance-based thresholds for target_map example counts
@@ -92,7 +105,8 @@ implementation code yet.
 - Resume auto-reset: blocked stages automatically reset to pending on
   `--resume`, no manual progress file editing needed
 - Progress/end-stage separation (Phase 4 pattern): progress always
-  contains full stage plan; `--end-stage` is runtime-only limit.
+  contains full stage plan; `--end-stage` is runtime-only limit with strict
+  prefix semantics (no Phase 3.5 / squash / Phase 4 until all stages commit).
   Defensive expansion at extraction loop entry for edge cases
 - Phase 4 scene archive (`scene_archive.py`): per-chapter parallel
   LLM calls for scene boundary annotation, programmatic validation,
@@ -177,7 +191,6 @@ implementation code yet.
   completion)
 - World schemas incomplete (no formal schema for foundation, timeline, events,
   locations, maps, state snapshots)
-- Character baseline files (relationships.json, bible.md) still lack schemas
 - No final roleplay prompt produced
 - Automated extraction pipeline built, iterative testing in progress
 
@@ -187,7 +200,13 @@ implementation code yet.
 - `ai_context/` is English for AI handoff
 - Real user packages stay local (not committed)
 - Full novels, databases, indexes, large artifacts not committed
-- `works/*/analysis/` and `works/*/indexes/` are git-tracked
+- Under `works/*/analysis/`, only durable analysis products are git-tracked
+  (`world_overview.json`, `stage_plan.json`, `candidate_characters.json`,
+  `consistency_report.json`). `progress/`, `chapter_summaries/`,
+  `scene_splits/`, `evidence/*` are local-only runtime artifacts per
+  `.gitignore`. `works/*/world/`, `works/*/characters/`, and
+  `works/*/indexes/` are git-tracked canon assets; `works/*/retrieval/`
+  is local-only.
 - `docs/logs/` is write-mostly; do not proactively read
 - No per-stage report files; use progress files in-place
 - Stages split by natural story boundaries (target 10 ch, min 5, max 15)
