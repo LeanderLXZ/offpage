@@ -182,7 +182,7 @@ def _timeline_to_digest(entry: dict, stage_id: str) -> dict | None:
 
     digest: dict[str, Any] = {
         "memory_id": memory_id,
-        "summary": entry.get("event_summary", ""),
+        "summary": entry.get("digest_summary", ""),
         "importance": entry.get("memory_importance", "minor"),
     }
 
@@ -247,7 +247,8 @@ def generate_world_event_digest(
     """Generate world_event_digest entries from a world stage_snapshot.
 
     Reads ``stage_events`` from the world stage_snapshot (each entry a
-    ≤80-char 1-sentence summary) and produces one digest entry per event.
+    50–80 char 1-sentence summary, hard schema gate) and produces one
+    digest entry per event (1:1 mechanical copy).
     Existing entries for other stages are preserved; entries matching the
     current stage number are replaced (upsert semantics keyed on
     ``event_id``; stage is carried by the ``S###`` segment of the ID).

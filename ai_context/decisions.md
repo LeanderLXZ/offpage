@@ -11,8 +11,7 @@ that a new AI should know beyond what the architecture docs already say.
    behavior decision → language realization.
 2. Objective fact and subjective character cognition must be separated.
    Characters may misunderstand, conceal, or distort things.
-3. Explicit canon and reasonable inference must be labeled separately.
-4. Time-stage differences must be preserved. A character must not be flattened
+3. Time-stage differences must be preserved. A character must not be flattened
    into a timeless static profile.
 
 ## Data Separation
@@ -61,10 +60,9 @@ that a new AI should know beyond what the architecture docs already say.
 13. Once active characters are confirmed, Phase 2.5 produces world foundation
     and all character baselines (identity.json, manifest.json, voice_rules.json,
     behavior_rules.json, boundaries.json, failure_modes.json) from full-book
-    context as skeleton drafts (source_type: inference). Then **1+N split
-    extraction** per stage: one world call, then N parallel character calls.
-    All stages may correct any existing baseline (upgrading inference → canon).
-    Targeted character supplement only when gaps remain.
+    context as skeleton drafts. Then **1+N split extraction** per stage: one
+    world call, then N parallel character calls. All stages may correct any
+    existing baseline. Targeted character supplement only when gaps remain.
 14. Any stage may revise any already-written asset across the whole work
     package, not only the current target.
 15. Do not generate per-stage report files. Update progress files in-place.
@@ -159,10 +157,11 @@ that a new AI should know beyond what the architecture docs already say.
     scene_archive (original text split by scene). No separate dialogue corpus.
 30. memory_timeline entries include `memory_id` (pattern `M-S###-##`),
     `time`, `location`, `scene_refs` (linking back to scene_archive),
-    `event_summary` (≤50 chars — the digest's direct source),
-    `subjective_experience` (unbounded, first-person with psychological
-    detail and causal reasoning). Entry count controlled by importance
-    filtering.
+    `event_description` (150–200 字 objective narration, hard gate),
+    `digest_summary` (30–50 字 independently written, hard gate — the
+    1:1 source of memory_digest), `subjective_experience` (unbounded,
+    first-person with psychological detail and causal reasoning). Entry
+    count controlled by importance filtering.
 31. scene_archive entries use `scene_id` (pattern `SC-S###-##`) plus
     `time`, `location`, `characters_present`, `summary`, `full_text`,
     `chapter`, `stage_id`. Work-level asset, not per-character. One
@@ -172,8 +171,9 @@ that a new AI should know beyond what the architecture docs already say.
     IDs.
 32. Startup loads: memory_timeline recent 2 stages (N + N-1) full text;
     `memory_digest.jsonl` stage 1..N (~30-40 tokens/entry:
-    `{memory_id, summary ≤50, importance, time?, location?}` — stage
-    encoded in `M-S###` prefix for loader filtering); scene_archive
+    `{memory_id, summary 30–50, importance, time?, location?}` — stage
+    encoded in `M-S###` prefix for loader filtering; summary copied 1:1
+    from memory_timeline `digest_summary`); scene_archive
     full_text for the most recent `scene_fulltext_window` scenes
     (**default 10**; configurable via `load_profiles.json`). Scene
     **summaries are NOT loaded at startup** — they live in FTS5 and
@@ -197,7 +197,7 @@ that a new AI should know beyond what the architecture docs already say.
     commit. Primarily programmatic (zero tokens) with optional LLM
     adjudication only for flagged items. Errors block Phase 4. This catches
     cross-stage drift that per-stage validation cannot detect (e.g. alias
-    mismatches, relationship discontinuity, lazy source_type annotation).
+    mismatches, relationship discontinuity, digest correspondence gaps).
 36. scene_archive is produced in Phase 4, independent from Phase 3 (only
     requires `stage_plan.json` from Phase 1 — treated as the
     authoritative stage-id source). Per-chapter LLM calls output scene
@@ -261,26 +261,32 @@ that a new AI should know beyond what the architecture docs already say.
 ## World Snapshot and Catalog
 
 40f. World `stage_snapshot` records only **current stage** events via
-    `stage_events` (**single source of truth, each entry ≤80 chars**).
-    `stage_events` is the direct source for `world_event_digest.jsonl`;
-    no cumulative history lives in the snapshot — cross-stage timeline
-    is held by `world_event_digest.jsonl`. `evidence_refs` is a chapter
-    number list (e.g. `["0001", "0002"]`).
+    `stage_events` (**single source of truth, each entry 50–80 字, hard
+    schema gate**). `stage_events` is world-public only — personal
+    thoughts, private episodes, and inner decisions belong in the
+    relevant character's `memory_timeline`, not here. It is the direct
+    source for `world_event_digest.jsonl` (1:1 mechanical copy);
+    cross-stage timeline lives in `world_event_digest.jsonl`.
+    `evidence_refs` is a chapter number list (e.g. `["0001", "0002"]`).
 
 40g. `world_event_digest.jsonl` accumulates world events across stages.
     Programmatic: `post_processing.py` reads `stage_events` from world
     stage snapshot → generates digest entries
-    `{event_id (E-S###-##), summary ≤80, importance, time?, location?,
-    involved_characters?}` (0 token, idempotent). 5-level importance
-    inferred by keyword (trivial/minor/significant/critical/defining),
-    defaulting to significant. Runtime loads stage 1..N filtered; stage
-    is parsed from `event_id` prefix. `stage_catalog.json` is demoted
-    to bootstrap stage selector only (not loaded at runtime).
+    `{event_id (E-S###-##), summary 50–80, importance, time?, location?,
+    involved_characters?}` (0 token, idempotent; summary is a 1:1 copy
+    of the source `stage_events` entry, so world-vs-character boundary
+    is enforced at write time in the extraction prompt + world review
+    lane, not here). 5-level importance inferred by keyword
+    (trivial/minor/significant/critical/defining), defaulting to
+    significant. Runtime loads stage 1..N filtered; stage is parsed
+    from `event_id` prefix. `stage_catalog.json` is demoted to
+    bootstrap stage selector only (not loaded at runtime).
 
 40h. Character `stage_snapshot.stage_events` holds **only this stage's**
-    events, not accumulated history. Each entry ≤80 chars. Cross-stage
-    history is carried by `memory_timeline` + `memory_digest.jsonl` +
-    `world_event_digest.jsonl`, not the snapshot.
+    events, not accumulated history. Each entry 50–80 字 (hard schema
+    gate). Cross-stage history is carried by `memory_timeline` +
+    `memory_digest.jsonl` + `world_event_digest.jsonl`, not the
+    snapshot.
 
 40i. ID convention: `{TYPE}-S{stage:03d}-{seq:02d}` for memory_digest
     (`M-`), world_event_digest (`E-`), scene_archive (`SC-`). 3-digit

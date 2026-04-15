@@ -26,8 +26,9 @@
     },
     "summary": {
       "type": "string",
+      "minLength": 30,
       "maxLength": 50,
-      "description": "客观层面发生了什么（简短摘要，≤ 50 字，由提取阶段保证）。直接复制 memory_timeline 的 event_summary。"
+      "description": "客观层面发生了什么（30–50 字的一句话摘要，由提取阶段保证）。直接复制 memory_timeline 的 digest_summary 字段。"
     },
     "importance": {
       "type": "string",
