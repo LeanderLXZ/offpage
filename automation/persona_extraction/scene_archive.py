@@ -171,22 +171,47 @@ class SceneArchiveProgress:
                 count += 1
         return count
 
-    def verify_passed(self, project_root: Path) -> int:
-        """Reset passed chapters whose split file is missing on disk.
+    def reconcile_with_disk(self, project_root: Path) -> dict[str, int]:
+        """Reconcile chapter states against on-disk split files.
 
-        Returns the number of chapters reset to pending.
+        Rules:
+          - state == PASSED but split file missing → revert to PENDING
+          - state == PENDING but split file present → delete (partial run)
+          - state in any intermediate state (SPLITTING, SPLIT, VALIDATING,
+            FAILED, RETRYING, ERROR) → delete any split file, revert to
+            PENDING
+
+        Returns counts: {"reverted": N, "purged": M}.
         """
         splits = self.splits_dir(project_root)
-        count = 0
+        reverted = 0
+        purged = 0
         for entry in self.chapters.values():
+            split_path = splits / f"{entry.chapter_id}.json"
+            on_disk = split_path.exists()
+
             if entry.state == ChapterState.PASSED:
-                split_path = splits / f"{entry.chapter_id}.json"
-                if not split_path.exists():
+                if not on_disk:
                     entry.state = ChapterState.PENDING
                     entry.retry_count = 0
                     entry.error_message = ""
-                    count += 1
-        return count
+                    reverted += 1
+                continue
+
+            if entry.state == ChapterState.PENDING:
+                if on_disk:
+                    split_path.unlink()
+                    purged += 1
+                continue
+
+            if on_disk:
+                split_path.unlink()
+                purged += 1
+            entry.state = ChapterState.PENDING
+            entry.retry_count = 0
+            entry.error_message = ""
+            reverted += 1
+        return {"reverted": reverted, "purged": purged}
 
     def stats(self) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -674,15 +699,16 @@ def _run_scene_archive_inner(
         if cid not in progress.chapters:
             progress.chapters[cid] = ChapterEntry(chapter_id=cid)
 
-    # On resume, reset failed chapters and verify passed splits exist
+    # Reconcile in-memory state against on-disk artifacts, every run.
+    # Drift can come from manual edits, interrupted writes, or git resets.
+    rec = progress.reconcile_with_disk(project_root)
+    if rec["reverted"] or rec["purged"]:
+        print(f"  Reconciled with disk: reverted {rec['reverted']} chapter(s) "
+              f"to pending, purged {rec['purged']} stale split file(s)")
     if resume:
         reset_count = progress.reset_failed()
         if reset_count > 0:
             print(f"  Reset {reset_count} blocked (ERROR) chapters to pending")
-        missing_count = progress.verify_passed(project_root)
-        if missing_count > 0:
-            print(f"  Reset {missing_count} passed chapters with missing "
-                  f"split files to pending")
 
     # Filter to chapters that need work
     pending = [cid for cid in chapters_to_process

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -31,6 +32,25 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _git_object_exists(project_root: Path, sha: str) -> bool:
+    """Return True if the given object SHA is present in the repo.
+
+    Used to detect committed_sha drift: a commit recorded in progress
+    may have been dropped by `git reset --hard` or rebase, in which
+    case the stage must be re-run from scratch.
+    """
+    if not sha:
+        return False
+    try:
+        result = subprocess.run(
+            ["git", "cat-file", "-e", sha],
+            cwd=project_root, capture_output=True, timeout=5,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
 
 
 def _now_iso() -> str:
@@ -225,6 +245,34 @@ class Phase0Progress:
         except (json.JSONDecodeError, OSError, KeyError) as exc:
             logger.warning("Failed to load Phase 0 progress: %s", exc)
             return None
+
+    def reconcile_with_disk(self, project_root: Path) -> dict[str, int]:
+        """Reconcile in-memory states against on-disk chunk summaries.
+
+        Rules:
+          - state == "done" but file missing       → revert to "pending"
+          - state != "done" but file exists        → delete partial file
+            (interrupted mid-write; re-extract)
+
+        Returns counts: {"reverted": N, "purged": M}.
+        """
+        summaries_dir = (project_root / "works" / self.work_id
+                         / "analysis" / "chapter_summaries")
+        reverted = 0
+        purged = 0
+        for entry in self.chunks.values():
+            idx = int(entry.chunk_id.split("_")[-1])
+            output_path = summaries_dir / f"chunk_{idx:03d}.json"
+            on_disk = output_path.exists()
+            if entry.state == "done" and not on_disk:
+                entry.state = "pending"
+                entry.retry_count = 0
+                entry.error_message = ""
+                reverted += 1
+            elif entry.state != "done" and on_disk:
+                output_path.unlink()
+                purged += 1
+        return {"reverted": reverted, "purged": purged}
 
 
 # ---------------------------------------------------------------------------
@@ -444,6 +492,91 @@ class Phase3Progress:
         except (json.JSONDecodeError, OSError, KeyError) as exc:
             logger.warning("Failed to load Phase 3 progress: %s", exc)
             return None
+
+    def reconcile_with_disk(self, project_root: Path,
+                             target_characters: list[str],
+                             ) -> dict[str, int]:
+        """Reconcile stage states against on-disk artifacts and git history.
+
+        Per-stage expected artifacts:
+          - works/{wid}/world/stage_snapshots/{stage_id}.json
+          - works/{wid}/characters/{char}/canon/stage_snapshots/{stage_id}.json
+          - works/{wid}/characters/{char}/canon/memory_timeline/{stage_id}.json
+            for each character in target_characters
+
+        Cumulative artifacts (memory_digest.jsonl, world_event_digest.jsonl,
+        *_catalog.json) cannot be checked per-stage and are left alone.
+
+        Rules:
+          - state == COMMITTED:
+              * any per-stage artifact missing OR committed_sha not in git
+                → revert to PENDING, clear committed_sha; remaining
+                  per-stage artifacts (if any) are deleted as orphans
+          - state == PENDING:
+              * any per-stage artifact present → delete (partial run)
+          - state in {EXTRACTING, EXTRACTED, POST_PROCESSING, REVIEWING,
+                      PASSED, RETRYING, FAILED, ERROR}:
+              * delete any per-stage artifacts, revert to PENDING
+
+        Returns counts: {"reverted": N, "purged_files": M, "sha_missing": K}.
+        """
+        work_dir = project_root / "works" / self.work_id
+        reverted = 0
+        purged_files = 0
+        sha_missing = 0
+
+        for stage in self.stages:
+            paths = self._stage_artifact_paths(work_dir, stage.stage_id,
+                                                target_characters)
+            existing = [p for p in paths if p.exists()]
+
+            if stage.state == StageState.COMMITTED:
+                sha_ok = _git_object_exists(project_root, stage.committed_sha)
+                if not sha_ok:
+                    sha_missing += 1
+                if len(existing) < len(paths) or not sha_ok:
+                    for p in existing:
+                        p.unlink()
+                        purged_files += 1
+                    stage.state = StageState.PENDING
+                    stage.committed_sha = ""
+                    stage.retry_count = 0
+                    stage.error_message = ""
+                    stage.fail_source = ""
+                    stage.last_reviewer_feedback = ""
+                    reverted += 1
+                continue
+
+            if stage.state == StageState.PENDING:
+                if existing:
+                    for p in existing:
+                        p.unlink()
+                        purged_files += 1
+                continue
+
+            # Intermediate states — discard any partial output, revert
+            for p in existing:
+                p.unlink()
+                purged_files += 1
+            stage.state = StageState.PENDING
+            stage.retry_count = 0
+            stage.error_message = ""
+            stage.fail_source = ""
+            stage.last_reviewer_feedback = ""
+            reverted += 1
+
+        return {"reverted": reverted, "purged_files": purged_files,
+                "sha_missing": sha_missing}
+
+    @staticmethod
+    def _stage_artifact_paths(work_dir: Path, stage_id: str,
+                               target_characters: list[str]) -> list[Path]:
+        paths = [work_dir / "world" / "stage_snapshots" / f"{stage_id}.json"]
+        for char_id in target_characters:
+            char_canon = work_dir / "characters" / char_id / "canon"
+            paths.append(char_canon / "stage_snapshots" / f"{stage_id}.json")
+            paths.append(char_canon / "memory_timeline" / f"{stage_id}.json")
+        return paths
 
 
 # ---------------------------------------------------------------------------
