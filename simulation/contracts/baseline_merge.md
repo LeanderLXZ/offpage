@@ -16,9 +16,8 @@ behavior patterns, boundaries, and failure modes. Stage-specific changes
 (voice shifts, behavior drift, emotional fluctuations) are covered by
 stage snapshots. Their role:
 
-- **Extraction anchor**: Phase 2.5 produces skeleton baselines (source_type:
-  inference) from full-book summaries. Subsequent stages refine them with
-  raw text evidence (upgrading inference to canon).
+- **Extraction anchor**: Phase 2.5 produces skeleton baselines from
+  full-book summaries. Subsequent stages refine them with raw text evidence.
 - **Cross-stage reference**: baseline represents the character's stable core
   and can be useful for understanding the arc of change.
 - **Partially loaded at runtime**: `failure_modes.json` and `boundaries.json`
@@ -42,8 +41,8 @@ stage snapshots. Their role:
 - **Phase 2.5 (baseline production)**: `identity.json`, `manifest.json`,
   `voice_rules.json`, `behavior_rules.json`, `boundaries.json`,
   `failure_modes.json` are produced from full-book chapter summaries as
-  skeleton drafts (source_type: inference). `world/foundation/foundation.json`
-  is also produced at this stage.
+  skeleton drafts. `world/foundation/foundation.json` is also produced at
+  this stage.
 - **Stage 1 (stage 1)**: review and correct all Phase 2.5 baseline drafts
   with raw text evidence. Produce stage 1 snapshot (self-contained).
 - **Stage N (stage N)**: use baseline + prior stage snapshots as reference.

@@ -247,7 +247,7 @@ L2 超时默认 600s（`repair_timeout` 参数可配置）。
 
 ## Phase 3.5：跨阶段一致性检查
 
-Phase 3 全部 stage 提交后自动运行。包含 9 项程序化检查（零 token），
+Phase 3 全部 stage 提交后自动运行。包含 8 项程序化检查（零 token），
 可选 LLM 裁定标记项。产出 `consistency_report.json`。有 error 级别问题时
 阻断 Phase 4，需人工处理后继续。target_map 样本数检查使用
 importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。

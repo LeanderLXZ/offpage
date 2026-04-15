@@ -39,18 +39,24 @@
 2. relationships 条目的 driving_events 是否同等详细
 3. evidence_refs 引用密度是否相近
 4. dialogue_examples 数量和质量是否相近
-5. memory_timeline 条目的 subjective_experience 长度和深度是否一致
-6. target_voice_map 每个 target 的 dialogue_examples 数量和质量是否充分（至少 3-5 条）
-7. target_behavior_map 每个 target 的 action_examples 数量和质量是否充分（至少 3-5 条）
-8. 如果任何维度出现明显退化（比前一批减少 50% 以上），标记为 FAIL
+5. memory_timeline 条目的 `subjective_experience` 长度和深度是否一致
+6. memory_timeline 每条的 `event_description`（150–200 字）和
+   `digest_summary`（30–50 字）是否在范围内且非空泛（贴近下限的"擦边"
+   填充应记为退化）
+7. `stage_events` 每条 50–80 字的一句话是否有敷衍填充
+8. target_voice_map 每个 target 的 dialogue_examples 数量和质量是否充分（至少 3-5 条）
+9. target_behavior_map 每个 target 的 action_examples 数量和质量是否充分（至少 3-5 条）
+10. 如果任何维度出现明显退化（比前一批减少 50% 以上），标记为 FAIL
 
 ### B. 数据边界正确性
 
-7. 世界层是否只记录了大事件？是否有小场景、个人经历误入世界层？
-8. 角色包是否有世界层的大事件直接复制？
-9. 角色的 knowledge_scope 是否合理？是否泄漏了角色不该知道的信息？
-10. 用户状态是否污染了 canonical 数据？
-11. 是否有 inference 被标为 canon？
+11. 世界 `stage_events` 是否只记录**世界公共层事件**？是否有个人私事、
+    内心决定误入？若有，列为 error 并指明应迁至哪个角色的 memory_timeline
+12. 角色包是否有世界层的大事件直接复制？
+13. 角色的 knowledge_scope 是否合理？是否泄漏了角色不该知道的信息？
+14. 用户状态是否污染了 canonical 数据？
+15. `digest_summary` 是否是从 `event_description` 机械截断而非独立撰写
+    （应当聚焦可检索关键词，而不是前 50 字截断）
 
 ### C. 信息充分性（stage_snapshot 完整度）
 

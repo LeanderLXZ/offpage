@@ -86,9 +86,10 @@ works/{work_id}/
 - `world_event_digest.jsonl` — 世界事件压缩摘要时间线（程序化维护）
 - `stage_snapshots/` — 每个阶段的世界状态快照，内容涵盖：
   - 对基础设定的修正与补充
-  - 仅本阶段发生的事件 `stage_events`（每条 ≤80 字符，作为
-    `world_event_digest.jsonl` 的直接来源；跨阶段时间线由 digest 聚合，
-    不在快照里累积）
+  - 仅本阶段发生的事件 `stage_events`（每条 50–80 字，schema 硬门控；
+    仅收录世界公共层事件，角色私事/内心决定应写入该角色 memory_timeline。
+    作为 `world_event_digest.jsonl` 的直接来源，1:1 复制；跨阶段时间线由
+    digest 聚合，不在快照里累积）
   - 当前世界状态
   - 人物关系转变
   - 人物状态变化（生死、恋爱、等级等随时间变化的状态）
@@ -152,8 +153,8 @@ works/{work_id}/
 - `stage_catalog.json` — 角色阶段目录，每个阶段包含一句话总结
   （`summary`）供用户选择（仅 bootstrap 阶段选择，运行时不加载）
 - `stage_snapshots/` — 角色在每个阶段的投影快照，内容涵盖：
-  - 仅本阶段发生的事件 `stage_events`（每条 ≤80 字符，非累积历史；
-    跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
+  - 仅本阶段发生的事件 `stage_events`（每条 50–80 字，schema 硬门控；
+    非累积历史；跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
     `world_event_digest.jsonl` 共同承载）
   - 当前状态（生死、恋爱、等级等随时间变化的状态）
   - 当前性格与性格转变

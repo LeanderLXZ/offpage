@@ -146,9 +146,8 @@ revision tracking, roleplay-focused. Seven-step workflow:
 
 Coordinated mode: read once per stage, produce world + character simultaneously.
 Self-contained snapshots: stage 1 ≈ baseline + stage fields; stage N = complete
-state (unchanged fields included); baseline = extraction anchor only. Source
-labeling: canon / inference / ambiguous with explanation. See
-`docs/requirements.md` §9 for full details.
+state (unchanged fields included); baseline = extraction anchor only.
+See `docs/requirements.md` §9 for full details.
 
 ## §10 Output Quality Protection
 
@@ -204,9 +203,12 @@ See `docs/requirements.md` §11.
 ## §12 Memory System and Retrieval
 
 Three-layer memory: stage_snapshot (aggregated state, current stage only;
-`stage_events` holds **only this stage's** events, each ≤80 chars) →
-memory_timeline (first-person subjective process per event; `memory_id`
-pattern `M-S###-##`, `time`, `location`, `event_summary` ≤50 chars,
+`stage_events` holds **only this stage's** events, each 50–80 字, hard
+gate; world stage_events are world-public only — personal/internal items
+belong in character memory_timeline) → memory_timeline (first-person
+subjective process per event; `memory_id` pattern `M-S###-##`, `time`,
+`location`, `event_description` 150–200 字 (hard gate),
+`digest_summary` 30–50 字 (hard gate, 1:1 source of memory_digest),
 `subjective_experience` unbounded, `scene_refs`) → scene_archive
 (original text split by scene; `scene_id` pattern `SC-S###-##`, `time`,
 `location`, `characters_present`; work-level, not per-character).
@@ -223,10 +225,12 @@ can naturally recall related memories without being asked.
 
 Startup: memory_timeline recent 2 stages (N + N-1) full;
 `memory_digest.jsonl` stage 1..N (each entry ~30-40 tokens:
-`{memory_id, summary ≤50, importance, time?, location?}` — stage encoded
-in the ID prefix for loader filtering); `world_event_digest.jsonl` stage
-1..N (`{event_id, summary ≤80, importance, involved_characters?,
-time?, location?}`); scene_archive full_text for the most recent
+`{memory_id, summary 30–50, importance, time?, location?}` — stage
+encoded in the ID prefix; summary copied 1:1 from memory_timeline
+`digest_summary`); `world_event_digest.jsonl` stage 1..N
+(`{event_id, summary 50–80, importance, involved_characters?,
+time?, location?}`; summary copied 1:1 from world snapshot
+`stage_events`); scene_archive full_text for the most recent
 `scene_fulltext_window` scenes (**default 10**, configurable via
 `works/{work_id}/indexes/load_profiles.json`). Scene summaries are
 **not** in Tier 0 — they live in FTS5 and surface on demand. Identity
