@@ -130,18 +130,22 @@
     "knowledge_scope": {
       "type": "object",
       "additionalProperties": false,
+      "description": "角色当前阶段的认知边界。条目数上限：knows ≤ 50、does_not_know ≤ 30、uncertain ≤ 30；每条字符串 ≤ 50 字。超限时按关联度裁剪：优先保留影响当前决策或关联 core_wounds/active_obsessions/活跃 relationships 的条目；常识、无触发点的早期细节、已由 memory_timeline 承载的条目可丢弃。",
       "properties": {
         "knows": {
           "type": "array",
-          "items": { "type": "string" }
+          "maxItems": 50,
+          "items": { "type": "string", "maxLength": 50 }
         },
         "does_not_know": {
           "type": "array",
-          "items": { "type": "string" }
+          "maxItems": 30,
+          "items": { "type": "string", "maxLength": 50 }
         },
         "uncertain": {
           "type": "array",
-          "items": { "type": "string" }
+          "maxItems": 30,
+          "items": { "type": "string", "maxLength": 50 }
         }
       }
     },
