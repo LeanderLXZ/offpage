@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "context_id": "{context_id}",
+  "user_id": "{user_id}",
+  "work_id": "{work_id}",
+  "character_id": "{character_id}",
+  "active_session_id": "",
+  "sessions": [],
+  "updated_at": ""
+}
