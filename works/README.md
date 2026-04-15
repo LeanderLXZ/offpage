@@ -43,9 +43,7 @@ works/{work_id}/
       manifest.json
       canon/
         identity.json
-        bible.md
         memory_timeline/{stage_id}.json
-        relationships.json
         voice_rules.json
         behavior_rules.json
         boundaries.json
@@ -88,7 +86,9 @@ works/{work_id}/
 - `world_event_digest.jsonl` — 世界事件压缩摘要时间线（程序化维护）
 - `stage_snapshots/` — 每个阶段的世界状态快照，内容涵盖：
   - 对基础设定的修正与补充
-  - 累积历史事件
+  - 仅本阶段发生的事件 `stage_events`（每条 ≤80 字符，作为
+    `world_event_digest.jsonl` 的直接来源；跨阶段时间线由 digest 聚合，
+    不在快照里累积）
   - 当前世界状态
   - 人物关系转变
   - 人物状态变化（生死、恋爱、等级等随时间变化的状态）
@@ -112,9 +112,9 @@ works/{work_id}/
 详细角色包，每个角色一个子目录，包含：
 
 - `identity.json` — 基础身份信息（不随阶段变化的底层属性：姓名、别名、
-  性别、种族、出身、外貌、初始社会地位）。schema:
+  性别、种族、出身、外貌、初始社会地位）；此外还承载 `core_wounds`
+  （根源性心理创伤）与 `key_relationships`（跨作品关系弧）。schema:
   `schemas/identity.schema.json`
-- `bible.md` — 角色圣经（完整人设文档，Markdown 格式）
 - `memory_timeline/{stage_id}.json` — 角色视角的记忆时间线，按阶段拆分（JSON
   数组，每个元素为一条记忆）。加载阶段 N 时只需读取阶段 1..N 的文件。内容涵盖：
   - 客观事件与角色的主观体验（可能与事实不同）
@@ -124,7 +124,6 @@ works/{work_id}/
   - 该事件对角色关系的影响
   - 记忆重要程度（trivial → defining）
   - schema: `schemas/memory_timeline_entry.schema.json`
-- `relationships.json` — 角色视角的关系地图
 - `voice_rules.json` — 语言风格规则（基线），内容涵盖：
   - 基础语气、语言习惯、用词偏好、标志性口头禅
   - 代表性台词示例（含出处和语境）
@@ -153,7 +152,9 @@ works/{work_id}/
 - `stage_catalog.json` — 角色阶段目录，每个阶段包含一句话总结
   （`summary`）供用户选择（仅 bootstrap 阶段选择，运行时不加载）
 - `stage_snapshots/` — 角色在每个阶段的投影快照，内容涵盖：
-  - 从上个阶段至今经历的事件
+  - 仅本阶段发生的事件 `stage_events`（每条 ≤80 字符，非累积历史；
+    跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
+    `world_event_digest.jsonl` 共同承载）
   - 当前状态（生死、恋爱、等级等随时间变化的状态）
   - 当前性格与性格转变
   - 当前心情与情感基线（驱动力、欲望、恐惧、心理创伤）

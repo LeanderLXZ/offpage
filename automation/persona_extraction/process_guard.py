@@ -94,11 +94,13 @@ class PidLock:
             return False
 
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        # lock_path: works/{work_id}/analysis/{lock_name}
+        # parent = analysis/ ; parent.parent = works/{work_id}/ (whose .name is work_id)
         self.lock_path.write_text(
             json.dumps({
                 "pid": os.getpid(),
                 "started": datetime.now().isoformat(timespec="seconds"),
-                "work_id": self.lock_path.parent.parent.parent.name,
+                "work_id": self.lock_path.parent.parent.name,
             }, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
