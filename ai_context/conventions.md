@@ -46,7 +46,13 @@ After changes, grep for the old phrasing to catch stale references.
   runtime.
 - Length rules are hard schema gates: world + character `stage_events`
   50–80 字 per entry; memory_timeline `event_description` 150–200 字,
-  `digest_summary` 30–50 字.
+  `digest_summary` 30–50 字; `knowledge_scope` items ≤ 50 字 each.
+- Count caps (hard schema gates): `knowledge_scope.knows` ≤ 50,
+  `does_not_know` ≤ 30, `uncertain` ≤ 30. Over-limit → trim by dropping
+  items least relevant to current-stage decisions / core_wounds /
+  active_obsessions / active relationships; prefer dropping daily
+  commonsense, early details without triggers, items already in
+  `memory_timeline`.
 
 ## Git
 
