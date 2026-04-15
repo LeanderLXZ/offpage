@@ -437,6 +437,12 @@ class ExtractionOrchestrator:
                 chunk_size=self.chunk_size,
                 total_chunks=total_chunks,
             )
+        else:
+            rec = phase0.reconcile_with_disk(self.project_root)
+            if rec["reverted"] or rec["purged"]:
+                print(f"  Reconciled with disk: reverted {rec['reverted']} "
+                      f"chunk(s) to pending, purged {rec['purged']} stale "
+                      f"summary file(s)")
         # Ensure all chunks are tracked
         for idx, start, end in chunks:
             chunk_id = f"chunk_{idx:03d}"
@@ -1460,6 +1466,42 @@ class ExtractionOrchestrator:
                 self.project_root, self.work_id)
             phase3 = Phase3Progress.load(
                 self.project_root, self.work_id)
+
+        # Self-heal: if Phase 2 is done and stage_plan exists but
+        # phase3_stages.json was deleted/corrupted, rebuild from stage_plan
+        # rather than falling through to the fresh-start path (which would
+        # re-prompt for characters and overwrite pipeline.json).
+        if (pipeline and pipeline.is_done("phase_2") and phase3 is None):
+            stage_plan_path = (self.project_root / "works" / self.work_id
+                               / "analysis" / "stage_plan.json")
+            if stage_plan_path.exists():
+                stage_plan_data = _load_json(stage_plan_path) or {}
+                phase3 = Phase3Progress(
+                    work_id=self.work_id,
+                    stage_size=stage_plan_data.get(
+                        "default_stage_size", 10),
+                    stages=[
+                        StageEntry(
+                            stage_id=b["stage_id"],
+                            chapters=b["chapters"],
+                            chapter_count=b.get("chapter_count", 10),
+                        )
+                        for b in stage_plan_data.get("stages", [])
+                    ],
+                )
+                phase3.save(self.project_root)
+                print(f"[REBUILT] phase3_stages.json from stage_plan.json "
+                      f"({len(phase3.stages)} stages, all pending).")
+
+        if phase3 is not None:
+            rec = phase3.reconcile_with_disk(
+                self.project_root, pipeline.target_characters)
+            if rec["reverted"] or rec["purged_files"]:
+                print(f"[RECONCILE] Phase 3: reverted {rec['reverted']} "
+                      f"stage(s), purged {rec['purged_files']} stale "
+                      f"artifact(s), {rec['sha_missing']} committed_sha "
+                      f"missing from git")
+                phase3.save(self.project_root)
 
         if pipeline and phase3 and pipeline.is_done("phase_2"):
             print(f"Found existing progress for {self.work_id}.")
