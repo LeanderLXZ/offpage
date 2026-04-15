@@ -1,5 +1,18 @@
 {
   "schema_version": "1.0",
   "work_id": "<work_id>",
-  "stages": []
+  "stages": [
+    {
+      "stage_id": "阶段01_<stage_title>初遇",
+      "order": 0,
+      "title": "<stage_title>初遇",
+      "summary": "天苍大陆进入大帝缺位时代，距上一次大帝级大战已逾万年，三位大帝仅余一位隐世老者。极冰<character>因前代大战致身心重创选择破境重修，降生时虚空错乱偏移至南域<stage_title>，修为降为凡人。<stage_title>柳村受柳绫分魂守护，但狩猎队失踪导致村民陷入粮荒。",
+      "snapshot_path": "stage_snapshots/阶段01_<stage_title>初遇.json",
+      "timeline_anchor": "第九世开始，距第八世大帝级大战逾万年后",
+      "chapter_scope": {
+        "from": "0001",
+        "to": "0010"
+      }
+    }
+  ]
 }
