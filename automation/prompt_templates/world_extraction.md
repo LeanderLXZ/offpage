@@ -4,12 +4,12 @@
 
 ## 任务卡
 
-- **当前目标**: 对 `{work_id}` 执行 {batch_id} 的 **世界层提取**（仅世界信息，不含角色）
-- **batch_id**: `{batch_id}`
+- **当前目标**: 对 `{work_id}` 执行 {stage_id} 的 **世界层提取**（仅世界信息，不含角色）
+- **stage_id**: `{stage_id}`
 - **stage_id**: `{stage_id}`
 - **章节范围**: `{chapter_range}`
 - **目标角色（参考）**: {target_characters}
-- **首批？**: {is_first_batch}
+- **首阶段？**: {is_first_stage}
 - **源目录**: `{source_dir}`
 - **作品目录**: `{work_dir}`
 
@@ -27,11 +27,11 @@
 4. **证据引用**：`evidence_refs` 字段为本阶段涉及的章节号列表（如 `["0001", "0002"]`）。正文字段（stage_events、current_world_state 等）**不需要**逐条标注 `[NNNN]`
 5. **中文标识**：中文作品的 work_id, stage_id, 路径段都使用中文
 6. **时间性**：当前阶段写清"现在"，不要混成扁平总结
-7. **仅本阶段事件**：`stage_events` 只记录本 batch 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 ≤ 80 字的 1 句话摘要**，既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）
+7. **仅本阶段事件**：`stage_events` 只记录本 stage 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 ≤ 80 字的 1 句话摘要**，既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）
 
 ## 世界层输出
 
-本批应产出或更新：
+本阶段应产出或更新：
 
 - `world/stage_snapshots/{stage_id}.json` — 当前阶段世界快照（遵循 world_stage_snapshot.schema.json）
 - `world/foundation/` — 如有基础设定修正
@@ -42,7 +42,7 @@
 
 前一阶段世界快照参照：`{prev_world_snapshot}`
 
-如果存在前一阶段的输出，请先读取它，并确保本批产出在以下维度与之保持一致：
+如果存在前一阶段的输出，请先读取它，并确保本阶段产出在以下维度与之保持一致：
 
 - `stage_events` 条目的粒度（≤ 80 字的 1 句话摘要）
 - `current_world_state` 的描述风格
@@ -53,10 +53,10 @@
 
 ### 写前自检（每次写文件前必做）
 
-1. **Schema 确认**：你是否在本 batch 内重读过要写入文件对应的 schema？
+1. **Schema 确认**：你是否在本 stage 内重读过要写入文件对应的 schema？
    如果没有，**现在重读**。不要凭记忆填字段——schema 是权威。
-2. **前批对照**：本 batch 的输出在字段详细度、术语、`stage_events`
-   粒度、source_type 分布上是否与前一 batch 一致？
+2. **前阶段对照**：本 stage 的输出在字段详细度、术语、`stage_events`
+   粒度、source_type 分布上是否与前一 stage 一致？
 
 ### 边界禁令
 
@@ -64,7 +64,7 @@
 - 不要把个人经济活动写入世界层（如个人消费记录）
 - 不要把角色内部心理事件写入世界层
 
-## 本批输出清单
+## 本阶段输出清单
 
 完成后，请确认已产出以下内容：
 

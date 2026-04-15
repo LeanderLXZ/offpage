@@ -69,7 +69,7 @@ def git_status(project_root: Path) -> GitStatus:
 def preflight_check(project_root: Path,
                     expected_branch: str | None = None,
                     ignore_patterns: list[str] | None = None) -> list[str]:
-    """Run preflight checks before a batch. Returns list of problems.
+    """Run preflight checks before a stage. Returns list of problems.
 
     ``ignore_patterns`` — file path substrings to tolerate in dirty status
     (e.g. ``["extraction_progress.json", "__pycache__"]``).
@@ -136,27 +136,32 @@ def create_extraction_branch(project_root: Path,
     return True
 
 
-def commit_batch(project_root: Path, batch_id: str, stage_id: str,
+def commit_stage(project_root: Path, stage_id: str,
+                 *, message: str | None = None,
                  files: list[str] | None = None) -> str | None:
-    """Commit current changes for a batch. Returns commit SHA or None."""
+    """Commit current changes for a stage. Returns commit SHA or None.
+
+    ``stage_id`` is the human-readable stage identifier (e.g.
+    ``阶段01_南林初遇`` or ``baseline`` for pre-Phase-3 commits). When
+    ``message`` is omitted, a default template is used for extraction
+    commits.
+    """
     if files:
         for f in files:
             _git(["add", f], project_root)
     else:
-        # Stage all changes under works/ and analysis/
         _git(["add", "works/"], project_root)
 
-    # Also stage progress file
     _git(["add", "-A", "works/"], project_root)
 
-    # Check if there's anything to commit
     status = _git(["status", "--porcelain"], project_root)
     if not status.stdout.strip():
-        logger.warning("Nothing to commit for batch %s", batch_id)
+        logger.warning("Nothing to commit for stage %s", stage_id)
         return None
 
-    message = (f"{batch_id}: 分层提取完成 ({stage_id})\n\n"
-               f"Automated extraction via persona-extraction orchestrator.")
+    if message is None:
+        message = (f"{stage_id}: 分层提取完成\n\n"
+                   f"Automated extraction via persona-extraction orchestrator.")
 
     result = _git(["commit", "-m", message], project_root)
     if result.returncode != 0:
@@ -165,7 +170,7 @@ def commit_batch(project_root: Path, batch_id: str, stage_id: str,
 
     sha_proc = _git(["rev-parse", "--short", "HEAD"], project_root)
     sha = sha_proc.stdout.strip()
-    logger.info("Committed %s as %s", batch_id, sha)
+    logger.info("Committed %s as %s", stage_id, sha)
     return sha
 
 

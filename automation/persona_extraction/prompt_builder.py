@@ -1,4 +1,4 @@
-"""Prompt builder — assembles context-aware prompts for each batch.
+"""Prompt builder — assembles context-aware prompts for each stage.
 
 Instead of letting the agent explore and discover files on its own,
 the orchestrator pre-computes exactly what the agent needs and injects
@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .progress import BatchEntry, PipelineProgress
+from .progress import StageEntry, PipelineProgress
 
 logger = logging.getLogger(__name__)
 
@@ -94,11 +94,11 @@ def build_analysis_prompt(
     *,
     correction_feedback: str = "",
 ) -> str:
-    """Build prompt for the analysis phase (from summaries → batch plan + candidates).
+    """Build prompt for the analysis phase (from summaries → stage plan + candidates).
 
     Args:
         correction_feedback: If non-empty, appended to the prompt to guide
-            the LLM to fix specific issues (e.g. oversized batches).
+            the LLM to fix specific issues (e.g. oversized stages).
     """
     template = _load_template("analysis.md")
 
@@ -166,7 +166,7 @@ def build_baseline_prompt(
 
     # Analysis outputs
     for name in ("world_overview.json", "candidate_characters.json",
-                 "source_batch_plan.json"):
+                 "stage_plan.json"):
         p = work_dir / "analysis" / name
         if p.exists():
             files.append(f"- `{p}`")
@@ -200,9 +200,9 @@ def build_baseline_prompt(
 def build_extraction_prompt(
     project_root: Path,
     progress: PipelineProgress,
-    batch: BatchEntry,
+    stage: StageEntry,
     *,
-    batches: list[BatchEntry] | None = None,
+    stages: list[StageEntry] | None = None,
     reviewer_feedback: str = "",
 ) -> str:
     """Build prompt for coordinated world + character extraction.
@@ -217,32 +217,31 @@ def build_extraction_prompt(
     work_dir = project_root / "works" / work_id
     source_dir = project_root / "sources" / "works" / work_id
 
-    # Determine previous batch output for style reference
-    prev_batch = _find_previous_committed_batch(batches or [], batch)
+    # Determine previous stage output for style reference
+    prev_stage = _find_previous_committed_stage(stages or [], stage)
     prev_world_snapshot = ""
     prev_char_snapshots: dict[str, str] = {}
-    if prev_batch:
+    if prev_stage:
         ws_path = (work_dir / "world" / "stage_snapshots"
-                   / f"{prev_batch.stage_id}.json")
+                   / f"{prev_stage.stage_id}.json")
         if ws_path.exists():
             prev_world_snapshot = str(ws_path)
         for char_id in progress.target_characters:
             cs_path = (work_dir / "characters" / char_id / "canon"
-                       / "stage_snapshots" / f"{prev_batch.stage_id}.json")
+                       / "stage_snapshots" / f"{prev_stage.stage_id}.json")
             if cs_path.exists():
                 prev_char_snapshots[char_id] = str(cs_path)
 
     # Build file read list for the agent
     files_to_read = _build_read_list(
         project_root, work_id, progress.target_characters,
-        batch, prev_batch)
+        stage, prev_stage)
 
     context = {
         "work_id": work_id,
-        "batch_id": batch.batch_id,
-        "stage_id": batch.stage_id,
-        "chapters": batch.chapters,
-        "chapter_range": batch.chapters,
+        "stage_id": stage.stage_id,
+        "chapters": stage.chapters,
+        "chapter_range": stage.chapters,
         "target_characters": ", ".join(progress.target_characters),
         "target_characters_list": json.dumps(
             progress.target_characters, ensure_ascii=False),
@@ -253,7 +252,7 @@ def build_extraction_prompt(
         "prev_char_snapshots_json": json.dumps(
             prev_char_snapshots, ensure_ascii=False),
         "files_to_read": "\n".join(f"- {f}" for f in files_to_read),
-        "is_first_batch": batch.batch_id == "batch_001",
+        "is_first_stage": bool(stages) and stage.stage_id == stages[0].stage_id,
         "reviewer_feedback": reviewer_feedback,
         "retry_note": (
             f"\n\n## 重试注意\n\n"
@@ -273,9 +272,9 @@ def build_extraction_prompt(
 def build_world_extraction_prompt(
     project_root: Path,
     progress: PipelineProgress,
-    batch: BatchEntry,
+    stage: StageEntry,
     *,
-    batches: list[BatchEntry] | None = None,
+    stages: list[StageEntry] | None = None,
     reviewer_feedback: str = "",
 ) -> str:
     """Build prompt for world extraction (parallel with characters in 1+N)."""
@@ -285,30 +284,29 @@ def build_world_extraction_prompt(
     work_dir = project_root / "works" / work_id
     source_dir = project_root / "sources" / "works" / work_id
 
-    prev_batch = _find_previous_committed_batch(batches or [], batch)
+    prev_stage = _find_previous_committed_stage(stages or [], stage)
     prev_world_snapshot = ""
-    if prev_batch:
+    if prev_stage:
         ws_path = (work_dir / "world" / "stage_snapshots"
-                   / f"{prev_batch.stage_id}.json")
+                   / f"{prev_stage.stage_id}.json")
         if ws_path.exists():
             prev_world_snapshot = str(ws_path)
 
     files_to_read = _build_world_read_list(
-        project_root, work_id, batch, prev_batch)
+        project_root, work_id, stage, prev_stage)
 
     context = {
         "work_id": work_id,
-        "batch_id": batch.batch_id,
-        "stage_id": batch.stage_id,
-        "chapters": batch.chapters,
-        "chapter_range": batch.chapters,
+        "stage_id": stage.stage_id,
+        "chapters": stage.chapters,
+        "chapter_range": stage.chapters,
         "target_characters": ", ".join(progress.target_characters),
         "source_dir": str(source_dir),
         "work_dir": str(work_dir),
         "schemas_dir": str(project_root / "schemas"),
         "prev_world_snapshot": prev_world_snapshot,
         "files_to_read": "\n".join(f"- {f}" for f in files_to_read),
-        "is_first_batch": batch.batch_id == "batch_001",
+        "is_first_stage": bool(stages) and stage.stage_id == stages[0].stage_id,
         "reviewer_feedback": reviewer_feedback,
         "retry_note": (
             f"\n\n## 重试注意\n\n"
@@ -324,10 +322,10 @@ def build_world_extraction_prompt(
 def build_character_extraction_prompt(
     project_root: Path,
     progress: PipelineProgress,
-    batch: BatchEntry,
+    stage: StageEntry,
     character_id: str,
     *,
-    batches: list[BatchEntry] | None = None,
+    stages: list[StageEntry] | None = None,
     reviewer_feedback: str = "",
 ) -> str:
     """Build prompt for single-character extraction (parallel with world)."""
@@ -338,16 +336,16 @@ def build_character_extraction_prompt(
     source_dir = project_root / "sources" / "works" / work_id
     char_dir = work_dir / "characters" / character_id / "canon"
 
-    prev_batch = _find_previous_committed_batch(batches or [], batch)
+    prev_stage = _find_previous_committed_stage(stages or [], stage)
     prev_char_snapshot = ""
-    if prev_batch:
+    if prev_stage:
         cs_path = (char_dir / "stage_snapshots"
-                   / f"{prev_batch.stage_id}.json")
+                   / f"{prev_stage.stage_id}.json")
         if cs_path.exists():
             prev_char_snapshot = str(cs_path)
 
     files_to_read = _build_character_read_list(
-        project_root, work_id, character_id, batch, prev_batch)
+        project_root, work_id, character_id, stage, prev_stage)
 
     # Build importance-based quality requirements table
     quality_requirements = _build_quality_requirements(
@@ -355,17 +353,16 @@ def build_character_extraction_prompt(
 
     context = {
         "work_id": work_id,
-        "batch_id": batch.batch_id,
-        "stage_id": batch.stage_id,
-        "chapters": batch.chapters,
-        "chapter_range": batch.chapters,
+        "stage_id": stage.stage_id,
+        "chapters": stage.chapters,
+        "chapter_range": stage.chapters,
         "character_id": character_id,
         "source_dir": str(source_dir),
         "work_dir": str(work_dir),
         "schemas_dir": str(project_root / "schemas"),
         "prev_char_snapshot": prev_char_snapshot,
         "files_to_read": "\n".join(f"- {f}" for f in files_to_read),
-        "is_first_batch": batch.batch_id == "batch_001",
+        "is_first_stage": bool(stages) and stage.stage_id == stages[0].stage_id,
         "quality_requirements": quality_requirements,
         "reviewer_feedback": reviewer_feedback,
         "retry_note": (
@@ -386,35 +383,35 @@ def build_character_extraction_prompt(
 def build_reviewer_prompt(
     project_root: Path,
     progress: PipelineProgress,
-    batch: BatchEntry,
+    stage: StageEntry,
     programmatic_report: str,
     *,
-    batches: list[BatchEntry] | None = None,
+    stages: list[StageEntry] | None = None,
     lane_type: str = "all",
     lane_character_id: str | None = None,
 ) -> str:
     """Build prompt for semantic review.
 
     Args:
-        lane_type: "world", "character", or "all" (full-batch fallback).
+        lane_type: "world", "character", or "all" (full-stage fallback).
         lane_character_id: Required when lane_type is "character".
     """
     work_id = progress.work_id
     work_dir = project_root / "works" / work_id
 
-    prev_batch = _find_previous_committed_batch(batches or [], batch)
+    prev_stage = _find_previous_committed_stage(stages or [], stage)
 
     # --- Build explicit file list for the lane ---
     review_files: list[str] = []
 
     if lane_type in ("world", "all"):
         review_files.append(
-            f"- `{work_dir / 'world' / 'stage_snapshots' / (batch.stage_id + '.json')}`")
-        if prev_batch:
+            f"- `{work_dir / 'world' / 'stage_snapshots' / (stage.stage_id + '.json')}`")
+        if prev_stage:
             prev_ws = (work_dir / "world" / "stage_snapshots"
-                       / f"{prev_batch.stage_id}.json")
+                       / f"{prev_stage.stage_id}.json")
             if prev_ws.exists():
-                review_files.append(f"- `{prev_ws}` (前批对比)")
+                review_files.append(f"- `{prev_ws}` (前阶段对比)")
 
     char_ids = ([lane_character_id] if lane_type == "character"
                 and lane_character_id
@@ -423,19 +420,19 @@ def build_reviewer_prompt(
     for char_id in char_ids:
         char_dir = work_dir / "characters" / char_id / "canon"
         review_files.append(
-            f"- `{char_dir / 'stage_snapshots' / (batch.stage_id + '.json')}`")
+            f"- `{char_dir / 'stage_snapshots' / (stage.stage_id + '.json')}`")
         review_files.append(
-            f"- `{char_dir / 'memory_timeline' / (batch.stage_id + '.json')}`")
-        if prev_batch:
+            f"- `{char_dir / 'memory_timeline' / (stage.stage_id + '.json')}`")
+        if prev_stage:
             prev_cs = (char_dir / "stage_snapshots"
-                       / f"{prev_batch.stage_id}.json")
+                       / f"{prev_stage.stage_id}.json")
             if prev_cs.exists():
-                review_files.append(f"- `{prev_cs}` (前批对比)")
+                review_files.append(f"- `{prev_cs}` (前阶段对比)")
 
     # Character lanes also read the world snapshot for cross-consistency
     if lane_type == "character":
         ws_path = (work_dir / "world" / "stage_snapshots"
-                   / f"{batch.stage_id}.json")
+                   / f"{stage.stage_id}.json")
         if ws_path.exists():
             review_files.append(
                 f"- `{ws_path}` (世界快照，交叉一致性参照)")
@@ -460,12 +457,11 @@ def build_reviewer_prompt(
 
     context = {
         "work_id": work_id,
-        "batch_id": batch.batch_id,
-        "stage_id": batch.stage_id,
-        "chapters": batch.chapters,
+        "stage_id": stage.stage_id,
+        "chapters": stage.chapters,
         "target_characters": ", ".join(progress.target_characters),
         "character_id": lane_character_id or "",
-        "prev_stage_id": prev_batch.stage_id if prev_batch else "(无)",
+        "prev_stage_id": prev_stage.stage_id if prev_stage else "(无)",
         "programmatic_report": programmatic_report,
         "review_files": "\n".join(review_files) if review_files else "(无)",
     }
@@ -480,17 +476,17 @@ def build_reviewer_prompt(
 def build_targeted_fix_prompt(
     project_root: Path,
     progress: PipelineProgress,
-    batch: BatchEntry,
+    stage: StageEntry,
     findings: str,
     *,
-    batches: list[BatchEntry] | None = None,
+    stages: list[StageEntry] | None = None,
     lane_type: str = "all",
     lane_character_id: str | None = None,
 ) -> str:
     """Build prompt for targeted fix of specific reviewer findings.
 
     Args:
-        lane_type: "world", "character", or "all" (full-batch fallback).
+        lane_type: "world", "character", or "all" (full-stage fallback).
         lane_character_id: Required when lane_type is "character".
     """
     template = _load_template("targeted_fix.md")
@@ -502,7 +498,7 @@ def build_targeted_fix_prompt(
     # Collect affected output files — scoped to the lane
     affected: list[str] = []
     if lane_type in ("world", "all"):
-        ws = work_dir / "world" / "stage_snapshots" / f"{batch.stage_id}.json"
+        ws = work_dir / "world" / "stage_snapshots" / f"{stage.stage_id}.json"
         if ws.exists():
             affected.append(f"- `{ws.relative_to(project_root)}`")
 
@@ -512,22 +508,22 @@ def build_targeted_fix_prompt(
                 else [])
     for char_id in char_ids:
         char_dir = work_dir / "characters" / char_id / "canon"
-        cs = char_dir / "stage_snapshots" / f"{batch.stage_id}.json"
+        cs = char_dir / "stage_snapshots" / f"{stage.stage_id}.json"
         if cs.exists():
             affected.append(f"- `{cs.relative_to(project_root)}`")
-        mt = char_dir / "memory_timeline" / f"{batch.stage_id}.json"
+        mt = char_dir / "memory_timeline" / f"{stage.stage_id}.json"
         if mt.exists():
             affected.append(f"- `{mt.relative_to(project_root)}`")
 
-    # Evidence: source chapters for this batch
+    # Evidence: source chapters for this stage
     evidence: list[str] = []
-    start, end = _parse_chapter_range(batch.chapters)
+    start, end = _parse_chapter_range(stage.chapters)
     for ch in range(start, end + 1):
         ch_file = source_dir / "chapters" / f"{ch:04d}.txt"
         if ch_file.exists():
             evidence.append(f"- `{ch_file.relative_to(project_root)}`")
 
-    # Only include chapter summary chunks covering this batch's range
+    # Only include chapter summary chunks covering this stage's range
     summaries_dir = work_dir / "analysis" / "chapter_summaries"
     if summaries_dir.exists():
         for p in sorted(summaries_dir.glob("chunk_*.json")):
@@ -536,9 +532,8 @@ def build_targeted_fix_prompt(
 
     context = {
         "work_id": work_id,
-        "batch_id": batch.batch_id,
-        "stage_id": batch.stage_id,
-        "chapters": batch.chapters,
+        "stage_id": stage.stage_id,
+        "chapters": stage.chapters,
         "findings": findings,
         "affected_files": "\n".join(affected) if affected else "(无)",
         "evidence_files": "\n".join(evidence) if evidence else "(无)",
@@ -551,12 +546,12 @@ def build_targeted_fix_prompt(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _find_previous_committed_batch(
-    batches: list[BatchEntry], current: BatchEntry
-) -> BatchEntry | None:
-    """Find the most recent committed batch before the current one."""
-    for b in reversed(batches):
-        if b.batch_id == current.batch_id:
+def _find_previous_committed_stage(
+    stages: list[StageEntry], current: StageEntry
+) -> StageEntry | None:
+    """Find the most recent committed stage before the current one."""
+    for b in reversed(stages):
+        if b.stage_id == current.stage_id:
             continue
         if b.state.value == "committed":
             return b
@@ -566,8 +561,8 @@ def _find_previous_committed_batch(
 def _build_world_read_list(
     project_root: Path,
     work_id: str,
-    batch: BatchEntry,
-    prev_batch: BatchEntry | None,
+    stage: StageEntry,
+    prev_stage: StageEntry | None,
 ) -> list[str]:
     """Pre-compute file list for world extraction (Phase A)."""
     files: list[str] = []
@@ -584,16 +579,16 @@ def _build_world_read_list(
             files.append(str(p.relative_to(project_root)))
 
     # Only the most recent world stage_snapshot (for delta calculation)
-    if prev_batch:
+    if prev_stage:
         ws = (work_dir / "world" / "stage_snapshots"
-              / f"{prev_batch.stage_id}.json")
+              / f"{prev_stage.stage_id}.json")
         if ws.exists():
             files.append(str(ws.relative_to(project_root)))
 
     # NOTE: world stage_catalog.json removed — now programmatically maintained.
 
-    # Source chapters for this batch
-    start, end = _parse_chapter_range(batch.chapters)
+    # Source chapters for this stage
+    start, end = _parse_chapter_range(stage.chapters)
     for ch in range(start, end + 1):
         ch_file = source_dir / "chapters" / f"{ch:04d}.txt"
         if ch_file.exists():
@@ -606,8 +601,8 @@ def _build_character_read_list(
     project_root: Path,
     work_id: str,
     character_id: str,
-    batch: BatchEntry,
-    prev_batch: BatchEntry | None,
+    stage: StageEntry,
+    prev_stage: StageEntry | None,
 ) -> list[str]:
     """Pre-compute file list for single-character extraction (parallel with world)."""
     files: list[str] = []
@@ -641,19 +636,19 @@ def _build_character_read_list(
                 files.append(str(p.relative_to(project_root)))
 
     # Only the most recent stage_snapshot (for delta and style reference)
-    if prev_batch and char_dir.exists():
-        cs = char_dir / "stage_snapshots" / f"{prev_batch.stage_id}.json"
+    if prev_stage and char_dir.exists():
+        cs = char_dir / "stage_snapshots" / f"{prev_stage.stage_id}.json"
         if cs.exists():
             files.append(str(cs.relative_to(project_root)))
 
     # Only the most recent memory_timeline (for continuation)
-    if prev_batch and char_dir.exists():
-        mt = char_dir / "memory_timeline" / f"{prev_batch.stage_id}.json"
+    if prev_stage and char_dir.exists():
+        mt = char_dir / "memory_timeline" / f"{prev_stage.stage_id}.json"
         if mt.exists():
             files.append(str(mt.relative_to(project_root)))
 
-    # Source chapters for this batch (after baselines so agent knows aliases)
-    start, end = _parse_chapter_range(batch.chapters)
+    # Source chapters for this stage (after baselines so agent knows aliases)
+    start, end = _parse_chapter_range(stage.chapters)
     for ch in range(start, end + 1):
         ch_file = source_dir / "chapters" / f"{ch:04d}.txt"
         if ch_file.exists():
@@ -666,17 +661,17 @@ def _build_read_list(
     project_root: Path,
     work_id: str,
     character_ids: list[str],
-    batch: BatchEntry,
-    prev_batch: BatchEntry | None,
+    stage: StageEntry,
+    prev_stage: StageEntry | None,
 ) -> list[str]:
     """Legacy: combined read list for coordinated extraction (kept for
     backward compatibility with reviewer/targeted-fix prompts)."""
     # Merge world + all character lists
     files = _build_world_read_list(
-        project_root, work_id, batch, prev_batch)
+        project_root, work_id, stage, prev_stage)
     for char_id in character_ids:
         files.extend(_build_character_read_list(
-            project_root, work_id, char_id, batch, prev_batch))
+            project_root, work_id, char_id, stage, prev_stage))
     return _deduplicate(files)
 
 
@@ -699,9 +694,9 @@ def _parse_chapter_range(chapters: str) -> tuple[int, int]:
     return int(parts[0]), int(parts[0])
 
 
-def _chunk_covers_range(chunk_path: Path, batch_start: int,
-                        batch_end: int) -> bool:
-    """Check if a chunk summary file covers any chapters in the batch range.
+def _chunk_covers_range(chunk_path: Path, stage_start: int,
+                        stage_end: int) -> bool:
+    """Check if a chunk summary file covers any chapters in the stage range.
 
     Chunk files are named like chunk_0001_0025.json (start_end chapters).
     """
@@ -712,7 +707,7 @@ def _chunk_covers_range(chunk_path: Path, batch_start: int,
             chunk_start = int(parts[1])
             chunk_end = int(parts[2])
             # Overlap check
-            return chunk_start <= batch_end and chunk_end >= batch_start
+            return chunk_start <= stage_end and chunk_end >= stage_start
         except ValueError:
             pass
     # If we can't parse, include it as fallback

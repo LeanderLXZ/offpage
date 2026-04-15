@@ -1,9 +1,9 @@
-"""Parallel review lanes and commit gate for Phase 3 batch extraction.
+"""Parallel review lanes and commit gate for Phase 3 stage extraction.
 
 After extraction + programmatic post-processing, each entity (world +
 each character) is validated/reviewed/fixed independently in parallel
 "review lanes" (审校通道). A final commit gate (提交门控) checks
-cross-entity consistency before allowing batch commit.
+cross-entity consistency before allowing stage commit.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .llm_backend import LLMBackend
-    from .progress import BatchEntry, PipelineProgress
+    from .progress import StageEntry, PipelineProgress
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class LaneResult:
 def run_parallel_review(
     project_root: Path,
     progress: "PipelineProgress",
-    batch: "BatchEntry",
+    stage: "StageEntry",
     backend: "LLMBackend",
     reviewer_backend: "LLMBackend",
     *,
@@ -47,14 +47,14 @@ def run_parallel_review(
     is_fixable_fn,
     run_with_retry_fn,
 ) -> list[LaneResult]:
-    """Run review lanes in parallel for all entities in a batch.
+    """Run review lanes in parallel for all entities in a stage.
 
     Each lane: validate → review → (optional) fix → re-validate/re-review.
 
     Args:
         validate_fn: callable(project_root, work_id, stage_id, char_ids, lane_type, lane_char_id) → report
-        build_reviewer_fn: callable(project_root, progress, batch, report_str, lane_type, lane_char_id) → prompt
-        build_fix_fn: callable(project_root, progress, batch, findings, lane_type, lane_char_id) → prompt
+        build_reviewer_fn: callable(project_root, progress, stage, report_str, lane_type, lane_char_id) → prompt
+        build_fix_fn: callable(project_root, progress, stage, findings, lane_type, lane_char_id) → prompt
         parse_verdict_fn: callable(text) → {"verdict": str, "findings": str}
         is_fixable_fn: callable(verdict) → bool
         run_with_retry_fn: callable(backend, prompt, timeout_seconds) → LLMResult
@@ -78,7 +78,7 @@ def run_parallel_review(
             lane_type=lane_type,
             project_root=project_root,
             progress=progress,
-            batch=batch,
+            stage=stage,
             backend=backend,
             reviewer_backend=reviewer_backend,
             validate_fn=validate_fn,
@@ -114,7 +114,7 @@ def _execute_single_lane(
     lane_type: str,
     project_root: Path,
     progress: "PipelineProgress",
-    batch: "BatchEntry",
+    stage: "StageEntry",
     backend: "LLMBackend",
     reviewer_backend: "LLMBackend",
     validate_fn,
@@ -131,7 +131,7 @@ def _execute_single_lane(
     # --- Step 1: Programmatic validation ---
     char_ids = ([lane_char] if lane_char else [])
     report = validate_fn(
-        project_root, progress.work_id, batch.stage_id,
+        project_root, progress.work_id, stage.stage_id,
         char_ids, lane_type, lane_char)
 
     if not report.passed:
@@ -146,7 +146,7 @@ def _execute_single_lane(
 
     # --- Step 2: Semantic review ---
     reviewer_prompt = build_reviewer_fn(
-        project_root, progress, batch, report.summary(),
+        project_root, progress, stage, report.summary(),
         lane_type=lane_type, lane_character_id=lane_char)
 
     review_result = run_with_retry_fn(
@@ -179,7 +179,7 @@ def _execute_single_lane(
 
     logger.info("%s Attempting targeted fix...", lane_label)
     fix_prompt = build_fix_fn(
-        project_root, progress, batch, findings,
+        project_root, progress, stage, findings,
         lane_type=lane_type, lane_character_id=lane_char)
 
     fix_result = run_with_retry_fn(
@@ -194,7 +194,7 @@ def _execute_single_lane(
 
     # --- Step 4: Re-validate + re-review after fix ---
     re_report = validate_fn(
-        project_root, progress.work_id, batch.stage_id,
+        project_root, progress.work_id, stage.stage_id,
         char_ids, lane_type, lane_char)
 
     # Gate: if programmatic validation still fails after fix, don't bother
@@ -208,7 +208,7 @@ def _execute_single_lane(
             error=f"Post-fix validation failed: {re_report.summary()}")
 
     re_reviewer_prompt = build_reviewer_fn(
-        project_root, progress, batch, re_report.summary(),
+        project_root, progress, stage, re_report.summary(),
         lane_type=lane_type, lane_character_id=lane_char)
 
     re_review = run_with_retry_fn(

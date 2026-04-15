@@ -43,7 +43,7 @@ implementation code yet.
 - One Chinese web novel onboarded (500+ chapters)
 - Phase 0-1 complete (chapter summaries + global analysis)
 - Phase 2 target characters confirmed (2 characters)
-- Phase 2.5-3 in progress (baseline + batch extraction)
+- Phase 2.5-3 in progress (baseline + stage extraction)
 
 ### Automated Extraction Orchestrator
 
@@ -52,11 +52,11 @@ implementation code yet.
 - LLM backend abstraction supporting Claude CLI and Codex CLI
 - Progress tracking with state machine (pending → extracting → extracted →
   post_processing → reviewing → passed → committed)
-- **Batch-internal parallelism**: world + N character extractions run
-  fully parallel within each batch (1+N LLM calls via ThreadPoolExecutor).
+- **Stage-internal parallelism**: world + N character extractions run
+  fully parallel within each stage (1+N LLM calls via ThreadPoolExecutor).
   Character extraction does not read world snapshot — both read the same
   source text independently; cross-consistency verified at commit gate.
-  Every batch can correct and supplement baseline files (not just batch 1).
+  Every stage can correct and supplement baseline files (not just stage 1).
 - Programmatic post-processing (`post_processing.py`): after extraction,
   automatically generates `memory_digest.jsonl` from `memory_timeline`,
   `world_event_digest.jsonl` from world snapshot `stage_events` (≤80 char
@@ -68,7 +68,7 @@ implementation code yet.
 - Parallel review lanes (`review_lanes.py`): world + each character gets
   an independent validate → review → fix pipeline, running in parallel.
   Commit gate (提交门控) performs programmatic cross-consistency check
-  before batch commit. All lanes must pass; any failure → full batch rollback.
+  before stage commit. All lanes must pass; any failure → full stage rollback.
 - Two-layer quality check per lane: programmatic (jsonschema) + semantic
   (LLM reviewer with narrowed input scope)
 - Failure triage: reviewer findings classified as fixable (≤5 specific field
@@ -83,16 +83,16 @@ implementation code yet.
   via `ThreadPoolExecutor` (`--concurrency`, default 10). L3 auto-retry on
   JSON repair failure. Completion gate blocks Phase 1 if any chunk missing.
   Completed chunk files auto-skipped on resume.
-- Git integration: extraction branch, per-batch commits, auto-rollback
+- Git integration: extraction branch, per-stage commits, auto-rollback
   (full-repo scope), squash-merge to main on completion
-- Phase 3.5 cross-batch consistency checker (`consistency_checker.py`):
-  9 programmatic checks (zero tokens) after all batches commit;
+- Phase 3.5 cross-stage consistency checker (`consistency_checker.py`):
+  9 programmatic checks (zero tokens) after all stages commit;
   importance-based thresholds for target_map example counts
   (主角≥5, 重要配角≥3, others≥1)
-- Resume auto-reset: blocked batches automatically reset to pending on
+- Resume auto-reset: blocked stages automatically reset to pending on
   `--resume`, no manual progress file editing needed
-- Progress/end-batch separation (Phase 4 pattern): progress always
-  contains full batch plan; `--end-batch` is runtime-only limit.
+- Progress/end-stage separation (Phase 4 pattern): progress always
+  contains full stage plan; `--end-stage` is runtime-only limit.
   Defensive expansion at extraction loop entry for edge cases
 - Phase 4 scene archive (`scene_archive.py`): per-chapter parallel
   LLM calls for scene boundary annotation, programmatic validation,
@@ -121,7 +121,7 @@ implementation code yet.
 - Phase 2.5 exit validation: `validate_baseline()` checks schema
   compliance and required field non-null for identity/manifest/foundation
   before allowing Phase 3 to start
-- Smart resume: PENDING batch with extraction output already on disk
+- Smart resume: PENDING stage with extraction output already on disk
   skips LLM extraction, jumps to post-processing (saves tokens)
 - REVIEWING state recovery: verifies extraction output exists on disk
   before continuing review; resets to PENDING if files missing
@@ -169,7 +169,7 @@ implementation code yet.
 
 ## Current Gaps
 
-- Batch extraction in progress — no finished character package yet
+- Stage extraction in progress — no finished character package yet
 - No real user package yet (only template)
 - No simulation-engine service implementation
 - No terminal adapter implementation
@@ -189,5 +189,5 @@ implementation code yet.
 - Full novels, databases, indexes, large artifacts not committed
 - `works/*/analysis/` and `works/*/indexes/` are git-tracked
 - `docs/logs/` is write-mostly; do not proactively read
-- No per-batch report files; use progress files in-place
-- Batches split by natural story boundaries (target 10 ch, min 5, max 15)
+- No per-stage report files; use progress files in-place
+- Stages split by natural story boundaries (target 10 ch, min 5, max 15)

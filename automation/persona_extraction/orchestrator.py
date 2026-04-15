@@ -1,16 +1,16 @@
 """Main orchestrator — drives the full extraction pipeline.
 
 Flow:
-  1. Analysis phase (LLM)  → batch plan + candidate characters
-  2. User confirmation      → select characters, confirm batch plan, set range
-  3. Extraction loop        → for each batch (1+N parallel):
+  1. Analysis phase (LLM)  → stage plan + candidate characters
+  2. User confirmation      → select characters, confirm stage plan, set range
+  3. Extraction loop        → for each stage (1+N parallel):
        a. Git preflight
        b. World + character extraction (1+N LLM calls, all parallel)
        c. Programmatic post-processing (memory_digest + stage_catalog)
        d. Parallel review lanes (world + each character: V+R+F)
        e. Commit gate (programmatic cross-consistency)
        f. Git commit or rollback + retry
-  3.5 Cross-batch consistency check (programmatic, zero tokens)
+  3.5 Cross-stage consistency check (programmatic, zero tokens)
   4. Scene archive (per-chapter parallel, programmatic validation only)
 """
 
@@ -29,7 +29,7 @@ from typing import Any
 
 from .consistency_checker import run_consistency_check, save_report
 from .git_utils import (
-    commit_batch,
+    commit_stage,
     create_extraction_branch,
     preflight_check,
     rollback_to_head,
@@ -37,11 +37,11 @@ from .git_utils import (
 )
 from .json_repair import try_repair_json_file
 from .llm_backend import LLMBackend, LLMResult, run_with_retry
-from .post_processing import run_batch_post_processing
+from .post_processing import run_stage_post_processing
 from .process_guard import PidLock, fmt_memory, get_rss_mb
 from .progress import (
-    BatchEntry,
-    BatchState,
+    StageEntry,
+    StageState,
     ChunkEntry,
     Phase0Progress,
     Phase3Progress,
@@ -91,14 +91,14 @@ class ProgressTracker:
     STEP_FIX = "fix"
     STEP_COMMIT = "commit"
 
-    def __init__(self, total_batches: int, completed_before: int):
-        self.total = total_batches
+    def __init__(self, total_stages: int, completed_before: int):
+        self.total = total_stages
         self.completed_before = completed_before
         self.completed_this_run = 0
         self.loop_start = time.monotonic()
-        self.batch_start: float = 0.0
+        self.stage_start: float = 0.0
         self.step_start: float = 0.0
-        self.batch_durations: list[float] = []
+        self.stage_durations: list[float] = []
         # Per-step duration history (for step-level ETA)
         self.step_durations: dict[str, list[float]] = {
             self.STEP_EXTRACTION: [],
@@ -117,10 +117,10 @@ class ProgressTracker:
         return self.total - self.completed
 
     @property
-    def avg_batch_seconds(self) -> float:
-        if not self.batch_durations:
+    def avg_stage_seconds(self) -> float:
+        if not self.stage_durations:
             return 0.0
-        return sum(self.batch_durations) / len(self.batch_durations)
+        return sum(self.stage_durations) / len(self.stage_durations)
 
     def avg_step_seconds(self, step_name: str) -> float:
         durations = self.step_durations.get(step_name, [])
@@ -134,12 +134,12 @@ class ProgressTracker:
         if step_name in self.step_durations:
             self.step_durations[step_name].append(duration)
 
-    def start_batch(self) -> None:
-        self.batch_start = time.monotonic()
+    def start_stage(self) -> None:
+        self.stage_start = time.monotonic()
 
-    def finish_batch(self) -> None:
-        duration = time.monotonic() - self.batch_start
-        self.batch_durations.append(duration)
+    def finish_stage(self) -> None:
+        duration = time.monotonic() - self.stage_start
+        self.stage_durations.append(duration)
         self.completed_this_run += 1
 
     def start_step(self) -> None:
@@ -148,21 +148,21 @@ class ProgressTracker:
     def step_elapsed(self) -> str:
         return _fmt_duration(time.monotonic() - self.step_start)
 
-    def print_batch_header(self, batch: Any) -> None:
-        """Print batch header with overall and step-level progress."""
+    def print_stage_header(self, stage: Any) -> None:
+        """Print stage header with overall and step-level progress."""
         n = self.completed + 1
         elapsed_total = time.monotonic() - self.loop_start
-        avg = self.avg_batch_seconds
+        avg = self.avg_stage_seconds
 
         print(f"\n{'━' * 60}")
-        print(f"  [{n}/{self.total}] {batch.batch_id} ({batch.stage_id})")
-        print(f"  Chapters: {batch.chapters}  |  "
-              f"State: {batch.state.value}  |  "
-              f"Retry: {batch.retry_count}/{batch.max_retries}")
+        print(f"  [{n}/{self.total}] {stage.stage_id} ({stage.stage_id})")
+        print(f"  Chapters: {stage.chapters}  |  "
+              f"State: {stage.state.value}  |  "
+              f"Retry: {stage.retry_count}/{stage.max_retries}")
 
         parts = [f"Elapsed: {_fmt_duration(elapsed_total)}"]
         if avg > 0:
-            parts.append(f"Avg: {_fmt_duration(avg)}/batch")
+            parts.append(f"Avg: {_fmt_duration(avg)}/stage")
             eta = avg * self.remaining
             parts.append(f"ETA: {_fmt_duration(eta)}")
         orch_mem = fmt_memory(get_rss_mb(os.getpid()))
@@ -204,11 +204,11 @@ class ProgressTracker:
         print(f"  Completed this run: {self.completed_this_run}")
         print(f"  Total completed: {self.completed}/{self.total}")
         print(f"  Total elapsed: {_fmt_duration(elapsed)}")
-        if self.batch_durations:
-            print(f"  Avg per batch: "
-                  f"{_fmt_duration(self.avg_batch_seconds)}")
-            fastest = min(self.batch_durations)
-            slowest = max(self.batch_durations)
+        if self.stage_durations:
+            print(f"  Avg per stage: "
+                  f"{_fmt_duration(self.avg_stage_seconds)}")
+            fastest = min(self.stage_durations)
+            slowest = max(self.stage_durations)
             print(f"  Fastest: {_fmt_duration(fastest)}  |  "
                   f"Slowest: {_fmt_duration(slowest)}")
 
@@ -371,16 +371,16 @@ class ExtractionOrchestrator:
     def _extraction_output_exists(
         self,
         target_characters: list[str],
-        batch: BatchEntry,
+        stage: StageEntry,
     ) -> bool:
-        """Check if extraction output already exists on disk for a batch.
+        """Check if extraction output already exists on disk for a stage.
 
         Returns True if world stage_snapshot AND all target character
         stage_snapshots exist, indicating the extraction step can be
         skipped (smart resume).
         """
         work_dir = self.project_root / "works" / self.work_id
-        stage_id = batch.stage_id
+        stage_id = stage.stage_id
 
         # World snapshot must exist
         world_ss = (work_dir / "world" / "stage_snapshots"
@@ -582,9 +582,9 @@ class ExtractionOrchestrator:
     # ------------------------------------------------------------------
 
     def run_analysis(self) -> dict[str, Any]:
-        """Run analysis phase: identity merge + world overview + batch plan + candidates.
+        """Run analysis phase: identity merge + world overview + stage plan + candidates.
 
-        If the produced batch plan contains oversized batches (>15 chapters),
+        If the produced stage plan contains oversized stages (>15 chapters),
         the plan file is deleted and the LLM is re-run with corrective
         feedback (up to MAX_ANALYSIS_RETRIES times).
         """
@@ -599,7 +599,7 @@ class ExtractionOrchestrator:
                 print("  Phase 1: Analysis (from chapter summaries)")
             else:
                 print(f"  Phase 1: Analysis — retry {attempt - 1}"
-                      f" (correcting batch plan)")
+                      f" (correcting stage plan)")
             print("=" * 60 + "\n")
 
             prompt = build_analysis_prompt(
@@ -614,7 +614,7 @@ class ExtractionOrchestrator:
 
             print("[OK] Analysis complete.")
 
-            batch_plan = _load_json(inc_dir / "source_batch_plan.json")
+            stage_plan = _load_json(inc_dir / "stage_plan.json")
             candidates = _load_json(inc_dir / "candidate_characters.json")
             world_overview = _load_json(inc_dir / "world_overview.json")
 
@@ -623,9 +623,9 @@ class ExtractionOrchestrator:
             else:
                 print("  [WARN] World overview not found.")
 
-            # Phase 1 exit validation: check batch chapter_count limits
-            if batch_plan:
-                violating = _check_batch_plan_limits(batch_plan)
+            # Phase 1 exit validation: check stage chapter_count limits
+            if stage_plan:
+                violating = _check_stage_plan_limits(stage_plan)
                 if not violating:
                     break  # all good
 
@@ -635,24 +635,24 @@ class ExtractionOrchestrator:
                         f"{b.get('stage_id', '?')}={b.get('chapter_count')}章"
                         for b in violating)
                     correction_feedback = (
-                        f"上次产出的 batch plan 中有 {len(violating)} 个 batch "
+                        f"上次产出的 stage plan 中有 {len(violating)} 个 stage "
                         f"不满足 5-15 章限制：{details}。\n\n"
-                        "请重新生成 `source_batch_plan.json`，确保每个 batch "
+                        "请重新生成 `stage_plan.json`，确保每个 stage "
                         "的 chapter_count 在 5-15 范围内。对于跨度大的故事弧，"
-                        "必须在其中寻找次级剧情节点拆分为多个 batch；"
-                        "对于过短的 batch，应合并到相邻 batch。\n\n"
+                        "必须在其中寻找次级剧情节点拆分为多个 stage；"
+                        "对于过短的 stage，应合并到相邻 stage。\n\n"
                         "其他已产出的文件（world_overview.json、"
                         "candidate_characters.json）如果已存在且正确，"
-                        "可以保留不变，只需重写 batch plan。"
+                        "可以保留不变，只需重写 stage plan。"
                     )
                     # Delete the bad plan so the LLM regenerates it
-                    plan_path = inc_dir / "source_batch_plan.json"
+                    plan_path = inc_dir / "stage_plan.json"
                     if plan_path.exists():
                         plan_path.unlink()
                     print(f"  [RETRY] Will re-run Phase 1 to correct "
-                          f"batch plan (attempt {attempt + 1})...")
+                          f"stage plan (attempt {attempt + 1})...")
                 else:
-                    print(f"  [FATAL] Batch plan still has violating batches "
+                    print(f"  [FATAL] Stage plan still has violating stages "
                           f"after {MAX_ANALYSIS_RETRIES} retries. Aborting.")
                     sys.exit(1)
             else:
@@ -664,7 +664,7 @@ class ExtractionOrchestrator:
             self.pipeline.save(self.project_root)
 
         return {
-            "batch_plan": batch_plan,
+            "stage_plan": stage_plan,
             "candidates": candidates,
             "world_overview": world_overview,
             "raw_output": result.text,
@@ -763,7 +763,7 @@ class ExtractionOrchestrator:
         analysis: dict[str, Any],
         *,
         preset_characters: list[str] | None = None,
-        preset_end_batch: int | None = None,
+        preset_end_stage: int | None = None,
     ) -> tuple[PipelineProgress, Phase3Progress]:
         """Interactive user confirmation of characters and parameters."""
         print("\n" + "=" * 60)
@@ -771,7 +771,7 @@ class ExtractionOrchestrator:
         print("=" * 60 + "\n")
 
         candidates = analysis.get("candidates") or {}
-        batch_plan = analysis.get("batch_plan") or {}
+        stage_plan = analysis.get("stage_plan") or {}
 
         # Show candidates
         if candidates and candidates.get("candidates"):
@@ -795,26 +795,26 @@ class ExtractionOrchestrator:
             print("[ERROR] No characters selected.")
             sys.exit(1)
 
-        # Show batch plan summary
-        batches_data = batch_plan.get("batches", [])
-        total_batches = len(batches_data)
-        if batches_data:
-            print(f"\nBatch plan ({total_batches} batches, "
+        # Show stage plan summary
+        stages_data = stage_plan.get("stages", [])
+        total_stages = len(stages_data)
+        if stages_data:
+            print(f"\nStage plan ({total_stages} stages, "
                   f"split by story boundaries):\n")
-            for b in batches_data:
-                print(f"  {b['batch_id']}: {b.get('stage_id', '?')} "
+            for b in stages_data:
+                print(f"  {b['stage_id']}: {b.get('stage_id', '?')} "
                       f"({b['chapters']}, {b.get('chapter_count', '?')} ch) "
                       f"— {b.get('boundary_reason', '')}")
             print()
 
-        # --end-batch is a runtime limit only; progress always contains
-        # the full batch plan (same pattern as Phase 4).
-        if preset_end_batch is None:
-            raw = input(f"Extract up to batch N (total {total_batches}, "
+        # --end-stage is a runtime limit only; progress always contains
+        # the full stage plan (same pattern as Phase 4).
+        if preset_end_stage is None:
+            raw = input(f"Extract up to stage N (total {total_stages}, "
                         f"0 or empty = all): ").strip()
-            preset_end_batch = int(raw) if raw else 0
+            preset_end_stage = int(raw) if raw else 0
 
-        batch_size = batch_plan.get("default_batch_size", 10)
+        stage_size = stage_plan.get("default_stage_size", 10)
 
         pipeline = PipelineProgress(
             work_id=self.work_id,
@@ -827,15 +827,14 @@ class ExtractionOrchestrator:
 
         phase3 = Phase3Progress(
             work_id=self.work_id,
-            batch_size=batch_size,
-            batches=[
-                BatchEntry(
-                    batch_id=b["batch_id"],
+            stage_size=stage_size,
+            stages=[
+                StageEntry(
                     stage_id=b["stage_id"],
                     chapters=b["chapters"],
                     chapter_count=b.get("chapter_count", 10),
                 )
-                for b in batches_data  # full plan, not truncated
+                for b in stages_data  # full plan, not truncated
             ],
         )
         phase3.save(self.project_root)
@@ -843,11 +842,11 @@ class ExtractionOrchestrator:
         self.pipeline = pipeline
         self.phase3 = phase3
 
-        run_label = (f"first {preset_end_batch}" if preset_end_batch
+        run_label = (f"first {preset_end_stage}" if preset_end_stage
                      else "all")
         print(f"\n[OK] Configuration saved.")
         print(f"     Characters: {selected}")
-        print(f"     Batches: {len(phase3.batches)} total "
+        print(f"     Stages: {len(phase3.stages)} total "
               f"(this run: {run_label})")
         print(f"     Branch: {pipeline.extraction_branch}")
         return pipeline, phase3
@@ -861,14 +860,14 @@ class ExtractionOrchestrator:
         pipeline: PipelineProgress | None = None,
         phase3: Phase3Progress | None = None,
         *,
-        max_batches: int | None = None,
+        max_stages: int | None = None,
     ) -> None:
-        """Main extraction loop: iterate through batches.
+        """Main extraction loop: iterate through stages.
 
         Args:
             pipeline: Pipeline progress (uses self.pipeline if None).
-            phase3: Phase 3 batch progress (uses self.phase3 if None).
-            max_batches: Stop after this many batches complete.
+            phase3: Phase 3 stage progress (uses self.phase3 if None).
+            max_stages: Stop after this many stages complete.
                          None = all, 0 = baseline only.
         """
         pipeline = pipeline or self.pipeline
@@ -880,11 +879,11 @@ class ExtractionOrchestrator:
         self.pipeline = pipeline
         self.phase3 = phase3
 
-        # Expand batches from batch plan if --end-batch increased
-        self._ensure_batches_from_plan(phase3, max_batches)
+        # Expand stages from stage plan if --end-stage increased
+        self._ensure_stages_from_plan(phase3, max_stages)
 
-        # --end-batch 0 means baseline only — skip extraction loop
-        if max_batches is not None and max_batches == 0:
+        # --end-stage 0 means baseline only — skip extraction loop
+        if max_stages is not None and max_stages == 0:
             # Still need baseline
             force_baseline = True
         else:
@@ -917,42 +916,42 @@ class ExtractionOrchestrator:
                 print("  [WARN] Baseline not completed. Running Phase 2.5...")
                 self.run_baseline_production(pipeline.target_characters)
                 # Commit baseline so extraction starts with clean tree
-                sha = commit_batch(self.project_root,
-                                   "baseline", "Phase 2.5 baseline (recovery)")
+                sha = commit_stage(self.project_root, "baseline",
+                                   message="Phase 2.5 baseline (recovery)")
                 if sha:
                     print(f"  [OK] Baseline committed as {sha}")
 
-        # --end-batch 0: baseline only, stop here
-        if max_batches is not None and max_batches == 0:
-            print("\n[STOP] --end-batch 0: baseline only, skipping "
+        # --end-stage 0: baseline only, stop here
+        if max_stages is not None and max_stages == 0:
+            print("\n[STOP] --end-stage 0: baseline only, skipping "
                   "extraction loop.")
             return
 
-        # Auto-reset blocked batches on resume — user chose to retry
-        for b in phase3.batches:
-            if b.state in (BatchState.FAILED, BatchState.ERROR):
+        # Auto-reset blocked stages on resume — user chose to retry
+        for b in phase3.stages:
+            if b.state in (StageState.FAILED, StageState.ERROR):
                 if b.retry_count >= b.max_retries:
-                    print(f"  [RESET] {b.batch_id} was blocked "
+                    print(f"  [RESET] {b.stage_id} was blocked "
                           f"(retry {b.retry_count}/{b.max_retries}), "
                           f"resetting to pending.")
-                    b.state = BatchState.PENDING
+                    b.state = StageState.PENDING
                     b.retry_count = 0
                     b.error_message = ""
                     phase3.save(self.project_root)
 
-        completed_before = phase3.completed_batch_count()
-        tracker = ProgressTracker(len(phase3.batches), completed_before)
+        completed_before = phase3.completed_stage_count()
+        tracker = ProgressTracker(len(phase3.stages), completed_before)
 
         print(f"\n{'=' * 60}")
         print(f"  Phase 3: Extraction Loop")
         print(f"{'=' * 60}")
         print(f"  Work: {pipeline.work_id}")
         print(f"  Characters: {pipeline.target_characters}")
-        print(f"  Total batches: {tracker.total}")
+        print(f"  Total stages: {tracker.total}")
         print(f"  Completed: {completed_before}")
-        if max_batches is not None and max_batches > 0:
-            to_run = max(0, max_batches - completed_before)
-            print(f"  Target: {max_batches} (up to {to_run} this run)")
+        if max_stages is not None and max_stages > 0:
+            to_run = max(0, max_stages - completed_before)
+            print(f"  Target: {max_stages} (up to {to_run} this run)")
         else:
             print(f"  Target: all ({tracker.remaining} remaining)")
         print(f"{'=' * 60}")
@@ -973,24 +972,24 @@ class ExtractionOrchestrator:
             if self._check_runtime_limit():
                 break
 
-            if (max_batches is not None and max_batches > 0
-                    and tracker.completed >= max_batches):
-                print(f"\n[STOP] Reached max_batches limit "
-                      f"({tracker.completed}/{max_batches}).")
+            if (max_stages is not None and max_stages > 0
+                    and tracker.completed >= max_stages):
+                print(f"\n[STOP] Reached max_stages limit "
+                      f"({tracker.completed}/{max_stages}).")
                 reached_limit = True
                 break
 
-            batch = phase3.next_pending_batch()
-            if batch is None:
+            stage = phase3.next_pending_stage()
+            if stage is None:
                 if phase3.all_committed():
-                    print("\n[DONE] All batches completed!")
+                    print("\n[DONE] All stages completed!")
                     reached_limit = True
                 else:
-                    print("\n[BLOCKED] No actionable batches. "
-                          "Check progress for blocked/error batches.")
+                    print("\n[BLOCKED] No actionable stages. "
+                          "Check progress for blocked/error stages.")
                 break
 
-            self._process_batch(phase3, pipeline, batch, tracker)
+            self._process_stage(phase3, pipeline, stage, tracker)
 
         # Post-loop: run Phase 3.5/4 when target was reached
         if reached_limit:
@@ -998,79 +997,79 @@ class ExtractionOrchestrator:
             self._offer_squash_merge()
             if consistency_ok:
                 self._run_scene_archive(
-                    end_batch=max_batches or 0, resume=True)
+                    end_stage=max_stages or 0, resume=True)
             else:
                 print("\n  Phase 4 skipped — fix consistency errors first, "
                       "then re-run with --resume.")
 
         tracker.print_summary()
 
-    def _process_batch(self, phase3: Phase3Progress,
+    def _process_stage(self, phase3: Phase3Progress,
                        pipeline: PipelineProgress,
-                       batch: BatchEntry,
+                       stage: StageEntry,
                        tracker: ProgressTracker) -> None:
-        """Process a single batch through the full pipeline."""
-        tracker.start_batch()
-        tracker.print_batch_header(batch)
+        """Process a single stage through the full pipeline."""
+        tracker.start_stage()
+        tracker.print_stage_header(stage)
 
         # Handle state resumption — reset interrupted states
-        if batch.state == BatchState.FAILED:
-            if batch.retry_count >= batch.max_retries:
-                print(f"  [BLOCKED] {batch.batch_id} exceeded max retries. "
+        if stage.state == StageState.FAILED:
+            if stage.retry_count >= stage.max_retries:
+                print(f"  [BLOCKED] {stage.stage_id} exceeded max retries. "
                       f"Needs manual intervention.")
                 return
-            batch.transition(BatchState.RETRYING)
-            batch.retry_count += 1
+            stage.transition(StageState.RETRYING)
+            stage.retry_count += 1
             phase3.save(self.project_root)
 
-        if batch.state == BatchState.ERROR:
-            if batch.retry_count >= batch.max_retries:
-                print(f"  [BLOCKED] {batch.batch_id} exceeded max retries. "
+        if stage.state == StageState.ERROR:
+            if stage.retry_count >= stage.max_retries:
+                print(f"  [BLOCKED] {stage.stage_id} exceeded max retries. "
                       f"Needs manual intervention.")
                 return
-            print(f"  [RETRY] {batch.batch_id} in error state, retrying...")
+            print(f"  [RETRY] {stage.stage_id} in error state, retrying...")
             rollback_to_head(self.project_root)
-            batch.retry_count += 1
-            batch.transition(BatchState.PENDING)
+            stage.retry_count += 1
+            stage.transition(StageState.PENDING)
             phase3.save(self.project_root)
 
-        if batch.state == BatchState.EXTRACTING:
+        if stage.state == StageState.EXTRACTING:
             print("  [RESUME] Interrupted during extraction, "
                   "rolling back and restarting...")
             rollback_to_head(self.project_root)
-            batch.state = BatchState.PENDING
+            stage.state = StageState.PENDING
             phase3.save(self.project_root)
 
-        if batch.state == BatchState.FIXING:
+        if stage.state == StageState.FIXING:
             # Interrupted during targeted fix — the fix may be partial.
             # Re-enter the FIXING step and let it re-run the fix agent.
             print("  [RESUME] Interrupted during targeted fix, "
                   "will retry fix...")
 
-        if batch.state in (BatchState.RETRYING, BatchState.PENDING):
+        if stage.state in (StageState.RETRYING, StageState.PENDING):
             # --- Step 1: Git preflight ---
             tracker.start_step()
             tracker.print_step(1, 6, "Git preflight")
             problems = preflight_check(
                 self.project_root, pipeline.extraction_branch or None,
                 ignore_patterns=["extraction_progress.json",
-                                 "pipeline.json", "phase3_batches.json",
+                                 "pipeline.json", "phase3_stages.json",
                                  "__pycache__"])
             if problems:
                 for p in problems:
                     print(f"    [PROBLEM] {p}")
-                batch.transition(BatchState.ERROR)
-                batch.error_message = "; ".join(problems)
+                stage.transition(StageState.ERROR)
+                stage.error_message = "; ".join(problems)
                 phase3.save(self.project_root)
                 return
             tracker.print_step_done(1, 6, "Git preflight")
 
             # --- Smart skip: if extraction output already on disk ---
             if self._extraction_output_exists(
-                    pipeline.target_characters, batch):
+                    pipeline.target_characters, stage):
                 print(f"  [SKIP] Extraction output already on disk for "
-                      f"{batch.batch_id}, jumping to post-processing")
-                batch.transition(BatchState.EXTRACTED)
+                      f"{stage.stage_id}, jumping to post-processing")
+                stage.transition(StageState.EXTRACTED)
                 phase3.save(self.project_root)
             else:
                 # --- Step 2: World + Character extraction (1+N parallel) ---
@@ -1079,16 +1078,16 @@ class ExtractionOrchestrator:
                 tracker.print_step(2, 6,
                                    f"Extraction (1 world + "
                                    f"{n_chars} characters parallel)")
-                batch.transition(BatchState.EXTRACTING)
+                stage.transition(StageState.EXTRACTING)
                 phase3.save(self.project_root)
 
                 extraction_errors: list[str] = []
 
                 def _extract_world() -> tuple[str, LLMResult]:
                     prompt = build_world_extraction_prompt(
-                        self.project_root, pipeline, batch,
-                        batches=phase3.batches,
-                        reviewer_feedback=batch.last_reviewer_feedback)
+                        self.project_root, pipeline, stage,
+                        stages=phase3.stages,
+                        reviewer_feedback=stage.last_reviewer_feedback)
                     result = run_with_retry(
                         self.backend, prompt, timeout_seconds=3600)
                     return "world", result
@@ -1097,9 +1096,9 @@ class ExtractionOrchestrator:
                     char_id: str,
                 ) -> tuple[str, LLMResult]:
                     char_prompt = build_character_extraction_prompt(
-                        self.project_root, pipeline, batch, char_id,
-                        batches=phase3.batches,
-                        reviewer_feedback=batch.last_reviewer_feedback)
+                        self.project_root, pipeline, stage, char_id,
+                        stages=phase3.stages,
+                        reviewer_feedback=stage.last_reviewer_feedback)
                     result = run_with_retry(
                         self.backend, char_prompt,
                         timeout_seconds=3600)
@@ -1124,8 +1123,8 @@ class ExtractionOrchestrator:
                 if extraction_errors:
                     print("    Rolling back uncommitted changes...")
                     rollback_to_head(self.project_root)
-                    batch.transition(BatchState.ERROR)
-                    batch.error_message = "; ".join(extraction_errors)
+                    stage.transition(StageState.ERROR)
+                    stage.error_message = "; ".join(extraction_errors)
                     phase3.save(self.project_root)
                     return
 
@@ -1134,30 +1133,30 @@ class ExtractionOrchestrator:
                                         f"Extraction "
                                         f"(1+{n_chars} parallel)")
 
-                batch.transition(BatchState.EXTRACTED)
+                stage.transition(StageState.EXTRACTED)
                 phase3.save(self.project_root)
 
         # --- Step 3: Programmatic post-processing ---
-        if batch.state in (BatchState.EXTRACTED, BatchState.POST_PROCESSING):
-            if batch.state == BatchState.EXTRACTED:
-                batch.transition(BatchState.POST_PROCESSING)
+        if stage.state in (StageState.EXTRACTED, StageState.POST_PROCESSING):
+            if stage.state == StageState.EXTRACTED:
+                stage.transition(StageState.POST_PROCESSING)
                 phase3.save(self.project_root)
 
             tracker.start_step()
             tracker.print_step(3, 6, "Post-processing (digest + catalog)")
 
-            # Determine batch order (0-based index in batches list)
-            batch_order = next(
-                (i for i, b in enumerate(phase3.batches)
-                 if b.batch_id == batch.batch_id), 0)
+            # Determine stage order (0-based index in stages list)
+            stage_order = next(
+                (i for i, b in enumerate(phase3.stages)
+                 if b.stage_id == stage.stage_id), 0)
 
-            pp_issues = run_batch_post_processing(
+            pp_issues = run_stage_post_processing(
                 project_root=self.project_root,
                 work_id=pipeline.work_id,
-                stage_id=batch.stage_id,
-                batch_order=batch_order,
+                stage_id=stage.stage_id,
+                stage_order=stage_order,
                 character_ids=pipeline.target_characters,
-                chapter_range=batch.chapters,
+                chapter_range=stage.chapters,
             )
 
             if pp_issues:
@@ -1170,11 +1169,11 @@ class ExtractionOrchestrator:
             tracker.print_step_done(3, 6, "Post-processing",
                                     f"{len(pp_issues)} issues")
 
-            batch.transition(BatchState.REVIEWING)
+            stage.transition(StageState.REVIEWING)
             phase3.save(self.project_root)
 
         # --- Step 4: Parallel review lanes (V+R+F per entity) ---
-        if batch.state == BatchState.REVIEWING:
+        if stage.state == StageState.REVIEWING:
             # Safety check: verify extraction output still exists on disk
             work_dir = self.project_root / "works" / pipeline.work_id
             has_output = any(
@@ -1184,9 +1183,9 @@ class ExtractionOrchestrator:
             )
             if not has_output:
                 print("  [RESUME] Extraction output missing for REVIEWING "
-                      "batch, rolling back and restarting...")
+                      "stage, rolling back and restarting...")
                 rollback_to_head(self.project_root)
-                batch.state = BatchState.PENDING
+                stage.state = StageState.PENDING
                 phase3.save(self.project_root)
                 return
 
@@ -1198,14 +1197,14 @@ class ExtractionOrchestrator:
             lane_results = run_parallel_review(
                 project_root=self.project_root,
                 progress=pipeline,
-                batch=batch,
+                stage=stage,
                 backend=self.backend,
                 reviewer_backend=self.reviewer_backend,
                 validate_fn=validate_lane,
                 build_reviewer_fn=partial(
-                    build_reviewer_prompt, batches=phase3.batches),
+                    build_reviewer_prompt, stages=phase3.stages),
                 build_fix_fn=partial(
-                    build_targeted_fix_prompt, batches=phase3.batches),
+                    build_targeted_fix_prompt, stages=phase3.stages),
                 parse_verdict_fn=_parse_verdict,
                 is_fixable_fn=_is_fixable,
                 run_with_retry_fn=run_with_retry,
@@ -1231,11 +1230,11 @@ class ExtractionOrchestrator:
                     feedback_parts.append(
                         f"[{r.lane_type}:{r.lane_id}] "
                         f"{r.error or r.findings[:500]}")
-                batch.last_reviewer_feedback = "\n".join(feedback_parts)
+                stage.last_reviewer_feedback = "\n".join(feedback_parts)
 
                 print("    [FAIL] Rolling back for retry...")
                 rollback_to_head(self.project_root)
-                batch.transition(BatchState.FAILED)
+                stage.transition(StageState.FAILED)
                 phase3.save(self.project_root)
                 return
 
@@ -1250,7 +1249,7 @@ class ExtractionOrchestrator:
             gate_passed, gate_issues = run_commit_gate(
                 project_root=self.project_root,
                 work_id=pipeline.work_id,
-                stage_id=batch.stage_id,
+                stage_id=stage.stage_id,
                 character_ids=pipeline.target_characters,
                 lane_results=lane_results,
             )
@@ -1260,35 +1259,34 @@ class ExtractionOrchestrator:
                     print(f"    [GATE] {issue}")
                 print("    [FAIL] Commit gate failed, rolling back...")
                 rollback_to_head(self.project_root)
-                batch.last_reviewer_feedback = "\n".join(gate_issues)
-                batch.transition(BatchState.FAILED)
+                stage.last_reviewer_feedback = "\n".join(gate_issues)
+                stage.transition(StageState.FAILED)
                 phase3.save(self.project_root)
                 return
 
             tracker.print_step_done(5, 6, "Commit gate", "PASS")
-            batch.transition(BatchState.PASSED)
+            stage.transition(StageState.PASSED)
             phase3.save(self.project_root)
 
         # --- Step 6: Git commit ---
-        if batch.state == BatchState.PASSED:
+        if stage.state == StageState.PASSED:
             tracker.start_step()
             tracker.print_step(6, 6, "Git commit")
 
             # Clear feedback/error fields on successful commit
-            batch.last_reviewer_feedback = ""
-            batch.error_message = ""
-            batch.fail_source = ""
+            stage.last_reviewer_feedback = ""
+            stage.error_message = ""
+            stage.fail_source = ""
 
             # Transition and save BEFORE git commit so the committed
             # progress file is included in the same commit.
-            batch.transition(BatchState.COMMITTED)
+            stage.transition(StageState.COMMITTED)
             phase3.save(self.project_root)
 
-            sha = commit_batch(self.project_root,
-                               batch.batch_id, batch.stage_id)
+            sha = commit_stage(self.project_root, stage.stage_id)
             tracker.record_step(ProgressTracker.STEP_COMMIT)
             if sha:
-                batch.committed_sha = sha
+                stage.committed_sha = sha
                 # Save again with the SHA (this will be uncommitted
                 # on disk but consistent on next resume)
                 phase3.save(self.project_root)
@@ -1297,17 +1295,17 @@ class ExtractionOrchestrator:
                 tracker.print_step_done(6, 6, "Git commit",
                                         "no changes")
 
-            tracker.finish_batch()
+            tracker.finish_stage()
 
     def _run_consistency_check(self) -> bool:
-        """Run Phase 3.5 cross-batch consistency check.
+        """Run Phase 3.5 cross-stage consistency check.
 
         Returns True if no error-level issues found (safe to proceed).
         Returns False if errors exist (should block Phase 4).
         """
         assert self.pipeline and self.phase3
-        print("\n--- Phase 3.5: Cross-batch consistency check ---")
-        stage_ids = [b.stage_id for b in self.phase3.batches
+        print("\n--- Phase 3.5: Cross-stage consistency check ---")
+        stage_ids = [b.stage_id for b in self.phase3.stages
                      if b.state.value == "committed"]
         char_ids = self.pipeline.target_characters or []
 
@@ -1335,24 +1333,24 @@ class ExtractionOrchestrator:
         print("  [OK] No blocking issues found.")
         return True
 
-    def _run_scene_archive(self, *, end_batch: int = 0,
+    def _run_scene_archive(self, *, end_stage: int = 0,
                            resume: bool = True) -> None:
         """Run Phase 4: scene archive generation."""
         run_scene_archive(
             self.project_root, self.work_id, self.backend,
             concurrency=self.concurrency,
-            end_batch=end_batch,
+            end_stage=end_stage,
             resume=resume,
         )
 
     def _offer_squash_merge(self) -> None:
-        """After all batches complete, offer to squash-merge to main."""
+        """After all stages complete, offer to squash-merge to main."""
         assert self.pipeline and self.phase3
         branch = self.pipeline.extraction_branch
         if not branch:
             return
 
-        print(f"\n  All batches committed on branch '{branch}'.")
+        print(f"\n  All stages committed on branch '{branch}'.")
         print(f"  Squash-merge to main will consolidate all extraction")
         print(f"  commits into a single clean commit.")
 
@@ -1369,7 +1367,7 @@ class ExtractionOrchestrator:
             return
 
         chars = ", ".join(self.pipeline.target_characters)
-        n = len(self.phase3.batches)
+        n = len(self.phase3.stages)
         message = (f"Extraction complete: {self.pipeline.work_id} "
                    f"({n} stages, {chars})\n\n"
                    f"Squash-merged from {branch}.\n"
@@ -1385,37 +1383,37 @@ class ExtractionOrchestrator:
                   f"Merge manually from '{branch}'.")
 
     # ------------------------------------------------------------------
-    # Batch expansion (like Phase 4: always derive targets from plan)
+    # Stage expansion (like Phase 4: always derive targets from plan)
     # ------------------------------------------------------------------
 
-    def _ensure_batches_from_plan(
+    def _ensure_stages_from_plan(
         self,
         phase3: Phase3Progress,
-        max_batches: int | None = None,
+        max_stages: int | None = None,
     ) -> None:
-        """Ensure progress contains all target batches from the batch plan.
+        """Ensure progress contains all target stages from the stage plan.
 
         Like Phase 4's chapter expansion pattern: every run re-reads the
-        batch plan and appends any batches not yet tracked.  Existing
-        batch states are preserved.
+        stage plan and appends any stages not yet tracked.  Existing
+        stage states are preserved.
         """
         plan_path = (self.project_root / "works" / self.work_id
-                     / "analysis" / "source_batch_plan.json")
+                     / "analysis" / "stage_plan.json")
         if not plan_path.exists():
             return
 
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
-        full_batches = plan.get("batches", [])
+        full_stages = plan.get("stages", [])
 
-        current_count = len(phase3.batches)
-        effective_max = max_batches if (max_batches is not None
-                                        and max_batches > 0) else 0
-        added = phase3.expand_batches(full_batches,
-                                      max_batches=effective_max)
+        current_count = len(phase3.stages)
+        effective_max = max_stages if (max_stages is not None
+                                        and max_stages > 0) else 0
+        added = phase3.expand_stages(full_stages,
+                                      max_stages=effective_max)
         if added > 0:
             phase3.save(self.project_root)
-            print(f"  [EXPAND] Added {added} new batches from batch plan "
-                  f"({current_count} → {len(phase3.batches)})")
+            print(f"  [EXPAND] Added {added} new stages from stage plan "
+                  f"({current_count} → {len(phase3.stages)})")
 
     # ------------------------------------------------------------------
     # Full pipeline
@@ -1425,7 +1423,7 @@ class ExtractionOrchestrator:
         self,
         *,
         preset_characters: list[str] | None = None,
-        preset_end_batch: int | None = None,
+        preset_end_stage: int | None = None,
     ) -> None:
         """Run the complete pipeline: analysis → confirm → extract."""
         # Check for legacy progress and migrate if needed
@@ -1443,8 +1441,8 @@ class ExtractionOrchestrator:
 
         if pipeline and phase3 and pipeline.is_done("phase_2"):
             print(f"Found existing progress for {self.work_id}.")
-            print(f"  Completed: {phase3.completed_batch_count()}"
-                  f"/{len(phase3.batches)}")
+            print(f"  Completed: {phase3.completed_stage_count()}"
+                  f"/{len(phase3.stages)}")
             # Auto-resume when characters are preset (non-interactive mode)
             if preset_characters:
                 print("  Auto-resuming (preset characters provided).")
@@ -1452,7 +1450,7 @@ class ExtractionOrchestrator:
                 self.phase3 = phase3
                 self.run_extraction_loop(
                     pipeline, phase3,
-                    max_batches=preset_end_batch)
+                    max_stages=preset_end_stage)
                 return
             resume = input("Resume from existing progress? [Y/n]: ").strip()
             if resume.lower() != "n":
@@ -1460,7 +1458,7 @@ class ExtractionOrchestrator:
                 self.phase3 = phase3
                 self.run_extraction_loop(
                     pipeline, phase3,
-                    max_batches=preset_end_batch)
+                    max_stages=preset_end_stage)
                 return
 
         # Fresh start: summarize → analyze → confirm → baseline → extract
@@ -1475,7 +1473,7 @@ class ExtractionOrchestrator:
         pipeline, phase3 = self.confirm_with_user(
             analysis,
             preset_characters=preset_characters,
-            preset_end_batch=preset_end_batch,
+            preset_end_stage=preset_end_stage,
         )
 
         self.pipeline = pipeline
@@ -1489,13 +1487,13 @@ class ExtractionOrchestrator:
         self.run_baseline_production(pipeline.target_characters)
 
         # Commit baseline output so Phase 3 starts with a clean working tree
-        sha = commit_batch(self.project_root,
-                           "baseline", "Phase 0-2.5 baseline")
+        sha = commit_stage(self.project_root, "baseline",
+                           message="Phase 0-2.5 baseline")
         if sha:
             print(f"  [OK] Baseline committed as {sha}")
 
         self.run_extraction_loop(pipeline, phase3,
-                                 max_batches=preset_end_batch)
+                                 max_stages=preset_end_stage)
 
 
 # ---------------------------------------------------------------------------
@@ -1573,36 +1571,36 @@ def _is_fixable(verdict: dict[str, str]) -> bool:
     return True
 
 
-def _check_batch_plan_limits(
-    batch_plan: dict[str, Any],
+def _check_stage_plan_limits(
+    stage_plan: dict[str, Any],
     *,
-    max_batch_size: int = 15,
-    min_batch_size: int = 5,
+    max_stage_size: int = 15,
+    min_stage_size: int = 5,
 ) -> list[dict[str, Any]]:
-    """Check batch chapter counts against limits.
+    """Check stage chapter counts against limits.
 
-    Returns a list of violating batch dicts (empty = all OK).
+    Returns a list of violating stage dicts (empty = all OK).
     Prints a report either way.
     """
-    batches = batch_plan.get("batches", [])
-    if not batches:
+    stages = stage_plan.get("stages", [])
+    if not stages:
         return []
 
-    violating = [b for b in batches
-                 if (b.get("chapter_count", 0) > max_batch_size
-                     or b.get("chapter_count", 0) < min_batch_size)]
+    violating = [b for b in stages
+                 if (b.get("chapter_count", 0) > max_stage_size
+                     or b.get("chapter_count", 0) < min_stage_size)]
 
     if not violating:
-        print(f"  [OK] Batch plan: {len(batches)} batches, "
-              f"all within {min_batch_size}-{max_batch_size} chapter limit.")
+        print(f"  [OK] Stage plan: {len(stages)} stages, "
+              f"all within {min_stage_size}-{max_stage_size} chapter limit.")
         return []
 
-    print(f"\n  [FAIL] {len(violating)}/{len(batches)} batch(es) outside "
-          f"{min_batch_size}-{max_batch_size} chapter limit:")
+    print(f"\n  [FAIL] {len(violating)}/{len(stages)} stage(es) outside "
+          f"{min_stage_size}-{max_stage_size} chapter limit:")
     for b in violating:
         count = b.get("chapter_count", "?")
-        tag = "over" if isinstance(count, int) and count > max_batch_size else "under"
-        print(f"    {b.get('batch_id', '?')}: {b.get('stage_id', '?')} "
+        tag = "over" if isinstance(count, int) and count > max_stage_size else "under"
+        print(f"    {b.get('stage_id', '?')}: {b.get('stage_id', '?')} "
               f"— {count} chapters ({tag})")
 
     return violating

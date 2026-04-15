@@ -1,6 +1,6 @@
 # 自动化提取编排器
 
-用脚本驱动 Claude Code CLI（或 Codex CLI）自动完成多批次的 1+N 并行提取（世界 + 角色全并行）。
+用脚本驱动 Claude Code CLI（或 Codex CLI）自动完成多阶段的 1+N 并行提取（世界 + 角色全并行）。
 
 ## 架构
 
@@ -25,7 +25,7 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
                               git commit    全量回滚
 ```
 
-每个 batch 的流程：
+每个 stage 的流程：
 
 1. Git preflight check（工作区干净、分支正确）
 2. **智能跳过**：若产物已在磁盘（world + 各角色 snapshot），直接跳到 3
@@ -37,7 +37,7 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 6. **提交门控**（程序化，0 token）：确认全通道 PASS + 交叉一致性检查
 7. **失败分级**：
    - 局部问题（≤5 个具体字段错误）→ 通道内定点修复 → 再审校 → 继续
-   - 系统性问题（文件缺失/结构错误/理解偏差）→ 全 batch rollback + 重试
+   - 系统性问题（文件缺失/结构错误/理解偏差）→ 全 stage rollback + 重试
 
 ## 依赖
 
@@ -68,7 +68,7 @@ python -m automation.persona_extraction "<work_id>" -b claude -m opus
 # 预设参数（跳过交互选角色）
 python -m automation.persona_extraction "<work_id>" \
     -c 角色A 角色B \
-    --end-batch 5
+    --end-stage 5
 
 # 调整 Phase 0/Phase 4 并发数（默认 10）
 python -m automation.persona_extraction "<work_id>" \
@@ -116,7 +116,7 @@ kill <PID>
 python -m automation.persona_extraction "<work_id>" --resume --max-runtime 120
 ```
 
-到达时限后会在当前 batch 结束时停止，不会中途打断。
+到达时限后会在当前 stage 结束时停止，不会中途打断。
 
 ## 进程保护
 
@@ -136,7 +136,7 @@ works/{work_id}/analysis/.extraction.lock
 
 - 提取 agent：3600 秒（60 分钟）超时后自动 kill
 - 审校 agent：600 秒（10 分钟）超时后自动 kill
-- 每个 batch 最多重试 2 次
+- 每个 stage 最多重试 2 次
 
 ### 进度监控
 
@@ -145,7 +145,7 @@ works/{work_id}/analysis/.extraction.lock
 - 已用时间
 - 子进程 PID
 - 子进程和编排器的内存占用（RSS）
-- 分步耗时预估（从第 2 个 batch 开始）
+- 分步耗时预估（从第 2 个 stage 开始）
 
 ## 目录结构
 
@@ -174,7 +174,7 @@ automation/
     ├── review_lanes.py             ← 并行审校通道 + 提交门控
     ├── json_repair.py              ← 三级 JSON 修复（见下）
     ├── prompt_builder.py           ← 上下文感知的 prompt 组装
-    ├── consistency_checker.py      ← 跨批次一致性检查（Phase 3.5）
+    ├── consistency_checker.py      ← 跨阶段一致性检查（Phase 3.5）
     ├── git_utils.py                ← Git 安全操作
     └── process_guard.py            ← PID 锁、内存监控、后台启动
 ```
@@ -185,10 +185,10 @@ automation/
 
 - `pipeline.json` — 流水线总进度（各 phase 完成状态）
 - `phase0_summaries.json` — Phase 0 各 chunk 状态
-- `phase3_batches.json` — Phase 3 各 batch 状态机
+- `phase3_stages.json` — Phase 3 各 stage 状态机
 - `phase4_scenes.json` — Phase 4 各章节状态
 
-Phase 3 batch 状态机：
+Phase 3 stage 状态机：
 
 ```
 pending → extracting → extracted → post_processing → reviewing → passed → committed
@@ -221,25 +221,25 @@ L2 超时默认 600s（`repair_timeout` 参数可配置）。
 脚本可以在任何状态安全中断：
 
 - `Ctrl+C` / `kill <PID>` → 保存当前进度、释放锁后退出
-- `--max-runtime` 到期 → 当前 batch 结束后优雅停止
+- `--max-runtime` 到期 → 当前 stage 结束后优雅停止
 - Rate limit → 自动等待后重试（递增退避）
 - **Token/context limit → 不重试**（相同 prompt 必定再次超限），直接标记
   ERROR 并回滚，避免浪费重试配额
-- 脚本崩溃 → 重启后加 `--resume` 从最后一个 committed batch 继续
+- 脚本崩溃 → 重启后加 `--resume` 从最后一个 committed stage 继续
 - 提取失败 → 自动回滚未提交的文件变更（全仓库范围，不仅限于 `works/`）
 - **Baseline 恢复**：`--resume` 时自动检测 Phase 2.5 baseline 是否完成，
-  缺失则补跑，避免后续 batch 因缺少 identity.json 而全部失败
+  缺失则补跑，避免后续 stage 因缺少 identity.json 而全部失败
 - **Baseline 出口验证**：Phase 2.5 完成后运行 `validate_baseline()`
   校验 schema + required 字段非空，阻断不合格的 baseline 进入 Phase 3
 - **REVIEWING 中断恢复**：恢复到 REVIEWING 状态时先验证提取产物仍在磁盘，
   文件缺失则自动回退重新提取
-- Resume 时自动重置 blocked batch（retry 耗尽的），无需手动编辑 progress
-- **Progress 与 `--end-batch` 分离**：progress 始终包含完整 batch plan，
-  `--end-batch` 仅控制本次执行范围（同 Phase 4 模式）
+- Resume 时自动重置 blocked stage（retry 耗尽的），无需手动编辑 progress
+- **Progress 与 `--end-stage` 分离**：progress 始终包含完整 stage plan，
+  `--end-stage` 仅控制本次执行范围（同 Phase 4 模式）
 
-## Phase 3.5：跨批次一致性检查
+## Phase 3.5：跨阶段一致性检查
 
-Phase 3 全部 batch 提交后自动运行。包含 9 项程序化检查（零 token），
+Phase 3 全部 stage 提交后自动运行。包含 9 项程序化检查（零 token），
 可选 LLM 裁定标记项。产出 `consistency_report.json`。有 error 级别问题时
 阻断 Phase 4，需人工处理后继续。target_map 样本数检查使用
 importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。
@@ -253,7 +253,7 @@ Phase 4 与 Phase 3 数据独立——使用独立 PID 锁 `.scene_archive.lock`
 `works/{work_id}/analysis/scene_splits/` 和 lock 文件均为
 本地忽略产物（**不得被 git track**），Phase 3 的 rollback 不会清掉它们。
 resume 时会校验 passed 章节的 split 文件是否实际存在，缺失的自动重新生成。
-前置条件仅为 `source_batch_plan.json`（Phase 1 产物）。
+前置条件仅为 `stage_plan.json`（Phase 1 产物）。
 
 **运行方式**：
 
@@ -264,9 +264,9 @@ python -m persona_extraction "<work_id>" -r .. --start-phase 4
 # 恢复断点
 python -m persona_extraction "<work_id>" -r .. --start-phase 4 --resume
 
-# 只处理前 5 个 batch 的章节，并发 20
+# 只处理前 5 个 stage 的章节，并发 20
 python -m persona_extraction "<work_id>" -r .. \
-    --start-phase 4 --end-batch 5 --concurrency 20
+    --start-phase 4 --end-stage 5 --concurrency 20
 ```
 
 **工作流**：
@@ -277,7 +277,7 @@ python -m persona_extraction "<work_id>" -r .. \
   是 work-level 产物，不限于提取目标角色集）
 - 全部完成后合并为 `works/{work_id}/retrieval/scene_archive.jsonl`
 - `scene_id` 格式：`SC-S{stage:03d}-{seq:02d}`（如 `SC-S003-07`）；阶段号从
-  `source_batch_plan.json` 查得（batch_plan 是唯一真源），seq 在每阶段内
+  `stage_plan.json` 查得（stage_plan 是唯一真源），seq 在每阶段内
   从 01 递增（上限 99）
 
 **产出**：

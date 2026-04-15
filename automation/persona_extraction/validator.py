@@ -75,14 +75,14 @@ def _load_importance_map(project_root: Path, work_id: str) -> dict[str, str]:
         return {}
 
 
-def validate_batch(
+def validate_stage(
     project_root: Path,
     work_id: str,
     stage_id: str,
     character_ids: list[str],
     schema_dir: Path | None = None,
 ) -> ValidationReport:
-    """Run all programmatic checks for a batch's output."""
+    """Run all programmatic checks for a stage's output."""
     issues: list[ValidationIssue] = []
     schema_dir = schema_dir or (project_root / "schemas")
     work_dir = project_root / "works" / work_id
@@ -96,7 +96,7 @@ def validate_batch(
         issues.extend(_check_character(
             work_dir, char_id, stage_id, schema_dir, importance_map))
 
-    # ---- Baseline file checks (Phase 2.5 creates, any batch may update) ----
+    # ---- Baseline file checks (Phase 2.5 creates, any stage may update) ----
     for char_id in character_ids:
         issues.extend(_check_baselines(work_dir, char_id, schema_dir))
 
@@ -123,11 +123,11 @@ def validate_lane(
     """Run programmatic checks scoped to a single review lane.
 
     Args:
-        lane_type: "world", "character", or "all" (full batch).
+        lane_type: "world", "character", or "all" (full stage).
         lane_character_id: Required when lane_type is "character".
     """
     if lane_type == "all":
-        return validate_batch(project_root, work_id, stage_id,
+        return validate_stage(project_root, work_id, stage_id,
                               character_ids, schema_dir)
 
     issues: list[ValidationIssue] = []
@@ -730,7 +730,7 @@ def _check_memory_digest(path: Path, stage_id: str,
             logger.info("Auto-repaired %s (%s)", path.name, desc)
             text = path.read_text(encoding="utf-8").strip()
 
-    # Derive current batch's stage number from the stage_id (e.g. 阶段01 → 1).
+    # Derive current stage's stage number from the stage_id (e.g. 阶段01 → 1).
     # Stage for digest entries is carried by the S### segment of memory_id
     # (authoritative); no separate stage_id field is stored.
     current_stage_num: int | None = None

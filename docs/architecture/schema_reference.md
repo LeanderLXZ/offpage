@@ -42,7 +42,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **用途**：世界级固定关系网络（血缘、宗族、师徒、势力从属等不随阶段变化的结构性关系）。
 **位置**：`works/{work_id}/world/foundation/fixed_relationships.json`
 **关键字段**：relationships[].relationship_id, relationships[].type, relationships[].parties, relationships[].description
-**生命周期**：Phase 2.5 产出骨架，后续批次可修正。运行时 Tier 0 加载。
+**生命周期**：Phase 2.5 产出骨架，后续阶段可修正。运行时 Tier 0 加载。
 
 ---
 
@@ -287,10 +287,10 @@ core_wounds 记录最底层的创伤根源。
 
 | 文件 | 提取时 | 运行时 |
 |------|--------|--------|
-| identity.json | 首批创建，后续修订 | **加载** |
-| failure_modes.json | 首批创建，后续修订 | **加载** |
+| identity.json | 首阶段创建，后续修订 | **加载** |
+| failure_modes.json | 首阶段创建，后续修订 | **加载** |
 | voice_rules.json | 提取锚点 | **不加载** |
 | behavior_rules.json | 提取锚点 | **不加载** |
 | boundaries.json | 提取锚点（hard_boundaries 加载） | hard_boundaries **加载** |
-| stage_snapshot | 每批产出 | **加载**（核心） |
-| memory_timeline | 每批产出 | 近期 2 阶段全量 + memory_digest 1..N 过滤 + FTS5 按需 |
+| stage_snapshot | 每阶段产出 | **加载**（核心） |
+| memory_timeline | 每阶段产出 | 近期 2 阶段全量 + memory_digest 1..N 过滤 + FTS5 按需 |
