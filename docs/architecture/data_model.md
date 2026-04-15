@@ -192,8 +192,9 @@ works/{work_id}/world/
 - `manifest.json`
 - `stage_catalog.json`
 - `stage_snapshots/{stage_id}.json` — 世界当前阶段状态；`stage_events`
-  **只记录该阶段发生的事件**（每条 ≤80 字一句话摘要），不累积历史。
-  跨阶段事件时间线由 `world_event_digest.jsonl` 承担。
+  **只记录该阶段的世界公共层事件**（每条 50–80 字一句话，schema 硬门控），
+  不累积历史，不收录角色私人场景/内心决定（后者属于角色 memory_timeline）。
+  跨阶段事件时间线由 `world_event_digest.jsonl` 承担（1:1 复制 stage_events）。
 - `foundation/foundation.json` — Phase 2.5 产出的统一基础设定
   （未来可拆分为 setting.json、cosmology.json、power_system.json 等）
 - `foundation/fixed_relationships.json` — 世界级固定关系网络
@@ -290,8 +291,8 @@ works/{work_id}/characters/{character_id}/
 - `canon/failure_modes.json`
 - `canon/stage_catalog.json`
 - `canon/stage_snapshots/{stage_id}.json` — **自包含**，运行时核心；
-  `stage_events` **仅记录该阶段次发生的事件**（每条 ≤80 字），不累积历史。
-  跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
+  `stage_events` **仅记录该阶段发生的事件**（每条 50–80 字，schema 硬门控），
+  不累积历史。跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
   `world_event_digest.jsonl` 承担。
 - `canon/memory_timeline/{stage_id}.json`
 - `canon/memory_digest.jsonl` — 压缩摘要索引，stage 1..N 过滤加载

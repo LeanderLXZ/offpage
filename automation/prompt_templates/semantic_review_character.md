@@ -30,49 +30,55 @@
 2. relationships 条目的 driving_events 是否同等详细
 3. evidence_refs 引用密度是否相近
 4. dialogue_examples 数量和质量是否相近
-5. memory_timeline 条目的 subjective_experience 长度和深度是否一致
-6. target_voice_map 每个 target 的 dialogue_examples 数量和质量是否充分（至少 3-5 条）
-7. target_behavior_map 每个 target 的 action_examples 数量和质量是否充分（至少 3-5 条）
-8. 如果任何维度出现明显退化（比前阶段减少 50% 以上），标记为 FAIL
+5. memory_timeline 条目的 `subjective_experience` 长度和深度是否一致
+6. memory_timeline 每条的 `event_description`（150–200 字）和
+   `digest_summary`（30–50 字）是否在范围内且非空泛。长度下限是 schema
+   硬门控，但贴近下限的"擦边"填充仍应记为退化
+7. `stage_events` 每条是否为 50–80 字的一句话（schema 硬门控；是否有
+   贴近下限的敷衍填充）
+8. target_voice_map 每个 target 的 dialogue_examples 数量和质量是否充分（至少 3-5 条）
+9. target_behavior_map 每个 target 的 action_examples 数量和质量是否充分（至少 3-5 条）
+10. 如果任何维度出现明显退化（比前阶段减少 50% 以上），标记为 FAIL
 
 ### B. 数据边界正确性
 
-9. 角色包是否有世界层的大事件直接复制？
-10. 角色的 knowledge_scope 是否合理？是否泄漏了角色不该知道的信息？
-11. 是否有 inference 被标为 canon？
+11. 角色包是否有世界层的大事件直接复制？
+12. 角色的 knowledge_scope 是否合理？是否泄漏了角色不该知道的信息？
+13. `digest_summary` 是否是从 `event_description` 机械截断而非独立撰写
+    （应当聚焦可检索关键词，而不是"前 50 字截断"）
 
 ### C. 信息充分性（stage_snapshot 完整度）
 
 stage_snapshot 是运行时角色扮演的唯一状态来源。以下维度缺少任何一个 = 扮演缺陷：
 
-12. `active_aliases` 是否存在？primary_name 是否正确？
-13. `voice_state` 是否有足够的 emotional_voice_map（至少 3 种情绪）？target_voice_map 每个 target 是否有至少 3-5 条 dialogue_examples？
-14. `behavior_state` 是否有足够的 emotional_reaction_map（至少 3 种情绪）？target_behavior_map 每个 target 是否有至少 3-5 条 action_examples？
-15. `boundary_state` 是否存在？
-16. `relationships` 是否覆盖了本阶段出现的所有重要角色？每条是否有 driving_events？
-17. `knowledge_scope` 是否存在？
-18. `misunderstandings` 和 `concealments` 是否已填写（即使为空数组）？
-19. `emotional_baseline`、`current_personality`、`current_mood`、`current_status` 是否存在？
-20. `stage_delta` 是否存在（非首阶段时应有实质内容）？
-21. `memory_timeline` 是否覆盖了本阶段的关键事件？
-22. 有没有明显的重大遗漏？
+14. `active_aliases` 是否存在？primary_name 是否正确？
+15. `voice_state` 是否有足够的 emotional_voice_map（至少 3 种情绪）？target_voice_map 每个 target 是否有至少 3-5 条 dialogue_examples？
+16. `behavior_state` 是否有足够的 emotional_reaction_map（至少 3 种情绪）？target_behavior_map 每个 target 是否有至少 3-5 条 action_examples？
+17. `boundary_state` 是否存在？
+18. `relationships` 是否覆盖了本阶段出现的所有重要角色？每条是否有 driving_events？
+19. `knowledge_scope` 是否存在？
+20. `misunderstandings` 和 `concealments` 是否已填写（即使为空数组）？
+21. `emotional_baseline`、`current_personality`、`current_mood`、`current_status` 是否存在？
+22. `stage_delta` 是否存在（非首阶段时应有实质内容）？
+23. `memory_timeline` 是否覆盖了本阶段的关键事件？
+24. 有没有明显的重大遗漏？
 
 ### C2. 别名一致性
 
-23. identity.json 的 aliases 是否包含本阶段新发现的别名？
-24. stage_snapshot 的 active_aliases 与 identity.json 的 aliases 是否一致？
+25. identity.json 的 aliases 是否包含本阶段新发现的别名？
+26. stage_snapshot 的 active_aliases 与 identity.json 的 aliases 是否一致？
 
 ### D. 世界-角色交叉一致性
 
-25. 世界快照和角色快照使用的 stage_id 是否一致？
-26. 世界快照中的重大事件是否在相关角色的 stage_events（仅本阶段）中有体现？
-27. 角色 relationships 中引用的事件是否合理？
+27. 世界快照和角色快照使用的 stage_id 是否一致？
+28. 世界快照中的重大事件是否在相关角色的 stage_events（仅本阶段）中有体现？
+29. 角色 relationships 中引用的事件是否合理？
 
 ### E. 时间性
 
-28. 当前阶段的内容是否写成了"现在时"？
-29. 历史事件是否正确标注为已发生？
-30. 是否有"未来阶段"的信息提前泄漏？
+30. 当前阶段的内容是否写成了"现在时"？
+31. 历史事件是否正确标注为已发生？
+32. 是否有"未来阶段"的信息提前泄漏？
 
 ## 输出格式
 

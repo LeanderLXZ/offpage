@@ -6,7 +6,6 @@
 
 - **当前目标**: 对 `{work_id}` 执行 {stage_id} 的 **世界层提取**（仅世界信息，不含角色）
 - **stage_id**: `{stage_id}`
-- **stage_id**: `{stage_id}`
 - **章节范围**: `{chapter_range}`
 - **目标角色（参考）**: {target_characters}
 - **首阶段？**: {is_first_stage}
@@ -22,12 +21,22 @@
 ## 核心规则
 
 1. **仅产出世界层**：本次调用只负责世界信息，角色信息由后续独立调用处理
-2. **世界层边界**：世界层只记录影响世界状态的大事件和主要角色参与的公共事件，小事件和个人视角归角色层
-3. **信息来源标注**：所有结构化数据必须标注 source_type（canon/inference/ambiguous）。inference 和 ambiguous 必须附带说明
-4. **证据引用**：`evidence_refs` 字段为本阶段涉及的章节号列表（如 `["0001", "0002"]`）。正文字段（stage_events、current_world_state 等）**不需要**逐条标注 `[NNNN]`
-5. **中文标识**：中文作品的 work_id, stage_id, 路径段都使用中文
-6. **时间性**：当前阶段写清"现在"，不要混成扁平总结
-7. **仅本阶段事件**：`stage_events` 只记录本 stage 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 ≤ 80 字的 1 句话摘要**，既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）
+2. **世界层边界**：`stage_events` 只记录**世界公共层事件**——对世界背景有持续影响或涉及多角色公共参与的事件。角色之间的私人互动、个人经济活动、内心决定等，归对应角色的 `memory_timeline` / `stage_events`，**不写入世界**
+3. **证据引用**：`evidence_refs` 字段为本阶段涉及的章节号列表（如 `["0001", "0002"]`）。正文字段（stage_events、current_world_state 等）**不需要**逐条标注 `[NNNN]`
+4. **中文标识**：中文作品的 work_id, stage_id, 路径段都使用中文
+5. **时间性**：当前阶段写清"现在"，不要混成扁平总结
+6. **仅本阶段事件**：`stage_events` 只记录本 stage 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 50–80 字的一句话摘要**（schema 两端硬门控；过短会直接判失败），既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。digest 是 1:1 机械展开，**你在此处写几条就是几条**——所以边界判定必须在你落笔时完成。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）
+
+### 世界层 vs 角色层（判定示例）
+
+| 属世界层（写入 stage_events） | 属角色层（**不要**写入世界） |
+|---|---|
+| 势力格局变迁（组织覆灭、联盟成立、领地易主） | 两名角色的私下对话或误会 |
+| 地形 / 资源显著变化（灵脉断裂、地图开辟） | 某角色的经济活动、日常消费 |
+| 世界规则首次被揭示（新法则、新设定公开） | 某角色的内心决定、情绪起伏 |
+| 跨角色公共事件（战役、典礼、危机事件） | 一方告知另一方私人信息 |
+
+判定准则：事件是否对"世界背景"有持续影响，或是否具有公共性（多方参与 / 公众知晓）。若只影响一两个角色的私人关系或心境，就是角色层。
 
 ## 世界层输出
 
@@ -44,10 +53,9 @@
 
 如果存在前一阶段的输出，请先读取它，并确保本阶段产出在以下维度与之保持一致：
 
-- `stage_events` 条目的粒度（≤ 80 字的 1 句话摘要）
+- `stage_events` 条目的粒度（50–80 字的一句话摘要）
 - `current_world_state` 的描述风格
-- 每条事件内嵌 `[NNNN]` 章节引用
-- source_type 已标注
+- evidence_refs 的填写密度
 
 ## 质量退化防护
 
@@ -56,7 +64,9 @@
 1. **Schema 确认**：你是否在本 stage 内重读过要写入文件对应的 schema？
    如果没有，**现在重读**。不要凭记忆填字段——schema 是权威。
 2. **前阶段对照**：本 stage 的输出在字段详细度、术语、`stage_events`
-   粒度、source_type 分布上是否与前一 stage 一致？
+   粒度上是否与前一 stage 一致？
+3. **长度合规**：每条 `stage_events` 是否在 50–80 字区间？过短（< 50）
+   或过长（> 80）都会被 schema 判失败。
 
 ### 边界禁令
 
@@ -70,8 +80,7 @@
 
 1. 世界快照 `world/stage_snapshots/{stage_id}.json`
 2. 基础设定修正（如有）
-4. 所有文件都通过 schema 校验
-5. evidence_refs 为章节号列表（如 `["0001", "0002"]`），非空
-6. source_type 已标注
-7. `stage_events` 仅包含本阶段事件，每条为 ≤ 80 字的 1 句话摘要（digest 直接复用）
+3. 所有文件都通过 schema 校验
+4. evidence_refs 为章节号列表（如 `["0001", "0002"]`），非空
+5. `stage_events` 仅包含本阶段世界级事件，每条 50–80 字（digest 1:1 复用）
 {retry_note}

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ConsistencyIssue:
     severity: str          # "error" or "warning"
-    category: str          # e.g. "alias", "relationship", "source_type"
+    category: str          # e.g. "alias", "relationship", "evidence_refs"
     location: str          # e.g. "角色名/阶段03"
     message: str
 
@@ -110,7 +110,6 @@ def run_consistency_check(
     issues.extend(_check_alias_consistency(work_dir, character_ids, stage_ids))
     issues.extend(_check_field_completeness(work_dir, character_ids, stage_ids))
     issues.extend(_check_relationship_continuity(work_dir, character_ids, stage_ids))
-    issues.extend(_check_source_type_distribution(work_dir, character_ids, stage_ids))
     issues.extend(_check_evidence_refs_coverage(work_dir, character_ids, stage_ids))
     issues.extend(_check_memory_id_correspondence(work_dir, character_ids, stage_ids))
     issues.extend(_check_target_map_counts(
@@ -320,31 +319,6 @@ def _check_relationship_continuity(
                                         f"'{new_val}' without driving_events"))
 
             prev_rels = curr_rels
-
-    return issues
-
-
-def _check_source_type_distribution(
-    work_dir: Path, character_ids: list[str], stage_ids: list[str],
-) -> list[ConsistencyIssue]:
-    """Flag stages where source_notes are all canon (lazy annotation)."""
-    issues: list[ConsistencyIssue] = []
-
-    for char_id in character_ids:
-        for stage_id in stage_ids:
-            snapshot = _load_json(_snapshot_path(work_dir, char_id, stage_id))
-            if snapshot is None:
-                continue
-            source_notes = snapshot.get("source_notes", [])
-            if not source_notes:
-                continue
-            types = [n.get("source_type") for n in source_notes]
-            unique = set(types)
-            if unique == {"canon"} and len(types) >= 3:
-                issues.append(ConsistencyIssue(
-                    "warning", "source_type", f"{char_id}/{stage_id}",
-                    f"All {len(types)} source_notes are 'canon' — "
-                    f"may indicate lazy annotation"))
 
     return issues
 

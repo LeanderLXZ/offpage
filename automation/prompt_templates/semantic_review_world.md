@@ -8,7 +8,11 @@
 
 ## 审校范围
 
-仅审校世界层产物，角色层由独立通道审校。
+审校世界层产物本身（snapshot、foundation）；同时需要读取各目标角色的
+`memory_timeline/{stage_id}.json` **作为越界判定依据**——世界 `stage_events`
+一旦写入角色层私事件（两人私下对话、单个角色的内心决定等），digest 会机械
+复制写入 `world_event_digest.jsonl`，造成世界事件污染。世界审校是过滤越界
+的唯一把关点。
 
 ## 必读文件
 
@@ -26,22 +30,31 @@
 
 如果前一批有输出（`{prev_stage_id}`），对比：
 
-1. stage_events 条目的粒度是否相近，每条是否为 ≤ 80 字的 1 句话摘要
+1. stage_events 条目的粒度是否相近，每条是否为 **50–80 字**的一句话摘要
+   （长度下限是 schema 硬门控，但过短"擦边"填充仍应记为退化）
 2. current_world_state 描述风格是否一致
 3. evidence_refs（章节号列表）是否完整
 4. 如果任何维度出现明显退化（比前阶段减少 50% 以上），标记为 FAIL
 
-### B. 数据边界正确性
+### B. 数据边界正确性（世界层 vs 角色层）
 
-5. 世界层是否只记录了大事件？是否有小场景、个人经历误入世界层？
-6. 是否有 inference 被标为 canon？
-7. stage_events 是否只包含本阶段事件，未重复前序阶段？（跨阶段时间线由 world_event_digest.jsonl 累积，不在 snapshot 内）
+5. 世界 `stage_events` 是否只记录**世界公共层事件**？典型世界层事件：
+   势力格局变迁、地形/资源显著变化、世界规则首次揭示、跨角色公共事件
+   （战役、典礼、公共危机）
+6. stage_events 是否只包含本阶段事件，未重复前序阶段？
+   （跨阶段时间线由 world_event_digest.jsonl 累积，不在 snapshot 内）
+7. **越界检查（关键）**：逐条比对世界 `stage_events` 与本阶段各角色的
+   `memory_timeline/{stage_id}.json`。若某条世界事件与某个角色
+   memory_timeline 条目高度重合、且该事件本质是角色私人互动或个人经历
+   （如两人私下对话、某角色的内心决定、某角色的私人经济活动），列为
+   **error**：该条目应从世界 stage_events 删除，交由角色层承载
 
 ### C. 信息充分性
 
 8. snapshot_summary 是否存在且有意义？
 9. current_world_state 是否覆盖本阶段重大变化？
-10. stage_events 是否完整覆盖本阶段重要事件？（stage_events 是唯一事件清单来源，每条 ≤ 80 字 1 句话摘要）
+10. stage_events 是否完整覆盖本阶段**世界级**重要事件？（stage_events 是
+    world_event_digest 的唯一事件清单来源，每条 50–80 字一句话）
 
 ### D. 时间性
 
@@ -58,6 +71,10 @@ FINDINGS:
 1. [severity: error/warning] [file] 具体问题描述
 2. ...
 
+BOUNDARY_LEAKAGE:
+- stage_events 中被判定属角色层、需要删除的条目（索引 + 原文 + 去向角色）
+- 若无越界，写 "无"
+
 STYLE_CONSISTENCY:
 - stage_events: OK/退化
 - current_world_state: OK/退化
@@ -68,4 +85,4 @@ SUMMARY:
 ```
 
 如果 VERDICT 为 FAIL，必须在 FINDINGS 中说明具体哪些问题必须修复。
-只有存在 severity=error 的 finding 时才应判定 FAIL。
+只有存在 severity=error 的 finding 时才应判定 FAIL。越界条目一律 error。

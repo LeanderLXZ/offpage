@@ -58,9 +58,10 @@ implementation code yet.
   source text independently; cross-consistency verified at commit gate.
   Every stage can correct and supplement baseline files (not just stage 1).
 - Programmatic post-processing (`post_processing.py`): after extraction,
-  automatically generates `memory_digest.jsonl` from `memory_timeline`,
-  `world_event_digest.jsonl` from world snapshot `stage_events` (≤80 char
-  per entry, 5-level importance inferred by keyword), and maintains
+  automatically generates `memory_digest.jsonl` from `memory_timeline`
+  (summary copied 1:1 from each entry's `digest_summary`),
+  `world_event_digest.jsonl` from world snapshot `stage_events` (50–80
+  字 per entry, 5-level importance inferred by keyword), and maintains
   `stage_catalog.json` from snapshot metadata (0 token, idempotent).
   IDs use `{TYPE}-S{stage:03d}-{seq:02d}` format (e.g. `M-S003-02`,
   `E-S001-05`); stage is encoded in the ID so digest entries omit
@@ -99,7 +100,7 @@ implementation code yet.
   and Phase 4 only run after **all** stages are `COMMITTED`. Prefix runs
   print a "re-run without --end-stage to finalize" hint and exit.
 - Phase 3.5 cross-stage consistency checker (`consistency_checker.py`):
-  9 programmatic checks (zero tokens) after all stages commit;
+  8 programmatic checks (zero tokens) after all stages commit;
   importance-based thresholds for target_map example counts
   (主角≥5, 重要配角≥3, others≥1)
 - Resume auto-reset: blocked stages automatically reset to pending on
@@ -168,7 +169,8 @@ implementation code yet.
   (location, recent events, emotion) for jieba matching each turn, enabling
   the character to naturally recall related memories without being asked.
 - memory_timeline schema uses `time`, `location`, `scene_refs` fields;
-  `memory_id` pattern `M-S###-##`; `event_summary` ≤50 chars.
+  `memory_id` pattern `M-S###-##`; `event_description` 150–200 字 and
+  `digest_summary` 30–50 字 (both hard schema gates).
 - scene_archive schema uses `scene_id` (pattern `SC-S###-##`), `time`,
   `location`, plus scene boundaries and `characters_present`.
 - scene_archive produced in Phase 4 (independent stage, after Phase 3.5).

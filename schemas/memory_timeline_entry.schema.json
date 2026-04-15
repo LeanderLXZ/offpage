@@ -8,7 +8,8 @@
   "required": [
     "memory_id",
     "stage_id",
-    "event_summary",
+    "event_description",
+    "digest_summary",
     "subjective_experience"
   ],
   "properties": {
@@ -30,10 +31,17 @@
       "type": "string",
       "description": "事件发生的地点。例如：某宗门·演武场、某城外。"
     },
-    "event_summary": {
+    "event_description": {
       "type": "string",
+      "minLength": 150,
+      "maxLength": 200,
+      "description": "客观层面发生了什么事的完整描述。第三人称，150–200 字，记录事件的起因、经过与结果，为 subjective_experience 提供事实锚点。"
+    },
+    "digest_summary": {
+      "type": "string",
+      "minLength": 30,
       "maxLength": 50,
-      "description": "客观层面发生了什么事。用第三人称简要描述，≤ 50 字——digest 直接复制此字段，提取阶段必须保证字数限制。"
+      "description": "供 memory_digest.jsonl 使用的一句话摘要。30–50 字，概括事件本体，不含主观情绪；post_processing 直接复制到 memory_digest.summary。"
     },
     "subjective_experience": {
       "type": "string",
@@ -107,15 +115,6 @@
       "type": "string",
       "enum": ["trivial", "minor", "significant", "critical", "defining"],
       "description": "这条记忆对角色的重要程度。defining = 塑造角色人生的关键事件。"
-    },
-    "source_type": {
-      "type": "string",
-      "enum": ["canon", "inference", "ambiguous"],
-      "description": "信息来源类型。canon = 原文明确描述；inference = 基于原文的合理推断；ambiguous = 原文存在多义性，当前解读可能有误。"
-    },
-    "source_note": {
-      "type": "string",
-      "description": "当 source_type 为 inference 或 ambiguous 时，简要说明推断依据或多义性所在。"
     },
     "scene_refs": {
       "type": "array",
