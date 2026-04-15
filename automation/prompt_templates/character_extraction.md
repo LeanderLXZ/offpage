@@ -116,6 +116,8 @@
 - dialogue_examples / action_examples 减少或复制前阶段
 - target_voice_map 或 target_behavior_map 某 target 的示例数低于上方质量要求表的最低值
 - relationships 缺少 driving_events 或 relationship_history_summary
+- knowledge_scope 条数频繁贴近 50/30/30 上限，或出现冗余堆砌条目
+  （重复、泛泛、与当前决策无关——即使字数合规也是质量退化信号）
 
 ### 字段命名严格对照（写错会导致 schema 校验失败）
 
