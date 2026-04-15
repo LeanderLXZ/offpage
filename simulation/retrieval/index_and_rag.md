@@ -35,8 +35,8 @@
 ```
 
 切分规则：以自然场景边界切分，一个场景不跨章节边界。`stage_id` 由章节号
-查 `source_batch_plan.json` 得出（batch_plan 是唯一真源；scene_archive
-每次合并均按 batch_plan 重建）。`scene_id` 将阶段号编码在前缀中
+查 `stage_plan.json` 得出（stage_plan 是唯一真源；scene_archive
+每次合并均按 stage_plan 重建）。`scene_id` 将阶段号编码在前缀中
 （`SC-S003-07` 表示阶段 3 的第 7 个场景）。
 
 ### memory_timeline（角色主观记忆线）

@@ -140,6 +140,6 @@
   ],
   "evidence_refs": [
     "基于全书章节摘要（0001-0537）和候选角色列表推断",
-    "core_wounds 和 key_relationships 基于摘要中明确记载的事件，后续 batch 提取读到原文后将修正补充"
+    "core_wounds 和 key_relationships 基于摘要中明确记载的事件，后续阶段提取读到原文后将修正补充"
   ]
 }

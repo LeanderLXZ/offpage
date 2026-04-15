@@ -6,7 +6,7 @@
    - Phase 0 (summarization) and Phase 1 (analysis) are complete
    - Run: `python -m automation.persona_extraction "<work_id>" --resume`
    - This will skip completed phases and resume from the last checkpoint
-   - Monitor the first 2-3 batches for output quality, tune prompt templates
+   - Monitor the first 2-3 stages for output quality, tune prompt templates
      in `automation/prompt_templates/` if needed
    - Note: need clean git working tree before running (stash or commit pending
      changes first)

@@ -81,14 +81,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "default_batch_size": {
+        "default_stage_size": {
           "type": "integer",
           "minimum": 1,
-          "description": "默认抽取批次大小，单位为章节数。若未显式覆盖，推荐默认值为 10。"
-        },
-        "batch_to_stage": {
-          "type": "boolean",
-          "description": "若为 true，则默认把第 N 个 batch 视为第 N 个阶段候选。"
+          "description": "默认抽取阶段大小，单位为章节数。若未显式覆盖，推荐默认值为 10。"
         },
         "stage_is_cumulative": {
           "type": "boolean",

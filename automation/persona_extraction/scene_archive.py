@@ -419,18 +419,18 @@ def _parse_scene_output(text: str) -> list[dict[str, Any]] | None:
 def _build_chapter_to_stage_map(
     project_root: Path, work_id: str,
 ) -> dict[str, str]:
-    """Build chapter_id → stage_id mapping from source_batch_plan.json."""
+    """Build chapter_id → stage_id mapping from stage_plan.json."""
     plan_path = (project_root / "works" / work_id / "analysis"
-                 / "source_batch_plan.json")
+                 / "stage_plan.json")
     if not plan_path.exists():
         return {}
 
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     mapping: dict[str, str] = {}
 
-    for batch in plan.get("batches", []):
-        stage_id = batch.get("stage_id", "")
-        ch_range = batch.get("chapters", "")
+    for stage in plan.get("stages", []):
+        stage_id = stage.get("stage_id", "")
+        ch_range = stage.get("chapters", "")
         if "-" in ch_range:
             parts = ch_range.split("-")
             ch_start = int(parts[0])
@@ -457,7 +457,7 @@ def merge_scene_archive(
 ) -> tuple[bool, str]:
     """Merge all per-chapter splits into scene_archive.jsonl.
 
-    ``source_batch_plan.json`` is the **single source of truth** for
+    ``stage_plan.json`` is the **single source of truth** for
     ``stage_id``: any pre-existing ``scene_archive.jsonl`` is entirely
     overwritten so stale stage names (e.g. from an earlier Phase 1 run)
     cannot leak through. ``scene_id`` is assigned as
@@ -471,7 +471,7 @@ def merge_scene_archive(
 
     chapter_to_stage = _build_chapter_to_stage_map(project_root, work_id)
     if not chapter_to_stage:
-        return False, "source_batch_plan.json not found or empty"
+        return False, "stage_plan.json not found or empty"
 
     known_stage_ids = set(chapter_to_stage.values())
 
@@ -498,11 +498,11 @@ def merge_scene_archive(
         if not stage_id:
             return False, (
                 f"Chapter {chapter_id} has no stage_id in "
-                f"source_batch_plan.json (batch plan is authoritative)")
+                f"stage_plan.json (stage plan is authoritative)")
         if stage_id not in known_stage_ids:
             return False, (
                 f"Chapter {chapter_id} mapped to unknown stage_id "
-                f"'{stage_id}' (batch plan mismatch)")
+                f"'{stage_id}' (stage plan mismatch)")
 
         stage_num = _stage_number(stage_id)
         if stage_num <= 0 or stage_num > 999:
@@ -517,7 +517,7 @@ def merge_scene_archive(
                 return False, (
                     f"stage '{stage_id}' exceeds 99 scenes — ID format "
                     f"SC-S###-## supports max 99 per stage; split the "
-                    f"stage or regenerate batch plan")
+                    f"stage or regenerate stage plan")
 
             scene_id = f"SC-S{stage_num:03d}-{seq:02d}"
             if scene_id in scene_ids_seen:
@@ -540,7 +540,7 @@ def merge_scene_archive(
             }
             all_scenes.append(entry)
 
-    # Fully rewrite scene_archive.jsonl — batch_plan is the truth source
+    # Fully rewrite scene_archive.jsonl — stage_plan is the truth source
     with open(output_path, "w", encoding="utf-8") as f:
         for entry in all_scenes:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -591,14 +591,14 @@ def run_scene_archive(
     backend: LLMBackend,
     *,
     concurrency: int = 10,
-    end_batch: int = 0,
+    end_stage: int = 0,
     resume: bool = False,
 ) -> bool:
     """Run Phase 4: scene archive generation.
 
     Args:
         concurrency: Max parallel chapter workers.
-        end_batch: Only process chapters from batches 1..N (0 = all).
+        end_stage: Only process chapters from stages 1..N (0 = all).
         resume: If True, load existing progress and continue.
 
     Returns True if completed successfully.
@@ -626,7 +626,7 @@ def run_scene_archive(
     try:
         return _run_scene_archive_inner(
             project_root, work_id, backend,
-            concurrency=concurrency, end_batch=end_batch, resume=resume)
+            concurrency=concurrency, end_stage=end_stage, resume=resume)
     finally:
         lock.release()
 
@@ -637,23 +637,23 @@ def _run_scene_archive_inner(
     backend: LLMBackend,
     *,
     concurrency: int = 10,
-    end_batch: int = 0,
+    end_stage: int = 0,
     resume: bool = False,
 ) -> bool:
     """Inner implementation after lock is acquired."""
 
-    # Check precondition: source_batch_plan.json
+    # Check precondition: stage_plan.json
     plan_path = (project_root / "works" / work_id / "analysis"
-                 / "source_batch_plan.json")
+                 / "stage_plan.json")
     if not plan_path.exists():
-        print("[ERROR] source_batch_plan.json not found. "
+        print("[ERROR] stage_plan.json not found. "
               "Phase 1 must complete first.")
         return False
 
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
 
     # Determine which chapters to process
-    chapters_to_process = _collect_chapters(plan, end_batch)
+    chapters_to_process = _collect_chapters(plan, end_stage)
     if not chapters_to_process:
         print("[ERROR] No chapters to process.")
         return False
@@ -745,19 +745,19 @@ def _run_scene_archive_inner(
 
 
 def _collect_chapters(
-    plan: dict[str, Any], end_batch: int,
+    plan: dict[str, Any], end_stage: int,
 ) -> list[str]:
-    """Collect chapter IDs from batch plan, respecting end_batch limit.
+    """Collect chapter IDs from stage plan, respecting end_stage limit.
 
-    Parses the 'chapters' field (format: "0001-0011") from each batch.
+    Parses the 'chapters' field (format: "0001-0011") from each stage.
     """
     chapters: list[str] = []
-    batches = plan.get("batches", [])
+    stages = plan.get("stages", [])
 
-    for i, batch in enumerate(batches):
-        if end_batch > 0 and (i + 1) > end_batch:
+    for i, stage in enumerate(stages):
+        if end_stage > 0 and (i + 1) > end_stage:
             break
-        ch_range = batch.get("chapters", "")
+        ch_range = stage.get("chapters", "")
         if "-" in ch_range:
             parts = ch_range.split("-")
             ch_start = int(parts[0])
@@ -797,7 +797,7 @@ def _run_parallel(
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures: dict = {}
 
-        # Seed initial batch
+        # Seed initial stage
         for chapter_id in itertools.islice(pending_iter, concurrency):
             future = executor.submit(
                 _process_chapter,
