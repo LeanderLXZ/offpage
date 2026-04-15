@@ -249,10 +249,15 @@ that a new AI should know beyond what the architecture docs already say.
     `git checkout -- .` during Phase 3 rollback restores tracked splits
     to their last committed version, silently destroying newer split
     files. Phase 3 rollback also excludes them from `git clean -fd`.
-40e. Phase 4 resume verifies that passed chapters' split files actually
-    exist on disk (`verify_passed`). Missing files are reset to pending
-    and regenerated. This guards against file loss from any cause
-    (rollback, manual cleanup, filesystem errors).
+40e. All progress files self-heal against on-disk artifacts on every
+    startup via `reconcile_with_disk()` (Phase 0 chunks, Phase 3 stages,
+    Phase 4 chapters). Three rules: (1) terminal state + missing
+    artifact → revert to PENDING; (2) PENDING + on-disk artifact →
+    purge artifact (treated as incomplete partial run); (3) any
+    intermediate state → purge artifact + revert. Phase 3 additionally
+    verifies `committed_sha` is reachable via `git cat-file -e`; sha
+    lost to reset/rebase is treated as missing artifact. Guards against
+    file loss, manual cleanup, partial writes, and history rewrites.
 40e2. Phase 3 and Phase 4 share the same retry contract: FAILED items
     auto-retry within the same run (no manual resume needed); all
     failure paths increment retry_count; exceeded max_retries → ERROR
