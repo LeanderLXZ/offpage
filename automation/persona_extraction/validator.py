@@ -28,8 +28,16 @@ logger = logging.getLogger(__name__)
 
 try:
     import jsonschema
-except ImportError:
-    jsonschema = None  # type: ignore[assignment]
+except ImportError as _jsonschema_exc:  # pragma: no cover
+    # jsonschema is declared as a required dependency in automation/pyproject.toml.
+    # If import fails here, the environment is broken — fail loudly rather than
+    # silently downgrade the gate. See requirements.md §11.4 "第一层：程序化
+    # 校验（jsonschema 为硬依赖）".
+    raise ImportError(
+        "jsonschema is a required dependency of persona-extraction. "
+        "Install it with `pip install jsonschema` (or install the automation "
+        "package with its dependencies). See docs/requirements.md §11.4."
+    ) from _jsonschema_exc
 
 
 @dataclass
@@ -864,10 +872,7 @@ def _is_valid_json_line(line: str) -> bool:
 
 def _validate_schema(data: dict, schema_path: Path,
                      file_label: str) -> list[ValidationIssue]:
-    """Validate data against a JSON Schema. Requires jsonschema package."""
-    if jsonschema is None:
-        return []  # Skip if jsonschema not installed
-
+    """Validate data against a JSON Schema (jsonschema is a hard dependency)."""
     if not schema_path.exists():
         return [ValidationIssue("warning", file_label,
                                 f"Schema not found: {schema_path.name}")]

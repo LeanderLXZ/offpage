@@ -25,10 +25,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-try:
-    import jsonschema as _jsonschema
-except ImportError:
-    _jsonschema = None
+import jsonschema as _jsonschema  # REQUIRED — see pyproject.toml dependencies
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +110,7 @@ def generate_memory_digest(
         return issues
 
     # --- validate against schema ---
-    if schema_dir and _jsonschema:
+    if schema_dir:
         schema_path = schema_dir / "memory_digest_entry.schema.json"
         if schema_path.exists():
             schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -306,7 +303,7 @@ def generate_world_event_digest(
         return issues
 
     # Validate against schema
-    if schema_dir and _jsonschema:
+    if schema_dir:
         schema_path = schema_dir / "world_event_digest_entry.schema.json"
         if schema_path.exists():
             schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -449,7 +446,7 @@ def upsert_stage_catalog(
     catalog["stages"] = stages
 
     # --- validate against schema ---
-    if schema_dir and _jsonschema:
+    if schema_dir:
         schema_name = ("world_stage_catalog.schema.json"
                        if character_id is None
                        else "stage_catalog.schema.json")

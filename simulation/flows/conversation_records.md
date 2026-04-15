@@ -142,8 +142,9 @@ When the user chooses to merge a context into long-term account state:
    - `long_term_profile.json`
    - `relationship_core`
 6. mark the source context as:
-   - `merged`
-   - or `merged_archived`
+   - `merged` (lightweight stub preserved, still derivable)
+   - or `archived` (fully archived into `conversation_library/`, no
+     longer an active branch)
 7. write back `archive_ref` into the source context manifest
 
 Recommended default:

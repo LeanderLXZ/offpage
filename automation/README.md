@@ -42,10 +42,11 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 ## 依赖
 
 - Python >= 3.11
-- `jsonschema`（可选，用于程序化校验。不装也能跑，只是跳过 schema 校验）
+- `jsonschema`（**必需**）—— 所有机器的程序化门控强度必须一致；未装则
+  import 时直接报错。详见 `docs/requirements.md §11.4`
 
 ```bash
-pip install jsonschema   # 一次性，可选
+pip install jsonschema   # 一次性，必需
 ```
 
 ## 使用
@@ -236,6 +237,13 @@ L2 超时默认 600s（`repair_timeout` 参数可配置）。
 - Resume 时自动重置 blocked stage（retry 耗尽的），无需手动编辑 progress
 - **Progress 与 `--end-stage` 分离**：progress 始终包含完整 stage plan，
   `--end-stage` 仅控制本次执行范围（同 Phase 4 模式）
+- **`--end-stage` 严格前缀语义**：Phase 3 命中 `--end-stage` 停止时，**不会**
+  触发 Phase 3.5、squash-merge 提示或 Phase 4 —— 这些收尾步骤只在所有
+  stage 均 `COMMITTED` 后执行。前缀运行结束时仅打印"继续运行即可完成"的提示
+- **提交顺序契约**：stage 在 git commit 成功（拿到真实 SHA）后才迁移到
+  `COMMITTED`；`git commit` 返回空 SHA（空 diff 或 commit 失败）则状态
+  回退到 `FAILED`，避免产生"状态已 commit 但 git 里没有对应 object"的伪
+  committed 漂移
 
 ## Phase 3.5：跨阶段一致性检查
 

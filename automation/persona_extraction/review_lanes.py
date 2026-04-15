@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from .post_processing import _parse_stage_number, _stage_from_id
 
 if TYPE_CHECKING:
     from .llm_backend import LLMBackend
@@ -248,11 +251,22 @@ def run_commit_gate(
 ) -> tuple[bool, list[str]]:
     """Run the commit gate after all review lanes complete.
 
+    Scope: structural + identifier-level 一致性 only. Content-level cross-entity
+    conflicts (world settings vs character cognition) are the character lane
+    semantic reviewer's job (§11.4b in requirements). This gate is a zero-token
+    last-line guard, not a replacement for semantic review.
+
     Checks:
     1. All lanes passed
-    2. World-character stage_id alignment
-    3. Cross-entity consistency (programmatic)
-    4. Programmatically-maintained files (digest, catalog) are valid
+    2. World + character snapshot files exist
+    3. ``stage_id`` field in each snapshot matches current stage_id
+    4. ``stage_catalog.json`` (world + per-character) contains current stage
+    5. Each character's ``memory_digest.jsonl`` has entries for current stage
+       (stage encoded in ``memory_id`` prefix; digest entries carry NO
+       ``stage_id`` field per memory_digest_entry.schema.json)
+    6. Lightweight cross-entity reference check (warn-only): names referenced
+       in world snapshot ``relationship_shifts`` / ``character_status_changes``
+       should resolve via world cast or active character aliases
 
     Returns (passed, list_of_issues).
     """
@@ -310,8 +324,6 @@ def run_commit_gate(
                     f"[{char_id}] 角色快照 JSON 解析失败")
 
     # --- Check 4: Programmatically-maintained files exist ---
-    schema_dir = project_root / "schemas"
-
     world_catalog = work_dir / "world" / "stage_catalog.json"
     if world_catalog.exists():
         _validate_catalog_has_stage(world_catalog, stage_id, issues,
@@ -327,7 +339,22 @@ def run_commit_gate(
         if digest.exists():
             _validate_digest_has_stage(digest, stage_id, issues, char_id)
 
-    passed = len(issues) == 0
+    # --- Check 5: Lightweight cross-entity reference resolution (warn-only) ---
+    # Resolve character names mentioned in world snapshot's relationship_shifts
+    # and character_status_changes against (a) world cast roster, (b) active
+    # character aliases. Failures are WARNINGS — the character may legitimately
+    # be out of the user's active extraction scope. We log the warnings into
+    # issues but do NOT fail the gate on reference misses; the content-level
+    # truth is enforced by the character lane semantic reviewer.
+    if world_snapshot.exists():
+        warnings = _cross_entity_reference_warnings(
+            work_dir, world_snapshot, character_ids)
+        for w in warnings:
+            issues.append(f"[WARN] {w}")
+
+    # Warnings (prefixed ``[WARN]``) do NOT fail the gate.
+    hard_issues = [i for i in issues if not i.startswith("[WARN]")]
+    passed = len(hard_issues) == 0
     return passed, issues
 
 
@@ -351,11 +378,21 @@ def _validate_digest_has_stage(
     digest_path: Path, stage_id: str,
     issues: list[str], label: str,
 ) -> None:
-    """Check that memory_digest contains entries for the given stage."""
+    """Check that memory_digest contains entries for the given stage.
+
+    Stage is encoded in the ``memory_id`` prefix (``M-S{stage:03d}-{seq:02d}``).
+    ``memory_digest_entry.schema.json`` does NOT permit a ``stage_id`` field,
+    so we parse the stage segment out of the ID instead.
+    """
     try:
         text = digest_path.read_text(encoding="utf-8").strip()
         if not text:
             issues.append(f"[{label}] memory_digest.jsonl 为空")
+            return
+        stage_num = _parse_stage_number(stage_id)
+        if stage_num == 0:
+            issues.append(
+                f"[{label}] 无法从 stage_id='{stage_id}' 中提取阶段数字")
             return
         found = False
         for line in text.splitlines():
@@ -364,13 +401,123 @@ def _validate_digest_has_stage(
                 continue
             try:
                 entry = json.loads(line)
-                if entry.get("stage_id") == stage_id:
+                if _stage_from_id(entry.get("memory_id", "")) == stage_num:
                     found = True
                     break
             except json.JSONDecodeError:
                 continue
         if not found:
             issues.append(
-                f"[{label}] memory_digest 缺少 stage_id={stage_id} 的条目")
+                f"[{label}] memory_digest 缺少阶段 S{stage_num:03d} 的条目")
     except (OSError, ValueError):
         issues.append(f"[{label}] memory_digest.jsonl 读取失败")
+
+
+# ---------------------------------------------------------------------------
+# Cross-entity reference resolution (lightweight warn-only)
+# ---------------------------------------------------------------------------
+
+# Match CJK-heavy tokens of length ≥ 2. Coarse filter — false positives are
+# acceptable since the check is warn-only.
+_NAME_TOKEN_RE = re.compile(
+    r"[\u4e00-\u9fff\u3400-\u4dbf][\u4e00-\u9fff\u3400-\u4dbfA-Za-z0-9_·]+"
+)
+
+
+def _collect_alias_index(work_dir: Path,
+                          character_ids: list[str]) -> set[str]:
+    """Collect a set of known names: world cast + active character aliases."""
+    names: set[str] = set()
+
+    # World cast names
+    cast_dir = work_dir / "world" / "cast"
+    if cast_dir.is_dir():
+        for cast_file in cast_dir.glob("*.json"):
+            try:
+                data = json.loads(cast_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, ValueError, OSError):
+                continue
+            # Cast file may be {"characters": [...]}, a list, or nested; walk.
+            _walk_names(data, names)
+
+    # Active character identities
+    for cid in character_ids:
+        identity_path = (work_dir / "characters" / cid / "canon"
+                         / "identity.json")
+        if not identity_path.exists():
+            continue
+        try:
+            data = json.loads(identity_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, ValueError, OSError):
+            continue
+        # character_id itself counts as a name
+        names.add(cid)
+        # Names from identity: name_zh/name, aliases[].name
+        for key in ("name", "name_zh", "display_name"):
+            v = data.get(key)
+            if isinstance(v, str) and v:
+                names.add(v)
+        for alias in data.get("aliases", []) or []:
+            if isinstance(alias, dict):
+                for k in ("name", "text", "alias"):
+                    v = alias.get(k)
+                    if isinstance(v, str) and v:
+                        names.add(v)
+            elif isinstance(alias, str):
+                names.add(alias)
+
+    return {n for n in names if len(n) >= 2}
+
+
+def _walk_names(node, out: set[str]) -> None:
+    """Recursively collect plausible-name string fields from a cast record."""
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k in ("name", "name_zh", "display_name", "alias", "aliases",
+                     "text", "character_id"):
+                _walk_names(v, out)
+            elif isinstance(v, (dict, list)):
+                _walk_names(v, out)
+    elif isinstance(node, list):
+        for item in node:
+            _walk_names(item, out)
+    elif isinstance(node, str) and node:
+        out.add(node)
+
+
+def _cross_entity_reference_warnings(
+    work_dir: Path,
+    world_snapshot_path: Path,
+    character_ids: list[str],
+) -> list[str]:
+    """Warn when world snapshot mentions character names not in any roster.
+
+    Reference miss is warn-only: a mentioned character may simply be outside
+    the user's active extraction scope. Full content-level cross-consistency
+    is owned by the character lane semantic reviewer.
+    """
+    warnings: list[str] = []
+    try:
+        snap = json.loads(world_snapshot_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, ValueError, OSError):
+        return warnings  # snapshot parse failure is reported elsewhere
+
+    names = _collect_alias_index(work_dir, character_ids)
+    if not names:
+        return warnings  # no roster to check against — skip silently
+
+    for field in ("relationship_shifts", "character_status_changes"):
+        entries = snap.get(field, []) or []
+        for entry in entries:
+            if not isinstance(entry, str):
+                continue
+            tokens = set(_NAME_TOKEN_RE.findall(entry))
+            if not tokens:
+                continue
+            # At least one token must resolve; otherwise flag as unresolved.
+            if not any(t in names for t in tokens):
+                warnings.append(
+                    f"world {field} 条目未找到任何可解析的角色名: "
+                    f"'{entry[:60]}'")
+
+    return warnings

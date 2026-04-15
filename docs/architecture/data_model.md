@@ -330,8 +330,6 @@ users/{user_id}/
 - `relationship_core/pinned_memories.json`
 - `contexts/{context_id}/manifest.json`
 - `contexts/{context_id}/character_state.json`
-- `contexts/{context_id}/relationship_state.json`
-- `contexts/{context_id}/shared_memory.json`
 - `contexts/{context_id}/session_index.json`
 
 `role_binding.json` 的首版专用 schema 已存在于：
@@ -417,8 +415,6 @@ users/{user_id}/conversation_library/archives/{archive_id}/
 - `relationship_core/pinned_memories.json`
 - `contexts/{context_id}/manifest.json`
 - `contexts/{context_id}/character_state.json`
-- `contexts/{context_id}/relationship_state.json`
-- `contexts/{context_id}/shared_memory.json`
 - 最近的 `turn_summaries.json`
 - `conversation_library/manifest.json`
 - 当前绑定的 `archive_refs.json`

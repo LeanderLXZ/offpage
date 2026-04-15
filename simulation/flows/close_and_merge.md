@@ -38,7 +38,8 @@ side effect.
 2. The merge should stay inside
    `users/{user_id}/`.
 3. Closing a session must not rewrite canonical work packages.
-4. The source context should normally become `merged` or `merged_archived`
-   rather than disappearing without provenance.
+4. The source context should normally become `merged` (stub retained) or
+   `archived` (fully moved into `conversation_library/`) rather than
+   disappearing without provenance.
 5. Default archive behavior should preserve a lightweight stub or reference to
    the moved conversation record.
