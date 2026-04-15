@@ -49,8 +49,7 @@ users/
     contexts/
       {context_id}/
         manifest.json
-        relationship_state.json
-        shared_memory.jsonl
+        character_state.json
         session_index.json
         sessions/
           {session_id}/
@@ -175,8 +174,7 @@ users/
 - `relationship_core/manifest.json`
 - `relationship_core/pinned_memories.jsonl`
 - `contexts/{context_id}/manifest.json`
-- `contexts/{context_id}/relationship_state.json`
-- `contexts/{context_id}/shared_memory.jsonl`
+- `contexts/{context_id}/character_state.json`
 - `contexts/{context_id}/session_index.json`
 - 当前 context 下最近 session 的 `turn_summaries.jsonl`
 - `conversation_library/manifest.json`
@@ -212,8 +210,8 @@ users/
    - `conversation_library/archive_index.jsonl`
    - `conversation_library/archive_refs.json`
 7. 把原 context 标记为：
-   - `merged`
-   - 或 `merged_archived`
+   - `merged`（仍保留轻量 stub 可继续派生）
+   - 或 `archived`（已归档进 conversation_library，不再作为活跃分支）
 8. 在原 context 中记录：
    - `archive_ref`
    - 被归档的 `session_id`
@@ -248,8 +246,8 @@ users/
   而不是等用户手动再触发一次写回
 - 只有明确保留、提升或合并的内容，才应进入 `relationship_core/` 或
   `pinned_memories.jsonl`
-- `contexts/{context_id}/` 应支持 `ephemeral / persistent / merged /
-  merged_archived` 等生命周期
+- `contexts/{context_id}/` 支持 `ephemeral / persistent / merged / archived`
+  四种生命周期（见 `schemas/context_manifest.schema.json` 的 `lifecycle` 枚举）
 - 当用户明确要求，或当前 merge policy 允许且证据足够时，context 中的
   内容可以被部分或整体提升进用户长期状态
 - 对中文作品，文件内容中的 `work_id`、`character_id`、`stage_id` 可以直接

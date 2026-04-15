@@ -116,9 +116,27 @@ that a new AI should know beyond what the architecture docs already say.
     also read world snapshot for cross-consistency). Targeted fix input
     is similarly narrowed (no full chunk summaries by default).
 25b. Commit gate (提交门控): programmatic (0 token) check after all lanes
-    pass. Verifies stage_id alignment, world-character consistency, and
-    programmatically-maintained file validity. Any lane failure or gate
-    failure → full stage rollback. No per-lane commit.
+    pass. Scope is **structural + identifier level only** — snapshot file
+    existence, `stage_id` field alignment, catalog/digest entry coverage,
+    plus a warn-only cross-entity reference resolution (names in world
+    `relationship_shifts` / `character_status_changes` should resolve via
+    world cast or active character aliases; unresolved → warning, not
+    failure). Content-level world-vs-character conflicts are the character
+    lane semantic reviewer's job, not the gate's. Memory digest check
+    parses the stage from `memory_id`'s `M-S{stage:03d}-` prefix — the
+    schema forbids a `stage_id` field on digest entries. Any lane failure
+    or hard gate failure → full stage rollback. No per-lane commit.
+25b.1 Commit ordering: `git commit` first; only a non-empty SHA transitions
+    the stage to `COMMITTED`. Empty SHA (no diff or commit failure) reverts
+    the stage to `FAILED` so resume can retry. Avoids "progress says
+    committed, git has no object" drift.
+25b.2 `--end-stage` has strict prefix semantics: Phase 3.5, squash-merge
+    prompt, and Phase 4 only run after **all** Phase 3 stages commit. A
+    prefix run exits with a "re-run without --end-stage to finalize"
+    message.
+25b.3 `jsonschema` is a HARD automation dependency (declared in
+    `automation/pyproject.toml`). Validator raises ImportError on load if
+    missing, rather than silently degrading the gate.
 25c. Failure triage after review: fixable issues (≤5 specific field/value
     errors, no missing files) → targeted fix agent makes minimal edits +
     re-validate; systemic issues (file missing, structural,

@@ -305,7 +305,7 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
 
 在对话开始时，系统应加载：
 
-`世界 foundation（含 fixed_relationships）+ 选定的世界阶段快照 + world_event_digest 1..N + 角色不变层（identity + failure_modes + hard_boundaries）+ 选定阶段的自包含快照 + memory_timeline 近期 2 阶段全量 + memory_digest 1..N 过滤 + scene_archive 摘要 + 用户绑定 + 长期档案 + 关系核心 + 当前 context + 近期 session 状态`
+`世界 foundation（含 fixed_relationships）+ 选定的世界阶段快照 + world_event_digest 1..N + 角色不变层（identity + failure_modes + hard_boundaries）+ 选定阶段的自包含快照 + memory_timeline 近期 2 阶段全量 + memory_digest 1..N 过滤 + scene_archive 最近 N 条 full_text（默认 10；摘要不进启动，按需从 FTS5 取）+ 用户绑定 + 长期档案 + 关系核心 + 当前 context + 近期 session 状态`
 
 注意：角色 baseline（voice_rules、behavior_rules、boundaries 的 soft 部分）
 **不在运行时加载**。运行时角色状态完全由自包含的 stage_snapshot 提供。
@@ -319,7 +319,9 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
   - 选定阶段的**自包含** stage_snapshot（voice/behavior/boundary/relationships 全含）
   - memory_timeline：近期 2 阶段（N + N-1）全量
   - memory_digest.jsonl：stage 1..N 过滤加载（压缩索引，远期感知）
-  - scene_archive：stage 1..N 摘要 + 当前阶段附近 N 个 full_text（默认 N=5）
+  - scene_archive：最近 `scene_fulltext_window` 条 full_text（默认 10，
+    可通过 `load_profiles.json` 覆盖）；**摘要不在启动期加载**，仅存在于
+    FTS5 索引，按需检索
   - vocab_dict.txt → jieba 自定义词典
   - 用户摘要层状态（role_binding、long_term_profile、relationship_core）
   - 当前 context 摘要 + 近期 session 摘要
