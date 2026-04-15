@@ -53,21 +53,21 @@ that a new AI should know beyond what the architecture docs already say.
 
 ## Extraction
 
-12. batch (extraction) = stage (runtime), 1:1. "Batch" is the pipeline
+12. stage (extraction) = stage (runtime), 1:1. "Stage" is the pipeline
     term; "stage" is the content/runtime term. Both kept for clarity.
-    Batches are split by natural story boundaries during the analysis phase.
-    Each batch may have a different chapter count (target 10, min 5, max 15).
-    Batch N = stage N candidate. Stage N is cumulative through 1..N.
+    Stages are split by natural story boundaries during the analysis phase.
+    Each stage may have a different chapter count (target 10, min 5, max 15).
+    Stage N = stage N candidate. Stage N is cumulative through 1..N.
 13. Once active characters are confirmed, Phase 2.5 produces world foundation
     and all character baselines (identity.json, manifest.json, voice_rules.json,
     behavior_rules.json, boundaries.json, failure_modes.json) from full-book
     context as skeleton drafts (source_type: inference). Then **1+N split
-    extraction** per batch: one world call, then N parallel character calls.
-    All batches may correct any existing baseline (upgrading inference → canon).
+    extraction** per stage: one world call, then N parallel character calls.
+    All stages may correct any existing baseline (upgrading inference → canon).
     Targeted character supplement only when gaps remain.
-14. Any batch may revise any already-written asset across the whole work
+14. Any stage may revise any already-written asset across the whole work
     package, not only the current target.
-15. Do not generate per-batch report files. Update progress files in-place.
+15. Do not generate per-stage report files. Update progress files in-place.
 16. `target_voice_map` (voice_state) and `target_behavior_map`
     (behavior_state) are parallel structures mapping specific targets to
     voice/behavior differences. Only main characters and important supporting
@@ -97,7 +97,7 @@ that a new AI should know beyond what the architecture docs already say.
 
 ## Automated Extraction
 
-24. Each phase step (summarization chunk, analysis, baseline production, batch
+24. Each phase step (summarization chunk, analysis, baseline production, stage
     extraction) is a fresh `claude -p` call with no shared session memory.
     Context between steps is entirely file-based.
 24a. Extraction prompts do NOT read `simulation/contracts/baseline_merge.md`,
@@ -106,7 +106,7 @@ that a new AI should know beyond what the architecture docs already say.
     directly in the extraction prompt. `memory_digest.jsonl`,
     `world_event_digest.jsonl`, and `stage_catalog.json` are maintained
     programmatically by `post_processing.py` (0 token, idempotent).
-25. Three-layer quality check per batch: programmatic validation (free) +
+25. Three-layer quality check per stage: programmatic validation (free) +
     per-lane semantic review (independent LLM agent) + commit gate
     (programmatic cross-consistency). Only semantic errors cause FAIL.
 25a. Parallel review lanes (审校通道): after extraction + post-processing,
@@ -118,15 +118,15 @@ that a new AI should know beyond what the architecture docs already say.
 25b. Commit gate (提交门控): programmatic (0 token) check after all lanes
     pass. Verifies stage_id alignment, world-character consistency, and
     programmatically-maintained file validity. Any lane failure or gate
-    failure → full batch rollback. No per-lane commit.
+    failure → full stage rollback. No per-lane commit.
 25c. Failure triage after review: fixable issues (≤5 specific field/value
     errors, no missing files) → targeted fix agent makes minimal edits +
     re-validate; systemic issues (file missing, structural,
     understanding-level) → full rollback + retry.
-26. Extraction runs on a dedicated git branch. Each passing batch is committed.
-    Rollback on failure = git reset. After all batches complete, squash-merge
+26. Extraction runs on a dedicated git branch. Each passing stage is committed.
+    Rollback on failure = git reset. After all stages complete, squash-merge
     to main (one clean commit); the extraction branch can then be deleted.
-27. Batch boundaries should follow natural story arcs (min 5, max 15, default
+27. Stage boundaries should follow natural story arcs (min 5, max 15, default
     10 chapters). stage_id should be a meaningful Chinese name.
 28. The orchestrator pre-computes the file read list for each call (world /
     character). Only the most recent snapshot and memory_timeline are included
@@ -149,7 +149,7 @@ that a new AI should know beyond what the architecture docs already say.
     `time`, `location`, `characters_present`, `summary`, `full_text`,
     `chapter`, `stage_id`. Work-level asset, not per-character. One
     scene never crosses a chapter boundary. `stage_id` is **authoritative
-    from `source_batch_plan.json`** — scene_archive.jsonl is fully
+    from `stage_plan.json`** — scene_archive.jsonl is fully
     regenerated on each merge; per-stage seq counter guarantees unique
     IDs.
 32. Startup loads: memory_timeline recent 2 stages (N + N-1) full text;
@@ -175,13 +175,13 @@ that a new AI should know beyond what the architecture docs already say.
 34. When simulating character A, only load scenes where A is in
     `characters_present` and A's own memory_timeline. Do not load other
     characters' memories or scenes where A is absent.
-35. Phase 3.5 (cross-batch consistency check) runs after all Phase 3 batches
+35. Phase 3.5 (cross-stage consistency check) runs after all Phase 3 stages
     commit. Primarily programmatic (zero tokens) with optional LLM
     adjudication only for flagged items. Errors block Phase 4. This catches
-    cross-batch drift that per-batch validation cannot detect (e.g. alias
+    cross-stage drift that per-stage validation cannot detect (e.g. alias
     mismatches, relationship discontinuity, lazy source_type annotation).
 36. scene_archive is produced in Phase 4, independent from Phase 3 (only
-    requires `source_batch_plan.json` from Phase 1 — treated as the
+    requires `stage_plan.json` from Phase 1 — treated as the
     authoritative stage-id source). Per-chapter LLM calls output scene
     boundary annotations; program extracts full_text from source.
     Parallel execution (`--concurrency`, default 10). Programmatic
@@ -259,7 +259,7 @@ that a new AI should know beyond what the architecture docs already say.
     is parsed from `event_id` prefix. `stage_catalog.json` is demoted
     to bootstrap stage selector only (not loaded at runtime).
 
-40h. Character `stage_snapshot.stage_events` holds **only this batch's**
+40h. Character `stage_snapshot.stage_events` holds **only this stage's**
     events, not accumulated history. Each entry ≤80 chars. Cross-stage
     history is carried by `memory_timeline` + `memory_digest.jsonl` +
     `world_event_digest.jsonl`, not the snapshot.
@@ -274,13 +274,13 @@ that a new AI should know beyond what the architecture docs already say.
 
 40g2. `fixed_relationships.json` in `world/foundation/` records structural
     bonds (blood, lineage, faction membership) that are not stage-dependent.
-    Phase 2.5 produces a skeleton; subsequent batches may correct it.
+    Phase 2.5 produces a skeleton; subsequent stages may correct it.
     Loaded at runtime as Tier 0 alongside `foundation.json`.
 
-40h. Smart resume: if a batch is PENDING but extraction output already
+40h. Smart resume: if a stage is PENDING but extraction output already
     exists on disk (world + all character stage_snapshots), the
     orchestrator skips LLM extraction and jumps directly to
-    post-processing. Saves tokens when a batch errored after producing
+    post-processing. Saves tokens when a stage errored after producing
     output (e.g. crash during post-processing or review). Detection:
     `_extraction_output_exists()` in orchestrator.
 

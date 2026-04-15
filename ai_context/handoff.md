@@ -3,7 +3,7 @@
 ## Mental Model
 
 Architecture agreed, scaffold created, extraction in progress. There is
-one real work package with batch extraction underway, no finished character
+one real work package with stage extraction underway, no finished character
 packages yet, no real user packages, and no runtime code.
 
 ## Quick Start

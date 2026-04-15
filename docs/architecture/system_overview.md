@@ -126,23 +126,23 @@
 0. **阶段 0 — 章节归纳**：按分组（chunk，约 25 章/组）逐组归纳，产出每章
    结构化摘要。存储在 `analysis/chapter_summaries/`
 1. **阶段 1 — 全书分析**（基于摘要）：跨 chunk 角色身份合并 → 世界观概览
-   (`world_overview.json`) → 剧情阶段划分 (`source_batch_plan.json`) →
+   (`world_overview.json`) → 剧情阶段划分 (`stage_plan.json`) →
    候选角色识别 (`candidate_characters.json`)
-2. **阶段 2 — 用户确认**：用户选定目标角色、确认 batch 边界
+2. **阶段 2 — 用户确认**：用户选定目标角色、确认 stage 边界
 3. **阶段 2.5 — Baseline 产出**：基于全书摘要上下文，产出世界 foundation
    (`world/foundation/foundation.json`) 和已确认角色的 identity baseline
-   (`identity.json`, `manifest.json`)。这些是初稿，后续批次可修正
-4. **阶段 3 — 1+N 分层批次提取**：逐 batch 读原文，采用 1+N 架构：先一次
+   (`identity.json`, `manifest.json`)。这些是初稿，后续阶段可修正
+4. **阶段 3 — 1+N 分层阶段提取**：逐 stage 读原文，采用 1+N 架构：先一次
    世界提取，再 N 次角色提取并行。每次调用只传最近一个 snapshot/memory，
-   不传全部历史。首批额外创建 `voice_rules.json`、`behavior_rules.json`、
-   `boundaries.json`、`failure_modes.json`。任何批次可修正任何已写入的 baseline
-5. **阶段 3.5 — 跨批次一致性检查**：Phase 3 全部 batch 提交后，运行程序化
-   跨批次一致性检查（零 token），可选 LLM 裁定标记项。有 error 时阻断 Phase 4
-6. **阶段 4 — 场景切分**：Phase 3.5 通过后，逐 batch 范围读原文，按自然场景
-   边界切分产出 scene_archive 条目。各 batch 间无依赖，可并行。与 Phase 3
+   不传全部历史。首阶段额外创建 `voice_rules.json`、`behavior_rules.json`、
+   `boundaries.json`、`failure_modes.json`。任何阶段可修正任何已写入的 baseline
+5. **阶段 3.5 — 跨阶段一致性检查**：Phase 3 全部 stage 提交后，运行程序化
+   跨阶段一致性检查（零 token），可选 LLM 裁定标记项。有 error 时阻断 Phase 4
+6. **阶段 4 — 场景切分**：Phase 3.5 通过后，逐 stage 范围读原文，按自然场景
+   边界切分产出 scene_archive 条目。各 stage 间无依赖，可并行。与 Phase 3
    分离以避免单次调用任务过重影响质量
 
-任何一个批次仍可能修订或补充多个下游资产，包括世界层和多个角色资产包。
+任何一个阶段仍可能修订或补充多个下游资产，包括世界层和多个角色资产包。
 
 ### 3. 世界资产包
 
@@ -220,7 +220,7 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
 过滤，只加载匹配条目。**Fallback**：如果当前 stage snapshot 缺少匹配条目
 （如该角色近期未出场），引擎向前扫描最近包含该条目的 stage snapshot。
 
-角色构建通常应在初始的世界优先批次处理建立了该作品的共享世界背景之后进行。
+角色构建通常应在初始的世界优先阶段处理建立了该作品的共享世界背景之后进行。
 
 ### 5. 用户资产包
 
@@ -278,7 +278,7 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
 
 以上内容编译为模型所需的最小运行时上下文。
 
-该运行时上下文可能依赖于在世界优先批次提取中首次发现、并在后续针对性角色提取中进一步精化的事实。
+该运行时上下文可能依赖于在世界优先阶段提取中首次发现、并在后续针对性角色提取中进一步精化的事实。
 
 如果运行时状态需要持久化，应优先使用用户级 context 树，而非 `works/{work_id}/`。
 

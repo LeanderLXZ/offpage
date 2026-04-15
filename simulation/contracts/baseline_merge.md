@@ -17,7 +17,7 @@ behavior patterns, boundaries, and failure modes. Stage-specific changes
 stage snapshots. Their role:
 
 - **Extraction anchor**: Phase 2.5 produces skeleton baselines (source_type:
-  inference) from full-book summaries. Subsequent batches refine them with
+  inference) from full-book summaries. Subsequent stages refine them with
   raw text evidence (upgrading inference to canon).
 - **Cross-stage reference**: baseline represents the character's stable core
   and can be useful for understanding the arc of change.
@@ -44,12 +44,12 @@ stage snapshots. Their role:
   `failure_modes.json` are produced from full-book chapter summaries as
   skeleton drafts (source_type: inference). `world/foundation/foundation.json`
   is also produced at this stage.
-- **Batch 1 (stage 1)**: review and correct all Phase 2.5 baseline drafts
+- **Stage 1 (stage 1)**: review and correct all Phase 2.5 baseline drafts
   with raw text evidence. Produce stage 1 snapshot (self-contained).
-- **Batch N (stage N)**: use baseline + prior stage snapshots as reference.
+- **Stage N (stage N)**: use baseline + prior stage snapshots as reference.
   Produce a new self-contained stage N snapshot with the complete state for
   that stage. Unchanged content from prior stages should still be included
-  in the snapshot — do not omit it. Any batch may correct any existing
+  in the snapshot — do not omit it. Any stage may correct any existing
   baseline file.
 - `stage_delta` records what changed from the previous stage, for human and
   AI understanding of the arc. This is informational, not a merge instruction.

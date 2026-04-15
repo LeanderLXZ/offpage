@@ -10,12 +10,12 @@ Arbitrary characters, stage-based state, long-term memory, multiple terminals.
 
 ## §2 Stage Model
 
-- Batch N = Stage N. Batch splitting is the **most critical output** of the
-  analysis phase — every batch boundary becomes a stage boundary that all
+- Stage N = Stage N. Stage splitting is the **most critical output** of the
+  analysis phase — every stage boundary becomes a stage boundary that all
   downstream structures (world snapshots, character snapshots, memory timelines,
   runtime stage selection) depend on. Accuracy of story boundaries matters more
   than even chapter counts. Target 10 chapters, min 5, max 15; variable per
-  batch. Cumulative through 1..N.
+  stage. Cumulative through 1..N.
 - Selected stage = "now"; prior stages = history. Current-stage personality/voice only.
 - World info architecture: foundation layer (setting, power system, cosmology) +
   entity tracking (events, locations, factions, main cast) + fixed vs dynamic
@@ -128,23 +128,23 @@ revision tracking, roleplay-focused. Seven-step workflow:
    a. Cross-chunk character identity merging
    b. World overview (genre, power system, factions, geography, major
       world-lines/eras, core setting rules)
-   c. Batch plan (story-boundary-based stage splitting; exit validation
+   c. Stage plan (story-boundary-based stage splitting; exit validation
       enforces 5-15 chapter limit as hard gate, re-runs LLM with correction
       if violated, aborts if still violating after retries)
    d. Candidate character identification (post-merge, with aliases)
    e. **Baseline production** (new): write world foundation files and
       character identity.json + manifest.json for confirmed characters.
-      Full-book context makes these baselines more accurate than batch-1-only.
-      voice_rules, behavior_rules, boundaries still deferred to batch extraction
-      (need raw text detail). Baselines are drafts — batch extraction corrects
+      Full-book context makes these baselines more accurate than stage-1-only.
+      voice_rules, behavior_rules, boundaries still deferred to stage extraction
+      (need raw text detail). Baselines are drafts — stage extraction corrects
       them when raw text reveals errors.
 4. Active character confirmation (user selects)
-5. Coordinated batch extraction (world + character per batch; baseline
+5. Coordinated stage extraction (world + character per stage; baseline
    correction when needed)
 6. Targeted supplement extraction
 7. Package validation
 
-Coordinated mode: read once per batch, produce world + character simultaneously.
+Coordinated mode: read once per stage, produce world + character simultaneously.
 Self-contained snapshots: stage 1 ≈ baseline + stage fields; stage N = complete
 state (unchanged fields included); baseline = extraction anchor only. Source
 labeling: canon / inference / ambiguous with explanation. See
@@ -159,9 +159,9 @@ loaded character data. Mitigations: character anchor re-injection (every turn
 or N turns), rolling session state (every 5-8 turns), deep calibration
 checkpoints (every 15-20 turns or after major events).
 
-**§10.2 Extraction cross-batch quality**: each batch is an independent
+**§10.2 Extraction cross-stage quality**: each stage is an independent
 `claude -p` call (fresh context), so no in-session dilution. Risk is
-cross-batch style drift and detail degradation. All mitigations are naturally
+cross-stage style drift and detail degradation. All mitigations are naturally
 satisfied by automation architecture (prompt_builder injects schema + previous
 output, validator + semantic review check quality, Phase 3.5 consistency
 checker catches global drift). No additional dilution protection code needed.
@@ -170,11 +170,11 @@ See `docs/requirements.md` §10 for full details.
 
 ## §11 Automated Extraction Pipeline
 
-Python orchestrator in `automation/` drives multi-batch extraction via CLI.
+Python orchestrator in `automation/` drives multi-stage extraction via CLI.
 Phase 0 chunk summarization runs in parallel (`--concurrency`, default 10);
 three-level JSON repair (L1 programmatic → L2 LLM 600s → L3 full re-run);
 completion gate blocks Phase 1 if any chunk missing.
-Analysis → user confirmation → extraction loop (per batch: git preflight →
+Analysis → user confirmation → extraction loop (per stage: git preflight →
 **smart skip** [if extraction output already on disk, jump to post-processing] →
 **1+N split extraction** [world call → N parallel character calls] →
 **programmatic post-processing** [memory_digest + world_event_digest
@@ -182,16 +182,16 @@ generation (IDs `{TYPE}-S{stage:03d}-{seq:02d}`; importance inferred
 by keyword), stage_catalog upsert, 0 token] →
 **parallel review lanes** [world + each character:
 validate → review → fix independently] → **commit gate** [programmatic
-cross-consistency, 0 token] → git commit or full batch rollback+retry) →
-Phase 3.5 cross-batch consistency check → Phase 4 scene archive. Each call
+cross-consistency, 0 token] → git commit or full stage rollback+retry) →
+Phase 3.5 cross-stage consistency check → Phase 4 scene archive. Each call
 is a fresh agent; context is file-based. Input trimming: only the most recent
 stage_snapshot and memory_timeline are passed (not full history).
 `baseline_merge.md`, `memory_digest.jsonl`, `stage_catalog.json` excluded
 from extraction input. Self-contained snapshot contract embedded in prompt.
 Extraction timeout 3600s, review 600s. Targeted fix re-runs the original
 failing check layer with narrowed input scope. Commit clears feedback/error
-fields. Batch size max 15 chapters. Phase 4 is independent
-(only needs Phase 1 batch plan): per-chapter parallel LLM calls for scene
+fields. Stage size max 15 chapters. Phase 4 is independent
+(only needs Phase 1 stage plan): per-chapter parallel LLM calls for scene
 boundary annotation, programmatic validation only, output to
 `works/{work_id}/retrieval/scene_archive.jsonl`. Intermediate
 `works/{work_id}/analysis/scene_splits/` and
@@ -204,7 +204,7 @@ See `docs/requirements.md` §11.
 ## §12 Memory System and Retrieval
 
 Three-layer memory: stage_snapshot (aggregated state, current stage only;
-`stage_events` holds **only this batch's** events, each ≤80 chars) →
+`stage_events` holds **only this stage's** events, each ≤80 chars) →
 memory_timeline (first-person subjective process per event; `memory_id`
 pattern `M-S###-##`, `time`, `location`, `event_summary` ≤50 chars,
 `subjective_experience` unbounded, `scene_refs`) → scene_archive
@@ -234,7 +234,7 @@ is loaded with a field whitelist (no `evidence_refs`/large nested arrays).
 Vocab dict into jieba. Distant memory and scene detail via FTS5 on-demand.
 
 scene_archive produced in Phase 4 (independent from Phase 3, only needs
-Phase 1 batch plan). Per-chapter parallel, programmatic validation only.
+Phase 1 stage plan). Per-chapter parallel, programmatic validation only.
 
 Tech: `jieba` (segmentation), `sqlite FTS5` (primary), `bge-large-zh-v1.5`
 (optional embedding fallback). Single SQLite file, no separate vector DB.

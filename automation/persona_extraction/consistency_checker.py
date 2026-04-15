@@ -1,7 +1,7 @@
-"""Cross-batch consistency checker — Phase 3.5.
+"""Cross-stage consistency checker — Phase 3.5.
 
-Runs after all Phase 3 batches complete. Performs programmatic checks
-(zero tokens) across all batches to find issues that single-batch
+Runs after all Phase 3 stages complete. Performs programmatic checks
+(zero tokens) across all stages to find issues that single-stage
 validation cannot detect: alias drift, relationship jumps, annotation
 degradation, etc.
 
@@ -79,13 +79,13 @@ def run_consistency_check(
     character_ids: list[str],
     stage_ids: list[str],
 ) -> ConsistencyReport:
-    """Run all cross-batch programmatic checks.
+    """Run all cross-stage programmatic checks.
 
     Args:
         project_root: Repository root.
         work_id: Work identifier.
         character_ids: List of target character IDs.
-        stage_ids: Ordered list of stage IDs (from batch plan).
+        stage_ids: Ordered list of stage IDs (from stage plan).
 
     Returns:
         ConsistencyReport with all issues found.
@@ -327,7 +327,7 @@ def _check_relationship_continuity(
 def _check_source_type_distribution(
     work_dir: Path, character_ids: list[str], stage_ids: list[str],
 ) -> list[ConsistencyIssue]:
-    """Flag batches where source_notes are all canon (lazy annotation)."""
+    """Flag stages where source_notes are all canon (lazy annotation)."""
     issues: list[ConsistencyIssue] = []
 
     for char_id in character_ids:

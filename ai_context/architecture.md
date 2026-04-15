@@ -13,7 +13,7 @@ For full details see `docs/architecture/system_overview.md` and
 - `prompts/` — manual-only prompts (ingest, review, supplement, cold start)
 - `schemas/` — persistence and runtime-request schemas
 - `interfaces/` — future terminal adapters (agent, app, MCP)
-- `automation/` — automated batch extraction orchestrator (Python)
+- `automation/` — automated stage extraction orchestrator (Python)
 - `docs/architecture/` — formal architecture docs (incl. schema reference)
 - `ai_context/` — compressed handoff for future AI sessions
 
@@ -21,7 +21,7 @@ For full details see `docs/architecture/system_overview.md` and
 
 1. **Source** (`sources/works/{work_id}/`) — raw text, normalized chapters,
    metadata
-2. **Extraction** (`works/{work_id}/analysis/`) — batch extraction progress,
+2. **Extraction** (`works/{work_id}/analysis/`) — stage extraction progress,
    evidence, conflicts
 3. **World** (`works/{work_id}/world/`) — world foundation, stages, events,
    locations, factions, cast
@@ -70,7 +70,7 @@ See `simulation/retrieval/load_strategy.md` for the full tier model.
 
 ## Stage Model
 
-- **batch (extraction) = stage (runtime), 1:1.** "Batch" is the pipeline
+- **stage (extraction) = stage (runtime), 1:1.** "Stage" is the pipeline
   term (which processing unit); "stage" is the content/runtime term (which
   story phase). They share the same `stage_id`. Both names are kept because
   they serve different audiences.
@@ -202,7 +202,7 @@ See `docs/requirements.md` §12 and `simulation/retrieval/index_and_rag.md`.
 ## Automated Extraction Pipeline
 
 The `automation/` directory contains a Python orchestrator that drives
-multi-batch extraction via CLI calls (`claude -p` or `codex`).
+multi-stage extraction via CLI calls (`claude -p` or `codex`).
 
 ### Pipeline phases
 
@@ -214,22 +214,22 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   before Phase 1 proceeds. Produces per-chapter structured summaries
   under `analysis/chapter_summaries/`.
 - **Phase 1 — Global analysis** (from summaries): cross-chunk character
-  identity merging → world overview (`world_overview.json`) → batch plan
-  (`source_batch_plan.json`) → candidate characters
+  identity merging → world overview (`world_overview.json`) → stage plan
+  (`stage_plan.json`) → candidate characters
   (`candidate_characters.json`). Exit validation: programmatic check of
-  batch chapter counts (5-15 limit); violating batches trigger LLM re-run
+  stage chapter counts (5-15 limit); violating stages trigger LLM re-run
   with corrective feedback (up to 2 retries); aborts if still violating.
 - **Phase 2 — User confirmation**: user selects target characters and
-  confirms batch boundaries.
+  confirms stage boundaries.
 - **Phase 2.5 — Baseline production**: with full-book context and
   confirmed characters, produce world foundation
   (`world/foundation/foundation.json`, `fixed_relationships.json`) and
   character baselines (`identity.json`, `manifest.json` + 4 skeleton
   baselines) for each target character. These are drafts — any subsequent
-  batch may correct them.
-- **Phase 3 — Coordinated batch extraction**: per-batch loop:
+  stage may correct them.
+- **Phase 3 — Coordinated stage extraction**: per-stage loop:
   1. World + character extraction (1+N LLM calls, **all parallel within
-     batch** — no dependency between world and characters)
+     stage** — no dependency between world and characters)
   2. Programmatic post-processing: L1 JSON repair + generate
      `memory_digest.jsonl` from `memory_timeline` + generate
      `world_event_digest.jsonl` from world snapshot `stage_events`
@@ -241,15 +241,15 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
      via ThreadPoolExecutor.
   4. Commit gate (提交门控): programmatic cross-consistency check
      (stage_id alignment, world-character consistency). All lanes must
-     pass; any failure → full batch rollback.
+     pass; any failure → full stage rollback.
   5. Git commit.
-  Every batch may correct any existing baseline (not just batch 1).
+  Every stage may correct any existing baseline (not just stage 1).
   Character extraction does NOT read world snapshot — both read the same
   source chapters independently; cross-consistency verified at commit gate.
   Extraction prompts do NOT read `baseline_merge.md`, `memory_digest.jsonl`,
   or `stage_catalog.json` — self-contained snapshot contract is embedded in
   the prompt; digest and catalog are programmatically maintained.
-- **Phase 3.5 — Cross-batch consistency check**: after all Phase 3 batches
+- **Phase 3.5 — Cross-stage consistency check**: after all Phase 3 stages
   commit, run 9 programmatic checks (zero tokens): alias consistency, field
   completeness, relationship continuity, source_type distribution,
   evidence_refs coverage, memory_digest correspondence, target_map counts,
@@ -257,14 +257,14 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
   adjudication for flagged items only. Errors block Phase 4.
   Report: `consistency_report.json`.
 - **Phase 4 — Scene archive**: independent from Phase 3; only requires
-  `source_batch_plan.json` (Phase 1 product). Per-chapter LLM calls mark
+  `stage_plan.json` (Phase 1 product). Per-chapter LLM calls mark
   scene boundaries + metadata (start/end line, time, location, characters,
   summary); program extracts `full_text` from source using line numbers.
   Multiple chapters run in parallel (`--concurrency`, default 10).
   Programmatic validation only (line coverage, no overlap, alias matching).
   Output: `works/{work_id}/retrieval/scene_archive.jsonl` (.gitignore).
   `scene_id` format: `SC-S{stage:03d}-{seq:02d}` (e.g. `SC-S003-07`);
-  stage number is looked up from `source_batch_plan.json` (authoritative
+  stage number is looked up from `stage_plan.json` (authoritative
   source). scene_archive.jsonl is fully regenerated on each merge.
   Intermediate state: `.scene_archive.lock` +
   `works/{work_id}/analysis/scene_splits/` (local ignored,
@@ -275,20 +275,20 @@ multi-batch extraction via CLI calls (`claude -p` or `codex`).
 
 ### Key design
 
-- Each batch / phase step is a fresh `claude -p` call (no shared session
+- Each stage / phase step is a fresh `claude -p` call (no shared session
   memory)
-- Smart resume: if a batch is PENDING but extraction output already exists
+- Smart resume: if a stage is PENDING but extraction output already exists
   on disk, skip LLM extraction and jump directly to post-processing
 - Context between steps is entirely file-based (progress files, previous
   output, schemas, baseline files)
 - Three-level JSON repair: programmatic regex (L1, zero tokens) → LLM
   repair on broken JSON only (L2, minimal tokens) → full re-run (L3)
-- Three-layer quality check per batch: programmatic validation (free) +
+- Three-layer quality check per stage: programmatic validation (free) +
   per-lane semantic review (independent LLM agent) + commit gate
   (programmatic cross-consistency); Phase 4 uses programmatic only
-- Extraction runs on a dedicated git branch; each passing batch is committed
-- Rollback on failure = `git reset` to last committed batch
-- After all batches complete, squash-merge to main (one clean commit);
+- Extraction runs on a dedicated git branch; each passing stage is committed
+- Rollback on failure = `git reset` to last committed stage
+- After all stages complete, squash-merge to main (one clean commit);
   extraction branch can be deleted
 - Supports Claude CLI and Codex CLI backends
 - `--start-phase` selects starting phase; completed phases auto-skip

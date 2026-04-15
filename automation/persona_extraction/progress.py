@@ -5,10 +5,10 @@ Progress files live under:
 
   pipeline.json         — phase-level completion status
   phase0_summaries.json — Phase 0 chunk progress
-  phase3_batches.json   — Phase 3 batch state machine
+  phase3_stages.json   — Phase 3 stage state machine
   phase4_scenes.json    — Phase 4 per-chapter progress (managed by scene_archive.py)
 
-State machine per batch (Phase 3):
+State machine per stage (Phase 3):
   pending → extracting → extracted → post_processing → reviewing
                 │                                        │  │
                 └→ error                                 │  └→ fixing → passed → committed
@@ -225,10 +225,10 @@ class Phase0Progress:
 
 
 # ---------------------------------------------------------------------------
-# Phase 3 batch state machine
+# Phase 3 stage state machine
 # ---------------------------------------------------------------------------
 
-class BatchState(str, Enum):
+class StageState(str, Enum):
     PENDING = "pending"
     EXTRACTING = "extracting"
     EXTRACTED = "extracted"
@@ -243,32 +243,31 @@ class BatchState(str, Enum):
 
 
 # Valid transitions
-_TRANSITIONS: dict[BatchState, set[BatchState]] = {
-    BatchState.PENDING:          {BatchState.EXTRACTING, BatchState.EXTRACTED,
-                                  BatchState.ERROR},
-    BatchState.EXTRACTING:       {BatchState.EXTRACTED, BatchState.ERROR},
-    BatchState.EXTRACTED:        {BatchState.POST_PROCESSING,
-                                  BatchState.REVIEWING},  # REVIEWING kept for compat
-    BatchState.POST_PROCESSING:  {BatchState.REVIEWING, BatchState.ERROR},
-    BatchState.REVIEWING:        {BatchState.PASSED, BatchState.FAILED,
-                                  BatchState.FIXING},
-    BatchState.FIXING:           {BatchState.PASSED, BatchState.FAILED},
-    BatchState.PASSED:           {BatchState.COMMITTED},
-    BatchState.COMMITTED:        set(),  # terminal
-    BatchState.FAILED:           {BatchState.RETRYING},
-    BatchState.RETRYING:         {BatchState.EXTRACTING, BatchState.EXTRACTED,
-                                  BatchState.ERROR},
-    BatchState.ERROR:            {BatchState.EXTRACTING, BatchState.PENDING},
+_TRANSITIONS: dict[StageState, set[StageState]] = {
+    StageState.PENDING:          {StageState.EXTRACTING, StageState.EXTRACTED,
+                                  StageState.ERROR},
+    StageState.EXTRACTING:       {StageState.EXTRACTED, StageState.ERROR},
+    StageState.EXTRACTED:        {StageState.POST_PROCESSING,
+                                  StageState.REVIEWING},  # REVIEWING kept for compat
+    StageState.POST_PROCESSING:  {StageState.REVIEWING, StageState.ERROR},
+    StageState.REVIEWING:        {StageState.PASSED, StageState.FAILED,
+                                  StageState.FIXING},
+    StageState.FIXING:           {StageState.PASSED, StageState.FAILED},
+    StageState.PASSED:           {StageState.COMMITTED},
+    StageState.COMMITTED:        set(),  # terminal
+    StageState.FAILED:           {StageState.RETRYING},
+    StageState.RETRYING:         {StageState.EXTRACTING, StageState.EXTRACTED,
+                                  StageState.ERROR},
+    StageState.ERROR:            {StageState.EXTRACTING, StageState.PENDING},
 }
 
 
 @dataclass
-class BatchEntry:
-    batch_id: str
+class StageEntry:
     stage_id: str
     chapters: str               # e.g. "0001-0010"
     chapter_count: int
-    state: BatchState = BatchState.PENDING
+    state: StageState = StageState.PENDING
     retry_count: int = 0
     max_retries: int = 2
     last_reviewer_feedback: str = ""
@@ -277,21 +276,20 @@ class BatchEntry:
     error_message: str = ""
     fail_source: str = ""  # "programmatic" or "semantic" — which check caused FAIL
 
-    def can_transition(self, target: BatchState) -> bool:
+    def can_transition(self, target: StageState) -> bool:
         return target in _TRANSITIONS.get(self.state, set())
 
-    def transition(self, target: BatchState) -> None:
+    def transition(self, target: StageState) -> None:
         if not self.can_transition(target):
             raise ValueError(
                 f"Invalid transition: {self.state.value} → {target.value} "
-                f"(batch {self.batch_id})"
+                f"(stage {self.stage_id})"
             )
         self.state = target
         self.last_updated = _now_iso()
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "batch_id": self.batch_id,
             "stage_id": self.stage_id,
             "chapters": self.chapters,
             "chapter_count": self.chapter_count,
@@ -306,13 +304,12 @@ class BatchEntry:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> BatchEntry:
+    def from_dict(cls, d: dict[str, Any]) -> StageEntry:
         return cls(
-            batch_id=d["batch_id"],
             stage_id=d["stage_id"],
             chapters=d["chapters"],
             chapter_count=d["chapter_count"],
-            state=BatchState(d.get("state", "pending")),
+            state=StageState(d.get("state", "pending")),
             retry_count=d.get("retry_count", 0),
             max_retries=d.get("max_retries", 2),
             last_reviewer_feedback=d.get("last_reviewer_feedback", ""),
@@ -325,77 +322,76 @@ class BatchEntry:
 
 @dataclass
 class Phase3Progress:
-    """Phase 3 batch extraction progress."""
+    """Phase 3 stage extraction progress."""
     work_id: str
-    batch_size: int = 10
-    batches: list[BatchEntry] = field(default_factory=list)
+    stage_size: int = 10
+    stages: list[StageEntry] = field(default_factory=list)
     last_updated: str = ""
 
     # ---- Queries ----
 
-    def next_pending_batch(self) -> BatchEntry | None:
-        """Return the first actionable batch, respecting sequential order.
+    def next_pending_stage(self) -> StageEntry | None:
+        """Return the first actionable stage, respecting sequential order.
 
-        Batches are sequential — batch N+1 depends on batch N's output.
-        We scan in order and return the first non-committed batch that is
-        actionable.  If a batch is stuck (failed/error beyond max retries),
+        Stages are sequential — stage N+1 depends on stage N's output.
+        We scan in order and return the first non-committed stage that is
+        actionable.  If a stage is stuck (failed/error beyond max retries),
         we return None to block the pipeline rather than skipping ahead.
         """
-        for b in self.batches:
-            if b.state == BatchState.COMMITTED:
+        for b in self.stages:
+            if b.state == StageState.COMMITTED:
                 continue
             # In-progress states (interrupted run) — resume immediately
-            if b.state in (BatchState.EXTRACTING, BatchState.EXTRACTED,
-                           BatchState.REVIEWING, BatchState.FIXING,
-                           BatchState.RETRYING):
+            if b.state in (StageState.EXTRACTING, StageState.EXTRACTED,
+                           StageState.REVIEWING, StageState.FIXING,
+                           StageState.RETRYING):
                 return b
-            # Pending — normal next batch
-            if b.state == BatchState.PENDING:
+            # Pending — normal next stage
+            if b.state == StageState.PENDING:
                 return b
             # Failed — retry if allowed, otherwise block
-            if b.state == BatchState.FAILED:
+            if b.state == StageState.FAILED:
                 if b.retry_count < b.max_retries:
                     return b
                 return None  # blocked — needs manual intervention
             # Error — retry if allowed, otherwise block
-            if b.state == BatchState.ERROR:
+            if b.state == StageState.ERROR:
                 if b.retry_count < b.max_retries:
                     return b
                 return None  # blocked — needs manual intervention
         return None
 
     def all_committed(self) -> bool:
-        return all(b.state == BatchState.COMMITTED for b in self.batches)
+        return all(b.state == StageState.COMMITTED for b in self.stages)
 
-    def completed_batch_count(self) -> int:
-        return sum(1 for b in self.batches
-                   if b.state == BatchState.COMMITTED)
+    def completed_stage_count(self) -> int:
+        return sum(1 for b in self.stages
+                   if b.state == StageState.COMMITTED)
 
-    def last_committed_batch(self) -> BatchEntry | None:
-        for b in reversed(self.batches):
-            if b.state == BatchState.COMMITTED:
+    def last_committed_stage(self) -> StageEntry | None:
+        for b in reversed(self.stages):
+            if b.state == StageState.COMMITTED:
                 return b
         return None
 
-    def expand_batches(self, full_plan_batches: list[dict],
-                       max_batches: int = 0) -> int:
-        """Append new batches from the full batch plan that are not yet tracked.
+    def expand_stages(self, full_plan_stages: list[dict],
+                       max_stages: int = 0) -> int:
+        """Append new stages from the full stage plan that are not yet tracked.
 
         Args:
-            full_plan_batches: All batches from source_batch_plan.json.
-            max_batches: Expand up to this many total batches (0 = all).
+            full_plan_stages: All stages from stage_plan.json.
+            max_stages: Expand up to this many total stages (0 = all).
 
         Returns:
-            Number of new batches added.
+            Number of new stages added.
         """
-        existing_ids = {b.batch_id for b in self.batches}
-        target = full_plan_batches[:max_batches] if max_batches > 0 \
-            else full_plan_batches
+        existing_ids = {b.stage_id for b in self.stages}
+        target = full_plan_stages[:max_stages] if max_stages > 0 \
+            else full_plan_stages
         added = 0
         for b in target:
-            if b["batch_id"] not in existing_ids:
-                self.batches.append(BatchEntry(
-                    batch_id=b["batch_id"],
+            if b["stage_id"] not in existing_ids:
+                self.stages.append(StageEntry(
                     stage_id=b["stage_id"],
                     chapters=b["chapters"],
                     chapter_count=b.get("chapter_count", 0),
@@ -407,7 +403,7 @@ class Phase3Progress:
 
     @staticmethod
     def _path(project_root: Path, work_id: str) -> Path:
-        return _progress_dir(project_root, work_id) / "phase3_batches.json"
+        return _progress_dir(project_root, work_id) / "phase3_stages.json"
 
     def save(self, project_root: Path) -> Path:
         path = self._path(project_root, self.work_id)
@@ -415,8 +411,8 @@ class Phase3Progress:
         self.last_updated = _now_iso()
         data = {
             "work_id": self.work_id,
-            "batch_size": self.batch_size,
-            "batches": [b.to_dict() for b in self.batches],
+            "stage_size": self.stage_size,
+            "stages": [b.to_dict() for b in self.stages],
             "last_updated": self.last_updated,
         }
         path.write_text(
@@ -434,9 +430,9 @@ class Phase3Progress:
             data = json.loads(path.read_text(encoding="utf-8"))
             return cls(
                 work_id=data["work_id"],
-                batch_size=data.get("batch_size", 10),
-                batches=[BatchEntry.from_dict(b)
-                         for b in data.get("batches", [])],
+                stage_size=data.get("stage_size", 10),
+                stages=[StageEntry.from_dict(b)
+                         for b in data.get("stages", [])],
                 last_updated=data.get("last_updated", ""),
             )
         except (json.JSONDecodeError, OSError, KeyError) as exc:
@@ -451,7 +447,7 @@ class Phase3Progress:
 def migrate_legacy_progress(
     project_root: Path, work_id: str,
 ) -> tuple[PipelineProgress, Phase3Progress] | None:
-    """Migrate old extraction_progress.json → pipeline.json + phase3_batches.json.
+    """Migrate old extraction_progress.json → pipeline.json + phase3_stages.json.
 
     Returns the new objects if migration happened, None if no legacy file found.
     """
@@ -485,8 +481,8 @@ def migrate_legacy_progress(
 
     phase3 = Phase3Progress(
         work_id=data["work_id"],
-        batch_size=data.get("batch_size", 10),
-        batches=[BatchEntry.from_dict(b) for b in data.get("batches", [])],
+        stage_size=data.get("stage_size", 10),
+        stages=[StageEntry.from_dict(b) for b in data.get("stages", [])],
     )
 
     # Save new files
