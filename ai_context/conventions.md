@@ -44,7 +44,9 @@ After changes, grep for the old phrasing to catch stale references.
 - Baseline files = extraction anchors only, **not loaded at runtime**.
 - Stage snapshots are **self-contained** — never merge with baseline at
   runtime.
-- `source_type` must be labeled: canon / inference / ambiguous.
+- Length rules are hard schema gates: world + character `stage_events`
+  50–80 字 per entry; memory_timeline `event_description` 150–200 字,
+  `digest_summary` 30–50 字.
 
 ## Git
 

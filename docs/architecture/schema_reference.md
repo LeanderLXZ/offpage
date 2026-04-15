@@ -28,7 +28,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **关键字段**：
 - `snapshot_summary` — 阶段的世界状态概述
 - `foundation_corrections` — 对基础设定的修正
-- `stage_events` — 本阶段事件（**唯一事件清单**，每条为 ≤ 80 字的 1 句话摘要；既是快照内容又是 `world_event_digest.jsonl` 的直接来源）
+- `stage_events` — 本阶段事件（**唯一事件清单**，每条 **50–80 字**一句话，schema 硬门控；**仅收录世界公共层事件**，角色私事/内心决定应写入该角色 memory_timeline；既是快照内容又是 `world_event_digest.jsonl` 的直接来源，1:1 复制）
 - `current_world_state` — 当前阶段的世界总体状态
 - `relationship_shifts` — 关注的人物关系转变
 - `character_status_changes` — 人物状态变化（生死、等级等）
@@ -55,7 +55,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 **关键字段**：
 - `event_id` — 格式 `E-S{stage:03d}-{seq:02d}`（例：`E-S003-02`）；阶段号编码在 ID 中
-- `summary` — 事件精简摘要（**≤ 80 字**）
+- `summary` — 事件精简摘要（**50–80 字**，1:1 复制自世界快照 `stage_events`）
 - `importance` — 5 级重要度（`trivial` / `minor` / `significant` / `critical` / `defining`）
 - `time` — 故事内时间（可选）
 - `location` — 事件地点（可选）
@@ -174,7 +174,7 @@ core_wounds 记录最底层的创伤根源。
 | `concealments` | 角色主动隐瞒的事情 |
 | `stage_delta` | 从上一阶段的变化摘要（信息性） |
 | `character_arc` | 角色从阶段 1 到当前的整体弧线概览（arc_summary、arc_stages 关键节点、current_position） |
-| `source_notes` | 推断和不确定性记录（field + source_type + note） |
+| `stage_events` | 本阶段发生的事件（每条 50–80 字，schema 硬门控；不累积历史） |
 
 ---
 
@@ -190,12 +190,12 @@ core_wounds 记录最底层的创伤根源。
 - `memory_id` — 格式 `M-S{stage:03d}-{seq:02d}`（例：`M-S003-02`）
 - `time` — 故事内时间（可选）
 - `location` — 事件发生地点
-- `event_summary` — 客观发生了什么（**≤ 50 字**——memory_digest 的直接来源）
+- `event_description` — 客观事件描述（**150–200 字**，schema 硬门控）
+- `digest_summary` — 用于 memory_digest 的精简摘要（**30–50 字**，schema 硬门控；独立撰写，聚焦可检索关键词，**不是** `event_description` 的机械截断）
 - `subjective_experience` — 角色对事件的主观体验（第一人称视角，核心字段，不限长度）
 - `emotional_impact` — 情感影响
 - `misunderstanding` — 是否产生了误解
 - `concealment` — 是否选择隐瞒
-- `source_type` — 信息来源（canon/inference/ambiguous）
 - `memory_importance` — 重要程度（trivial ~ defining）
 - `scene_refs` — 关联的 scene_archive scene_id（追溯到原文）
 
@@ -213,7 +213,7 @@ core_wounds 记录最底层的创伤根源。
 
 **关键字段**：
 - `memory_id` — 格式 `M-S{stage:03d}-{seq:02d}`；与 memory_timeline 条目的 `memory_id` 一一对应
-- `summary` — 事件精简摘要（**≤ 50 字**；复制自 memory_timeline 的 `event_summary`）
+- `summary` — 事件精简摘要（**30–50 字**；1:1 复制自 memory_timeline 的 `digest_summary`）
 - `importance` — 5 级重要度（`trivial` / `minor` / `significant` / `critical` / `defining`）
 - `time` — 故事内时间（可选）
 - `location` — 事件地点（可选）

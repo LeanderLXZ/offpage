@@ -18,8 +18,9 @@
     },
     "summary": {
       "type": "string",
+      "minLength": 50,
       "maxLength": 80,
-      "description": "事件摘要（≤ 80 字，直接复制 stage_events[i]）。"
+      "description": "事件摘要（50–80 字，直接复制 stage_events[i]）。"
     },
     "importance": {
       "type": "string",

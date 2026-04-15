@@ -109,8 +109,8 @@
     },
     "stage_events": {
       "type": "array",
-      "description": "仅本阶段发生的关键事件清单（不累积历史），每条为 ≤ 80 字的 1 句话摘要。历史跨阶段视图由 world_event_digest / memory_timeline 提供。",
-      "items": { "type": "string", "maxLength": 80 }
+      "description": "仅本阶段发生的关键事件清单（不累积历史），每条为 50–80 字的一句话摘要。历史跨阶段视图由 world_event_digest / memory_timeline 提供。",
+      "items": { "type": "string", "minLength": 50, "maxLength": 80 }
     },
     "current_status": {
       "type": "array",
@@ -691,33 +691,6 @@
     "evidence_refs": {
       "type": "array",
       "items": { "type": "string" }
-    },
-    "source_notes": {
-      "type": "array",
-      "description": "提取过程中的推断和不确定性记录。用于标注快照中哪些内容是推断或多义性解读。",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["field", "source_type"],
-        "properties": {
-          "field": {
-            "type": "string",
-            "description": "涉及的字段路径。例如：current_personality[2]、relationships[0].attitude、voice_state.emotional_voice_map[3]。"
-          },
-          "source_type": {
-            "type": "string",
-            "enum": ["canon", "inference", "ambiguous"],
-            "description": "canon = 原文明确描述；inference = 基于原文的合理推断；ambiguous = 原文存在多义性。"
-          },
-          "note": {
-            "type": "string",
-            "description": "推断依据或多义性说明。"
-          },
-          "evidence_ref": {
-            "type": "string"
-          }
-        }
-      }
     }
   }
 }

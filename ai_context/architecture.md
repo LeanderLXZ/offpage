@@ -131,12 +131,14 @@ Three layers with distinct granularity, no redundancy:
 2. **memory_timeline** — subjective process per event ("After he took that
    sword for me, I started to waver"). First-person, summarized (not raw
    text). Each entry: `memory_id` (`M-S###-##`), `time`, `location`,
-   `event_summary` (≤50 chars), `subjective_experience`, `scene_refs`.
+   `event_description` (150–200 字, objective narration, hard gate),
+   `digest_summary` (30–50 字, independently written digest source, hard
+   gate), `subjective_experience`, `scene_refs`.
    Loaded: recent 2 stages (N + N-1) full at startup; distant stages via
    `memory_digest.jsonl` (compressed index, ~30-40 tokens/entry —
-   `{memory_id, summary ≤50, importance, time?, location?}`, stage encoded
-   in the ID prefix for loader filtering) + FTS5/embedding on-demand for
-   detail.
+   `{memory_id, summary 30–50, importance, time?, location?}`, stage
+   encoded in the ID prefix for loader filtering; `summary` copied 1:1
+   from `digest_summary`) + FTS5/embedding on-demand for detail.
 
 3. **scene_archive** — original text split by scene. Fields: `scene_id`
    (`SC-S###-##`), `stage_id`, `chapter`, `time`, `location`,
@@ -256,11 +258,11 @@ multi-stage extraction via CLI calls (`claude -p` or `codex`).
   or `stage_catalog.json` — self-contained snapshot contract is embedded in
   the prompt; digest and catalog are programmatically maintained.
 - **Phase 3.5 — Cross-stage consistency check**: after all Phase 3 stages
-  commit, run 9 programmatic checks (zero tokens): alias consistency, field
-  completeness, relationship continuity, source_type distribution,
-  evidence_refs coverage, memory_digest correspondence, target_map counts,
-  stage_id alignment, world_event_digest correspondence. Optional LLM
-  adjudication for flagged items only. Errors block Phase 4.
+  commit, run 8 programmatic checks (zero tokens): alias consistency, field
+  completeness, relationship continuity, evidence_refs coverage,
+  memory_digest correspondence, target_map counts, stage_id alignment,
+  world_event_digest correspondence. Optional LLM adjudication for
+  flagged items only. Errors block Phase 4.
   Report: `consistency_report.json`.
 - **Phase 4 — Scene archive**: independent from Phase 3; only requires
   `stage_plan.json` (Phase 1 product). Per-chapter LLM calls mark
