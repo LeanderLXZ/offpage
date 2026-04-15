@@ -13,6 +13,18 @@
         "from": "0001",
         "to": "0010"
       }
+    },
+    {
+      "stage_id": "阶段02_离开<stage_title>",
+      "order": 1,
+      "title": "离开<stage_title>",
+      "summary": "<stage_title>夜间邪祟的真正规模曝光——不是零散恶鬼而是有组织的骷髅军团，包含骨马骷髅将等聚灵境强者。两人先后离开柳村向<stage_title>外赶路，发现<stage_title>实为悬崖围合的封闭盆地，夜间亡灵仅活动于崖下区域，崖上安全，<stage_title>疑为一片诅咒封印之地。",
+      "snapshot_path": "stage_snapshots/阶段02_离开<stage_title>.json",
+      "timeline_anchor": "抵达柳村数日后，两人先后离开<stage_title>",
+      "chapter_scope": {
+        "from": "0011",
+        "to": "0019"
+      }
     }
   ]
 }
