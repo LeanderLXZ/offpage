@@ -962,7 +962,12 @@ Baseline 文件（voice_rules、behavior_rules、boundaries）仍然存在，
 - `relationships`：对每个重要角色的完整关系状态——态度、信任度、亲密度、
   戒备度、语气变化、行为变化、驱动事件、认知中的对方状态、
   从阶段 1 到当前的关系演变概述
-- `knowledge_scope`：角色知道什么、不知道什么、不确定什么
+- `knowledge_scope`：角色知道什么、不知道什么、不确定什么。**条数上限**：
+  `knows` ≤ 50、`does_not_know` ≤ 30、`uncertain` ≤ 30；**每条 ≤ 50 字**
+  （schema 硬门控）。超限时按裁剪策略丢弃：优先保留 ① 影响当前阶段决策或
+  角色扮演的条目、② 与 `core_wounds` / `active_obsessions` / 活跃
+  `relationships` 相关的条目；优先丢弃 ① 日常常识类条目、② 早期阶段已无
+  触发点的细节、③ 已在 `memory_timeline` 中完整承载的条目
 - `misunderstandings`：角色持有的误解（主观 vs 客观）
 - `concealments`：角色主动隐瞒的事情
 - `emotional_baseline`：主导特质、**active_goals**（活跃理性目标）、
