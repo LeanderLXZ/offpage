@@ -138,8 +138,13 @@ implementation code yet.
   before allowing Phase 3 to start
 - Smart resume: PENDING stage with extraction output already on disk
   skips LLM extraction, jumps to post-processing (saves tokens)
-- REVIEWING state recovery: verifies extraction output exists on disk
-  before continuing review; resets to PENDING if files missing
+- Disk reconcile self-heal: every startup, Phase 0/3/4 progress files
+  call `reconcile_with_disk()` to align state vs on-disk artifacts —
+  terminal+missing → revert PENDING; PENDING+present → purge as
+  partial; intermediate → purge+revert. Phase 3 also verifies
+  `committed_sha` reachability via `git cat-file -e` (lost commits
+  treated as missing). Phase 3 also self-heals missing/corrupt
+  `phase3_stages.json` by rebuilding from `stage_plan.json`
 - Process guard: PID lockfile (prevents duplicate runs; Phase 3 uses
   `.extraction.lock`, Phase 4 uses `.scene_archive.lock` — independent),
   startup git preflight check (Phase 3 only), SIGINT/SIGTERM graceful

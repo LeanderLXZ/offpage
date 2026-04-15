@@ -232,8 +232,14 @@ L2 超时默认 600s（`repair_timeout` 参数可配置）。
   缺失则补跑，避免后续 stage 因缺少 identity.json 而全部失败
 - **Baseline 出口验证**：Phase 2.5 完成后运行 `validate_baseline()`
   校验 schema + required 字段非空，阻断不合格的 baseline 进入 Phase 3
-- **REVIEWING 中断恢复**：恢复到 REVIEWING 状态时先验证提取产物仍在磁盘，
-  文件缺失则自动回退重新提取
+- **磁盘对账自愈**：每次启动加载 progress 后自动调用 `reconcile_with_disk()`
+  对账（Phase 0/3/4 全覆盖）。规则：(1) 终态但产物缺失 → 回退 PENDING；
+  (2) PENDING 但磁盘有产物 → 清掉产物（视为不完整的半成品）；
+  (3) 任意中间态 → 清产物 + 回退。Phase 3 额外用 `git cat-file -e` 校验
+  `committed_sha` 是否仍可达，reset/rebase 丢掉的 commit 视同产物缺失
+- **Phase 3 progress 自愈**：若 Phase 2 已完成但 `phase3_stages.json`
+  缺失或损坏，从 `stage_plan.json` 重建（全部 stage 标 pending），避免
+  落到 fresh-start 路径重新提示选角色 + 覆写 pipeline.json
 - Resume 时自动重置 blocked stage（retry 耗尽的），无需手动编辑 progress
 - **Progress 与 `--end-stage` 分离**：progress 始终包含完整 stage plan，
   `--end-stage` 仅控制本次执行范围（同 Phase 4 模式）
@@ -260,7 +266,8 @@ Phase 4 与 Phase 3 数据独立——使用独立 PID 锁 `.scene_archive.lock`
 可与 Phase 3 并行运行（`--start-phase 4`）。Phase 4 自身不做 git 操作；其中间目录
 `works/{work_id}/analysis/scene_splits/` 和 lock 文件均为
 本地忽略产物（**不得被 git track**），Phase 3 的 rollback 不会清掉它们。
-resume 时会校验 passed 章节的 split 文件是否实际存在，缺失的自动重新生成。
+每次启动通过 `reconcile_with_disk()` 校验 passed 章节的 split 文件是否
+实际存在，缺失的自动重置为 pending；同时清掉 PENDING/中间态遗留的半成品。
 前置条件仅为 `stage_plan.json`（Phase 1 产物）。
 
 **运行方式**：
