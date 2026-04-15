@@ -21,7 +21,7 @@ VALID_PHASES = ("auto", "0", "1", "2", "2.5", "3", "3.5", "4")
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="persona-extract",
-        description="Automated batch extraction for persona-engine",
+        description="Automated stage extraction for persona-engine",
     )
     parser.add_argument(
         "work_id",
@@ -75,10 +75,10 @@ def main(argv: list[str] | None = None) -> None:
         help="Chapters per summarization chunk (default: 25)",
     )
     parser.add_argument(
-        "--end-batch",
+        "--end-stage",
         type=int,
         default=None,
-        help="Stop after batch N completes (0 = baseline only, omit = all)",
+        help="Stop after stage N completes (0 = baseline only, omit = all)",
     )
     parser.add_argument(
         "--start-phase",
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> None:
         success = run_scene_archive(
             project_root, args.work_id, backend,
             concurrency=args.concurrency,
-            end_batch=args.end_batch or 0,
+            end_stage=args.end_stage or 0,
             resume=args.resume,
         )
         sys.exit(0 if success else 1)
@@ -217,11 +217,11 @@ def main(argv: list[str] | None = None) -> None:
             orch.pipeline = pipeline
             orch.phase3 = phase3
             orch.run_extraction_loop(pipeline, phase3,
-                                     max_batches=args.end_batch)
+                                     max_stages=args.end_stage)
         else:
             orch.run_full(
                 preset_characters=args.characters,
-                preset_end_batch=args.end_batch,
+                preset_end_stage=args.end_stage,
             )
 
         print("\nDone.")

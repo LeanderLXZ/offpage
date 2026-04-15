@@ -4,7 +4,7 @@
 
 ## 目标
 
-对 `{work_id}` 的 `{batch_id}`（阶段 `{stage_id}`，章节 `{chapters}`）的**世界层**提取产出做语义审校。
+对 `{work_id}` 的 `{stage_id}`（阶段 `{stage_id}`，章节 `{chapters}`）的**世界层**提取产出做语义审校。
 
 ## 审校范围
 
@@ -29,7 +29,7 @@
 1. stage_events 条目的粒度是否相近，每条是否为 ≤ 80 字的 1 句话摘要
 2. current_world_state 描述风格是否一致
 3. evidence_refs（章节号列表）是否完整
-4. 如果任何维度出现明显退化（比前批减少 50% 以上），标记为 FAIL
+4. 如果任何维度出现明显退化（比前阶段减少 50% 以上），标记为 FAIL
 
 ### B. 数据边界正确性
 
@@ -40,7 +40,7 @@
 ### C. 信息充分性
 
 8. snapshot_summary 是否存在且有意义？
-9. current_world_state 是否覆盖本批重大变化？
+9. current_world_state 是否覆盖本阶段重大变化？
 10. stage_events 是否完整覆盖本阶段重要事件？（stage_events 是唯一事件清单来源，每条 ≤ 80 字 1 句话摘要）
 
 ### D. 时间性

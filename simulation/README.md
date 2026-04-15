@@ -20,7 +20,7 @@ Do not use this directory for:
 - source text
 - work canon
 - user state
-- batch extraction reports
+- stage extraction reports
 
 Those assets still belong under:
 

@@ -1,4 +1,4 @@
-"""Programmatic post-processing for Phase 3 batch extraction.
+"""Programmatic post-processing for Phase 3 stage extraction.
 
 After LLM extraction produces stage_snapshots and memory_timelines,
 this module programmatically maintains derived files:
@@ -385,7 +385,7 @@ def upsert_stage_catalog(
     Args:
         catalog_path: Path to stage_catalog.json
         stage_id: The stage identifier
-        order: Numeric ordering (batch index)
+        order: Numeric ordering (stage index)
         snapshot_path_rel: Relative path to the snapshot file
         snapshot_data: Parsed snapshot JSON (to extract title, summary)
         work_id: Work identifier
@@ -487,18 +487,18 @@ _CHAR_CATALOG_SUMMARY_FIELDS = [
 
 
 # ---------------------------------------------------------------------------
-# Batch-level post-processing orchestration
+# Stage-level post-processing orchestration
 # ---------------------------------------------------------------------------
 
-def run_batch_post_processing(
+def run_stage_post_processing(
     project_root: Path,
     work_id: str,
     stage_id: str,
-    batch_order: int,
+    stage_order: int,
     character_ids: list[str],
     chapter_range: str,
 ) -> list[str]:
-    """Run all programmatic post-processing for a completed batch.
+    """Run all programmatic post-processing for a completed stage.
 
     Called after world + character extraction succeeds, before review.
     Generates memory_digest, world_event_digest, and updates stage_catalogs.
@@ -529,7 +529,7 @@ def run_batch_post_processing(
             catalog_issues = upsert_stage_catalog(
                 catalog_path=world_catalog_path,
                 stage_id=stage_id,
-                order=batch_order,
+                order=stage_order,
                 snapshot_path_rel=f"stage_snapshots/{stage_id}.json",
                 snapshot_data=snapshot_data,
                 work_id=work_id,
@@ -602,7 +602,7 @@ def run_batch_post_processing(
             catalog_issues = upsert_stage_catalog(
                 catalog_path=catalog_path,
                 stage_id=stage_id,
-                order=batch_order,
+                order=stage_order,
                 snapshot_path_rel=(
                     f"canon/stage_snapshots/{stage_id}.json"),
                 snapshot_data=snapshot_data,

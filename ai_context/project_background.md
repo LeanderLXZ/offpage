@@ -19,7 +19,7 @@ and behavioral patterns across long conversations and multiple sessions.
 - **The original novel is the highest authority.** All character data must
   trace back to source text evidence.
 - **Incremental, not from scratch.** The system processes long novels in
-  batches and builds up character data over time.
+  stages and builds up character data over time.
 - **Structured layers, not one giant prompt.** Source text, world data,
   character data, user data, and runtime state are kept in separate layers
   with clear boundaries.
@@ -29,7 +29,7 @@ and behavioral patterns across long conversations and multiple sessions.
 Build in this order:
 
 1. Character-asset system (schemas, data model)
-2. Extraction workflows (batch processing, incremental updates)
+2. Extraction workflows (stage processing, incremental updates)
 3. Runtime roleplay engine (loading, retrieval, session management)
 4. Terminal integrations (agent, app, MCP)
 

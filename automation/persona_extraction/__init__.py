@@ -1,1 +1,1 @@
-"""Persona Engine — automated batch extraction orchestrator."""
+"""Persona Engine — automated stage extraction orchestrator."""

@@ -55,13 +55,13 @@ works/{work_id}/
 
   analysis/
     world_overview.json
-    source_batch_plan.json
+    stage_plan.json
     candidate_characters.json
     consistency_report.json
     progress/
       pipeline.json
       phase0_summaries.json
-      phase3_batches.json
+      phase3_stages.json
       phase4_scenes.json
       extraction.log
     chapter_summaries/
@@ -175,13 +175,13 @@ works/{work_id}/
 - `chapter_summaries/` — Phase 0 章节摘要（每 chunk 一个 JSON）
 - `scene_splits/` — Phase 4 中间产物（每章一个 JSON，.gitignore）
 - `world_overview.json` — Phase 1 世界观概览
-- `source_batch_plan.json` — Phase 1 分批规划
+- `stage_plan.json` — Phase 1 阶段规划
 - `candidate_characters.json` — Phase 1 候选角色
 - `consistency_report.json` — Phase 3.5 一致性检查报告
 - `evidence/` — 证据引用材料
 - `conflicts/` — 矛盾与修订记录
 
-不要为每个 batch 单独生成报告文件，交接信息应直接写入 progress 文件。
+不要为每个 stage 单独生成报告文件，交接信息应直接写入 progress 文件。
 
 ### indexes/
 
@@ -208,8 +208,8 @@ works/{work_id}/
 
 ## 剧情阶段模型
 
-- 每个提取 batch 对应一个剧情阶段（batch N = 阶段 N）
-- 分批规划在分析阶段按自然剧情边界确定，每个 batch 的章节数可以不同
+- 每个提取 stage 对应一个剧情阶段（stage N = 阶段 N）
+- 阶段规划在分析阶段按自然剧情边界确定，每个 stage 的章节数可以不同
   （默认目标 10 章，最小 5 章，最大 15 章，可在作品 config 中调整）
 - 阶段 N 是累积的：选择阶段 N 意味着提取阶段 1..N 的全部内容
 - **时间性原则**：当前所选阶段是角色的"现在"，之前的阶段是按顺序发生的
