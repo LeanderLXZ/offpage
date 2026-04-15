@@ -194,8 +194,8 @@ Phase 4（见 §11.4.2）；`--start-phase 4` 可跳过此门控独立运行。P
 - 中间文件：`works/{work_id}/analysis/scene_splits/`（每章一个 JSON，.gitignore）
 - 进度：`works/{work_id}/analysis/progress/phase4_scenes.json`
 - 锁：`works/{work_id}/analysis/.scene_archive.lock`
-- resume 时校验 passed 章节的 split 文件是否存在，
-  缺失则重置为 pending 重新生成
+- 每次启动通过 `reconcile_with_disk()` 与磁盘对账：passed 缺文件
+  → 回退 pending；PENDING/中间态有半成品 → 清掉
 
 `scene_id` 格式：`SC-S{stage:03d}-{seq:02d}`（如 `SC-S003-07`）。
 阶段号由章节号通过 `stage_plan.json` 查得；seq 为该阶段内从 01
