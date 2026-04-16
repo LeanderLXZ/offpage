@@ -282,14 +282,18 @@ orchestrator (Python)
     ├── 提取循环 → 每个 stage (1+N 全并行):
     │       ├── git preflight
     │       ├── claude -p ×(1+N) (世界+角色全并行, 3600s)
-    │       ├── 程序化后处理 (digest/catalog, 0 token)
+    │       ├── 程序化后处理 (digest/catalog, 0 token, idempotent upsert)
     │       ├── 并行审校通道 (world + 各角色独立):
-    │       │       ├── 程序化校验 (Python/jsonschema)
+    │       │       ├── Level 0 schema autofix (0 token)
+    │       │       ├── Level 1 程序化校验 (Python/jsonschema)
     │       │       ├── claude -p (语义审校, per-lane)
     │       │       └── [局部问题] → claude -p (定点修复) → 重跑检查
+    │       ├── [lane FAIL] → 仅该 lane 回滚产物 + 单独重提取
+    │       │       (≤ lane_max_retries=2, 已通过 lane 保留)
     │       ├── 提交门控 (程序化跨通道一致性, 0 token)
     │       ├── [全通过] → git commit
-    │       └── [系统性问题] → rollback + 全量重试
+    │       └── [lane 重试耗尽] → 全 stage rollback + 整 stage 重试
+    │               (最后手段, ≤ max_retries=2)
     │
     ├── 跨阶段一致性检查 (Phase 3.5):
     │       ├── 程序化检查 (Python, 0 token)

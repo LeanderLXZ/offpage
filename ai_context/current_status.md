@@ -75,13 +75,24 @@ implementation code yet.
   world-vs-character conflicts remain the character lane semantic reviewer's
   job. Memory digest gate parses the stage segment out of `memory_id`
   (`M-S{stage:03d}-`), not from a `stage_id` field — the schema forbids
-  that field. All lanes must pass; any failure → full stage rollback.
+  that field. Lane failures trigger **lane-independent retry** (see
+  retry model below), not immediate full rollback.
 - Two-layer quality check per lane: programmatic (`jsonschema` is a HARD
   dependency — see `automation/pyproject.toml`) + semantic (LLM reviewer
   with narrowed input scope)
-- Failure triage: reviewer findings classified as fixable (≤5 specific field
-  errors) → targeted fix agent (minimal edits + re-validate); systemic
-  (file missing, structural, understanding-level) → full rollback + retry
+- **Lane-independent retry** (requirements §11.4b + §11.5, last resort =
+  full rollback): Fix cascade inside a lane first — Level 0 schema
+  autofix → Level 1 programmatic validation → Level 2/3 targeted LLM
+  fix. If a lane still FAILs after the cascade (or hits a systemic
+  issue: file missing, structural, understanding-level), roll back
+  only that lane's on-disk products and re-extract only that lane
+  (≤ `lane_max_retries`=2); previously PASSED lanes are preserved.
+  After any lane re-extraction we re-review **all** lanes (world
+  reviewer reads character memory_timelines, character reviewer reads
+  world snapshot — cross-dependency). Full-stage rollback is the last
+  resort, triggered only when a failing lane exhausts its lane quota;
+  the stage then transitions to FAILED and enters the stage-level
+  retry loop (≤ `max_retries`=2).
 - Three-level JSON repair pipeline (`json_repair.py`): L1 programmatic regex
   (zero tokens) → L2 LLM repair (600s timeout, configurable via
   `repair_timeout`) → L3 full re-run (caller-implemented, max 1 attempt).
