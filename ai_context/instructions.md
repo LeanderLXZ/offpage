@@ -1,122 +1,64 @@
 # Instructions For Future AI Agents
 
-## Primary Rule
+## Entry Point
 
-Use `ai_context/` as the default handoff entry point. Do not begin by
-rereading full chat history, the full novel corpus, or large artifact
-directories. Do not proactively load `prompts/` content unless the user
-explicitly asks for a prompt-driven workflow.
+`ai_context/` is the handoff entry point. Do not reread full chat history,
+the novel, or large artifact directories by default. Do not load `prompts/`
+unless the user asks.
 
-## Default Reading Order
+## Reading Order
 
-1. `ai_context/conventions.md` ← short, re-read periodically during session
-2. `ai_context/project_background.md`
-3. `ai_context/requirements.md`
-4. `ai_context/read_scope.md`
-5. `ai_context/current_status.md`
-6. `ai_context/architecture.md`
-7. `ai_context/decisions.md`
-8. `ai_context/next_steps.md`
-9. `ai_context/handoff.md`
-
-## Update Expectations
-
-After a meaningful project change, update `ai_context/` deliberately.
-
-**Do not update `ai_context/` or `docs/logs/` for routine runtime-state or
-extraction-progress updates.** Those should go into work-local or user-local
-progress files. Only promote into `ai_context/` or `docs/logs/` when the
-change affects durable repository truth (instructions, prompts, schemas,
-architecture, directory rules, data-model conventions, retrieval strategy).
-
-When a durable change occurs, update the relevant subset of:
-
-- `current_status.md`
-- `handoff.md`
-- `next_steps.md`
-- `architecture.md` (if architecture changed)
-- `decisions.md` (if a durable decision was added or reversed)
-- one timestamped entry under `docs/logs/` (for major changes)
+1. `conventions.md` ← short, re-read periodically
+2. `project_background.md`
+3. `requirements.md`
+4. `read_scope.md`
+5. `current_status.md`
+6. `architecture.md`
+7. `decisions.md`
+8. `next_steps.md`
+9. `handoff.md`
 
 ## Dilution Protection
 
-Long sessions cause you to forget what you read earlier. These rules help:
+Long sessions cause forgetting. Re-read the relevant file when:
 
-1. **Before writing to `works/` or `users/`** — re-read `decisions.md`
-   (data separation, Chinese identifiers, canon vs inference).
-2. **Before modifying schemas or architecture** — re-read `architecture.md`
-   (self-contained snapshots, baseline role, key boundaries).
-3. **When switching task types** — re-read the relevant `ai_context/` file.
-4. **If you cannot recall** `work_id`, `character_id`, `stage_id`, or what
-   was decided earlier in this conversation — stop and re-read, do not guess.
-5. **After completing any task** — re-read `conventions.md` and run through
-   its Post-Change Checklist. Check whether you also missed logging a
-   previous task in this session.
-6. **Every 3-4 tasks in a long session** — re-read `conventions.md` in full.
-   This file is short and designed for periodic refreshing. Pay special
-   attention to the cross-file alignment table and the log timestamp format.
-7. **Before creating any file in `docs/logs/`** — run
-   `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'` to get the exact
-   timestamp. Do not guess or approximate the time.
+- Writing to `works/` or `users/` → `decisions.md` (data separation,
+  Chinese identifiers, canon vs inference)
+- Modifying schemas or architecture → `architecture.md`
+- Switching task types → the relevant `ai_context/` file
+- Forgetting `work_id` / `character_id` / `stage_id` / prior decisions →
+  stop and re-read, do not guess
+- Every 3–4 tasks in a long session → `conventions.md` in full
+- Before creating any `docs/logs/` file → run
+  `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'` for the exact timestamp
 
-## Logging Rules — CRITICAL
+## Update Expectations
 
-**Every meaningful change must produce a log entry under `docs/logs/`.** This
-is not optional. If you changed schemas, architecture, prompts, simulation
-docs, directory structure, or made any decision that a future AI session would
-need to understand, you must write a timestamped log before moving on. The log
-is the only durable record that survives across conversations.
+Update `ai_context/` only for durable repository truth (instructions,
+prompts, schemas, architecture, directory rules, data-model conventions,
+retrieval strategy). Runtime / extraction progress goes in work-local or
+user-local progress files.
 
-Checklist — after completing a task, ask yourself:
+For durable changes, update the relevant subset of: `current_status.md`,
+`handoff.md`, `next_steps.md`, `architecture.md`, `decisions.md`, plus one
+timestamped entry under `docs/logs/`.
 
-1. Did I change any file outside of `ai_context/`? → Write a log.
-2. Did I add, remove, or rename a schema, template, or directory? → Write a
-   log.
-3. Did I make a design decision or reverse a prior one? → Write a log.
-4. Did I only update `ai_context/` text with no other file changes? → Log is
-   optional.
+## Logging (critical)
 
-Log format:
-
-- Location: `docs/logs/{timestamp}_{slug}.md`
-- Timestamp format: `YYYY-MM-DD_HHMMSS` — **HHMMSS is mandatory, never omit
-  the time portion.** Bad: `2026-04-03_foo.md`. Good:
-  `2026-04-03_020841_foo.md`. Always run the date command below to get the
-  exact timestamp before creating the file.
-- Timezone: `America/New_York` (use `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'`)
-- Content: what changed, which files, and why
+Every meaningful change outside `ai_context/` → write a log at
+`docs/logs/{YYYY-MM-DD_HHMMSS}_{slug}.md`. HHMMSS is mandatory. See
+`conventions.md` for the full checklist and alignment table.
 
 Layer summary:
+- `ai_context/` — compressed current truth
+- `docs/architecture/` — formal architecture documentation
+- `docs/logs/` — timestamped historical records (write-mostly)
 
-- `ai_context/` = compressed current truth (updated after durable changes)
-- `docs/architecture/` = formal architecture documentation
-- `docs/logs/` = timestamped historical change records (write-mostly; do not
-  proactively read, but always write after changes)
+## Project Focus
 
-## Git And Repository Size Rules
-
-- Keep the repository lightweight
-- Do not commit: full novels, databases, vector indexes, embeddings, caches,
-  full user histories, large runtime artifacts
-- Schemas, templates, code, docs, and config are fine to commit
-- Real user packages under `users/` stay local
-- Under `works/*/analysis/`, only durable analysis products are git-tracked:
-  `world_overview.json`, `stage_plan.json`, `candidate_characters.json`,
-  `consistency_report.json`. `progress/`, `chapter_summaries/`,
-  `scene_splits/`, `evidence/*` are local-only runtime artifacts (see
-  `.gitignore` for the authoritative list). `works/*/indexes/`,
-  `works/*/world/` and `works/*/characters/` are git-tracked canon assets;
-  `works/*/retrieval/` is local-only.
-- Only commit at coherent milestones
-
-## Project-Specific Guidance
-
-- The core is decision logic, memory logic, and relationship logic recovery —
-  not surface tone mimicry
-- Keep layers separate: objective plot, character definition, character memory,
-  character misunderstandings, voice style, behavior rules, conflicts
-- The original novel is the highest authority
-- Distinguish explicit canon from reasonable inference
-- Preserve stage differences
-- The runtime should not degrade into one giant prompt — prefer retrieval and
-  compilation
+The core is decision logic, memory logic, and relationship logic — not
+surface tone mimicry. Keep layers separate (objective plot, character
+definition, memory, misunderstanding, voice, behavior, conflicts). The
+original novel is the highest authority. Explicit canon vs inference.
+Stage differences preserved. Runtime uses retrieval + compilation, not
+one giant prompt.
