@@ -1,37 +1,32 @@
 # Project Background
 
-## What This Project Is
+Long-lived novel character roleplay system. A reusable character-asset
+system that can be updated and loaded across sessions — not a one-off
+prompt experiment.
 
-A long-lived novel character roleplay system. Not a one-off prompt experiment
-or a temporary character card. The goal is a reusable character-asset system
-that can be updated, corrected, and loaded by AI systems over time.
+## Goal
 
-## Why It Exists
-
-The user wants AI to perform deep, stable roleplay as specific novel
-characters — maintaining consistent personality, memory, knowledge boundaries,
-and behavioral patterns across long conversations and multiple sessions.
+Deep, stable roleplay of specific novel characters — consistent
+personality, memory, knowledge boundaries, and behavioral patterns across
+long conversations and multiple sessions.
 
 ## Guiding Principles
 
-- **Deep roleplay over surface mimicry.** The priority is behavioral and
-  decision consistency, not just matching a character's tone of voice.
-- **The original novel is the highest authority.** All character data must
-  trace back to source text evidence.
-- **Incremental, not from scratch.** The system processes long novels in
-  stages and builds up character data over time.
-- **Structured layers, not one giant prompt.** Source text, world data,
-  character data, user data, and runtime state are kept in separate layers
-  with clear boundaries.
+- **Deep roleplay over surface mimicry.** Behavioral and decision
+  consistency is the priority; tone is secondary.
+- **The original novel is the highest authority.** All character data
+  traces back to source text.
+- **Incremental, not from scratch.** Long novels processed in stages;
+  character data builds up over time.
+- **Layered, not one giant prompt.** Source, world, character, user,
+  runtime state — each in its own layer with clear boundaries.
 
-## Architectural Mindset
-
-Build in this order:
+## Build Order
 
 1. Character-asset system (schemas, data model)
 2. Extraction workflows (stage processing, incremental updates)
 3. Runtime roleplay engine (loading, retrieval, session management)
 4. Terminal integrations (agent, app, MCP)
 
-For specific requirements, see `requirements.md`. For architecture details,
-see `architecture.md`.
+For requirements see `requirements.md`; for architecture see
+`architecture.md`.
