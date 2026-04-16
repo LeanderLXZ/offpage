@@ -1447,6 +1447,7 @@ class ExtractionOrchestrator:
                 print("    [FAIL] Commit gate failed, rolling back...")
                 rollback_to_head(self.project_root)
                 stage.last_reviewer_feedback = "\n".join(gate_issues)
+                stage.lane_retries = {}
                 stage.transition(StageState.FAILED)
                 phase3.save(self.project_root)
                 return
@@ -1471,6 +1472,7 @@ class ExtractionOrchestrator:
             if not sha:
                 print("    [FAIL] Git commit returned no SHA "
                       "(empty diff or commit failure).")
+                stage.lane_retries = {}
                 stage.transition(StageState.FAILED)
                 stage.error_message = (
                     "git commit produced no object — aborting COMMITTED "
