@@ -75,8 +75,15 @@ implementation code yet.
   world-vs-character conflicts remain the character lane semantic reviewer's
   job. Memory digest gate parses the stage segment out of `memory_id`
   (`M-S{stage:03d}-`), not from a `stage_id` field — the schema forbids
-  that field. Lane failures trigger **lane-independent retry** (see
-  retry model below), not immediate full rollback.
+  that field. Each gate finding surfaces as `GateIssue(message, severity,
+  lane_type, lane_id, category)`; the orchestrator routes recovery by
+  category — `catalog_missing` / `digest_missing` ∈
+  `POST_PROCESSING_RECOVERABLE` → free post-processing rerun + re-gate;
+  `snapshot_*` / `lane_review` → lane re-extraction sharing the same
+  `lane_retries` budget as review failures; unattributed structural issues
+  or exhausted budget → full-stage rollback. Lane failures (review or
+  gate) trigger **lane-independent retry** (see retry model below), not
+  immediate full rollback.
 - Two-layer quality check per lane: programmatic (`jsonschema` is a HARD
   dependency — see `automation/pyproject.toml`) + semantic (LLM reviewer
   with narrowed input scope)
@@ -89,9 +96,13 @@ implementation code yet.
   (≤ `lane_max_retries`=2); previously PASSED lanes are preserved.
   After any lane re-extraction we re-review **all** lanes (world
   reviewer reads character memory_timelines, character reviewer reads
-  world snapshot — cross-dependency). Full-stage rollback is the last
-  resort, triggered only when a failing lane exhausts its lane quota;
-  the stage then transitions to FAILED and enters the stage-level
+  world snapshot — cross-dependency). The commit gate sits inside the
+  same retry loop as review: a gate failure consumes the same
+  `lane_retries` quota and routes via the cascade (free PP rerun → lane
+  re-extract → full rollback) before re-running review + gate. Full-stage
+  rollback is the last resort, triggered only when a failing lane
+  exhausts its quota or when the gate raises an unattributed structural
+  issue; the stage then transitions to FAILED and enters the stage-level
   retry loop (≤ `max_retries`=2).
 - Three-level JSON repair pipeline (`json_repair.py`): L1 programmatic regex
   (zero tokens) → L2 LLM repair (600s timeout, configurable via

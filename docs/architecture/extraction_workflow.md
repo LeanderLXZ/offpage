@@ -292,8 +292,14 @@ orchestrator (Python)
     │       │       (≤ lane_max_retries=2, 已通过 lane 保留；
     │       │        详见 requirements.md §11.4b)
     │       ├── 提交门控 (程序化跨通道一致性, 0 token)
-    │       ├── [全通过] → git commit
-    │       └── [lane 重试耗尽] → 全 stage rollback + 整 stage 重试
+    │       │       ├── [PASS] → git commit
+    │       │       ├── [catalog/digest miss] → post_processing 重跑
+    │       │       │       + 重新过门控 (免费, 不消耗 lane_retries)
+    │       │       ├── [snapshot miss / lane_review miss]
+    │       │       │       → 仅该 lane 回滚 + 重提取
+    │       │       │       (与审校失败共享 lane_retries 配额)
+    │       │       └── [无法定位 / 配额耗尽] → 全 stage rollback
+    │       └── 全 stage rollback → 整 stage 重试
     │               (最后手段, ≤ max_retries=2)
     │
     ├── 跨阶段一致性检查 (Phase 3.5):
@@ -316,6 +322,13 @@ orchestrator (Python)
 - 修复瀑布（Fix Cascade）：Level 0 schema autofix（0 token）→ Level 1
   程序化校验 → Level 2/3 定点 LLM 修复 → lane 独立重提取。
   系统性问题（文件缺失/结构错误/理解偏差）→ 仅失败 lane 回滚重提取
+- 提交门控级联（Gate Cascade）：门控产物为 `GateIssue(message, severity,
+  lane_type, lane_id, category)`，按 category 路由 —
+  `catalog_missing`/`digest_missing` ∈ `POST_PROCESSING_RECOVERABLE` →
+  免费 post_processing 重跑 + 重新过门控；`snapshot_*`/`lane_review` →
+  仅该 lane 回滚重提取（与审校失败共享 `lane_retries` 配额）；
+  无 lane 归属或配额耗尽 → 全 stage rollback。`lane_retries` 计数器
+  仅在门控最终 PASS 后清零，避免 review/gate 之间反复消耗配额
 - 提取在独立 git 分支进行，每 stage 单独 commit（精确回滚）；全部完成后
   squash merge 回 main（干净历史），extraction 分支可删除
 - 支持 Claude CLI 和 Codex CLI 两种后端

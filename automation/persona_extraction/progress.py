@@ -332,10 +332,13 @@ class StageEntry:
     # Per-lane retry tracking (lane_key → retry_count). Keys are the lane
     # identifiers used by review_lanes: "world" for the world lane,
     # "character:{char_id}" for each character lane. Lane retries are
-    # bounded by ``lane_max_retries``; when any lane exhausts its quota,
-    # the whole stage falls back to full-stage rollback (see
-    # orchestrator._process_stage Step 4 and requirements §11.4b/§11.5).
-    # Cleared on successful stage commit or stage-level rollback.
+    # bounded by ``lane_max_retries`` and **shared between review-failure
+    # retries and commit-gate failure cascades** — both consume the same
+    # counter so a stage cannot ping-pong the budget. When any lane
+    # exhausts its quota, the whole stage falls back to full-stage
+    # rollback (see orchestrator._process_stage Step 4-5 and
+    # requirements §11.4b/§11.5). Cleared only after the commit gate
+    # finally PASSes (or on stage-level rollback).
     lane_retries: dict[str, int] = field(default_factory=dict)
     lane_max_retries: int = 2
 

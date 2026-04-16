@@ -425,19 +425,64 @@ def _execute_single_lane(
 # Commit gate (提交门控)
 # ---------------------------------------------------------------------------
 
+@dataclass
+class GateIssue:
+    """A single commit-gate finding with lane attribution and recovery hint.
+
+    Fields:
+        message: human-readable issue text (also what gets printed)
+        severity: ``"error"`` (fails the gate) or ``"warning"`` (logged only)
+        lane_type: ``"world"`` or ``"character"`` when the issue is attributable
+            to a single lane; ``""`` when it is unattributed (rare — only
+            structural failures with no clear owner like ``stage_id`` parse
+            failure)
+        lane_id: ``"world"`` or character_id matching ``lane_type``;
+            ``""`` when unattributed
+        category: one of ``"snapshot_missing"``, ``"snapshot_stage_id"``,
+            ``"snapshot_parse"``, ``"catalog_missing"``, ``"digest_missing"``,
+            ``"lane_review"``, ``"reference_warning"``. Drives the
+            orchestrator's recovery cascade — see §11.4b "失败处理 B" in
+            ``docs/requirements.md``.
+    """
+    message: str
+    severity: str             # "error" | "warning"
+    lane_type: str = ""       # "world" | "character" | ""
+    lane_id: str = ""         # "world" | char_id | ""
+    category: str = ""
+
+    @property
+    def lane_key_str(self) -> str:
+        """Canonical lane key, or empty string when unattributed."""
+        if not self.lane_type:
+            return ""
+        return lane_key(self.lane_type, self.lane_id)
+
+
+# Categories that can be repaired by re-running post_processing alone (no LLM).
+# Anything else falls through to lane re-extraction or full-stage rollback.
+POST_PROCESSING_RECOVERABLE: frozenset[str] = frozenset({
+    "catalog_missing",
+    "digest_missing",
+})
+
+
 def run_commit_gate(
     project_root: Path,
     work_id: str,
     stage_id: str,
     character_ids: list[str],
     lane_results: list[LaneResult],
-) -> tuple[bool, list[str]]:
+) -> tuple[bool, list[GateIssue]]:
     """Run the commit gate after all review lanes complete.
 
     Scope: structural + identifier-level 一致性 only. Content-level cross-entity
     conflicts (world settings vs character cognition) are the character lane
     semantic reviewer's job (§11.4b in requirements). This gate is a zero-token
     last-line guard, not a replacement for semantic review.
+
+    Each issue is annotated with ``lane_type`` / ``lane_id`` / ``category`` so
+    the orchestrator can route recovery via the same lane-independent retry
+    path used by review failures (see §11.4b "失败处理 B" in requirements).
 
     Checks:
     1. All lanes passed
@@ -451,9 +496,11 @@ def run_commit_gate(
        in world snapshot ``relationship_shifts`` / ``character_status_changes``
        should resolve via world cast or active character aliases
 
-    Returns (passed, list_of_issues).
+    Returns ``(passed, list_of_GateIssue)``. ``passed`` is True iff there are
+    no error-severity issues; warnings are present in the list but do not
+    affect ``passed``.
     """
-    issues: list[str] = []
+    issues: list[GateIssue] = []
     work_dir = project_root / "works" / work_id
 
     # --- Check 1: All lanes passed ---
@@ -461,121 +508,182 @@ def run_commit_gate(
     if failed_lanes:
         for r in failed_lanes:
             msg = r.error or r.findings or "unknown failure"
-            issues.append(
-                f"审校通道 [{r.lane_type}:{r.lane_id}] 未通过: "
-                f"{msg[:200]}")
+            issues.append(GateIssue(
+                message=(f"审校通道 [{r.lane_type}:{r.lane_id}] 未通过: "
+                         f"{msg[:200]}"),
+                severity="error",
+                lane_type=r.lane_type, lane_id=r.lane_id,
+                category="lane_review",
+            ))
         return False, issues
 
-    # --- Check 2: stage_id alignment ---
+    # --- Check 2 + 3: snapshot existence and stage_id alignment ---
     world_snapshot = (work_dir / "world" / "stage_snapshots"
                       / f"{stage_id}.json")
     if not world_snapshot.exists():
-        issues.append(f"世界快照缺失: {world_snapshot}")
-    for char_id in character_ids:
-        char_snapshot = (work_dir / "characters" / char_id / "canon"
-                         / "stage_snapshots" / f"{stage_id}.json")
-        if not char_snapshot.exists():
-            issues.append(f"角色快照缺失: {char_snapshot}")
-
-    # --- Check 3: Cross-consistency (lightweight programmatic) ---
-    if world_snapshot.exists():
+        issues.append(GateIssue(
+            message=f"世界快照缺失: {world_snapshot}",
+            severity="error",
+            lane_type="world", lane_id="world",
+            category="snapshot_missing",
+        ))
+    else:
         try:
             ws_data = json.loads(
                 world_snapshot.read_text(encoding="utf-8"))
             ws_stage = ws_data.get("stage_id", "")
             if ws_stage != stage_id:
-                issues.append(
-                    f"世界快照 stage_id 不匹配: "
-                    f"expected={stage_id}, got={ws_stage}")
+                issues.append(GateIssue(
+                    message=(f"世界快照 stage_id 不匹配: "
+                             f"expected={stage_id}, got={ws_stage}"),
+                    severity="error",
+                    lane_type="world", lane_id="world",
+                    category="snapshot_stage_id",
+                ))
         except (json.JSONDecodeError, ValueError):
-            issues.append(f"世界快照 JSON 解析失败: {world_snapshot}")
+            issues.append(GateIssue(
+                message=f"世界快照 JSON 解析失败: {world_snapshot}",
+                severity="error",
+                lane_type="world", lane_id="world",
+                category="snapshot_parse",
+            ))
 
     for char_id in character_ids:
         char_snap_path = (work_dir / "characters" / char_id / "canon"
                           / "stage_snapshots" / f"{stage_id}.json")
-        if char_snap_path.exists():
-            try:
-                cs_data = json.loads(
-                    char_snap_path.read_text(encoding="utf-8"))
-                cs_stage = cs_data.get("stage_id", "")
-                if cs_stage != stage_id:
-                    issues.append(
-                        f"[{char_id}] 角色快照 stage_id 不匹配: "
-                        f"expected={stage_id}, got={cs_stage}")
-            except (json.JSONDecodeError, ValueError):
-                issues.append(
-                    f"[{char_id}] 角色快照 JSON 解析失败")
+        if not char_snap_path.exists():
+            issues.append(GateIssue(
+                message=f"角色快照缺失: {char_snap_path}",
+                severity="error",
+                lane_type="character", lane_id=char_id,
+                category="snapshot_missing",
+            ))
+            continue
+        try:
+            cs_data = json.loads(
+                char_snap_path.read_text(encoding="utf-8"))
+            cs_stage = cs_data.get("stage_id", "")
+            if cs_stage != stage_id:
+                issues.append(GateIssue(
+                    message=(f"[{char_id}] 角色快照 stage_id 不匹配: "
+                             f"expected={stage_id}, got={cs_stage}"),
+                    severity="error",
+                    lane_type="character", lane_id=char_id,
+                    category="snapshot_stage_id",
+                ))
+        except (json.JSONDecodeError, ValueError):
+            issues.append(GateIssue(
+                message=f"[{char_id}] 角色快照 JSON 解析失败",
+                severity="error",
+                lane_type="character", lane_id=char_id,
+                category="snapshot_parse",
+            ))
 
-    # --- Check 4: Programmatically-maintained files exist ---
+    # --- Check 4 + 5: programmatically-maintained files ---
     world_catalog = work_dir / "world" / "stage_catalog.json"
     if world_catalog.exists():
-        _validate_catalog_has_stage(world_catalog, stage_id, issues,
-                                    "world")
+        _validate_catalog_has_stage(
+            world_catalog, stage_id, issues,
+            label="world", lane_type="world", lane_id="world")
 
     for char_id in character_ids:
         char_dir = work_dir / "characters" / char_id / "canon"
         char_catalog = char_dir / "stage_catalog.json"
         if char_catalog.exists():
-            _validate_catalog_has_stage(char_catalog, stage_id, issues,
-                                        char_id)
+            _validate_catalog_has_stage(
+                char_catalog, stage_id, issues,
+                label=char_id, lane_type="character", lane_id=char_id)
         digest = char_dir / "memory_digest.jsonl"
         if digest.exists():
-            _validate_digest_has_stage(digest, stage_id, issues, char_id)
+            _validate_digest_has_stage(
+                digest, stage_id, issues,
+                label=char_id, lane_type="character", lane_id=char_id)
 
-    # --- Check 5: Lightweight cross-entity reference resolution (warn-only) ---
-    # Resolve character names mentioned in world snapshot's relationship_shifts
-    # and character_status_changes against (a) world cast roster, (b) active
-    # character aliases. Failures are WARNINGS — the character may legitimately
-    # be out of the user's active extraction scope. We log the warnings into
-    # issues but do NOT fail the gate on reference misses; the content-level
-    # truth is enforced by the character lane semantic reviewer.
+    # --- Check 6: cross-entity reference resolution (warn-only) ---
     if world_snapshot.exists():
         warnings = _cross_entity_reference_warnings(
             work_dir, world_snapshot, character_ids)
         for w in warnings:
-            issues.append(f"[WARN] {w}")
+            issues.append(GateIssue(
+                message=w, severity="warning",
+                lane_type="world", lane_id="world",
+                category="reference_warning",
+            ))
 
-    # Warnings (prefixed ``[WARN]``) do NOT fail the gate.
-    hard_issues = [i for i in issues if not i.startswith("[WARN]")]
-    passed = len(hard_issues) == 0
+    passed = not any(i.severity == "error" for i in issues)
     return passed, issues
 
 
 def _validate_catalog_has_stage(
     catalog_path: Path, stage_id: str,
-    issues: list[str], label: str,
+    issues: list["GateIssue"],
+    *, label: str, lane_type: str, lane_id: str,
 ) -> None:
-    """Check that a stage_catalog contains an entry for the given stage."""
+    """Check that a stage_catalog contains an entry for the given stage.
+
+    Lane attribution: world catalog → world lane; per-character catalog →
+    that character's lane. Both belong to ``catalog_missing`` category,
+    which the orchestrator routes to a post_processing rerun before any
+    LLM call.
+    """
     try:
         data = json.loads(catalog_path.read_text(encoding="utf-8"))
         stages = data.get("stages", [])
         found = any(s.get("stage_id") == stage_id for s in stages)
         if not found:
-            issues.append(
-                f"[{label}] stage_catalog 缺少 stage_id={stage_id} 的条目")
+            issues.append(GateIssue(
+                message=(f"[{label}] stage_catalog 缺少 "
+                         f"stage_id={stage_id} 的条目"),
+                severity="error",
+                lane_type=lane_type, lane_id=lane_id,
+                category="catalog_missing",
+            ))
     except (json.JSONDecodeError, ValueError):
-        issues.append(f"[{label}] stage_catalog JSON 解析失败")
+        issues.append(GateIssue(
+            message=f"[{label}] stage_catalog JSON 解析失败",
+            severity="error",
+            lane_type=lane_type, lane_id=lane_id,
+            category="catalog_missing",
+        ))
 
 
 def _validate_digest_has_stage(
     digest_path: Path, stage_id: str,
-    issues: list[str], label: str,
+    issues: list["GateIssue"],
+    *, label: str, lane_type: str, lane_id: str,
 ) -> None:
     """Check that memory_digest contains entries for the given stage.
 
     Stage is encoded in the ``memory_id`` prefix (``M-S{stage:03d}-{seq:02d}``).
     ``memory_digest_entry.schema.json`` does NOT permit a ``stage_id`` field,
     so we parse the stage segment out of the ID instead.
+
+    A digest miss is attributed to the owning character lane and routed to
+    a post_processing rerun (post_processing rebuilds digest entries from
+    the snapshot's ``memory_timeline``, so it can recover whenever the
+    snapshot itself is intact).
     """
     try:
         text = digest_path.read_text(encoding="utf-8").strip()
         if not text:
-            issues.append(f"[{label}] memory_digest.jsonl 为空")
+            issues.append(GateIssue(
+                message=f"[{label}] memory_digest.jsonl 为空",
+                severity="error",
+                lane_type=lane_type, lane_id=lane_id,
+                category="digest_missing",
+            ))
             return
         stage_num = _parse_stage_number(stage_id)
         if stage_num == 0:
-            issues.append(
-                f"[{label}] 无法从 stage_id='{stage_id}' 中提取阶段数字")
+            # Unattributed: stage_id parse failure is a Phase 1 / progress
+            # bug, not a per-lane fault. Leaves lane fields empty so the
+            # orchestrator falls through to full-stage rollback.
+            issues.append(GateIssue(
+                message=(f"[{label}] 无法从 stage_id='{stage_id}' "
+                         f"中提取阶段数字"),
+                severity="error",
+                category="digest_missing",
+            ))
             return
         found = False
         for line in text.splitlines():
@@ -590,10 +698,20 @@ def _validate_digest_has_stage(
             except json.JSONDecodeError:
                 continue
         if not found:
-            issues.append(
-                f"[{label}] memory_digest 缺少阶段 S{stage_num:03d} 的条目")
+            issues.append(GateIssue(
+                message=(f"[{label}] memory_digest 缺少阶段 "
+                         f"S{stage_num:03d} 的条目"),
+                severity="error",
+                lane_type=lane_type, lane_id=lane_id,
+                category="digest_missing",
+            ))
     except (OSError, ValueError):
-        issues.append(f"[{label}] memory_digest.jsonl 读取失败")
+        issues.append(GateIssue(
+            message=f"[{label}] memory_digest.jsonl 读取失败",
+            severity="error",
+            lane_type=lane_type, lane_id=lane_id,
+            category="digest_missing",
+        ))
 
 
 # ---------------------------------------------------------------------------
