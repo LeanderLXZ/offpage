@@ -130,11 +130,16 @@ that a new AI should know beyond what the architecture docs already say.
     → free post-processing rerun + re-gate; `snapshot_missing` /
     `snapshot_stage_id` / `snapshot_parse` / `lane_review` → lane
     re-extraction consuming the same `lane_retries` budget as review
-    failures; unattributed structural issues or exhausted budget →
-    full-stage rollback. Lane-retry budget is shared across review and
-    gate paths and cleared only after the gate finally PASSes — pre-gate
-    clearing would let a stage ping-pong the quota indefinitely. No
-    per-lane commit: the gate requires all lanes pass before git commit.
+    failures AND as initial-extraction lane errors (see 25c.1);
+    unattributed structural issues or exhausted budget →
+    full-stage rollback. Lane-retry budget is shared across initial
+    extraction, review, and gate paths and cleared only after the gate
+    finally PASSes — pre-gate clearing would let a stage ping-pong the
+    quota indefinitely. Re-extraction LLM failures inside the cascade
+    are not escalated to a full rollback; they leave the snapshot
+    missing on disk and the next iteration catches it via the gate's
+    `snapshot_missing` path, naturally consuming another quota slot.
+    No per-lane commit: the gate requires all lanes pass before git commit.
 25b.1 Commit ordering: `git commit` first; only a non-empty SHA transitions
     the stage to `COMMITTED`. Empty SHA (no diff or commit failure) reverts
     the stage to `FAILED` so resume can retry. Avoids "progress says
@@ -159,6 +164,15 @@ that a new AI should know beyond what the architecture docs already say.
     Full-stage rollback is triggered only when a failing lane
     exhausts its lane quota — at that point the stage transitions to
     FAILED and enters the stage-level retry loop (≤ `max_retries`=2).
+25c.1 Initial-extraction lane errors (Step 2 — the 1+N parallel agents)
+    follow the same lane-attributed model: a single lane's LLM error
+    no longer triggers a full-stage rollback. The successful lanes'
+    outputs stay on disk, only the failed lane's partial products are
+    cleaned via `rollback_lane_files`, and only that lane is
+    re-submitted on the next round — consuming the same `lane_retries`
+    budget. Full rollback fires only when a lane exhausts the budget.
+    This unifies the retry model across initial extraction, review,
+    and gate paths.
 26. Extraction runs on a dedicated git branch. Each passing stage is committed.
     Rollback on failure = git reset. After all stages complete, squash-merge
     to main (one clean commit); the extraction branch can then be deleted.

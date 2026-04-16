@@ -1141,6 +1141,12 @@ class ExtractionOrchestrator:
                 phase3.save(self.project_root)
             else:
                 # --- Step 2: World + Character extraction (1+N parallel) ---
+                # Lane-attributed retry: on partial failure, re-extract
+                # only the entities that errored, consuming the shared
+                # stage.lane_retries quota (same budget as review/gate
+                # lane retries). Full-stage rollback fires only when at
+                # least one entity has exhausted its lane quota — see
+                # requirements §11.4b 失败处理 B.
                 tracker.start_step()
                 n_chars = len(pipeline.target_characters)
                 tracker.print_step(2, 6,
@@ -1149,31 +1155,81 @@ class ExtractionOrchestrator:
                 stage.transition(StageState.EXTRACTING)
                 phase3.save(self.project_root)
 
-                extraction_errors: list[str] = []
+                # Initial submission set; shrinks each retry round to the
+                # subset of lanes whose previous attempt errored.
+                pending: list[tuple[str, str]] = [("world", "world")]
+                pending.extend(
+                    ("character", c) for c in pipeline.target_characters)
 
-                with ThreadPoolExecutor(
-                        max_workers=1 + n_chars) as executor:
-                    futures = [executor.submit(_extract_world)]
-                    futures.extend(
-                        executor.submit(_extract_character, c)
-                        for c in pipeline.target_characters
-                    )
-                    for future in as_completed(futures):
-                        entity_id, result = future.result()
-                        if not result.success:
-                            extraction_errors.append(
-                                f"{entity_id}: "
-                                f"{result.error or 'unknown'}")
-                            print(f"    [ERROR] {entity_id} extraction "
-                                  f"failed: {result.error}")
+                ext_round = 0
+                while pending:
+                    ext_round += 1
+                    if ext_round > 1:
+                        ids = ", ".join(
+                            f"[{lt}:{lid}]" for lt, lid in pending)
+                        print(f"    [RETRY] Extraction round {ext_round} "
+                              f"for {len(pending)} lane(s): {ids}")
 
-                if extraction_errors:
-                    print("    Rolling back uncommitted changes...")
-                    rollback_to_head(self.project_root)
-                    stage.transition(StageState.ERROR)
-                    stage.error_message = "; ".join(extraction_errors)
+                    failed_lanes: list[tuple[str, str, str]] = []
+                    with ThreadPoolExecutor(
+                            max_workers=len(pending)) as executor:
+                        futures = {}
+                        for lt, lid in pending:
+                            if lt == "world":
+                                fut = executor.submit(_extract_world)
+                            else:
+                                fut = executor.submit(_extract_character, lid)
+                            futures[fut] = (lt, lid)
+                        for future in as_completed(futures):
+                            lt, lid = futures[future]
+                            entity_id, result = future.result()
+                            if not result.success:
+                                err = result.error or "unknown"
+                                failed_lanes.append((lt, lid, err))
+                                print(f"    [ERROR] {entity_id} extraction "
+                                      f"failed: {err}")
+
+                    if not failed_lanes:
+                        break
+
+                    # Decide retry vs. exhaust per failing lane.
+                    next_pending: list[tuple[str, str]] = []
+                    exhausted: list[tuple[str, str, str]] = []
+                    for lt, lid, err in failed_lanes:
+                        lk = lane_key(lt, lid)
+                        used = stage.lane_retries.get(lk, 0)
+                        if used < stage.lane_max_retries:
+                            stage.lane_retries[lk] = used + 1
+                            # Clean partial output before retrying.
+                            rollback_lane_files(
+                                self.project_root, pipeline.work_id,
+                                stage.stage_id, lt,
+                                lid if lt == "character" else None,
+                            )
+                            next_pending.append((lt, lid))
+                        else:
+                            exhausted.append((lt, lid, err))
+
+                    if exhausted:
+                        exhausted_ids = ", ".join(
+                            f"[{lt}:{lid}]" for lt, lid, _ in exhausted)
+                        print(f"    [FAIL] Extraction lane retry "
+                              f"exhausted for {exhausted_ids} — full "
+                              f"stage rollback")
+                        rollback_to_head(self.project_root)
+                        stage.lane_retries = {}
+                        stage.transition(StageState.ERROR)
+                        # Only the exhausted lanes triggered the ERROR;
+                        # retriable lanes were re-queued successfully and
+                        # never reached this branch.
+                        stage.error_message = "; ".join(
+                            f"{lt}:{lid}: {err}"
+                            for lt, lid, err in exhausted)
+                        phase3.save(self.project_root)
+                        return
+
                     phase3.save(self.project_root)
-                    return
+                    pending = next_pending
 
                 tracker.record_step(ProgressTracker.STEP_EXTRACTION)
                 tracker.print_step_done(2, 6,
@@ -1277,11 +1333,18 @@ class ExtractionOrchestrator:
                     print(f"    [WARN] {issue}")
 
             def _re_extract_and_post_process(
-                    targets: list[tuple[str, str, str]]) -> bool:
+                    targets: list[tuple[str, str, str]]) -> None:
                 """Re-extract the named lanes in parallel, then refresh
-                post-processing. On extraction failure, performs full-
-                stage rollback + transitions to FAILED and returns
-                False — caller MUST early-return."""
+                post-processing.
+
+                Lane LLM errors are NOT escalated to a full-stage rollback:
+                the failed lanes' on-disk products were already cleaned by
+                the caller via rollback_lane_files, so the next outer-loop
+                iteration will catch the missing snapshot via the commit
+                gate's snapshot_missing cascade — consuming another lane
+                quota slot per failure until exhaustion triggers the
+                normal full-rollback path.
+                """
                 errors: list[str] = []
                 with ThreadPoolExecutor(
                         max_workers=len(targets)) as executor:
@@ -1303,17 +1366,14 @@ class ExtractionOrchestrator:
                                   f"failed: {result.error}")
 
                 if errors:
-                    print("    [FAIL] Lane re-extraction errors — "
-                          "full stage rollback")
-                    rollback_to_head(self.project_root)
-                    stage.lane_retries = {}
-                    stage.error_message = "; ".join(errors)
-                    stage.transition(StageState.FAILED)
-                    phase3.save(self.project_root)
-                    return False
+                    # Skip post_processing when some lanes lack snapshots;
+                    # PP will be re-run on the next outer-loop iteration
+                    # after the gate cascade re-extracts the missing lanes.
+                    print(f"    [WARN] {len(errors)} lane(s) failed to "
+                          f"re-extract — leaving outer loop to cascade")
+                    return
 
                 _rerun_post_processing()
-                return True
 
             def _full_rollback_and_fail(feedback: str) -> None:
                 rollback_to_head(self.project_root)
@@ -1423,8 +1483,7 @@ class ExtractionOrchestrator:
                             f"[{lt}:{lid}]"
                             for lt, lid, _ in retry_targets))
 
-                    if not _re_extract_and_post_process(retry_targets):
-                        return
+                    _re_extract_and_post_process(retry_targets)
 
                 # ----- Step 5: Commit gate (programmatic, 0 token) -----
                 tracker.start_step()
@@ -1547,8 +1606,7 @@ class ExtractionOrchestrator:
                         f"[{lt}:{lid}]"
                         for lt, lid, _ in gate_retry_targets))
 
-                if not _re_extract_and_post_process(gate_retry_targets):
-                    return
+                _re_extract_and_post_process(gate_retry_targets)
                 # Loop back: outer while → re-run all review lanes + gate.
 
             # Outer loop exited via break (gate PASS).
