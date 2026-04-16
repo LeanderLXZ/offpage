@@ -138,7 +138,7 @@ def launch_background(
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Build command: same as current invocation but without --background
-    cmd = [sys.executable, "-m", "automation.persona_extraction"] + extra_argv
+    cmd = [sys.executable, "-u", "-m", "automation.persona_extraction"] + extra_argv
 
     with open(log_path, "a", encoding="utf-8") as log_f:
         log_f.write(f"\n{'=' * 60}\n")

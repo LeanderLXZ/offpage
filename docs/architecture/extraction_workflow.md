@@ -305,10 +305,12 @@ orchestrator (Python)
 - 世界和角色间无执行依赖——角色不读世界快照，客观事实一致性由 commit gate 跨通道检查保证
 - 阶段间上下文通过文件系统传递；只传最近一个 snapshot/memory（不传全部历史）
 - 每个 stage 都可修正和补充 baseline（不限 stage 1）
-- 三层质量检查：程序化校验（免费）+ 每通道语义审校（LLM，world + 各角色独立并行）+
+- 四层质量检查：schema autofix（程序化，0 token）+ 程序化校验（免费）+
+  每通道语义审校（LLM，world + 各角色独立并行）+
   提交门控（程序化跨通道一致性，0 token）
-- 失败分级：局部问题（≤5 个字段级错误）→ 通道内定点修复（~5% token 成本）；
-  系统性问题（文件缺失/结构错误/理解偏差）→ 全量回滚重试
+- 修复瀑布（Fix Cascade）：Level 0 schema autofix（0 token）→ Level 1
+  程序化校验 → Level 2/3 定点 LLM 修复 → lane 独立重提取。
+  系统性问题（文件缺失/结构错误/理解偏差）→ 仅失败 lane 回滚重提取
 - 提取在独立 git 分支进行，每 stage 单独 commit（精确回滚）；全部完成后
   squash merge 回 main（干净历史），extraction 分支可删除
 - 支持 Claude CLI 和 Codex CLI 两种后端

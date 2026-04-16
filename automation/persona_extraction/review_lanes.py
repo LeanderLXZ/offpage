@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .post_processing import _parse_stage_number, _stage_from_id
+from .schema_autofix import attempt_schema_autofix
 
 if TYPE_CHECKING:
     from .llm_backend import LLMBackend
@@ -34,6 +35,85 @@ class LaneResult:
     verdict_text: str = ""
     findings: str = ""
     error: str = ""
+
+
+def _attempt_lane_autofix(
+    project_root: Path,
+    work_id: str,
+    stage_id: str,
+    lane_type: str,
+    lane_char: str | None,
+) -> bool:
+    """Run schema autofix on all files validated by a lane.
+
+    Returns True if at least one fix was applied.
+    """
+    schema_dir = project_root / "schemas"
+    work_dir = project_root / "works" / work_id
+    any_fixed = False
+
+    if lane_type == "world":
+        # World stage snapshot
+        world_snap = (work_dir / "world" / "stage_snapshots"
+                      / f"{stage_id}.json")
+        world_schema = schema_dir / "world_stage_snapshot.schema.json"
+        if world_snap.exists() and world_schema.exists():
+            fixed, descs = attempt_schema_autofix(world_snap, world_schema)
+            if fixed:
+                any_fixed = True
+                for d in descs:
+                    logger.info("  autofix [world snapshot]: %s", d)
+
+    elif lane_type == "character" and lane_char:
+        char_dir = work_dir / "characters" / lane_char / "canon"
+
+        # Character stage snapshot
+        char_snap = char_dir / "stage_snapshots" / f"{stage_id}.json"
+        snap_schema = schema_dir / "stage_snapshot.schema.json"
+        if char_snap.exists() and snap_schema.exists():
+            fixed, descs = attempt_schema_autofix(char_snap, snap_schema)
+            if fixed:
+                any_fixed = True
+                for d in descs:
+                    logger.info("  autofix [%s snapshot]: %s", lane_char, d)
+
+        # Memory timeline
+        mem_path = char_dir / "memory_timeline" / f"{stage_id}.json"
+        mem_schema = schema_dir / "memory_timeline_entry.schema.json"
+        if mem_path.exists() and mem_schema.exists():
+            # memory_timeline is a JSON array of entries — autofix each entry
+            try:
+                entries = json.loads(
+                    mem_path.read_text(encoding="utf-8"))
+                if isinstance(entries, list):
+                    entry_fixed = False
+                    schema_data = json.loads(
+                        mem_schema.read_text(encoding="utf-8"))
+                    from .schema_autofix import (
+                        _apply_fix, _collect_all_errors,
+                    )
+                    for entry in entries:
+                        if isinstance(entry, dict):
+                            # _collect_all_errors sorts deepest-first
+                            errs = _collect_all_errors(entry, schema_data)
+                            for err in errs:
+                                result = _apply_fix(entry, schema_data,
+                                                    err)
+                                if result:
+                                    entry_fixed = True
+                                    logger.info(
+                                        "  autofix [%s memory]: %s",
+                                        lane_char, result)
+                    if entry_fixed:
+                        any_fixed = True
+                        mem_path.write_text(
+                            json.dumps(entries, ensure_ascii=False,
+                                       indent=2) + "\n",
+                            encoding="utf-8")
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    return any_fixed
 
 
 def run_parallel_review(
@@ -140,12 +220,40 @@ def _execute_single_lane(
     if not report.passed:
         logger.info("%s Programmatic validation FAIL: %s",
                     lane_label, report.summary())
-        return LaneResult(
-            lane_id=lane_id, lane_type=lane_type,
-            passed=False,
-            findings=("Programmatic validation failures:\n" +
-                      "\n".join(str(i) for i in report.issues
-                               if i.severity == "error")))
+
+        # --- Step 1b: Attempt schema autofix (0 tokens, <1s) ---
+        fix_applied = _attempt_lane_autofix(
+            project_root, progress.work_id, stage.stage_id,
+            lane_type, lane_char)
+        if fix_applied:
+            report = validate_fn(
+                project_root, progress.work_id, stage.stage_id,
+                char_ids, lane_type, lane_char)
+            if report.passed:
+                logger.info("%s Schema autofix resolved all errors",
+                            lane_label)
+            else:
+                logger.info("%s Schema autofix helped but %d error(s) remain",
+                            lane_label,
+                            sum(1 for i in report.issues
+                                if i.severity == "error"))
+                return LaneResult(
+                    lane_id=lane_id, lane_type=lane_type,
+                    passed=False,
+                    findings=(
+                        "Programmatic validation failures "
+                        "(after schema autofix):\n" +
+                        "\n".join(str(i) for i in report.issues
+                                 if i.severity == "error")))
+        else:
+            return LaneResult(
+                lane_id=lane_id, lane_type=lane_type,
+                passed=False,
+                findings=(
+                    "Programmatic validation failures "
+                    "(no autofix applicable):\n" +
+                    "\n".join(str(i) for i in report.issues
+                             if i.severity == "error")))
 
     # --- Step 2: Semantic review ---
     reviewer_prompt = build_reviewer_fn(
