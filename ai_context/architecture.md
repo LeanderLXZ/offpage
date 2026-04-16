@@ -249,7 +249,11 @@ multi-stage extraction via CLI calls (`claude -p` or `codex`).
      `stage_id` field per schema). Warn-only cross-entity reference
      resolution against world cast + character aliases. Content-level
      conflict detection is the character lane's responsibility.
-     Lane FAIL → only that lane rolls back and retries (≤2 times).
+     Lane FAIL → only that lane rolls back and re-extracts (≤
+     `lane_max_retries`=2). Already-PASSED lanes are preserved on disk;
+     post-processing re-runs with idempotent upsert semantics. Only
+     when a failing lane exhausts its lane quota does the stage fall
+     back to full-stage rollback + stage-level retry (≤ `max_retries`=2).
   5. Git commit — commit-ordering contract: git commit first, then
      transition `PASSED → COMMITTED` only on non-empty SHA; empty SHA
      reverts to `FAILED` so resume retries. Prevents fake-committed drift.
