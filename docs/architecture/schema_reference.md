@@ -294,3 +294,26 @@ core_wounds 记录最底层的创伤根源。
 | boundaries.json | 提取锚点（hard_boundaries 加载） | hard_boundaries **加载** |
 | stage_snapshot | 每阶段产出 | **加载**（核心） |
 | memory_timeline | 每阶段产出 | 近期 2 阶段全量 + memory_digest 1..N 过滤 + FTS5 按需 |
+
+---
+
+## 进度跟踪状态（Python dataclass，非 JSON Schema）
+
+以下结构存于 `automation/persona_extraction/progress.py`，不归属
+`schemas/` 目录；序列化到磁盘时位于 `works/{work_id}/analysis/progress/`。
+因其字段跨文档引用频繁，在此登记以便查询。
+
+### StageEntry（Phase 3 阶段状态，序列化到 `phase3_stages.json`）
+
+- `stage_id: str` — 阶段标识
+- `chapters: list[int]` + `chapter_count: int`
+- `state: StageState` — 枚举：PENDING / EXTRACTING / EXTRACTED / POST_PROCESSING / REVIEWING / PASSED / FAILED / ERROR / RETRYING / COMMITTED
+- `retry_count: int` + `max_retries: int = 2` — **阶段级**重试计数（全阶段回滚后重新进入阶段）
+- `lane_retries: dict[str, int]` + `lane_max_retries: int = 2` — **通道级**重试计数；key 由 `review_lanes.lane_key()` 生成（`"world"` / `"character:{id}"`）；仅在 lane 重试路径使用，成功提交或全阶段回滚后清空
+- `committed_sha: str` — git commit SHA（仅 COMMITTED 态非空）
+- `error_message: str` — 最近一次错误摘要
+- `fail_source: str` — 失败来源标签（validator / reviewer / gate / commit）
+- `last_reviewer_feedback: str` — 审校反馈（供下次重提取时作为 prompt 上下文）
+
+向后兼容：旧版 `phase3_stages.json` 反序列化时，`lane_retries` / `lane_max_retries` 自动使用默认值（空 dict / 2）。
+

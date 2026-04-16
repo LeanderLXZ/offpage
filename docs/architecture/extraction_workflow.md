@@ -289,7 +289,8 @@ orchestrator (Python)
     │       │       ├── claude -p (语义审校, per-lane)
     │       │       └── [局部问题] → claude -p (定点修复) → 重跑检查
     │       ├── [lane FAIL] → 仅该 lane 回滚产物 + 单独重提取
-    │       │       (≤ lane_max_retries=2, 已通过 lane 保留)
+    │       │       (≤ lane_max_retries=2, 已通过 lane 保留；
+    │       │        详见 requirements.md §11.4b)
     │       ├── 提交门控 (程序化跨通道一致性, 0 token)
     │       ├── [全通过] → git commit
     │       └── [lane 重试耗尽] → 全 stage rollback + 整 stage 重试
