@@ -35,14 +35,14 @@
    
    每个 stage_snapshot 必须包含以下全部维度，即使某些字段相比上一阶段未变化：
    - `active_aliases`：当前活跃名称、隐藏身份、各角色称呼映射
-   - `voice_state`：语气基调、语言习惯、用词偏好、口头禅、禁忌用语、**情绪语气矩阵**（emotional_voice_map，覆盖主要情绪）、**对象语气矩阵**（target_voice_map，见下方详细要求）、典型对话示例（至少 2-3 条）
-   - `behavior_state`：**core_goals**（理性目标——可权衡调整的）、**obsessions**（执念——非理性的心结，与创伤或强烈情感相关，不受理性权衡控制；区别于 core_goals）、决策风格、情绪触发器、**情绪反应矩阵**、**关系行为矩阵**（relationship_behavior_map，通用关系类型）、**对象行为矩阵**（target_behavior_map，见下方详细要求）、习惯性行为、压力应对
+   - `voice_state`：语气基调、语言习惯、用词偏好、口头禅、禁忌用语、**情绪语气矩阵**（emotional_voice_map，≤ 10 种情绪，覆盖主要情绪）、**对象语气矩阵**（target_voice_map，≤ 5 个对象，见下方详细要求）、典型对话示例（至少 2-3 条，≤ 5 条）
+   - `behavior_state`：**core_goals**（理性目标——可权衡调整的）、**obsessions**（执念——非理性的心结，与创伤或强烈情感相关，不受理性权衡控制；区别于 core_goals）、决策风格、情绪触发器、**情绪反应矩阵**（≤ 10 种情绪）、**对象行为矩阵**（target_behavior_map，≤ 5 个对象，与 target_voice_map 对齐，见下方详细要求）、习惯性行为、压力应对
    - `boundary_state`：当前阶段有效的软边界、容易被误判的点
-   - `relationships`：对每个重要角色的完整关系（态度、信任、亲密度、戒备度、语气/行为变化、驱动事件、关系演变概述）
+   - `relationships`（≤ 10 条）：对每个重要角色的完整关系（态度、信任、亲密度、戒备度、语气/行为变化、驱动事件、关系演变概述）。不含边缘不重要角色
    - `knowledge_scope`：知道什么、不知道什么、不确定什么。**条数上限** `knows` ≤ 50、`does_not_know` ≤ 30、`uncertain` ≤ 30；**每条 ≤ 50 字**（schema 硬门控，超限直接 FAIL）。**裁剪策略**（超限时）：优先保留 ① 影响当前阶段决策或扮演的条目、② 与 `core_wounds` / `active_obsessions` / 活跃 `relationships` 相关的条目；优先丢弃 ① 日常常识类条目、② 早期阶段已无触发点的细节、③ 已在 `memory_timeline` 中完整承载的条目。**禁止敷衍填充**（贴近 50 字上限但语义稀薄、堆砌形容词）
-   - `misunderstandings`、`concealments`
-   - `emotional_baseline`（含 **active_goals** 理性目标、**active_obsessions** 执念、active_fears、active_wounds）、`current_personality`、`current_mood`、`current_status`
-   - `stage_events`（**仅本阶段**发生的关键事件清单，每条 **50–80 字** 的一句话摘要；schema 两端硬门控，过短/过长都会直接判失败；不累积历史，历史由 memory_timeline 和 world_event_digest 承载）。如果本阶段内有该角色亲历或深度影响其处境的世界事件（对照世界 stage_snapshot.stage_events），必须以角色视角写入此清单，不可遗漏
+   - `misunderstandings`（≤ 20 条，已 resolved 的移除）、`concealments`（≤ 20 条，已 revealed 的移除）
+   - `emotional_baseline`（含 **active_goals** 理性目标、**active_obsessions** 执念、active_fears、active_wounds）、`current_personality`（≤ 10 条）、`current_mood`（≤ 10 条）、`current_status`（≤ 10 条）
+   - `stage_events`（≤ 10 条，**仅本阶段**发生的关键事件清单，每条 **50–80 字** 的一句话摘要；schema 两端硬门控，过短/过长都会直接判失败；不累积历史，历史由 memory_timeline 和 world_event_digest 承载）。如果本阶段内有该角色亲历或深度影响其处境的世界事件（对照世界 stage_snapshot.stage_events），必须以角色视角写入此清单，不可遗漏
    - `stage_delta`：从上一阶段的变化
    - `character_arc`：角色从阶段 1 到当前阶段的 **整体弧线概览**——`arc_summary`（一句话弧线摘要）、`arc_stages`（关键节点列表，每个含 stage_id 和描述）、`current_position`（当前在弧线中的位置和趋势）。第一个阶段可省略或仅写起点状态
    
@@ -50,7 +50,7 @@
    
    **未出场角色的继承规则**：本阶段中某个重要角色未出场，但前一阶段快照中有该角色的 target_voice_map、target_behavior_map、relationships 条目时，必须从前一阶段 **原样继承** 到本阶段快照中。不可因为"本阶段没出现"就删除。没有新原文时不加新例句，但已有条目完整保留。
 3. **Baseline 修正**：所有 baseline 文件（identity.json、voice_rules.json、behavior_rules.json、boundaries.json、failure_modes.json）及 world foundation 已在 Phase 2.5 全书分析阶段产出骨架初稿。任何阶段中如发现原文与初稿不符，应直接修正。注意：这些 baseline 只记录跨阶段稳定的角色基底，阶段性变化写入 stage_snapshot
-4. **证据引用**：每个结论必须有 evidence_refs（紧凑章节引用格式，如 `0001`, `0011-0013`）
+4. **证据引用**：`evidence_refs` 仅在文件顶层填写（章节号列表，如 `["0001", "0011-0013"]`），不在子对象（如 relationships、voice_map 等）内部添加
 5. **中文标识**：中文作品的 work_id, character_id, stage_id, 路径段都使用中文
 6. **时间性**：当前阶段写清"现在"，历史事件标注为"已发生"，不要混成扁平总结
 7. **角色别名跟踪**：遇到新名称时，先与 `identity.json` 中的 `aliases` 列表比对。发现新别名时需 **双写**：
@@ -87,7 +87,7 @@
 - target_voice_map 每个 target 的 dialogue_examples 不少于下方质量要求表的最低值
 - target_behavior_map 每个 target 的 action_examples 不少于下方质量要求表的最低值
 - relationships 每个条目都有 driving_events 和 relationship_history_summary
-- evidence_refs 每个结论至少 2 条
+- evidence_refs 顶层非空
 - dialogue_examples 至少有 2-3 条（voice_state 和 emotional_voice_map 各自）
 - memory_timeline 条目的详细度（`event_description` 150–200 字、
   `digest_summary` 30–50 字、`subjective_experience` 的长度与质量）
@@ -128,7 +128,7 @@
 | voice_rules.json | `tone_baseline` | `baseline_tone` |
 | failure_modes.json | `failure_modes` (数组键) | `common_failures` |
 | boundaries.json hard_boundaries 条目 | `consequence` | `reason` |
-| behavior_rules.json | `relationship_defaults` | `relationship_behavior_map`（数组格式） |
+| behavior_rules.json | `relationship_defaults` | `relationship_defaults`（已从 stage_snapshot 移除 relationship_behavior_map） |
 | stage_catalog.json | 缺 `order`/`summary`/`snapshot_path` | 每个 stage 条目**必须**包含这三个字段 |
 | stage_catalog.json | 缺 `schema_version`/`character_id` | 顶层**必须**包含 |
 | manifest.json | `stage_snapshot_root` 指向 `canon/stages` | 正确路径：`canon/stage_snapshots` |
