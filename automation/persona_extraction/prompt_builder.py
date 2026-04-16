@@ -429,6 +429,16 @@ def build_reviewer_prompt(
             if prev_cs.exists():
                 review_files.append(f"- `{prev_cs}` (前阶段对比)")
 
+    # World lane also reads all target characters' memory_timeline for
+    # boundary-leakage detection (world stage_events must not carry
+    # character-private events — that's the world reviewer's filter job).
+    if lane_type == "world":
+        for char_id in progress.target_characters:
+            mt_path = (work_dir / "characters" / char_id / "canon"
+                       / "memory_timeline" / f"{stage.stage_id}.json")
+            review_files.append(
+                f"- `{mt_path}` (角色 `{char_id}` 记忆，越界判定依据)")
+
     # Character lanes also read the world snapshot for cross-consistency
     if lane_type == "character":
         ws_path = (work_dir / "world" / "stage_snapshots"
