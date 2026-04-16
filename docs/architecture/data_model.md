@@ -93,7 +93,9 @@ sources/works/{work_id}/
    - `title` — 源语言的显示标题
    - `language` — ISO 639-1 代码（如 `"zh"`、`"en"`）
    - `source_types` — 源格式标签数组（如 `["epub"]`）
-   - `ingestion_status` — 取值为 `"pending"`、`"active"` 或 `"complete"` 之一
+   - `ingestion_status` — 取值为 `"planned"`、`"raw_imported"`、`"normalized"`、
+     `"chunked"`、`"indexed"` 或 `"active"` 之一（权威定义见
+     `schemas/work_manifest.schema.json` 与 `docs/requirements.md §8.4`）
 
 4. **将文本标准化**至 `normalized/`。
    - 去除格式伪影、修复编码问题，生成适合章节切分的干净纯文本内容。

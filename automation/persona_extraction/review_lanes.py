@@ -463,6 +463,7 @@ class GateIssue:
 POST_PROCESSING_RECOVERABLE: frozenset[str] = frozenset({
     "catalog_missing",
     "digest_missing",
+    "world_event_digest_missing",
 })
 
 
@@ -488,10 +489,18 @@ def run_commit_gate(
     1. All lanes passed
     2. World + character snapshot files exist
     3. ``stage_id`` field in each snapshot matches current stage_id
-    4. ``stage_catalog.json`` (world + per-character) contains current stage
-    5. Each character's ``memory_digest.jsonl`` has entries for current stage
-       (stage encoded in ``memory_id`` prefix; digest entries carry NO
-       ``stage_id`` field per memory_digest_entry.schema.json)
+    4. ``stage_catalog.json`` (world + per-character) **exists** and contains
+       current stage. Missing file → ``catalog_missing`` (post-processing
+       recoverable).
+    5. Each character's ``memory_digest.jsonl`` **exists** and has entries for
+       current stage (stage encoded in ``memory_id`` prefix; digest entries
+       carry NO ``stage_id`` field per memory_digest_entry.schema.json).
+       Missing file → ``digest_missing`` (post-processing recoverable).
+    5b. ``world/world_event_digest.jsonl`` **exists** and has entries for
+       current stage (stage encoded in ``event_id`` prefix ``E-S{stage:03d}-``).
+       Missing file / empty / no stage entries → ``world_event_digest_missing``
+       (post-processing recoverable — post_processing rebuilds from world
+       snapshot's ``stage_events``).
     6. Lightweight cross-entity reference check (warn-only): names referenced
        in world snapshot ``relationship_shifts`` / ``character_status_changes``
        should resolve via world cast or active character aliases
@@ -579,22 +588,61 @@ def run_commit_gate(
                 category="snapshot_parse",
             ))
 
-    # --- Check 4 + 5: programmatically-maintained files ---
+    # --- Check 4 + 5 + 5b: programmatically-maintained files ---
+    # File existence is a hard gate — post_processing.py is supposed to write
+    # these. A missing file here means PP never wrote (or something deleted
+    # them); route to a free PP rerun via POST_PROCESSING_RECOVERABLE so the
+    # orchestrator recovers without an LLM call.
     world_catalog = work_dir / "world" / "stage_catalog.json"
-    if world_catalog.exists():
+    if not world_catalog.exists():
+        issues.append(GateIssue(
+            message=f"world stage_catalog.json 缺失: {world_catalog}",
+            severity="error",
+            lane_type="world", lane_id="world",
+            category="catalog_missing",
+        ))
+    else:
         _validate_catalog_has_stage(
             world_catalog, stage_id, issues,
             label="world", lane_type="world", lane_id="world")
 
+    world_event_digest = work_dir / "world" / "world_event_digest.jsonl"
+    if not world_event_digest.exists():
+        issues.append(GateIssue(
+            message=(f"world_event_digest.jsonl 缺失: "
+                     f"{world_event_digest}"),
+            severity="error",
+            lane_type="world", lane_id="world",
+            category="world_event_digest_missing",
+        ))
+    else:
+        _validate_world_event_digest_has_stage(
+            world_event_digest, stage_id, issues,
+            lane_type="world", lane_id="world")
+
     for char_id in character_ids:
         char_dir = work_dir / "characters" / char_id / "canon"
         char_catalog = char_dir / "stage_catalog.json"
-        if char_catalog.exists():
+        if not char_catalog.exists():
+            issues.append(GateIssue(
+                message=f"[{char_id}] stage_catalog.json 缺失: {char_catalog}",
+                severity="error",
+                lane_type="character", lane_id=char_id,
+                category="catalog_missing",
+            ))
+        else:
             _validate_catalog_has_stage(
                 char_catalog, stage_id, issues,
                 label=char_id, lane_type="character", lane_id=char_id)
         digest = char_dir / "memory_digest.jsonl"
-        if digest.exists():
+        if not digest.exists():
+            issues.append(GateIssue(
+                message=f"[{char_id}] memory_digest.jsonl 缺失: {digest}",
+                severity="error",
+                lane_type="character", lane_id=char_id,
+                category="digest_missing",
+            ))
+        else:
             _validate_digest_has_stage(
                 digest, stage_id, issues,
                 label=char_id, lane_type="character", lane_id=char_id)
@@ -711,6 +759,66 @@ def _validate_digest_has_stage(
             severity="error",
             lane_type=lane_type, lane_id=lane_id,
             category="digest_missing",
+        ))
+
+
+def _validate_world_event_digest_has_stage(
+    digest_path: Path, stage_id: str,
+    issues: list["GateIssue"],
+    *, lane_type: str, lane_id: str,
+) -> None:
+    """Check that world_event_digest contains entries for the given stage.
+
+    Stage is encoded in the ``event_id`` prefix (``E-S{stage:03d}-{seq:02d}``),
+    mirroring memory_digest (see ``world_event_digest_entry.schema.json``).
+    A miss is attributed to the world lane and routed to post_processing,
+    which rebuilds the digest from the world snapshot's ``stage_events``.
+    """
+    try:
+        text = digest_path.read_text(encoding="utf-8").strip()
+        if not text:
+            issues.append(GateIssue(
+                message="world_event_digest.jsonl 为空",
+                severity="error",
+                lane_type=lane_type, lane_id=lane_id,
+                category="world_event_digest_missing",
+            ))
+            return
+        stage_num = _parse_stage_number(stage_id)
+        if stage_num == 0:
+            issues.append(GateIssue(
+                message=(f"无法从 stage_id='{stage_id}' 中提取阶段数字 "
+                         f"(world_event_digest)"),
+                severity="error",
+                category="world_event_digest_missing",
+            ))
+            return
+        found = False
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                if _stage_from_id(entry.get("event_id", "")) == stage_num:
+                    found = True
+                    break
+            except json.JSONDecodeError:
+                continue
+        if not found:
+            issues.append(GateIssue(
+                message=(f"world_event_digest 缺少阶段 "
+                         f"S{stage_num:03d} 的条目"),
+                severity="error",
+                lane_type=lane_type, lane_id=lane_id,
+                category="world_event_digest_missing",
+            ))
+    except (OSError, ValueError):
+        issues.append(GateIssue(
+            message="world_event_digest.jsonl 读取失败",
+            severity="error",
+            lane_type=lane_type, lane_id=lane_id,
+            category="world_event_digest_missing",
         ))
 
 
