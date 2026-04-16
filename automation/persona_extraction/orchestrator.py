@@ -8,8 +8,12 @@ Flow:
        b. World + character extraction (1+N LLM calls, all parallel)
        c. Programmatic post-processing (memory_digest + stage_catalog)
        d. Parallel review lanes (world + each character: V+R+F)
+          · lane FAIL → per-lane rollback + lane re-extraction
+            (≤ ``lane_max_retries`` per lane), all passed lanes preserved
+          · only when a lane exhausts its quota → full-stage rollback
+            + stage-level retry (last resort)
        e. Commit gate (programmatic cross-consistency)
-       f. Git commit or rollback + retry
+       f. Git commit
   3.5 Cross-stage consistency check (programmatic, zero tokens)
   4. Scene archive (per-chapter parallel, programmatic validation only)
 """
@@ -59,7 +63,12 @@ from .prompt_builder import (
     build_targeted_fix_prompt,
     build_world_extraction_prompt,
 )
-from .review_lanes import run_commit_gate, run_parallel_review
+from .review_lanes import (
+    lane_key,
+    rollback_lane_files,
+    run_commit_gate,
+    run_parallel_review,
+)
 from .scene_archive import run_scene_archive
 from .validator import validate_baseline, validate_lane
 
@@ -943,6 +952,8 @@ class ExtractionOrchestrator:
                     b.state = StageState.PENDING
                     b.retry_count = 0
                     b.error_message = ""
+                    b.last_reviewer_feedback = ""
+                    b.lane_retries = {}
                     phase3.save(self.project_root)
 
         completed_before = phase3.completed_stage_count()
@@ -1032,6 +1043,39 @@ class ExtractionOrchestrator:
         tracker.start_stage()
         tracker.print_stage_header(stage)
 
+        # Lane-scoped extraction closures — defined here so both the
+        # initial parallel extraction (Step 2) and the lane-independent
+        # retry loop (Step 4) can call them. Each accepts an optional
+        # per-lane reviewer feedback string; when empty, falls back to
+        # the stage-level feedback (used by stage-level retries).
+        def _extract_world(
+            feedback: str = "",
+        ) -> tuple[str, LLMResult]:
+            effective_feedback = (
+                feedback or stage.last_reviewer_feedback)
+            prompt = build_world_extraction_prompt(
+                self.project_root, pipeline, stage,
+                stages=phase3.stages,
+                reviewer_feedback=effective_feedback)
+            result = run_with_retry(
+                self.backend, prompt, timeout_seconds=3600)
+            return "world", result
+
+        def _extract_character(
+            char_id: str,
+            feedback: str = "",
+        ) -> tuple[str, LLMResult]:
+            effective_feedback = (
+                feedback or stage.last_reviewer_feedback)
+            char_prompt = build_character_extraction_prompt(
+                self.project_root, pipeline, stage, char_id,
+                stages=phase3.stages,
+                reviewer_feedback=effective_feedback)
+            result = run_with_retry(
+                self.backend, char_prompt,
+                timeout_seconds=3600)
+            return char_id, result
+
         # Handle state resumption — reset interrupted states
         if stage.state == StageState.FAILED:
             if stage.retry_count >= stage.max_retries:
@@ -1105,27 +1149,6 @@ class ExtractionOrchestrator:
 
                 extraction_errors: list[str] = []
 
-                def _extract_world() -> tuple[str, LLMResult]:
-                    prompt = build_world_extraction_prompt(
-                        self.project_root, pipeline, stage,
-                        stages=phase3.stages,
-                        reviewer_feedback=stage.last_reviewer_feedback)
-                    result = run_with_retry(
-                        self.backend, prompt, timeout_seconds=3600)
-                    return "world", result
-
-                def _extract_character(
-                    char_id: str,
-                ) -> tuple[str, LLMResult]:
-                    char_prompt = build_character_extraction_prompt(
-                        self.project_root, pipeline, stage, char_id,
-                        stages=phase3.stages,
-                        reviewer_feedback=stage.last_reviewer_feedback)
-                    result = run_with_retry(
-                        self.backend, char_prompt,
-                        timeout_seconds=3600)
-                    return char_id, result
-
                 with ThreadPoolExecutor(
                         max_workers=1 + n_chars) as executor:
                     futures = [executor.submit(_extract_world)]
@@ -1194,7 +1217,26 @@ class ExtractionOrchestrator:
             stage.transition(StageState.REVIEWING)
             phase3.save(self.project_root)
 
-        # --- Step 4: Parallel review lanes (V+R+F per entity) ---
+        # --- Step 4: Parallel review lanes with lane-independent retry ---
+        #
+        # Retry model (requirements §11.4b + §11.5):
+        #   - Each review lane runs the fix cascade (schema autofix →
+        #     programmatic validation → semantic review → targeted fix).
+        #   - If a lane still FAILs after the cascade, it is retried
+        #     *independently*: only that lane's on-disk products are
+        #     rolled back, only that lane's extraction is re-run, and
+        #     other lanes' PASS results are preserved.
+        #   - Each lane has its own retry counter (lane_max_retries=2).
+        #   - Full-stage rollback is the *last resort*: it fires only
+        #     when at least one failing lane has exhausted its retry
+        #     quota, at which point the whole stage transitions to
+        #     FAILED and enters the stage-level retry loop.
+        #
+        # After any lane is re-extracted we re-review *all* lanes, not
+        # just the retried ones: the world reviewer reads every
+        # character's memory_timeline, and character reviewers cross-
+        # check world content, so one lane's changes can invalidate
+        # another's previously-PASSED verdict (see requirements §11.4b).
         if stage.state == StageState.REVIEWING:
             # Safety check: verify extraction output still exists on disk
             work_dir = self.project_root / "works" / pipeline.work_id
@@ -1211,58 +1253,181 @@ class ExtractionOrchestrator:
                 phase3.save(self.project_root)
                 return
 
-            tracker.start_step()
             n_lanes = 1 + len(pipeline.target_characters)
-            tracker.print_step(4, 6,
-                               f"Parallel review lanes ({n_lanes} lanes)")
+            lane_results: list = []
 
-            lane_results = run_parallel_review(
-                project_root=self.project_root,
-                progress=pipeline,
-                stage=stage,
-                backend=self.backend,
-                reviewer_backend=self.reviewer_backend,
-                validate_fn=validate_lane,
-                build_reviewer_fn=partial(
-                    build_reviewer_prompt, stages=phase3.stages),
-                build_fix_fn=partial(
-                    build_targeted_fix_prompt, stages=phase3.stages),
-                parse_verdict_fn=_parse_verdict,
-                is_fixable_fn=_is_fixable,
-                run_with_retry_fn=run_with_retry,
-            )
+            while True:
+                tracker.start_step()
+                round_label = (
+                    f"Parallel review lanes ({n_lanes} lanes)"
+                    if not stage.lane_retries
+                    else f"Parallel review lanes "
+                         f"(lane retry round, "
+                         f"{max(stage.lane_retries.values(), default=0)})"
+                )
+                tracker.print_step(4, 6, round_label)
 
-            # Print lane results
-            passed_lanes = sum(1 for r in lane_results if r.passed)
-            failed_lanes = [r for r in lane_results if not r.passed]
-            for r in lane_results:
-                status = "PASS" if r.passed else "FAIL"
-                detail = r.error or r.findings[:200] if not r.passed else ""
-                print(f"    [{r.lane_type}:{r.lane_id}] {status}"
-                      f"{' — ' + detail if detail else ''}")
+                lane_results = run_parallel_review(
+                    project_root=self.project_root,
+                    progress=pipeline,
+                    stage=stage,
+                    backend=self.backend,
+                    reviewer_backend=self.reviewer_backend,
+                    validate_fn=validate_lane,
+                    build_reviewer_fn=partial(
+                        build_reviewer_prompt, stages=phase3.stages),
+                    build_fix_fn=partial(
+                        build_targeted_fix_prompt, stages=phase3.stages),
+                    parse_verdict_fn=_parse_verdict,
+                    is_fixable_fn=_is_fixable,
+                    run_with_retry_fn=run_with_retry,
+                )
 
-            if failed_lanes:
+                # Print lane results for this round
+                passed_lanes = sum(1 for r in lane_results if r.passed)
+                failed_lane_results = [
+                    r for r in lane_results if not r.passed]
+                for r in lane_results:
+                    status = "PASS" if r.passed else "FAIL"
+                    detail = (r.error or r.findings[:200]
+                              if not r.passed else "")
+                    print(f"    [{r.lane_type}:{r.lane_id}] {status}"
+                          f"{' — ' + detail if detail else ''}")
+
+                if not failed_lane_results:
+                    # All lanes PASS — exit the retry loop
+                    tracker.record_step(ProgressTracker.STEP_REVIEW)
+                    tracker.print_step_done(
+                        4, 6, "Parallel review lanes",
+                        f"{n_lanes}/{n_lanes} passed")
+                    break
+
+                # Partition failed lanes into retriable vs exhausted
+                retriable = []
+                exhausted = []
+                for r in failed_lane_results:
+                    lk = lane_key(r.lane_type, r.lane_id)
+                    used = stage.lane_retries.get(lk, 0)
+                    if used < stage.lane_max_retries:
+                        retriable.append(r)
+                    else:
+                        exhausted.append(r)
+
+                if exhausted:
+                    # Last resort: at least one lane is out of retries →
+                    # full-stage rollback + stage-level retry.
+                    tracker.print_step_done(
+                        4, 6, "Parallel review lanes",
+                        f"{passed_lanes}/{n_lanes} passed — "
+                        f"lane retries exhausted")
+
+                    # Aggregate all remaining lane failures into the
+                    # stage-level feedback so the next stage-level
+                    # retry re-extracts with the full error context.
+                    feedback_parts = []
+                    for r in failed_lane_results:
+                        feedback_parts.append(
+                            f"[{r.lane_type}:{r.lane_id}] "
+                            f"{r.error or r.findings[:500]}")
+                    stage.last_reviewer_feedback = "\n".join(feedback_parts)
+
+                    exhausted_ids = ", ".join(
+                        f"[{r.lane_type}:{r.lane_id}]" for r in exhausted)
+                    print(f"    [FAIL] Lane retry exhausted for "
+                          f"{exhausted_ids} — full stage rollback")
+                    rollback_to_head(self.project_root)
+                    # Clear per-lane counters: the next entry into this
+                    # stage starts fresh under stage-level retry control.
+                    stage.lane_retries = {}
+                    stage.transition(StageState.FAILED)
+                    phase3.save(self.project_root)
+                    return
+
+                # All failing lanes still have quota → retry them
+                # individually. Increment per-lane counters, roll back
+                # just their files, and re-extract only those lanes.
+                retry_targets: list[tuple[str, str, str]] = []
+                # (lane_type, lane_id, feedback)
+                for r in retriable:
+                    lk = lane_key(r.lane_type, r.lane_id)
+                    stage.lane_retries[lk] = (
+                        stage.lane_retries.get(lk, 0) + 1)
+                    feedback = (r.error or r.findings[:2000]
+                                or "(lane review failed)")
+                    retry_targets.append((r.lane_type, r.lane_id, feedback))
+                    rollback_lane_files(
+                        self.project_root, pipeline.work_id,
+                        stage.stage_id, r.lane_type,
+                        r.lane_id if r.lane_type == "character" else None,
+                    )
+                phase3.save(self.project_root)
+
                 tracker.print_step_done(
                     4, 6, "Parallel review lanes",
-                    f"{passed_lanes}/{n_lanes} passed")
+                    f"{passed_lanes}/{n_lanes} passed, "
+                    f"retrying {len(retriable)} lane(s): "
+                    + ", ".join(
+                        f"[{lt}:{lid}]"
+                        for lt, lid, _ in retry_targets))
 
-                # Collect failure feedback for retry
-                feedback_parts = []
-                for r in failed_lanes:
-                    feedback_parts.append(
-                        f"[{r.lane_type}:{r.lane_id}] "
-                        f"{r.error or r.findings[:500]}")
-                stage.last_reviewer_feedback = "\n".join(feedback_parts)
+                # Re-extract retriable lanes in parallel with per-lane
+                # reviewer feedback injected.
+                retry_extraction_errors: list[str] = []
+                with ThreadPoolExecutor(
+                        max_workers=len(retry_targets)) as executor:
+                    futures = []
+                    for lane_type, lid, fb in retry_targets:
+                        if lane_type == "world":
+                            futures.append(
+                                executor.submit(_extract_world, fb))
+                        else:
+                            futures.append(
+                                executor.submit(_extract_character, lid, fb))
+                    for future in as_completed(futures):
+                        entity_id, result = future.result()
+                        if not result.success:
+                            retry_extraction_errors.append(
+                                f"{entity_id}: "
+                                f"{result.error or 'unknown'}")
+                            print(f"    [ERROR] {entity_id} re-extraction "
+                                  f"failed: {result.error}")
 
-                print("    [FAIL] Rolling back for retry...")
-                rollback_to_head(self.project_root)
-                stage.transition(StageState.FAILED)
+                if retry_extraction_errors:
+                    print("    [FAIL] Lane re-extraction errors — "
+                          "full stage rollback")
+                    rollback_to_head(self.project_root)
+                    stage.lane_retries = {}
+                    stage.error_message = "; ".join(retry_extraction_errors)
+                    stage.transition(StageState.FAILED)
+                    phase3.save(self.project_root)
+                    return
+
+                # Re-run post-processing (idempotent upsert: overwrites
+                # only the current stage's entries in digests / catalog,
+                # other stages and lanes remain intact).
+                stage_order = next(
+                    (i for i, b in enumerate(phase3.stages)
+                     if b.stage_id == stage.stage_id), 0)
+                pp_issues = run_stage_post_processing(
+                    project_root=self.project_root,
+                    work_id=pipeline.work_id,
+                    stage_id=stage.stage_id,
+                    stage_order=stage_order,
+                    character_ids=pipeline.target_characters,
+                    chapter_range=stage.chapters,
+                )
+                for issue in pp_issues:
+                    print(f"    [WARN] {issue}")
+
+                # Loop back: re-run all review lanes.
+
+            # Clear per-lane counters on success — the next stage starts
+            # fresh.
+            if stage.lane_retries:
+                print(f"    [INFO] Lane retries used: "
+                      f"{dict(stage.lane_retries)}")
+                stage.lane_retries = {}
                 phase3.save(self.project_root)
-                return
-
-            tracker.record_step(ProgressTracker.STEP_REVIEW)
-            tracker.print_step_done(4, 6, "Parallel review lanes",
-                                    f"{n_lanes}/{n_lanes} passed")
 
             # --- Step 5: Commit gate (programmatic, 0 token) ---
             tracker.start_step()

@@ -180,8 +180,11 @@ Analysis → user confirmation → extraction loop (per stage: git preflight →
 generation (IDs `{TYPE}-S{stage:03d}-{seq:02d}`; importance inferred
 by keyword), stage_catalog upsert, 0 token] →
 **parallel review lanes** [world + each character:
-validate → review → fix independently] → **commit gate** [programmatic
-cross-consistency, 0 token] → git commit or full stage rollback+retry) →
+schema autofix → validate → review → fix independently; lane FAIL →
+per-lane rollback + lane re-extraction (≤ lane_max_retries=2); any
+lane exhausting its quota → full-stage rollback + stage-level retry]
+→ **commit gate** [programmatic cross-consistency, 0 token] → git
+commit) →
 Phase 3.5 cross-stage consistency check → Phase 4 scene archive. Each call
 is a fresh agent; context is file-based. Input trimming: only the most recent
 stage_snapshot and memory_timeline are passed (not full history).
