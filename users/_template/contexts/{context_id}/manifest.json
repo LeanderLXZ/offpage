@@ -5,8 +5,10 @@
   "work_id": "{work_id}",
   "character_id": "{character_id}",
   "stage_id": "{stage_id}",
+  "counterpart_mode": "user_self",
   "lifecycle": "ephemeral",
-  "origin": "",
-  "sessions": [],
-  "notes": ""
+  "origin_type": "new",
+  "session_ids": [],
+  "merge_policy": "manual_only",
+  "writeback_policy": "continuous"
 }

@@ -4,8 +4,8 @@
   "work_id": "{work_id}",
   "character_id": "{character_id}",
   "status": "active",
-  "persona_shifts": [],
-  "promoted_events": [],
-  "promoted_memories": [],
-  "notes": ""
+  "event_history": [],
+  "memory_history": [],
+  "persona_shift_history": [],
+  "character_drift_history": []
 }

@@ -51,8 +51,10 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
   and gate (shared `lane_max_retries`=2). Full-stage rollback is last
   resort (`max_retries`=2).
 - Gate failure cascade by category: `catalog_missing` /
-  `digest_missing` → free PP rerun; `snapshot_*` / `lane_review` → lane
-  re-extract; else → full rollback.
+  `digest_missing` / `world_event_digest_missing` → free PP rerun;
+  `snapshot_*` / `lane_review` → lane re-extract; else → full rollback.
+  Gate emits hard errors when catalogs / digests are absent (no silent
+  skip).
 - Three-level JSON repair (L1 regex → L2 LLM 600s → L3 full re-run) in
   Phase 0 and Phase 3.
 - Phase 0 parallel summarization + completion gate blocks Phase 1.
@@ -67,7 +69,8 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
   programmatic validation only, circuit breaker (≥8 failures / 60s →
   180s pause).
 - Baseline recovery tracked via `baseline_done`; Phase 2.5 exit
-  validation.
+  validation runs on both fresh and `--resume` paths (re-runs Phase 2.5
+  if existing baseline fails validation).
 - Smart resume skips extraction if output already on disk.
 - Disk reconcile self-heal on every startup (Phase 0/3/4); Phase 3
   verifies `committed_sha` via `git cat-file -e`.
