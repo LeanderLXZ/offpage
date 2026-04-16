@@ -239,15 +239,17 @@ multi-stage extraction via CLI calls (`claude -p` or `codex`).
      `{TYPE}-S{stage:03d}-{seq:02d}` so stage is encoded in the ID) +
      upsert `stage_catalog.json` from snapshot metadata (0 token)
   3. Parallel review lanes: world + each character independently runs
-     validate → semantic review → targeted fix. Lanes run in parallel
-     via ThreadPoolExecutor.
+     schema autofix → validate → semantic review → targeted fix.
+     Lanes run in parallel via ThreadPoolExecutor. Fix cascade:
+     Level 0 schema autofix (0 token) → Level 1 programmatic validation
+     → Level 2/3 targeted LLM fix → lane-independent re-extraction.
   4. Commit gate (提交门控): structural + identifier-level check only
      (snapshot existence, `stage_id` field alignment, catalog/digest
      coverage; digest stage parsed from `memory_id` prefix — no
      `stage_id` field per schema). Warn-only cross-entity reference
      resolution against world cast + character aliases. Content-level
      conflict detection is the character lane's responsibility.
-     Any lane FAIL or hard gate FAIL → full stage rollback.
+     Lane FAIL → only that lane rolls back and retries (≤2 times).
   5. Git commit — commit-ordering contract: git commit first, then
      transition `PASSED → COMMITTED` only on non-empty SHA; empty SHA
      reverts to `FAILED` so resume retries. Prevents fake-committed drift.
