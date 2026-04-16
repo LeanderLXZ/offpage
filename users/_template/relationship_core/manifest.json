@@ -4,11 +4,15 @@
   "work_id": "{work_id}",
   "character_id": "{character_id}",
   "status": "active",
-  "relationship_labels": [],
+  "current_relation_summary": "",
+  "relationship_label": "",
   "trust_level": 0,
   "intimacy_level": 0,
   "dependence_level": 0,
-  "personalized_voice_shifts": [],
-  "personalized_behavior_shifts": [],
-  "notes": ""
+  "pinned_memories": [],
+  "event_refs": [],
+  "profile_shift_refs": [],
+  "mutual_agreements": [],
+  "personalized_voice_shift": {},
+  "personalized_behavior_shift": {}
 }

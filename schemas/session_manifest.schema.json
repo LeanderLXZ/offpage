@@ -131,7 +131,10 @@
           "counterpart_mode": {
             "const": "user_persona"
           }
-        }
+        },
+        "required": [
+          "counterpart_mode"
+        ]
       },
       "then": {
         "required": [
@@ -162,7 +165,10 @@
           "counterpart_mode": {
             "const": "canon_character"
           }
-        }
+        },
+        "required": [
+          "counterpart_mode"
+        ]
       },
       "then": {
         "required": [
@@ -211,7 +217,10 @@
           "counterpart_stage_mode": {
             "const": "explicit_override"
           }
-        }
+        },
+        "required": [
+          "counterpart_stage_mode"
+        ]
       },
       "then": {
         "required": [

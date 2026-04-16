@@ -94,8 +94,10 @@ constraints beyond what the architecture docs already say.
     (programmatic cross-consistency). Only semantic errors cause FAIL.
     Commit gate is **structural + identifier level only** — content-
     level world-vs-character conflicts belong to the character
-    reviewer, not the gate. Full retry / cascade model in
-    `architecture.md`.
+    reviewer, not the gate. Gate emits hard errors when any required
+    catalog / digest file is absent (no silent skip); missing
+    catalog / digest (including `world_event_digest`) route to a free
+    PP rerun. Full retry / cascade model in `architecture.md`.
 26. Extraction runs on a dedicated git branch. Each passing stage
     committed. Rollback = `git reset` to last committed stage. After
     all stages complete, squash-merge to main.
