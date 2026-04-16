@@ -122,13 +122,19 @@ that a new AI should know beyond what the architecture docs already say.
     failure). Content-level world-vs-character conflicts are the character
     lane semantic reviewer's job, not the gate's. Memory digest check
     parses the stage from `memory_id`'s `M-S{stage:03d}-` prefix — the
-    schema forbids a `stage_id` field on digest entries. Lane failures
-    take the **lane-independent retry** path (see 25c); only when a
-    failing lane exhausts its retry quota does the stage fall back to
-    full rollback. Hard gate failure → full stage rollback directly
-    (gate runs after all lanes pass, so there is no lane-level retry
-    at that point). No per-lane commit: the gate requires all lanes
-    pass before git commit.
+    schema forbids a `stage_id` field on digest entries. Each gate finding
+    is emitted as a `GateIssue(message, severity, lane_type, lane_id,
+    category)` so the orchestrator can route recovery the same way it
+    routes review failures (see 25c). Gate failures cascade by category:
+    `catalog_missing` / `digest_missing` (in `POST_PROCESSING_RECOVERABLE`)
+    → free post-processing rerun + re-gate; `snapshot_missing` /
+    `snapshot_stage_id` / `snapshot_parse` / `lane_review` → lane
+    re-extraction consuming the same `lane_retries` budget as review
+    failures; unattributed structural issues or exhausted budget →
+    full-stage rollback. Lane-retry budget is shared across review and
+    gate paths and cleared only after the gate finally PASSes — pre-gate
+    clearing would let a stage ping-pong the quota indefinitely. No
+    per-lane commit: the gate requires all lanes pass before git commit.
 25b.1 Commit ordering: `git commit` first; only a non-empty SHA transitions
     the stage to `COMMITTED`. Empty SHA (no diff or commit failure) reverts
     the stage to `FAILED` so resume can retry. Avoids "progress says
