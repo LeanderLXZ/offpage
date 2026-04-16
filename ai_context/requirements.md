@@ -175,7 +175,9 @@ three-level JSON repair (L1 programmatic → L2 LLM 600s → L3 full re-run);
 completion gate blocks Phase 1 if any chunk missing.
 Analysis → user confirmation → extraction loop (per stage: git preflight →
 **smart skip** [if extraction output already on disk, jump to post-processing] →
-**1+N split extraction** [world call → N parallel character calls] →
+**1+N split extraction** [world call → N parallel character calls;
+single-lane LLM error retries only that lane consuming the shared
+lane_retries budget, others' outputs preserved] →
 **programmatic post-processing** [memory_digest + world_event_digest
 generation (IDs `{TYPE}-S{stage:03d}-{seq:02d}`; importance inferred
 by keyword), stage_catalog upsert, 0 token] →
@@ -186,7 +188,8 @@ lane exhausting its quota → full-stage rollback + stage-level retry]
 → **commit gate** [programmatic cross-consistency, 0 token; failures
 cascade by category — catalog/digest miss → free post_processing rerun;
 snapshot or lane_review miss → lane re-extract sharing the same
-lane_retries budget; unattributed or budget-exhausted → full rollback]
+lane_retries budget across initial extraction + review + gate;
+unattributed or budget-exhausted → full rollback]
 → git commit) →
 Phase 3.5 cross-stage consistency check → Phase 4 scene archive. Each call
 is a fresh agent; context is file-based. Input trimming: only the most recent

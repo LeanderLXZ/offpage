@@ -37,16 +37,22 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 6. **提交门控**（程序化，0 token）：确认全通道 PASS + 交叉一致性检查；
    失败时按 category 级联恢复（详见 `docs/requirements.md §11.4b 失败处理 B`）
 7. **失败分级**（lane 独立重试优先，全量回滚为最后手段）：
+   - **初次提取阶段（Step 3 的 1+N 并行）某条 lane LLM 报错** → 已成功的
+     lane 产物保留，仅 `rollback_lane_files` 该失败 lane + 消耗一次
+     `lane_retries` + 仅重跑该 lane（不重跑全部 1+N）
    - 通道内可修复（schema 层或小范围字段错误）→ autofix → 定点修复 → 再审校 → 继续
    - 通道内不可修复（系统性偏差、修复瀑布走完仍 FAIL）→ **仅该 lane 回滚产物**
      + 该 lane 单独重提取（≤ `lane_max_retries`=2 次），已通过 lane 保留
    - 提交门控失败按 category 路由：
      - `catalog_missing` / `digest_missing` → **post_processing 重跑**（免费）+ 重新过门控
      - `snapshot_*` / `lane_review` → 仅该 lane 回滚重提取
-       （与审校失败共享 `lane_retries` 配额）
+       （与审校失败、初次提取共享 `lane_retries` 配额）
      - 无 lane 归属或配额耗尽 → 全 stage rollback
    - 任一 lane 耗尽 `lane_max_retries` 仍失败 → **全 stage rollback**
      + 标记 FAILED → 进入 stage 级重试（≤ `max_retries`=2 次）
+   - **lane 重提取过程本身 LLM 报错**（瞬时 API 错误等）→ 不再立即全 stage
+     rollback，仅清理该 lane 文件，由下一轮 review/gate 通过 `snapshot_missing`
+     类目自然兜底（每次再消耗一格 `lane_retries`）
 
 ## 依赖
 
@@ -236,7 +242,8 @@ L2 超时默认 600s（`repair_timeout` 参数可配置）。
 - **Token/context limit → 不重试**（相同 prompt 必定再次超限），直接标记
   ERROR 并回滚，避免浪费重试配额
 - 脚本崩溃 → 重启后加 `--resume` 从最后一个 committed stage 继续
-- 提取失败 → 自动回滚未提交的文件变更（全仓库范围，不仅限于 `works/`）
+- 提取失败 → lane-attributed 优先（仅清失败 lane 文件 + 重跑该 lane），
+  仅在 lane 配额耗尽或不可归属时才全仓库回滚未提交变更
 - **Baseline 恢复**：`--resume` 时自动检测 Phase 2.5 baseline 是否完成，
   缺失则补跑，避免后续 stage 因缺少 identity.json 而全部失败
 - **Baseline 出口验证**：Phase 2.5 完成后运行 `validate_baseline()`

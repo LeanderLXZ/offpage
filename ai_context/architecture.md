@@ -256,10 +256,15 @@ multi-stage extraction via CLI calls (`claude -p` or `codex`).
      the same loop: `catalog_missing` / `digest_missing` recover via a
      free post-processing rerun + re-gate; `snapshot_*` / `lane_review`
      re-extract only the affected lanes (sharing the `lane_retries`
-     budget with review failures); unattributed structural issues or
-     budget exhaustion fall back to full-stage rollback + stage-level
+     budget with review failures AND with initial-extraction lane
+     errors — see §11.4b 失败处理 A0); unattributed structural issues
+     or budget exhaustion fall back to full-stage rollback + stage-level
      retry (≤ `max_retries`=2). The `lane_retries` counter clears only
-     after the gate finally PASSes.
+     after the gate finally PASSes. Lane re-extraction LLM errors
+     (transient API failures) are NOT escalated to a full rollback —
+     they leave the snapshot missing on disk and the next outer-loop
+     iteration catches it via the gate's `snapshot_missing` cascade,
+     consuming another lane quota slot until exhaustion.
   5. Git commit — commit-ordering contract: git commit first, then
      transition `PASSED → COMMITTED` only on non-empty SHA; empty SHA
      reverts to `FAILED` so resume retries. Prevents fake-committed drift.

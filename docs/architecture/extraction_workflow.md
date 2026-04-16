@@ -282,6 +282,11 @@ orchestrator (Python)
     ├── 提取循环 → 每个 stage (1+N 全并行):
     │       ├── git preflight
     │       ├── claude -p ×(1+N) (世界+角色全并行, 3600s)
+    │       │       ├── [全部成功] → 程序化后处理
+    │       │       ├── [部分 lane 失败] → 仅清失败 lane 的部分产物
+    │       │       │       + 消耗 lane_retries → 仅重跑失败 lane
+    │       │       │       (已成功 lane 保留)
+    │       │       └── [失败 lane 配额耗尽] → 全 stage rollback
     │       ├── 程序化后处理 (digest/catalog, 0 token, idempotent upsert)
     │       ├── 并行审校通道 (world + 各角色独立):
     │       │       ├── Level 0 schema autofix (0 token)
@@ -297,7 +302,7 @@ orchestrator (Python)
     │       │       │       + 重新过门控 (免费, 不消耗 lane_retries)
     │       │       ├── [snapshot miss / lane_review miss]
     │       │       │       → 仅该 lane 回滚 + 重提取
-    │       │       │       (与审校失败共享 lane_retries 配额)
+    │       │       │       (与审校失败、初次提取共享 lane_retries 配额)
     │       │       └── [无法定位 / 配额耗尽] → 全 stage rollback
     │       └── 全 stage rollback → 整 stage 重试
     │               (最后手段, ≤ max_retries=2)
@@ -326,9 +331,12 @@ orchestrator (Python)
   lane_type, lane_id, category)`，按 category 路由 —
   `catalog_missing`/`digest_missing` ∈ `POST_PROCESSING_RECOVERABLE` →
   免费 post_processing 重跑 + 重新过门控；`snapshot_*`/`lane_review` →
-  仅该 lane 回滚重提取（与审校失败共享 `lane_retries` 配额）；
-  无 lane 归属或配额耗尽 → 全 stage rollback。`lane_retries` 计数器
-  仅在门控最终 PASS 后清零，避免 review/gate 之间反复消耗配额
+  仅该 lane 回滚重提取（与审校失败、**初次提取** 共享 `lane_retries`
+  配额）；无 lane 归属或配额耗尽 → 全 stage rollback。`lane_retries`
+  计数器仅在门控最终 PASS 后清零，避免 extraction/review/gate 之间反复
+  消耗配额。Lane 重提取过程中 LLM 自身报错不再升级为全 stage rollback：
+  仅该 lane 文件被清掉，下一轮 review/gate 通过 `snapshot_missing` 类目
+  自然兜底（再消耗一格配额）
 - 提取在独立 git 分支进行，每 stage 单独 commit（精确回滚）；全部完成后
   squash merge 回 main（干净历史），extraction 分支可删除
 - 支持 Claude CLI 和 Codex CLI 两种后端

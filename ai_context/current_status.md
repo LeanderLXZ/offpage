@@ -99,11 +99,18 @@ implementation code yet.
   world snapshot — cross-dependency). The commit gate sits inside the
   same retry loop as review: a gate failure consumes the same
   `lane_retries` quota and routes via the cascade (free PP rerun → lane
-  re-extract → full rollback) before re-running review + gate. Full-stage
-  rollback is the last resort, triggered only when a failing lane
-  exhausts its quota or when the gate raises an unattributed structural
-  issue; the stage then transitions to FAILED and enters the stage-level
-  retry loop (≤ `max_retries`=2).
+  re-extract → full rollback) before re-running review + gate. The
+  same `lane_retries` budget also covers **initial-extraction** lane
+  errors (Step 2's 1+N parallel agents): a single lane's LLM error
+  in Step 2 retries only that lane, preserving the other lanes'
+  outputs. Lane re-extraction LLM errors inside the cascade are not
+  escalated to full rollback either — the missing snapshot gets
+  caught by the next gate iteration's `snapshot_missing` cascade,
+  consuming another quota slot. Full-stage rollback is the last
+  resort, triggered only when a failing lane exhausts its quota or
+  when the gate raises an unattributed structural issue; the stage
+  then transitions to FAILED and enters the stage-level retry loop
+  (≤ `max_retries`=2).
 - Three-level JSON repair pipeline (`json_repair.py`): L1 programmatic regex
   (zero tokens) → L2 LLM repair (600s timeout, configurable via
   `repair_timeout`) → L3 full re-run (caller-implemented, max 1 attempt).
