@@ -251,9 +251,15 @@ multi-stage extraction via CLI calls (`claude -p` or `codex`).
      conflict detection is the character lane's responsibility.
      Lane FAIL → only that lane rolls back and re-extracts (≤
      `lane_max_retries`=2). Already-PASSED lanes are preserved on disk;
-     post-processing re-runs with idempotent upsert semantics. Only
-     when a failing lane exhausts its lane quota does the stage fall
-     back to full-stage rollback + stage-level retry (≤ `max_retries`=2).
+     post-processing re-runs with idempotent upsert semantics. Gate
+     failures emit categorized `GateIssue` objects and cascade through
+     the same loop: `catalog_missing` / `digest_missing` recover via a
+     free post-processing rerun + re-gate; `snapshot_*` / `lane_review`
+     re-extract only the affected lanes (sharing the `lane_retries`
+     budget with review failures); unattributed structural issues or
+     budget exhaustion fall back to full-stage rollback + stage-level
+     retry (≤ `max_retries`=2). The `lane_retries` counter clears only
+     after the gate finally PASSes.
   5. Git commit — commit-ordering contract: git commit first, then
      transition `PASSED → COMMITTED` only on non-empty SHA; empty SHA
      reverts to `FAILED` so resume retries. Prevents fake-committed drift.
