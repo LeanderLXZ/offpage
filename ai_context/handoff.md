@@ -2,37 +2,35 @@
 
 ## Mental Model
 
-Architecture agreed, scaffold created, extraction in progress. There is
-one real work package with stage extraction underway, no finished character
-packages yet, no real user packages, and no runtime code.
+Architecture agreed, scaffold created, extraction in progress. One real
+work package under stage extraction. No finished character packages, no
+real user packages, no runtime code.
 
 ## Quick Start
 
-1. Read all of `ai_context/` first.
-2. On first follow-up, continue from `ai_context/` + the user request. Do not
-   proactively route through `prompts/` unless the user asks.
-3. For architecture details, read `docs/architecture/system_overview.md` and
-   `docs/architecture/data_model.md`.
-4. For schema documentation, read `docs/architecture/schema_reference.md`.
-5. For runtime flow details, read `simulation/README.md` and relevant files
-   under `simulation/flows/`, `simulation/retrieval/`, and
-   `simulation/prompt_templates/`.
-6. For the automated extraction pipeline, read `automation/README.md`.
-7. For the current work, start from existing metadata and analysis, not raw
+1. Read all of `ai_context/` (order in `instructions.md`).
+2. On follow-up, continue from `ai_context/` + user request. Don't route
+   through `prompts/` unless asked.
+3. Architecture detail → `docs/architecture/system_overview.md`,
+   `data_model.md`, `schema_reference.md`.
+4. Runtime flow → `simulation/README.md`, `simulation/flows/`,
+   `simulation/retrieval/`, `simulation/prompt_templates/`.
+5. Extraction pipeline → `automation/README.md`.
+6. Current work → start from existing metadata / analysis, not raw
    chapters.
 
-## Current Work Continuation Point
+## Current Work Continuation
 
-One Chinese web novel is onboarded and in progress. Check
-`works/` and `sources/works/` for the actual work_id.
+One Chinese web novel is onboarded and in progress. Actual `work_id`
+lives under `works/` and `sources/works/`.
 
-### How to continue extraction
+### Resume extraction
 
 ```bash
-# Resume in foreground
+# Foreground
 python -m automation.persona_extraction "<work_id>" --resume
 
-# Resume in background (survives SSH disconnect), max 6 hours
+# Background (survives SSH disconnect), 6h cap
 python -m automation.persona_extraction "<work_id>" \
     --resume --background --max-runtime 360
 
@@ -40,38 +38,37 @@ python -m automation.persona_extraction "<work_id>" \
 tail -f works/<work_id>/analysis/progress/extraction.log
 ```
 
-Optional: `pip install jsonschema` for programmatic schema validation (the
-tool works without it but skips schema checks).
+`jsonschema` is a HARD dep in `automation/pyproject.toml` — validator
+raises ImportError without it.
 
-The pipeline will check for a running instance (PID lock) and clean git
-working tree before starting. See `automation/README.md` for full CLI
-options and pipeline phase descriptions.
+Pipeline checks PID lock and clean git tree before starting. See
+`automation/README.md` for full CLI.
 
 ### Post-extraction manual repair
 
-After automation completes, use `prompts/review/手动补抽与修复.md` for
-targeted fixes (e.g. Phase 3.5 report items, missing relationships).
-Use `prompts/review/数据包审校.md` for full package review.
+`prompts/review/手动补抽与修复.md` for targeted fixes;
+`prompts/review/数据包审校.md` for full package review.
 
 ## What The User Cares About
 
 - Deep roleplay, not shallow mimicry or generic AI tone
-- Preserve time-stage differences and knowledge boundaries
-- Do not reduce analysis to ordinary literary summary
-- Do not leak memory across contexts or write the character as omniscient
-- Do not blur canon and inference without labeling
-- Keep updating incrementally, do not restart from scratch
-- Do not accidentally rewrite Chinese canon into English summaries
-- Do not paste large raw text into logs, docs, or answers
-- Do not put specific book names, character names, chapter names, or plot
-  details from any test work into docs, requirements, README, prompt templates,
-  schemas, or ai_context — even in examples, use generic placeholders
-  (e.g. "角色A", "<work_id>", "阶段01_主角初登场"). Only `works/`, `sources/`,
-  and `docs/logs/` (historical records) may contain work-specific references
+- Preserve stage differences and knowledge boundaries
+- Don't reduce analysis to ordinary literary summary
+- Don't leak memory across contexts or write the character as
+  omniscient
+- Don't blur canon and inference without labeling
+- Incremental updates, never restart from scratch
+- Don't rewrite Chinese canon into English summaries
+- Don't paste large raw text into logs, docs, or answers
+- Don't put specific book names, character names, chapter names, or
+  plot details in docs, requirements, README, prompt templates,
+  schemas, or `ai_context/` — use generic placeholders ("角色A",
+  "<work_id>", "阶段01_主角初登场"). Only `works/`, `sources/`, and
+  `docs/logs/` may contain work-specific references.
 
 ## After Each Milestone
 
-1. **Write a log entry under `docs/logs/`.** This is mandatory for any change
-   to schemas, architecture, prompts, simulation docs, or directory structure.
-   Do not skip this step.
+1. Write a log entry under `docs/logs/` with HHMMSS timestamp
+   (mandatory for schema / architecture / prompt / simulation /
+   directory changes).
 2. Update `current_status.md`, `next_steps.md`, and this file.
