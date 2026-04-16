@@ -6,10 +6,6 @@
   "character_id": "{character_id}",
   "stage_id": "{stage_id}",
   "context_id": "{context_id}",
-  "terminal": "",
-  "started_at": "",
-  "ended_at": null,
-  "close_trigger": null,
-  "merge_decision": null,
-  "notes": ""
+  "terminal": "agent",
+  "status": "active"
 }

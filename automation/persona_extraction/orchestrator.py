@@ -925,10 +925,30 @@ class ExtractionOrchestrator:
             )
             if (foundation.exists() and identities_ok
                     and fixed_rel.exists() and not force_baseline):
-                # Files exist from a prior partial run — mark done
-                print("  [OK] Baseline files already present, marking done.")
-                pipeline.mark_done("phase_2_5")
-                pipeline.save(self.project_root)
+                # Files exist from a prior partial run — still must pass
+                # Phase 2.5 exit validation before marking done. File presence
+                # alone does not guarantee schema / required-field correctness;
+                # external damage or stale baseline formats must be caught
+                # here rather than silently slipping into Phase 3. See
+                # requirements.md §11.7 "Baseline 恢复".
+                print("  [OK] Baseline files already present — validating.")
+                baseline_report = validate_baseline(
+                    self.project_root, self.work_id,
+                    pipeline.target_characters)
+                print(baseline_report.summary())
+                if not baseline_report.passed:
+                    print("  [WARN] Existing baseline failed validation. "
+                          "Re-running Phase 2.5 to repair.")
+                    self.run_baseline_production(pipeline.target_characters)
+                    sha = commit_stage(
+                        self.project_root, "baseline",
+                        message="Phase 2.5 baseline (validation-triggered "
+                                "recovery)")
+                    if sha:
+                        print(f"  [OK] Baseline committed as {sha}")
+                else:
+                    pipeline.mark_done("phase_2_5")
+                    pipeline.save(self.project_root)
             else:
                 print("  [WARN] Baseline not completed. Running Phase 2.5...")
                 self.run_baseline_production(pipeline.target_characters)

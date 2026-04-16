@@ -4,9 +4,9 @@
   "work_id": "{work_id}",
   "character_id": "{character_id}",
   "stage_id": "{stage_id}",
-  "counterpart_mode": "custom",
-  "counterpart_custom_label": "",
-  "status": "draft",
+  "counterpart_mode": "user_self",
+  "counterpart_label": "",
+  "status": "active",
   "setup_locked": false,
   "notes": ""
 }

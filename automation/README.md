@@ -283,13 +283,13 @@ Phase 4 与 Phase 3 数据独立——使用独立 PID 锁 `.scene_archive.lock`
 
 ```bash
 # 独立运行 Phase 4
-python -m persona_extraction "<work_id>" -r .. --start-phase 4
+python -m automation.persona_extraction "<work_id>" --start-phase 4
 
 # 恢复断点
-python -m persona_extraction "<work_id>" -r .. --start-phase 4 --resume
+python -m automation.persona_extraction "<work_id>" --start-phase 4 --resume
 
 # 只处理前 5 个 stage 的章节，并发 20
-python -m persona_extraction "<work_id>" -r .. \
+python -m automation.persona_extraction "<work_id>" \
     --start-phase 4 --end-stage 5 --concurrency 20
 ```
 
