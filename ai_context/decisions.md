@@ -122,8 +122,13 @@ that a new AI should know beyond what the architecture docs already say.
     failure). Content-level world-vs-character conflicts are the character
     lane semantic reviewer's job, not the gate's. Memory digest check
     parses the stage from `memory_id`'s `M-S{stage:03d}-` prefix — the
-    schema forbids a `stage_id` field on digest entries. Any lane failure
-    or hard gate failure → full stage rollback. No per-lane commit.
+    schema forbids a `stage_id` field on digest entries. Lane failures
+    take the **lane-independent retry** path (see 25c); only when a
+    failing lane exhausts its retry quota does the stage fall back to
+    full rollback. Hard gate failure → full stage rollback directly
+    (gate runs after all lanes pass, so there is no lane-level retry
+    at that point). No per-lane commit: the gate requires all lanes
+    pass before git commit.
 25b.1 Commit ordering: `git commit` first; only a non-empty SHA transitions
     the stage to `COMMITTED`. Empty SHA (no diff or commit failure) reverts
     the stage to `FAILED` so resume can retry. Avoids "progress says
@@ -135,10 +140,19 @@ that a new AI should know beyond what the architecture docs already say.
 25b.3 `jsonschema` is a HARD automation dependency (declared in
     `automation/pyproject.toml`). Validator raises ImportError on load if
     missing, rather than silently degrading the gate.
-25c. Failure triage after review: fixable issues (≤5 specific field/value
-    errors, no missing files) → targeted fix agent makes minimal edits +
-    re-validate; systemic issues (file missing, structural,
-    understanding-level) → full rollback + retry.
+25c. Failure triage — **lane-independent retry first, full rollback last**.
+    Inside a lane: Level 0 schema autofix → Level 1 programmatic
+    validation → Level 2/3 targeted LLM fix. If the lane still FAILs
+    (or hits a systemic issue — file missing, structural,
+    understanding-level), roll back only that lane's products and
+    re-extract only that lane (≤ `lane_max_retries`=2). Previously
+    PASSED lanes are preserved on disk. After any lane re-extraction
+    we re-run post-processing (idempotent upsert) and re-review all
+    lanes (cross-dependency: world reviewer reads character
+    memory_timelines; character reviewers read world snapshot).
+    Full-stage rollback is triggered only when a failing lane
+    exhausts its lane quota — at that point the stage transitions to
+    FAILED and enters the stage-level retry loop (≤ `max_retries`=2).
 26. Extraction runs on a dedicated git branch. Each passing stage is committed.
     Rollback on failure = git reset. After all stages complete, squash-merge
     to main (one clean commit); the extraction branch can then be deleted.

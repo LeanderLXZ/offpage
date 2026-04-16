@@ -116,6 +116,69 @@ def _attempt_lane_autofix(
     return any_fixed
 
 
+def lane_key(lane_type: str, lane_id: str) -> str:
+    """Canonical lane identifier used for retry bookkeeping and rollback.
+
+    Format:
+      - ``"world"`` for the world lane (there is exactly one)
+      - ``"character:{char_id}"`` for each character lane
+
+    This matches the keys used by ``StageEntry.lane_retries`` and the
+    ``lane_filter`` argument of :func:`run_parallel_review`.
+    """
+    if lane_type == "world":
+        return "world"
+    return f"character:{lane_id}"
+
+
+def rollback_lane_files(
+    project_root: Path,
+    work_id: str,
+    stage_id: str,
+    lane_type: str,
+    lane_char: str | None,
+) -> list[Path]:
+    """Delete the on-disk artifacts owned by a single review lane.
+
+    Per the writer-boundary rule (§11.4b), each lane writes exactly one
+    set of files:
+
+    - **world lane**: ``world/stage_snapshots/{stage_id}.json``
+    - **character lane**: the character's ``stage_snapshots/{stage_id}.json``
+      and ``memory_timeline/{stage_id}.json``
+
+    Cumulative products (``memory_digest.jsonl``, ``world_event_digest.jsonl``,
+    ``stage_catalog.json``) are **not** touched here: post-processing is
+    idempotent and upserts only the entries for the current stage, so
+    re-running it after a lane re-extraction safely overwrites the stale
+    entries for this stage while preserving data from other stages and
+    other lanes.
+
+    Returns the list of files that were actually removed (for logging).
+    """
+    work_dir = project_root / "works" / work_id
+    removed: list[Path] = []
+
+    if lane_type == "world":
+        world_snap = (work_dir / "world" / "stage_snapshots"
+                      / f"{stage_id}.json")
+        if world_snap.exists():
+            world_snap.unlink()
+            removed.append(world_snap)
+    elif lane_type == "character" and lane_char:
+        char_canon = work_dir / "characters" / lane_char / "canon"
+        for rel in (f"stage_snapshots/{stage_id}.json",
+                    f"memory_timeline/{stage_id}.json"):
+            p = char_canon / rel
+            if p.exists():
+                p.unlink()
+                removed.append(p)
+
+    for p in removed:
+        logger.info("  [lane rollback] removed %s", p)
+    return removed
+
+
 def run_parallel_review(
     project_root: Path,
     progress: "PipelineProgress",
@@ -129,8 +192,9 @@ def run_parallel_review(
     parse_verdict_fn,
     is_fixable_fn,
     run_with_retry_fn,
+    lane_filter: list[str] | None = None,
 ) -> list[LaneResult]:
-    """Run review lanes in parallel for all entities in a stage.
+    """Run review lanes in parallel for the entities in a stage.
 
     Each lane: validate → review → (optional) fix → re-validate/re-review.
 
@@ -141,8 +205,12 @@ def run_parallel_review(
         parse_verdict_fn: callable(text) → {"verdict": str, "findings": str}
         is_fixable_fn: callable(verdict) → bool
         run_with_retry_fn: callable(backend, prompt, timeout_seconds) → LLMResult
+        lane_filter: optional list of :func:`lane_key` values to run; when
+            given, only those lanes execute (used by lane-independent retry
+            to review only the lanes that were just re-extracted, while
+            preserving earlier PASS results for the rest).
 
-    Returns list of LaneResult (one per lane).
+    Returns list of LaneResult (one per lane that actually ran).
     """
     lanes: list[tuple[str, str]] = []  # (lane_id, lane_type)
 
@@ -152,6 +220,13 @@ def run_parallel_review(
     # Character lanes
     for char_id in progress.target_characters:
         lanes.append((char_id, "character"))
+
+    if lane_filter is not None:
+        allowed = set(lane_filter)
+        lanes = [(lid, ltype) for lid, ltype in lanes
+                 if lane_key(ltype, lid) in allowed]
+        if not lanes:
+            return []
 
     results: list[LaneResult] = []
 

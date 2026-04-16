@@ -329,6 +329,15 @@ class StageEntry:
     last_updated: str = ""
     error_message: str = ""
     fail_source: str = ""  # "programmatic" or "semantic" — which check caused FAIL
+    # Per-lane retry tracking (lane_key → retry_count). Keys are the lane
+    # identifiers used by review_lanes: "world" for the world lane,
+    # "character:{char_id}" for each character lane. Lane retries are
+    # bounded by ``lane_max_retries``; when any lane exhausts its quota,
+    # the whole stage falls back to full-stage rollback (see
+    # orchestrator._process_stage Step 4 and requirements §11.4b/§11.5).
+    # Cleared on successful stage commit or stage-level rollback.
+    lane_retries: dict[str, int] = field(default_factory=dict)
+    lane_max_retries: int = 2
 
     def can_transition(self, target: StageState) -> bool:
         return target in _TRANSITIONS.get(self.state, set())
@@ -355,6 +364,8 @@ class StageEntry:
             "last_updated": self.last_updated,
             "error_message": self.error_message,
             "fail_source": self.fail_source,
+            "lane_retries": dict(self.lane_retries),
+            "lane_max_retries": self.lane_max_retries,
         }
 
     @classmethod
@@ -371,6 +382,8 @@ class StageEntry:
             last_updated=d.get("last_updated", ""),
             error_message=d.get("error_message", ""),
             fail_source=d.get("fail_source", ""),
+            lane_retries=dict(d.get("lane_retries", {})),
+            lane_max_retries=d.get("lane_max_retries", 2),
         )
 
 
@@ -544,6 +557,7 @@ class Phase3Progress:
                     stage.error_message = ""
                     stage.fail_source = ""
                     stage.last_reviewer_feedback = ""
+                    stage.lane_retries = {}
                     reverted += 1
                 continue
 
@@ -563,6 +577,7 @@ class Phase3Progress:
             stage.error_message = ""
             stage.fail_source = ""
             stage.last_reviewer_feedback = ""
+            stage.lane_retries = {}
             reverted += 1
 
         return {"reverted": reverted, "purged_files": purged_files,
