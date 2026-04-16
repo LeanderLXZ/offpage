@@ -110,21 +110,25 @@
     "stage_events": {
       "type": "array",
       "description": "仅本阶段发生的关键事件清单（不累积历史），每条为 50–80 字的一句话摘要。历史跨阶段视图由 world_event_digest / memory_timeline 提供。",
+      "maxItems": 10,
       "items": { "type": "string", "minLength": 50, "maxLength": 80 }
     },
     "current_status": {
       "type": "array",
-      "description": "当前阶段角色的状态信息，例如生死、关系、等级、位置等。",
+      "description": "当前阶段角色的状态信息，例如生死、关系、等级、位置等。保留最核心重要的条目。",
+      "maxItems": 10,
       "items": { "type": "string" }
     },
     "current_personality": {
       "type": "array",
-      "description": "当前阶段下已经稳定显现的人格与处事倾向。",
+      "description": "当前阶段下已经稳定显现的人格与处事倾向。保留核心倾向。",
+      "maxItems": 10,
       "items": { "type": "string" }
     },
     "current_mood": {
       "type": "array",
       "description": "当前阶段下更接近现在进行时的情绪背景。",
+      "maxItems": 10,
       "items": { "type": "string" }
     },
     "knowledge_scope": {
@@ -210,6 +214,7 @@
         "dialogue_examples": {
           "type": "array",
           "description": "当前阶段的典型对话示例。",
+          "maxItems": 5,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -222,7 +227,8 @@
         },
         "emotional_voice_map": {
           "type": "array",
-          "description": "当前阶段下不同情绪的语气变化。",
+          "description": "当前阶段下不同情绪的语气变化。保留最重要、最常见的情绪。",
+          "maxItems": 10,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -235,10 +241,12 @@
               "voice_shift": { "type": "string" },
               "typical_expressions": {
                 "type": "array",
+                "maxItems": 5,
                 "items": { "type": "string" }
               },
               "dialogue_examples": {
                 "type": "array",
+                "maxItems": 5,
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
@@ -255,6 +263,7 @@
         "target_voice_map": {
           "type": "array",
           "description": "当前阶段下面对不同对象的语气变化。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条对话示例），泛化类型（陌生人、路人等）简要描述即可。",
+          "maxItems": 5,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -271,11 +280,13 @@
               "typical_expressions": {
                 "type": "array",
                 "description": "面对该对象时的典型表达列表。",
+                "maxItems": 5,
                 "items": { "type": "string" }
               },
               "dialogue_examples": {
                 "type": "array",
                 "description": "原文中面对该对象的对话示例。主要角色和重要配角要求至少 3-5 条，覆盖多种情绪和场景；泛化类型可简要。",
+                "maxItems": 5,
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
@@ -330,7 +341,8 @@
         },
         "emotional_reaction_map": {
           "type": "array",
-          "description": "当前阶段下不同情绪的行为反应模式。",
+          "description": "当前阶段下不同情绪的行为反应模式。保留最重要、最常见的情绪。",
+          "maxItems": 10,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -341,30 +353,17 @@
               "external_behavior": { "type": "string" },
               "typical_actions": {
                 "type": "array",
+                "maxItems": 5,
                 "items": { "type": "string" }
               },
               "recovery_pattern": { "type": "string" }
             }
           }
         },
-        "relationship_behavior_map": {
-          "type": "array",
-          "description": "当前阶段下面对不同关系类型的通用行为模式。提供默认行为基线。",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["relationship_type"],
-            "properties": {
-              "relationship_type": { "type": "string" },
-              "default_stance": { "type": "string" },
-              "boundaries": { "type": "string" },
-              "escalation_pattern": { "type": "string" }
-            }
-          }
-        },
         "target_behavior_map": {
           "type": "array",
-          "description": "当前阶段下面对不同对象的具体行为模式。与 voice_state.target_voice_map 平行，侧重肢体反应、距离感、习惯性动作、回避模式等行为差异。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条行为示例），泛化类型简要描述即可。",
+          "description": "当前阶段下面对不同对象的具体行为模式。与 voice_state.target_voice_map 平行且对齐，侧重肢体反应、距离感、习惯性动作、回避模式等行为差异。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条行为示例），泛化类型简要描述即可。",
+          "maxItems": 5,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -381,11 +380,13 @@
               "typical_actions": {
                 "type": "array",
                 "description": "面对该对象时的典型行为列表。",
+                "maxItems": 5,
                 "items": { "type": "string" }
               },
               "action_examples": {
                 "type": "array",
                 "description": "原文中面对该对象的具体行为示例。主要角色和重要配角要求至少 3-5 条、场景多样；泛化类型可简要。",
+                "maxItems": 5,
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
@@ -466,7 +467,8 @@
     },
     "relationships": {
       "type": "array",
-      "description": "当前阶段角色对每个重要角色的完整关系状态。",
+      "description": "当前阶段角色对每个重要角色的完整关系状态。不包含边缘的不重要角色。",
+      "maxItems": 10,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -536,7 +538,8 @@
 
     "misunderstandings": {
       "type": "array",
-      "description": "角色在当前阶段持有的误解。角色主观认为是对的，但客观上是错误的认知。",
+      "description": "角色在当前阶段持有的误解。角色主观认为是对的，但客观上是错误的认知。已 resolved 的误解（resolved_at_stage 非空且 ≤ 当前阶段）应移除。",
+      "maxItems": 20,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -563,7 +566,8 @@
     },
     "concealments": {
       "type": "array",
-      "description": "角色在当前阶段主动隐瞒的事情。角色知道真相但选择不说。",
+      "description": "角色在当前阶段主动隐瞒的事情。角色知道真相但选择不说。已 revealed 的隐瞒（revealed_at_stage 非空且 ≤ 当前阶段）应移除。",
+      "maxItems": 20,
       "items": {
         "type": "object",
         "additionalProperties": false,

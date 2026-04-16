@@ -22,7 +22,7 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
                                           │
                                    ┌──────┴──────┐
                                    ▼             ▼
-                              git commit    全量回滚
+                              git commit    失败 lane 独立重试
 ```
 
 每个 stage 的流程：
