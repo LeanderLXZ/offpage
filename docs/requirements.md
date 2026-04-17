@@ -1173,7 +1173,7 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 | 措施 | 目的 | automation 实现 |
 |------|------|----------------|
 | Schema 引用 | 确保字段要求在注意力范围内 | `prompt_builder` 每次构建 prompt 时将 schema 路径列入读取清单 |
-| 架构规则内嵌 | 防止退化为增量模式 | `prompt_templates/character_extraction.md` 内嵌自包含快照规则 |
+| 架构规则内嵌 | 防止退化为增量模式 | `prompt_templates/character_snapshot_extraction.md` + `character_support_extraction.md` 内嵌自包含快照规则 |
 | 前阶段输出参照 | 确保风格和详细度一致 | `prompt_builder` 将前一阶段 snapshot 和 memory_timeline 列为参照文件 |
 | 输出质量检查 | 检测字段粗糙、引用缺失等退化 | `repair_agent`（四层检查 + 四层就地修复，见 §11.4） |
 | 跨阶段上下文传递 | 防止信息断裂 | progress 文件 + 前阶段输出 + schema，全部通过文件系统传递 |

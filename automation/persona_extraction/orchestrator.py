@@ -379,9 +379,11 @@ class ExtractionOrchestrator:
     ) -> bool:
         """Check if extraction output already exists on disk for a stage.
 
-        Returns True if world stage_snapshot AND all target character
-        stage_snapshots exist, indicating the extraction step can be
-        skipped (smart resume).
+        Returns True when **all** three 1+2N outputs are present for the
+        stage: world snapshot, each character snapshot (from char_snapshot
+        process), and each character memory_timeline (from char_support
+        process). Missing any one means extraction is incomplete — skipping
+        to post-processing would silently drop the absent lane.
         """
         work_dir = self.project_root / "works" / self.work_id
         stage_id = stage.stage_id
@@ -392,11 +394,12 @@ class ExtractionOrchestrator:
         if not world_ss.exists():
             return False
 
-        # All target character snapshots must exist
+        # Every character must have both snapshot AND memory_timeline
         for char_id in target_characters:
-            char_ss = (work_dir / "characters" / char_id / "canon"
-                       / "stage_snapshots" / f"{stage_id}.json")
-            if not char_ss.exists():
+            char_canon = work_dir / "characters" / char_id / "canon"
+            char_ss = char_canon / "stage_snapshots" / f"{stage_id}.json"
+            char_tl = char_canon / "memory_timeline" / f"{stage_id}.json"
+            if not char_ss.exists() or not char_tl.exists():
                 return False
 
         return True
@@ -486,6 +489,14 @@ class ExtractionOrchestrator:
         e = _jsonl_stage_entry(
             world_ed, "world_event_digest_entry.schema.json",
             id_fields=("event_id",))
+        if e:
+            files.append(e)
+
+        # World stage catalog (accumulated; schema validates the whole
+        # catalog shape and monotonic ordering across stages)
+        e = _entry(
+            work_dir / "world" / "stage_catalog.json",
+            "world_stage_catalog.schema.json")
         if e:
             files.append(e)
 
@@ -1331,7 +1342,7 @@ class ExtractionOrchestrator:
                 (i for i, b in enumerate(phase3.stages)
                  if b.stage_id == stage.stage_id), 0)
 
-            pp_issues = run_stage_post_processing(
+            pp_errors, pp_warnings = run_stage_post_processing(
                 project_root=self.project_root,
                 work_id=pipeline.work_id,
                 stage_id=stage.stage_id,
@@ -1340,15 +1351,33 @@ class ExtractionOrchestrator:
                 chapter_range=stage.chapters,
             )
 
-            if pp_issues:
-                for issue in pp_issues:
-                    print(f"    [WARN] {issue}")
-                # Post-processing warnings don't block — files may still
-                # be validated by the review lanes below.
+            for w in pp_warnings:
+                print(f"    [WARN] {w}")
+
+            if pp_errors:
+                # Missing or unparsable extraction output — the repair
+                # gate cannot meaningfully inspect absent files, so treat
+                # as stage FAIL → ERROR. Products are preserved on disk
+                # per §11.5 contract; --resume re-attempts the stage.
+                for e in pp_errors:
+                    print(f"    [ERROR] {e}")
+                tracker.record_step(ProgressTracker.STEP_VALIDATION)
+                tracker.print_step_done(
+                    3, 5, "Post-processing",
+                    f"{len(pp_errors)} errors, {len(pp_warnings)} warnings")
+                stage.error_message = (
+                    "post-processing blocked: "
+                    + "; ".join(pp_errors)[:500])
+                stage.transition(StageState.REVIEWING)
+                stage.transition(StageState.FAILED)
+                stage.transition(StageState.ERROR)
+                phase3.save(self.project_root)
+                return
 
             tracker.record_step(ProgressTracker.STEP_VALIDATION)
-            tracker.print_step_done(3, 5, "Post-processing",
-                                    f"{len(pp_issues)} issues")
+            tracker.print_step_done(
+                3, 5, "Post-processing",
+                f"{len(pp_warnings)} warnings")
 
             stage.transition(StageState.REVIEWING)
             phase3.save(self.project_root)
@@ -1391,7 +1420,8 @@ class ExtractionOrchestrator:
                 chapter_summaries_dir=str(
                     work_dir / "analysis" / "chapter_summaries"),
                 chapters_dir=str(
-                    work_dir / "sources" / "chapters"),
+                    self.project_root / "sources" / "works"
+                    / pipeline.work_id / "chapters"),
             )
 
             # LLM callable for semantic checker + T1/T2/T3 fixers
@@ -1428,7 +1458,10 @@ class ExtractionOrchestrator:
                     4, 5, "Repair agent",
                     f"FAIL — {n_errors} errors remaining")
                 print(repair_result.report)
-                rollback_to_head(self.project_root)
+                # Per requirements §11.5: repair FAIL does NOT roll back
+                # extraction output. Artifacts stay on disk for human
+                # inspection; --resume re-runs the repair loop (smart
+                # skip bypasses extraction if files are already present).
                 stage.error_message = repair_result.report
                 stage.transition(StageState.FAILED)
                 stage.transition(StageState.ERROR)

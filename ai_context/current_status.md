@@ -3,7 +3,8 @@
 ## Project Stage
 
 Architecture scaffold done. One work package under automated extraction
-(Phase 2.5 / Phase 3 in progress). No runtime code yet.
+(Phase 2.5 complete; Phase 3 pending — no stages committed yet;
+Phase 4 scene archive independently done). No runtime code yet.
 
 ## What Exists
 
@@ -28,8 +29,8 @@ Architecture scaffold done. One work package under automated extraction
 ### First Work Package
 
 - One Chinese web novel (500+ chapters)
-- Phase 0–1 complete; 2 target characters confirmed; Phase 2.5–3 in
-  progress
+- Phase 0–2.5 complete; 2 target characters confirmed; Phase 3 pending
+  (no stages committed yet); Phase 4 scene archive independently done
 
 ### Automated Extraction Orchestrator
 
@@ -63,7 +64,9 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
 - Baseline recovery tracked via `baseline_done`; Phase 2.5 exit
   validation runs on both fresh and `--resume` paths (re-runs Phase 2.5
   if existing baseline fails validation).
-- Smart resume skips extraction if output already on disk.
+- Smart resume skips extraction only when **all** 1+2N outputs are on
+  disk (world snapshot + each character snapshot + each character
+  memory_timeline); any missing lane re-runs the full extraction.
 - Disk reconcile self-heal on every startup (Phase 0/3/4); Phase 3
   verifies `committed_sha` via `git cat-file -e`.
 - Process guard (PID lock), git preflight, SIGINT/SIGTERM graceful
