@@ -8,7 +8,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 ### work_manifest.schema.json
 
 **用途**：作品入库 manifest。
-**位置**：`works/{work_id}/manifest.json`
+**位置**：`sources/works/{work_id}/manifest.json`
 **关键字段**：work_id, title, language, source_types, ingestion_status
 
 ---
@@ -306,14 +306,19 @@ core_wounds 记录最底层的创伤根源。
 ### StageEntry（Phase 3 阶段状态，序列化到 `phase3_stages.json`）
 
 - `stage_id: str` — 阶段标识
-- `chapters: list[int]` + `chapter_count: int`
-- `state: StageState` — 枚举：PENDING / EXTRACTING / EXTRACTED / POST_PROCESSING / REVIEWING / PASSED / FAILED / ERROR / RETRYING / COMMITTED
-- `retry_count: int` + `max_retries: int = 2` — **阶段级**重试计数（全阶段回滚后重新进入阶段）
-- `lane_retries: dict[str, int]` + `lane_max_retries: int = 2` — **通道级**重试计数；key 由 `review_lanes.lane_key()` 生成（`"world"` / `"character:{id}"`）；仅在 lane 重试路径使用，成功提交或全阶段回滚后清空
+- `chapters: str` + `chapter_count: int` — 章节范围 `"NNNN-NNNN"` 与总数
+- `state: StageState` — 枚举：PENDING / EXTRACTING / EXTRACTED / POST_PROCESSING / REVIEWING / PASSED / FAILED / ERROR / COMMITTED
 - `committed_sha: str` — git commit SHA（仅 COMMITTED 态非空）
-- `error_message: str` — 最近一次错误摘要
-- `fail_source: str` — 失败来源标签（validator / reviewer / gate / commit）
-- `last_reviewer_feedback: str` — 审校反馈（供下次重提取时作为 prompt 上下文）
+- `error_message: str` — 最近一次错误摘要（含 `force_reset_to_pending` 的 reason）
+- `fail_source: str` — 失败来源标签（`programmatic` / `semantic`）
+- `last_reviewer_feedback: str` — 最近一次 repair agent 报告摘要，commit 成功后清空
+- `last_updated: str` — ISO 时间戳，每次转换后更新
 
-向后兼容：旧版 `phase3_stages.json` 反序列化时，`lane_retries` / `lane_max_retries` 自动使用默认值（空 dict / 2）。
+状态转换：由 `_TRANSITIONS` 白名单控制，不允许任意跳转。回到 PENDING 的
+唯一合法路径是 `force_reset_to_pending(reason)`——disk reconcile 与
+resume 自愈流程（EXTRACTING / REVIEWING 中断恢复、ERROR → PENDING 重
+置）走此方法，必须携带原因，便于审计。
+
+`from_dict` 对未识别的字段静默忽略（前向兼容），不会因为运行时版本差异
+导致 progress 文件无法加载。
 

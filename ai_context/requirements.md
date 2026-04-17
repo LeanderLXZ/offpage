@@ -132,18 +132,18 @@ extraction anchor only.
 
 Python orchestrator in `automation/`. Phase 0 parallel summarization
 (`--concurrency`, default 10) → Phase 1 analysis → Phase 2 user confirm
-→ Phase 2.5 baseline production → Phase 3 stage loop (1+N split
-extraction, post-processing, parallel review lanes, commit gate, git
-commit) → Phase 3.5 cross-stage consistency → Phase 4 scene archive
-(independent).
+→ Phase 2.5 baseline production → Phase 3 stage loop (1+2N split
+extraction: 1 world + N char_snapshot + N char_support, post-processing,
+repair agent, git commit) → Phase 3.5 cross-stage
+consistency → Phase 4 scene archive (independent).
 
-**Lane-attributed retry** unifies initial extraction, review, and
-commit-gate failures: a lane fail rolls back only that lane's products
-and re-extracts that lane (shared `lane_max_retries`=2). Gate failures
-cascade by category (`catalog_missing` / `digest_missing` → free PP
-rerun; `snapshot_*` / `lane_review` → lane re-extract; unattributed /
-exhausted → full rollback). Full-stage rollback is last resort
-(≤ `max_retries`=2).
+**Repair agent** (`automation/repair_agent/`) is the unified per-stage
+quality gate: check → fix → verify in one process. Field-level surgical
+patches via json_path (no whole-file rollback). Four-layer checkers
+(L0–L3) × four-tier fixers (T0–T3), orthogonal. Fixers escalate from the
+lowest available tier per issue category. Semantic LLM at most 2 calls
+per file (initial + final verify); total scales with the number of files
+passed in. Repair fail → stage ERROR; `--resume` resets ERROR → PENDING.
 
 Commit-ordering contract: git commit first; only non-empty SHA →
 COMMITTED; empty → FAILED (resume retries). `--end-stage` strict prefix:

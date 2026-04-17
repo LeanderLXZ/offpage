@@ -6,6 +6,12 @@
 the novel, or large artifact directories by default. Do not load `prompts/`
 unless the user asks.
 
+After finishing `ai_context/`, **stop and wait for the next instruction.**
+Do not start modifying code, schemas, prompts, or docs on your own
+initiative — even if you spot something that looks off. Reading
+`ai_context/` is context loading, not a task brief. Only act when the user
+gives an explicit request.
+
 ## Reading Order
 
 1. `conventions.md` ← short, re-read periodically

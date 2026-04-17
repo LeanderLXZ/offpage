@@ -57,8 +57,18 @@ After changes, grep for the old phrasing to catch stale references.
 ## Git
 
 - Do not commit: novels, databases, embeddings, caches, user packages.
-- Extraction runs on a dedicated branch; squash-merge to main when done.
 - Do not amend others' commits.
+- **Default branch is `master`.** Always stay on `master` unless actively
+  running extraction. Checkout extraction branch only when starting or
+  resuming `python -m automation.persona_extraction`. When extraction
+  pauses or finishes, checkout back to `master` immediately.
+- **Code changes go to `master` first.** All modifications to code,
+  schemas, prompts, docs, and `ai_context/` must be committed on
+  `master`, then merged into the extraction branch (`git merge master`
+  from the extraction branch). Never develop directly on the extraction
+  branch.
+- Extraction branch is for extraction data commits only (stage outputs).
+  Squash-merge to `master` when all stages complete.
 
 ## Post-Change Checklist
 

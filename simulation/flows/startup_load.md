@@ -6,7 +6,7 @@ Compile the minimum useful packet for the first reply.
 
 ## Load Order
 
-1. Read `works/{work_id}/manifest.json` if present.
+1. Read `sources/works/{work_id}/manifest.json` if present.
 2. Read `works/{work_id}/indexes/load_profiles.json` if present.
 3. Read `works/{work_id}/world/manifest.json`.
 4. Read selected `world/stage_snapshots/{stage_id}.json`.

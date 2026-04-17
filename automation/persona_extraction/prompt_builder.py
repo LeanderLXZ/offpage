@@ -193,80 +193,7 @@ def build_baseline_prompt(
 
 
 # ---------------------------------------------------------------------------
-# Coordinated extraction prompt (LEGACY — kept for backward compatibility;
-# orchestrator now uses build_world_extraction_prompt + build_character_extraction_prompt)
-# ---------------------------------------------------------------------------
-
-def build_extraction_prompt(
-    project_root: Path,
-    progress: PipelineProgress,
-    stage: StageEntry,
-    *,
-    stages: list[StageEntry] | None = None,
-    reviewer_feedback: str = "",
-) -> str:
-    """Build prompt for coordinated world + character extraction.
-
-    Not invoked by the main extraction orchestrator (which uses 1+N split
-    lanes), but retained as the shared read-list builder for reviewer and
-    targeted-fix prompts.
-    """
-    template = _load_template("coordinated_extraction.md")
-
-    work_id = progress.work_id
-    work_dir = project_root / "works" / work_id
-    source_dir = project_root / "sources" / "works" / work_id
-
-    # Determine previous stage output for style reference
-    prev_stage = _find_previous_committed_stage(stages or [], stage)
-    prev_world_snapshot = ""
-    prev_char_snapshots: dict[str, str] = {}
-    if prev_stage:
-        ws_path = (work_dir / "world" / "stage_snapshots"
-                   / f"{prev_stage.stage_id}.json")
-        if ws_path.exists():
-            prev_world_snapshot = str(ws_path)
-        for char_id in progress.target_characters:
-            cs_path = (work_dir / "characters" / char_id / "canon"
-                       / "stage_snapshots" / f"{prev_stage.stage_id}.json")
-            if cs_path.exists():
-                prev_char_snapshots[char_id] = str(cs_path)
-
-    # Build file read list for the agent
-    files_to_read = _build_read_list(
-        project_root, work_id, progress.target_characters,
-        stage, prev_stage)
-
-    context = {
-        "work_id": work_id,
-        "stage_id": stage.stage_id,
-        "chapters": stage.chapters,
-        "chapter_range": stage.chapters,
-        "target_characters": ", ".join(progress.target_characters),
-        "target_characters_list": json.dumps(
-            progress.target_characters, ensure_ascii=False),
-        "source_dir": str(source_dir),
-        "work_dir": str(work_dir),
-        "schemas_dir": str(project_root / "schemas"),
-        "prev_world_snapshot": prev_world_snapshot,
-        "prev_char_snapshots_json": json.dumps(
-            prev_char_snapshots, ensure_ascii=False),
-        "files_to_read": "\n".join(f"- {f}" for f in files_to_read),
-        "is_first_stage": bool(stages) and stage.stage_id == stages[0].stage_id,
-        "reviewer_feedback": reviewer_feedback,
-        "retry_note": (
-            f"\n\n## 重试注意\n\n"
-            f"上一次提取被 reviewer 打回，具体问题如下：\n\n"
-            f"{reviewer_feedback}\n\n"
-            f"请重点修复以上问题。"
-        ) if reviewer_feedback else "",
-    }
-
-    return _render_template(template, context)
-
-
-# ---------------------------------------------------------------------------
-# 1+N split extraction prompts
+# 1+2N split extraction prompts
 # ---------------------------------------------------------------------------
 
 def build_world_extraction_prompt(
@@ -277,7 +204,7 @@ def build_world_extraction_prompt(
     stages: list[StageEntry] | None = None,
     reviewer_feedback: str = "",
 ) -> str:
-    """Build prompt for world extraction (parallel with characters in 1+N)."""
+    """Build prompt for world extraction (parallel with char lanes in 1+2N)."""
     template = _load_template("world_extraction.md")
 
     work_id = progress.work_id
@@ -319,7 +246,7 @@ def build_world_extraction_prompt(
     return _render_template(template, context)
 
 
-def build_character_extraction_prompt(
+def build_char_snapshot_prompt(
     project_root: Path,
     progress: PipelineProgress,
     stage: StageEntry,
@@ -328,28 +255,31 @@ def build_character_extraction_prompt(
     stages: list[StageEntry] | None = None,
     reviewer_feedback: str = "",
 ) -> str:
-    """Build prompt for single-character extraction (parallel with world)."""
-    template = _load_template("character_extraction.md")
+    """Build prompt for character snapshot extraction (stage_snapshot only).
+
+    This is the heavier of the two character sub-processes. Input includes
+    the previous stage snapshot for delta calculation and style reference.
+    """
+    template = _load_template("character_snapshot_extraction.md")
 
     work_id = progress.work_id
     work_dir = project_root / "works" / work_id
     source_dir = project_root / "sources" / "works" / work_id
-    char_dir = work_dir / "characters" / character_id / "canon"
 
     prev_stage = _find_previous_committed_stage(stages or [], stage)
+    files_to_read = _build_char_snapshot_read_list(
+        project_root, work_id, character_id, stage, prev_stage)
+
+    quality_requirements = _build_quality_requirements(
+        project_root, work_id, progress.target_characters)
+
     prev_char_snapshot = ""
     if prev_stage:
+        char_dir = work_dir / "characters" / character_id / "canon"
         cs_path = (char_dir / "stage_snapshots"
                    / f"{prev_stage.stage_id}.json")
         if cs_path.exists():
             prev_char_snapshot = str(cs_path)
-
-    files_to_read = _build_character_read_list(
-        project_root, work_id, character_id, stage, prev_stage)
-
-    # Build importance-based quality requirements table
-    quality_requirements = _build_quality_requirements(
-        project_root, work_id, progress.target_characters)
 
     context = {
         "work_id": work_id,
@@ -376,177 +306,48 @@ def build_character_extraction_prompt(
     return _render_template(template, context)
 
 
-# ---------------------------------------------------------------------------
-# Reviewer prompt
-# ---------------------------------------------------------------------------
-
-def build_reviewer_prompt(
+def build_char_support_prompt(
     project_root: Path,
     progress: PipelineProgress,
     stage: StageEntry,
-    programmatic_report: str,
+    character_id: str,
     *,
     stages: list[StageEntry] | None = None,
-    lane_type: str = "all",
-    lane_character_id: str | None = None,
+    reviewer_feedback: str = "",
 ) -> str:
-    """Build prompt for semantic review.
+    """Build prompt for character support extraction (memory + baseline).
 
-    Args:
-        lane_type: "world", "character", or "all" (full-stage fallback).
-        lane_character_id: Required when lane_type is "character".
+    Input does NOT include the previous stage snapshot — memory timeline
+    is event-by-event subjective recording, independent of aggregate state.
     """
-    work_id = progress.work_id
-    work_dir = project_root / "works" / work_id
-
-    prev_stage = _find_previous_committed_stage(stages or [], stage)
-
-    # --- Build explicit file list for the lane ---
-    review_files: list[str] = []
-
-    if lane_type in ("world", "all"):
-        review_files.append(
-            f"- `{work_dir / 'world' / 'stage_snapshots' / (stage.stage_id + '.json')}`")
-        if prev_stage:
-            prev_ws = (work_dir / "world" / "stage_snapshots"
-                       / f"{prev_stage.stage_id}.json")
-            if prev_ws.exists():
-                review_files.append(f"- `{prev_ws}` (前阶段对比)")
-
-    char_ids = ([lane_character_id] if lane_type == "character"
-                and lane_character_id
-                else progress.target_characters if lane_type == "all"
-                else [])
-    for char_id in char_ids:
-        char_dir = work_dir / "characters" / char_id / "canon"
-        review_files.append(
-            f"- `{char_dir / 'stage_snapshots' / (stage.stage_id + '.json')}`")
-        review_files.append(
-            f"- `{char_dir / 'memory_timeline' / (stage.stage_id + '.json')}`")
-        if prev_stage:
-            prev_cs = (char_dir / "stage_snapshots"
-                       / f"{prev_stage.stage_id}.json")
-            if prev_cs.exists():
-                review_files.append(f"- `{prev_cs}` (前阶段对比)")
-
-    # World lane also reads all target characters' memory_timeline for
-    # boundary-leakage detection (world stage_events must not carry
-    # character-private events — that's the world reviewer's filter job).
-    if lane_type == "world":
-        for char_id in progress.target_characters:
-            mt_path = (work_dir / "characters" / char_id / "canon"
-                       / "memory_timeline" / f"{stage.stage_id}.json")
-            review_files.append(
-                f"- `{mt_path}` (角色 `{char_id}` 记忆，越界判定依据)")
-
-    # Character lanes also read the world snapshot for cross-consistency
-    if lane_type == "character":
-        ws_path = (work_dir / "world" / "stage_snapshots"
-                   / f"{stage.stage_id}.json")
-        if ws_path.exists():
-            review_files.append(
-                f"- `{ws_path}` (世界快照，交叉一致性参照)")
-
-    # Schema files
-    if lane_type in ("world", "all"):
-        review_files.append(
-            f"- `{project_root / 'schemas' / 'world_stage_snapshot.schema.json'}`")
-    if lane_type in ("character", "all"):
-        review_files.append(
-            f"- `{project_root / 'schemas' / 'stage_snapshot.schema.json'}`")
-        review_files.append(
-            f"- `{project_root / 'schemas' / 'memory_timeline_entry.schema.json'}`")
-
-    # Select appropriate template
-    if lane_type == "world":
-        template = _load_template("semantic_review_world.md")
-    elif lane_type == "character":
-        template = _load_template("semantic_review_character.md")
-    else:
-        template = _load_template("semantic_review.md")
-
-    context = {
-        "work_id": work_id,
-        "stage_id": stage.stage_id,
-        "chapters": stage.chapters,
-        "target_characters": ", ".join(progress.target_characters),
-        "character_id": lane_character_id or "",
-        "prev_stage_id": prev_stage.stage_id if prev_stage else "(无)",
-        "programmatic_report": programmatic_report,
-        "review_files": "\n".join(review_files) if review_files else "(无)",
-    }
-
-    return _render_template(template, context)
-
-
-# ---------------------------------------------------------------------------
-# Targeted fix prompt
-# ---------------------------------------------------------------------------
-
-def build_targeted_fix_prompt(
-    project_root: Path,
-    progress: PipelineProgress,
-    stage: StageEntry,
-    findings: str,
-    *,
-    stages: list[StageEntry] | None = None,
-    lane_type: str = "all",
-    lane_character_id: str | None = None,
-) -> str:
-    """Build prompt for targeted fix of specific reviewer findings.
-
-    Args:
-        lane_type: "world", "character", or "all" (full-stage fallback).
-        lane_character_id: Required when lane_type is "character".
-    """
-    template = _load_template("targeted_fix.md")
+    template = _load_template("character_support_extraction.md")
 
     work_id = progress.work_id
     work_dir = project_root / "works" / work_id
     source_dir = project_root / "sources" / "works" / work_id
 
-    # Collect affected output files — scoped to the lane
-    affected: list[str] = []
-    if lane_type in ("world", "all"):
-        ws = work_dir / "world" / "stage_snapshots" / f"{stage.stage_id}.json"
-        if ws.exists():
-            affected.append(f"- `{ws.relative_to(project_root)}`")
-
-    char_ids = ([lane_character_id] if lane_type == "character"
-                and lane_character_id
-                else progress.target_characters if lane_type == "all"
-                else [])
-    for char_id in char_ids:
-        char_dir = work_dir / "characters" / char_id / "canon"
-        cs = char_dir / "stage_snapshots" / f"{stage.stage_id}.json"
-        if cs.exists():
-            affected.append(f"- `{cs.relative_to(project_root)}`")
-        mt = char_dir / "memory_timeline" / f"{stage.stage_id}.json"
-        if mt.exists():
-            affected.append(f"- `{mt.relative_to(project_root)}`")
-
-    # Evidence: source chapters for this stage
-    evidence: list[str] = []
-    start, end = _parse_chapter_range(stage.chapters)
-    for ch in range(start, end + 1):
-        ch_file = source_dir / "chapters" / f"{ch:04d}.txt"
-        if ch_file.exists():
-            evidence.append(f"- `{ch_file.relative_to(project_root)}`")
-
-    # Only include chapter summary chunks covering this stage's range
-    summaries_dir = work_dir / "analysis" / "chapter_summaries"
-    if summaries_dir.exists():
-        for p in sorted(summaries_dir.glob("chunk_*.json")):
-            if _chunk_covers_range(p, start, end):
-                evidence.append(f"- `{p.relative_to(project_root)}`")
+    prev_stage = _find_previous_committed_stage(stages or [], stage)
+    files_to_read = _build_char_support_read_list(
+        project_root, work_id, character_id, stage, prev_stage)
 
     context = {
         "work_id": work_id,
         "stage_id": stage.stage_id,
         "chapters": stage.chapters,
-        "findings": findings,
-        "affected_files": "\n".join(affected) if affected else "(无)",
-        "evidence_files": "\n".join(evidence) if evidence else "(无)",
+        "chapter_range": stage.chapters,
+        "character_id": character_id,
+        "source_dir": str(source_dir),
+        "work_dir": str(work_dir),
+        "schemas_dir": str(project_root / "schemas"),
+        "files_to_read": "\n".join(f"- {f}" for f in files_to_read),
+        "is_first_stage": bool(stages) and stage.stage_id == stages[0].stage_id,
+        "reviewer_feedback": reviewer_feedback,
+        "retry_note": (
+            f"\n\n## 重试注意\n\n"
+            f"上一次提取被 reviewer 打回，具体问题如下：\n\n"
+            f"{reviewer_feedback}\n\n"
+            f"请重点修复以上问题。"
+        ) if reviewer_feedback else "",
     }
 
     return _render_template(template, context)
@@ -607,37 +408,30 @@ def _build_world_read_list(
     return _deduplicate(files)
 
 
-def _build_character_read_list(
+def _build_char_snapshot_read_list(
     project_root: Path,
     work_id: str,
     character_id: str,
     stage: StageEntry,
     prev_stage: StageEntry | None,
 ) -> list[str]:
-    """Pre-compute file list for single-character extraction (parallel with world)."""
+    """Pre-compute file list for character snapshot extraction.
+
+    Includes previous stage_snapshot (for delta/style), baseline files,
+    and source chapters. Does NOT include memory_timeline.
+    """
     files: list[str] = []
     work_dir = project_root / "works" / work_id
     source_dir = project_root / "sources" / "works" / work_id
     char_dir = work_dir / "characters" / character_id / "canon"
 
-    # Schemas (character extraction only — digest/catalog now programmatic)
-    for schema in ("stage_snapshot.schema.json",
-                   "memory_timeline_entry.schema.json"):
-        files.append(f"schemas/{schema}")
-
-    # NOTE: world snapshot NOT included — character runs parallel with world,
-    # no dependency. Cross-consistency checked by commit gate.
-    # NOTE: baseline_merge.md removed — self-contained snapshot contract
-    # is now embedded in the extraction prompt template.
-    # NOTE: memory_digest.jsonl removed — now programmatically generated.
-    # NOTE: stage_catalog.json removed — now programmatically maintained.
+    files.append("schemas/stage_snapshot.schema.json")
 
     # Character baseline files (identity.json first for alias cross-ref)
     if char_dir.exists():
         identity = char_dir / "identity.json"
         if identity.exists():
             files.append(str(identity.relative_to(project_root)))
-        # Other baseline files (not stage_snapshots/ or memory_timeline/)
         for name in ("voice_rules.json", "behavior_rules.json",
                      "boundaries.json", "failure_modes.json",
                      "manifest.json"):
@@ -645,19 +439,13 @@ def _build_character_read_list(
             if p.exists():
                 files.append(str(p.relative_to(project_root)))
 
-    # Only the most recent stage_snapshot (for delta and style reference)
+    # Previous stage_snapshot for delta calculation and style reference
     if prev_stage and char_dir.exists():
         cs = char_dir / "stage_snapshots" / f"{prev_stage.stage_id}.json"
         if cs.exists():
             files.append(str(cs.relative_to(project_root)))
 
-    # Only the most recent memory_timeline (for continuation)
-    if prev_stage and char_dir.exists():
-        mt = char_dir / "memory_timeline" / f"{prev_stage.stage_id}.json"
-        if mt.exists():
-            files.append(str(mt.relative_to(project_root)))
-
-    # Source chapters for this stage (after baselines so agent knows aliases)
+    # Source chapters
     start, end = _parse_chapter_range(stage.chapters)
     for ch in range(start, end + 1):
         ch_file = source_dir / "chapters" / f"{ch:04d}.txt"
@@ -667,21 +455,68 @@ def _build_character_read_list(
     return _deduplicate(files)
 
 
-def _build_read_list(
+def _build_char_support_read_list(
     project_root: Path,
     work_id: str,
-    character_ids: list[str],
+    character_id: str,
     stage: StageEntry,
     prev_stage: StageEntry | None,
 ) -> list[str]:
-    """Legacy: combined read list for coordinated extraction (kept for
-    backward compatibility with reviewer/targeted-fix prompts)."""
-    # Merge world + all character lists
-    files = _build_world_read_list(
-        project_root, work_id, stage, prev_stage)
-    for char_id in character_ids:
-        files.extend(_build_character_read_list(
-            project_root, work_id, char_id, stage, prev_stage))
+    """Pre-compute file list for character support extraction.
+
+    Includes previous memory_timeline (for continuation), baseline files,
+    and source chapters. Does NOT include stage_snapshot.
+    """
+    files: list[str] = []
+    work_dir = project_root / "works" / work_id
+    source_dir = project_root / "sources" / "works" / work_id
+    char_dir = work_dir / "characters" / character_id / "canon"
+
+    files.append("schemas/memory_timeline_entry.schema.json")
+
+    # Character baseline files (identity.json first for alias cross-ref)
+    if char_dir.exists():
+        identity = char_dir / "identity.json"
+        if identity.exists():
+            files.append(str(identity.relative_to(project_root)))
+        for name in ("voice_rules.json", "behavior_rules.json",
+                     "boundaries.json", "failure_modes.json",
+                     "manifest.json"):
+            p = char_dir / name
+            if p.exists():
+                files.append(str(p.relative_to(project_root)))
+
+    # Previous memory_timeline for continuation
+    if prev_stage and char_dir.exists():
+        mt = char_dir / "memory_timeline" / f"{prev_stage.stage_id}.json"
+        if mt.exists():
+            files.append(str(mt.relative_to(project_root)))
+
+    # Source chapters
+    start, end = _parse_chapter_range(stage.chapters)
+    for ch in range(start, end + 1):
+        ch_file = source_dir / "chapters" / f"{ch:04d}.txt"
+        if ch_file.exists():
+            files.append(str(ch_file.relative_to(project_root)))
+
+    return _deduplicate(files)
+
+
+def _build_character_read_list(
+    project_root: Path,
+    work_id: str,
+    character_id: str,
+    stage: StageEntry,
+    prev_stage: StageEntry | None,
+) -> list[str]:
+    """Legacy: combined read list for single-character extraction.
+
+    Kept for backward compatibility with coordinated extraction prompt.
+    """
+    files = _build_char_snapshot_read_list(
+        project_root, work_id, character_id, stage, prev_stage)
+    files.extend(_build_char_support_read_list(
+        project_root, work_id, character_id, stage, prev_stage))
     return _deduplicate(files)
 
 

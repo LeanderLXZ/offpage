@@ -3,7 +3,8 @@
 ## Project Stage
 
 Architecture scaffold done. One work package under automated extraction
-(Phase 2.5 / Phase 3 in progress). No runtime code yet.
+(Phase 2.5 complete; Phase 3 pending — no stages committed yet;
+Phase 4 scene archive independently done). No runtime code yet.
 
 ## What Exists
 
@@ -28,8 +29,8 @@ Architecture scaffold done. One work package under automated extraction
 ### First Work Package
 
 - One Chinese web novel (500+ chapters)
-- Phase 0–1 complete; 2 target characters confirmed; Phase 2.5–3 in
-  progress
+- Phase 0–2.5 complete; 2 target characters confirmed; Phase 3 pending
+  (no stages committed yet); Phase 4 scene archive independently done
 
 ### Automated Extraction Orchestrator
 
@@ -37,26 +38,18 @@ Python package `automation/persona_extraction` with CLI `persona-extract`.
 Supports Claude CLI and Codex CLI backends. Full pipeline design in
 `architecture.md`. Key features:
 
-- Stage-internal parallelism (1+N LLM calls per stage). Character
-  extraction does not read world snapshot — cross-consistency verified
-  at commit gate. Every stage may correct baselines.
+- Stage-internal parallelism (1+2N LLM calls per stage: 1 world +
+  N char_snapshot + N char_support). Character extraction split into
+  snapshot (stage_snapshot only) and support (memory_timeline + baseline
+  corrections). No inter-process dependency.
 - Programmatic post-processing (0 token, idempotent): generates
   `memory_digest.jsonl`, `world_event_digest.jsonl`, and upserts
   `stage_catalog.json`.
-- Parallel review lanes (world + each character): schema autofix →
-  validate → semantic review → targeted fix.
-- Commit gate — structural + identifier level; warn-only cross-entity
-  reference resolution. Content conflicts = character reviewer's job.
-- **Lane-attributed retry** unified across initial extraction, review,
-  and gate (shared `lane_max_retries`=2). Full-stage rollback is last
-  resort (`max_retries`=2).
-- Gate failure cascade by category: `catalog_missing` /
-  `digest_missing` / `world_event_digest_missing` → free PP rerun;
-  `snapshot_*` / `lane_review` → lane re-extract; else → full rollback.
-  Gate emits hard errors when catalogs / digests are absent (no silent
-  skip).
-- Three-level JSON repair (L1 regex → L2 LLM 600s → L3 full re-run) in
-  Phase 0 and Phase 3.
+- `repair_agent.run()` — unified check (L0–L3) + fix (T0–T3) + verify.
+  Field-level surgical patches. Repair fail → stage ERROR; `--resume`
+  resets to PENDING.
+- Three-level JSON repair (L1 regex → L2 LLM 600s → L3 full re-run)
+  in Phase 0 only.
 - Phase 0 parallel summarization + completion gate blocks Phase 1.
 - Git integration: dedicated branch, per-stage commits, auto-rollback,
   squash-merge to main. Commit-ordering contract prevents fake-committed
@@ -71,7 +64,9 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
 - Baseline recovery tracked via `baseline_done`; Phase 2.5 exit
   validation runs on both fresh and `--resume` paths (re-runs Phase 2.5
   if existing baseline fails validation).
-- Smart resume skips extraction if output already on disk.
+- Smart resume skips extraction only when **all** 1+2N outputs are on
+  disk (world snapshot + each character snapshot + each character
+  memory_timeline); any missing lane re-runs the full extraction.
 - Disk reconcile self-heal on every startup (Phase 0/3/4); Phase 3
   verifies `committed_sha` via `git cat-file -e`.
 - Process guard (PID lock), git preflight, SIGINT/SIGTERM graceful

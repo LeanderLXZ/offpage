@@ -1,6 +1,6 @@
 # 自动化提取编排器
 
-用脚本驱动 Claude Code CLI（或 Codex CLI）自动完成多阶段的 1+N 并行提取（世界 + 角色全并行）。
+用脚本驱动 Claude Code CLI（或 Codex CLI）自动完成多阶段的 1+2N 并行提取（世界 + 角色快照 + 角色支持层全并行）。
 
 ## 架构
 
@@ -10,49 +10,29 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
   ┌─────────────────┼──────────────────┐
   │                 │                  │
   ▼                 ▼                  ▼
-提取 agent     程序化后处理        并行审校通道
-(claude -p)    (digest/catalog     (world + 各角色独立)
+提取 agent     程序化后处理        repair_agent
+(claude -p)    (digest/catalog     (统一检测+修复)
                0 token)            ┌──────────────┐
-                                   │ 校验 → 审校   │
-                                   │ → 修复(可选)  │
+                                   │ L0–L3 检查    │
+                                   │ T0–T3 修复    │
+                                   │ 最终语义验证   │
                                    └──────┬───────┘
                                           ▼
-                                     提交门控
-                                  (程序化, 0 token)
-                                          │
-                                   ┌──────┴──────┐
-                                   ▼             ▼
-                              git commit    失败 lane 独立重试
+                                     git commit
 ```
 
 每个 stage 的流程：
 
 1. Git preflight check（工作区干净、分支正确）
 2. **智能跳过**：若产物已在磁盘（world + 各角色 snapshot），直接跳到 3
-3. 构建 prompt → 运行 1+N 提取 agent（世界 + 各角色全并行，无先后依赖）
-4. **程序化后处理**：L1 JSON 修复 + 生成 memory_digest + 生成 world_event_digest + 更新 stage_catalog
-5. **并行审校通道**（world + 各角色各一条通道）：
-   - 每条通道独立：程序化校验 → 语义审校 → 定点修复（如需）
-   - 通道间并行运行，互不阻塞
-6. **提交门控**（程序化，0 token）：确认全通道 PASS + 交叉一致性检查；
-   失败时按 category 级联恢复（详见 `docs/requirements.md §11.4b 失败处理 B`）
-7. **失败分级**（lane 独立重试优先，全量回滚为最后手段）：
-   - **初次提取阶段（Step 3 的 1+N 并行）某条 lane LLM 报错** → 已成功的
-     lane 产物保留，仅 `rollback_lane_files` 该失败 lane + 消耗一次
-     `lane_retries` + 仅重跑该 lane（不重跑全部 1+N）
-   - 通道内可修复（schema 层或小范围字段错误）→ autofix → 定点修复 → 再审校 → 继续
-   - 通道内不可修复（系统性偏差、修复瀑布走完仍 FAIL）→ **仅该 lane 回滚产物**
-     + 该 lane 单独重提取（≤ `lane_max_retries`=2 次），已通过 lane 保留
-   - 提交门控失败按 category 路由：
-     - `catalog_missing` / `digest_missing` → **post_processing 重跑**（免费）+ 重新过门控
-     - `snapshot_*` / `lane_review` → 仅该 lane 回滚重提取
-       （与审校失败、初次提取共享 `lane_retries` 配额）
-     - 无 lane 归属或配额耗尽 → 全 stage rollback
-   - 任一 lane 耗尽 `lane_max_retries` 仍失败 → **全 stage rollback**
-     + 标记 FAILED → 进入 stage 级重试（≤ `max_retries`=2 次）
-   - **lane 重提取过程本身 LLM 报错**（瞬时 API 错误等）→ 不再立即全 stage
-     rollback，仅清理该 lane 文件，由下一轮 review/gate 通过 `snapshot_missing`
-     类目自然兜底（每次再消耗一格 `lane_retries`）
+3. 构建 prompt → 运行 1+2N 提取 agent（1 world + N char_snapshot + N char_support，全并行无先后依赖）
+4. **程序化后处理**：生成 memory_digest + 生成 world_event_digest + 更新 stage_catalog
+5. **Repair Agent**（统一检测+修复，详见 `docs/requirements.md §11.4`）：
+   - Phase A：四层检查（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
+   - Phase B：修复循环，按 tier 逐层升级（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成）
+   - Phase C：最终语义验证（仅 Phase A 有语义问题时触发）
+   - 安全阀：回归保护、收敛检测、总轮次限制
+   - 全部通过 → git commit；有 error 级别问题未解决 → stage ERROR
 
 ## 依赖
 
@@ -151,8 +131,8 @@ works/{work_id}/analysis/.extraction.lock
 ### 子进程超时
 
 - 提取 agent：3600 秒（60 分钟）超时后自动 kill
-- 审校 agent：600 秒（10 分钟）超时后自动 kill
-- 每个 stage 最多重试 2 次
+- Repair agent LLM 调用：600 秒（10 分钟）超时
+- 修复循环总轮次限制（默认 5 轮），未解决 → stage ERROR
 
 ### 进度监控
 
@@ -169,26 +149,38 @@ works/{work_id}/analysis/.extraction.lock
 automation/
 ├── pyproject.toml
 ├── README.md
-├── prompt_templates/               ← 提取和审校的 prompt 模板
+├── prompt_templates/               ← 提取的 prompt 模板
 │   ├── analysis.md
-│   ├── world_extraction.md         ← 世界层提取（与角色并行）
-│   ├── character_extraction.md     ← 角色层提取（与世界并行）
-│   ├── semantic_review_world.md    ← 世界层语义审校（per-lane）
-│   ├── semantic_review_character.md ← 角色层语义审校（per-lane）
-│   ├── semantic_review.md          ← 统一审校兜底模板
-│   ├── targeted_fix.md             ← 定点修复
-│   ├── coordinated_extraction.md   ← reviewer / targeted-fix 共享的读取清单来源
+│   ├── world_extraction.md              ← 世界层提取
+│   ├── character_snapshot_extraction.md ← 角色快照提取
+│   ├── character_support_extraction.md  ← 角色支持层提取
 │   └── scene_split.md
+├── repair_agent/                   ← 统一检测+修复系统
+│   ├── __init__.py                 ← 公共 API：run(), validate_only()
+│   ├── protocol.py                 ← 数据类：Issue, FileEntry, RepairConfig 等
+│   ├── coordinator.py              ← 三阶段编排：check → fix → verify
+│   ├── tracker.py                  ← 跨轮次 Issue 追踪 + 安全阀
+│   ├── field_patch.py              ← json_path 字段级精确替换
+│   ├── context_retriever.py        ← 原文定位（chapter_summaries → chapters）
+│   ├── checkers/                   ← 四层检查器（L0–L3）
+│   │   ├── json_syntax.py          ← L0：JSON 语法
+│   │   ├── schema.py               ← L1：jsonschema 校验
+│   │   ├── structural.py           ← L2：结构/业务规则
+│   │   └── semantic.py             ← L3：LLM 语义审查
+│   └── fixers/                     ← 四层修复器（T0–T3）
+│       ├── programmatic.py         ← T0：程序化修复（0 token）
+│       ├── local_patch.py          ← T1：局部 LLM 修复
+│       ├── source_patch.py         ← T2：原文辅助 LLM 修复
+│       └── file_regen.py           ← T3：全文件 LLM 重生成
 └── persona_extraction/             ← Python 包
     ├── __init__.py
     ├── cli.py                      ← CLI 入口
     ├── orchestrator.py             ← 主循环
     ├── llm_backend.py              ← Claude/Codex 后端抽象
     ├── progress.py                 ← 进度追踪和状态机
-    ├── validator.py                ← 程序化校验（不花 token）
+    ├── validator.py                ← 程序化校验（Phase 2.5 baseline 校验）
     ├── post_processing.py          ← 程序化后处理（digest/catalog）
-    ├── review_lanes.py             ← 并行审校通道 + 提交门控
-    ├── json_repair.py              ← 三级 JSON 修复（见下）
+    ├── json_repair.py              ← Phase 0 JSON 修复
     ├── prompt_builder.py           ← 上下文感知的 prompt 组装
     ├── consistency_checker.py      ← 跨阶段一致性检查（Phase 3.5）
     ├── git_utils.py                ← Git 安全操作
@@ -212,25 +204,39 @@ pending → extracting → extracted → post_processing → reviewing → passe
               └→ error                                   └→ failed → retrying → extracting
 ```
 
-## JSON 自动修复
+## 检测与修复系统（Repair Agent）
 
-LLM 产出的 JSON 经常有格式问题（内容完整但解析失败）。管线内置三级修复策略，
-在判定失败和重跑之前自动尝试：
+Phase 3 的文件校验和修复由独立的 `repair_agent` 模块负责。
+各 phase 都通过统一接口调用，详见 `docs/requirements.md §11.4`。
 
-| 级别 | 方法 | 成本 | 处理 |
-|------|------|------|------|
-| L1 | 程序化正则 | 0 token | 未转义内部引号、尾部逗号、截断、尾部垃圾 |
-| L2 | LLM 修 JSON（只发坏 JSON，不重读原文，600s） | 少量 token | L1 无法处理的复杂格式问题 |
-| L3 | 完整重跑（最多 1 次） | 全量 token | L1+L2 均失败时自动触发 |
+**四层检查器**（L0–L3，分层依赖）：
 
-L2 超时默认 600s（`repair_timeout` 参数可配置）。
+| 层 | 名称 | 成本 | 检查内容 |
+|---|------|------|---------|
+| L0 | json_syntax | 0 token | 文件存在、UTF-8、JSON 解析、非空 |
+| L1 | schema | 0 token | jsonschema 校验 |
+| L2 | structural | 0 token | 业务规则（ID 格式、样本数、长度、一致性） |
+| L3 | semantic | LLM | 事实准确性、逻辑一致性、跨阶段连续性 |
 
-集成位置：
-- Phase 0：chunk 写后验证先 L1→L2 修复，仍失败则 L3 全量重跑；
-  全部 chunk 完成后门控检查，有缺失阻断 Phase 1
-- Phase 3：`validator.py` 的 `_load_json()` 自动修复 JSON，JSONL 逐行修复
+**四层修复器**（T0–T3，逐层升级）：
 
-代码：`persona_extraction/json_repair.py`
+| 层 | 名称 | 成本 | 修复方式 |
+|---|------|------|---------|
+| T0 | programmatic | 0 token | 正则修 JSON、类型转换、ID 格式、缺失字段 |
+| T1 | local_patch | 少量 token | 字段级 LLM 修复（不读原文） |
+| T2 | source_patch | 中等 token | 字段级 LLM 修复（带原文章节） |
+| T3 | file_regen | 大量 token | 全文件 LLM 重生成（最后手段） |
+
+**三阶段运行**：Phase A 全量检查 → Phase B 修复循环 → Phase C 最终语义验证。
+语义 LLM **每个文件最多调用 2 次**（Phase A 初检 + Phase C 终验，文件级计数），
+修复循环内只用 0-token 的 L0–L2 复检。
+
+代码：`repair_agent/`
+
+### Phase 0 JSON 修复
+
+Phase 0（章节归纳）仍使用 `persona_extraction/json_repair.py` 的三级修复
+（L1 程序化 → L2 LLM → L3 全量重跑）。
 
 ## 断点恢复
 
@@ -256,7 +262,7 @@ L2 超时默认 600s（`repair_timeout` 参数可配置）。
 - **Phase 3 progress 自愈**：若 Phase 2 已完成但 `phase3_stages.json`
   缺失或损坏，从 `stage_plan.json` 重建（全部 stage 标 pending），避免
   落到 fresh-start 路径重新提示选角色 + 覆写 pipeline.json
-- Resume 时自动重置 blocked stage（retry 耗尽的），无需手动编辑 progress
+- Resume 时自动重置 ERROR stage → PENDING，无需手动编辑 progress
 - **Progress 与 `--end-stage` 分离**：progress 始终包含完整 stage plan，
   `--end-stage` 仅控制本次执行范围（同 Phase 4 模式）
 - **`--end-stage` 严格前缀语义**：Phase 3 命中 `--end-stage` 停止时，**不会**

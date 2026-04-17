@@ -53,10 +53,10 @@ constraints beyond what the architecture docs already say.
     boundaries (target 10 ch, min 5, max 15). Stage N cumulative
     through 1..N. `stage_id` is a meaningful Chinese name.
 13. Phase 2.5 produces world foundation + character baselines (skeleton
-    drafts) from full-book context. Phase 3 uses 1+N split extraction
-    per stage; any stage may correct any existing baseline or
-    already-written asset across the whole work package. Targeted
-    supplement only when gaps remain.
+    drafts) from full-book context. Phase 3 uses 1+2N split extraction
+    per stage (1 world + N char_snapshot + N char_support); any stage
+    may correct any existing baseline (via char_support process) or
+    already-written asset across the whole work package.
 14. No per-stage report files; update progress in-place.
 15. `target_voice_map` / `target_behavior_map` use specific character
     names for main / important characters (≥3–5 examples each); generic
@@ -89,15 +89,12 @@ constraints beyond what the architecture docs already say.
     self-contained snapshot contract is embedded directly in the
     prompt; digests / catalog are programmatically maintained by
     `post_processing.py` (0 token, idempotent).
-25. Three-layer quality check per stage: programmatic validation +
-    per-lane semantic review (independent LLM) + commit gate
-    (programmatic cross-consistency). Only semantic errors cause FAIL.
-    Commit gate is **structural + identifier level only** — content-
-    level world-vs-character conflicts belong to the character
-    reviewer, not the gate. Gate emits hard errors when any required
-    catalog / digest file is absent (no silent skip); missing
-    catalog / digest (including `world_event_digest`) route to a free
-    PP rerun. Full retry / cascade model in `architecture.md`.
+25. Quality check per stage via `repair_agent`: four-layer checkers
+    (L0 json_syntax → L1 schema → L2 structural → L3 semantic) ×
+    four-tier fixers (T0 programmatic → T1 local_patch → T2
+    source_patch → T3 file_regen), orthogonal. Field-level surgical
+    patches via json_path. Semantic LLM at most 2 calls per file
+    (initial + final verify); total scales with the number of files. Missing catalog / digest routes to PP rerun.
 26. Extraction runs on a dedicated git branch. Each passing stage
     committed. Rollback = `git reset` to last committed stage. After
     all stages complete, squash-merge to main.
@@ -123,7 +120,7 @@ constraints beyond what the architecture docs already say.
     never in world `stage_events`.
 32. `world_event_digest.summary` = 1:1 copy of the source
     `stage_events` entry (boundary enforced at write time in prompt +
-    world review lane). 5-level importance inferred by keyword
+    repair agent). 5-level importance inferred by keyword
     (trivial / minor / significant / critical / defining), default
     significant.
 33. `memory_digest.summary` = 1:1 copy of the memory_timeline
