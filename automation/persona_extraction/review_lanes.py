@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class LaneResult:
     """Result of a single review lane."""
     lane_id: str          # "world" or character_id
-    lane_type: str        # "world" or "character"
+    lane_type: str        # "world", "char_snapshot", or "char_support"
     passed: bool
     verdict_text: str = ""
     findings: str = ""
@@ -64,7 +64,7 @@ def _attempt_lane_autofix(
                 for d in descs:
                     logger.info("  autofix [world snapshot]: %s", d)
 
-    elif lane_type == "character" and lane_char:
+    elif lane_type == "char_snapshot" and lane_char:
         char_dir = work_dir / "characters" / lane_char / "canon"
 
         # Character stage snapshot
@@ -76,6 +76,9 @@ def _attempt_lane_autofix(
                 any_fixed = True
                 for d in descs:
                     logger.info("  autofix [%s snapshot]: %s", lane_char, d)
+
+    elif lane_type == "char_support" and lane_char:
+        char_dir = work_dir / "characters" / lane_char / "canon"
 
         # Memory timeline
         mem_path = char_dir / "memory_timeline" / f"{stage_id}.json"
@@ -121,14 +124,15 @@ def lane_key(lane_type: str, lane_id: str) -> str:
 
     Format:
       - ``"world"`` for the world lane (there is exactly one)
-      - ``"character:{char_id}"`` for each character lane
+      - ``"char_snapshot:{char_id}"`` for each character snapshot lane
+      - ``"char_support:{char_id}"`` for each character support lane
 
     This matches the keys used by ``StageEntry.lane_retries`` and the
     ``lane_filter`` argument of :func:`run_parallel_review`.
     """
     if lane_type == "world":
         return "world"
-    return f"character:{lane_id}"
+    return f"{lane_type}:{lane_id}"
 
 
 def rollback_lane_files(
@@ -144,8 +148,9 @@ def rollback_lane_files(
     set of files:
 
     - **world lane**: ``world/stage_snapshots/{stage_id}.json``
-    - **character lane**: the character's ``stage_snapshots/{stage_id}.json``
-      and ``memory_timeline/{stage_id}.json``
+    - **char_snapshot lane**: ``characters/{char}/canon/stage_snapshots/{stage_id}.json``
+    - **char_support lane**: ``characters/{char}/canon/memory_timeline/{stage_id}.json``
+      + git-restore any modified baseline files for that character
 
     Cumulative products (``memory_digest.jsonl``, ``world_event_digest.jsonl``,
     ``stage_catalog.json``) are **not** touched here: post-processing is
@@ -156,6 +161,8 @@ def rollback_lane_files(
 
     Returns the list of files that were actually removed (for logging).
     """
+    import subprocess
+
     work_dir = project_root / "works" / work_id
     removed: list[Path] = []
 
@@ -165,14 +172,35 @@ def rollback_lane_files(
         if world_snap.exists():
             world_snap.unlink()
             removed.append(world_snap)
-    elif lane_type == "character" and lane_char:
+    elif lane_type == "char_snapshot" and lane_char:
+        char_snap = (work_dir / "characters" / lane_char / "canon"
+                     / "stage_snapshots" / f"{stage_id}.json")
+        if char_snap.exists():
+            char_snap.unlink()
+            removed.append(char_snap)
+    elif lane_type == "char_support" and lane_char:
+        # Delete memory_timeline for this stage
+        mt = (work_dir / "characters" / lane_char / "canon"
+              / "memory_timeline" / f"{stage_id}.json")
+        if mt.exists():
+            mt.unlink()
+            removed.append(mt)
+        # Restore baseline files via git checkout HEAD
         char_canon = work_dir / "characters" / lane_char / "canon"
-        for rel in (f"stage_snapshots/{stage_id}.json",
-                    f"memory_timeline/{stage_id}.json"):
-            p = char_canon / rel
+        baseline_files = [
+            "identity.json", "voice_rules.json", "behavior_rules.json",
+            "boundaries.json", "failure_modes.json", "manifest.json",
+        ]
+        for name in baseline_files:
+            p = char_canon / name
             if p.exists():
-                p.unlink()
-                removed.append(p)
+                try:
+                    subprocess.run(
+                        ["git", "checkout", "HEAD", "--", str(p)],
+                        cwd=str(project_root),
+                        capture_output=True, timeout=10)
+                except Exception:
+                    pass  # best-effort restore
 
     for p in removed:
         logger.info("  [lane rollback] removed %s", p)
@@ -217,9 +245,10 @@ def run_parallel_review(
     # World lane
     lanes.append(("world", "world"))
 
-    # Character lanes
+    # Character lanes — 2 per character (snapshot + support)
     for char_id in progress.target_characters:
-        lanes.append((char_id, "character"))
+        lanes.append((char_id, "char_snapshot"))
+        lanes.append((char_id, "char_support"))
 
     if lane_filter is not None:
         allowed = set(lane_filter)
@@ -281,9 +310,11 @@ def _execute_single_lane(
     parse_verdict_fn,
     is_fixable_fn,
     run_with_retry_fn,
+    *,
+    max_fix_attempts: int = 2,
 ) -> LaneResult:
-    """Execute a single review lane: validate → review → fix → re-check."""
-    lane_char = lane_id if lane_type == "character" else None
+    """Execute a single review lane: validate → review → fix(×2) → re-check."""
+    lane_char = lane_id if lane_type in ("char_snapshot", "char_support") else None
     lane_label = f"[{lane_type}:{lane_id}]"
 
     # --- Step 1: Programmatic validation ---
@@ -353,7 +384,7 @@ def _execute_single_lane(
             lane_id=lane_id, lane_type=lane_type,
             passed=True, verdict_text=review_result.text)
 
-    # --- Step 3: FAIL — attempt targeted fix if fixable ---
+    # --- Step 3: FAIL — attempt targeted fix (up to max_fix_attempts) ---
     findings = verdict.get("findings", "")
     logger.info("%s Semantic review FAIL: %s", lane_label, findings[:300])
 
@@ -363,62 +394,78 @@ def _execute_single_lane(
             lane_id=lane_id, lane_type=lane_type,
             passed=False, findings=findings)
 
-    logger.info("%s Attempting targeted fix...", lane_label)
-    fix_prompt = build_fix_fn(
-        project_root, progress, stage, findings,
-        lane_type=lane_type, lane_character_id=lane_char)
+    accumulated_findings = findings
+    for fix_attempt in range(1, max_fix_attempts + 1):
+        logger.info("%s Attempting targeted fix %d/%d...",
+                    lane_label, fix_attempt, max_fix_attempts)
+        fix_prompt = build_fix_fn(
+            project_root, progress, stage, accumulated_findings,
+            lane_type=lane_type, lane_character_id=lane_char)
 
-    fix_result = run_with_retry_fn(
-        backend, fix_prompt, timeout_seconds=600)
+        fix_result = run_with_retry_fn(
+            backend, fix_prompt, timeout_seconds=600)
 
-    if not fix_result.success:
-        logger.error("%s Targeted fix failed: %s",
-                     lane_label, fix_result.error)
-        return LaneResult(
-            lane_id=lane_id, lane_type=lane_type,
-            passed=False, error=f"Fix failed: {fix_result.error}")
+        if not fix_result.success:
+            logger.error("%s Targeted fix %d failed: %s",
+                         lane_label, fix_attempt, fix_result.error)
+            return LaneResult(
+                lane_id=lane_id, lane_type=lane_type,
+                passed=False,
+                error=f"Fix {fix_attempt} failed: {fix_result.error}")
 
-    # --- Step 4: Re-validate + re-review after fix ---
-    re_report = validate_fn(
-        project_root, progress.work_id, stage.stage_id,
-        char_ids, lane_type, lane_char)
+        # Re-validate after fix
+        re_report = validate_fn(
+            project_root, progress.work_id, stage.stage_id,
+            char_ids, lane_type, lane_char)
 
-    # Gate: if programmatic validation still fails after fix, don't bother
-    # with semantic review — the fix introduced structural/schema errors.
-    if not re_report.passed:
-        logger.warning("%s Post-fix validation still FAIL: %s",
-                       lane_label, re_report.summary())
-        return LaneResult(
-            lane_id=lane_id, lane_type=lane_type,
-            passed=False,
-            error=f"Post-fix validation failed: {re_report.summary()}")
+        if not re_report.passed:
+            logger.warning("%s Post-fix-%d validation still FAIL: %s",
+                           lane_label, fix_attempt, re_report.summary())
+            # Don't re-review; accumulate and retry fix
+            accumulated_findings = (
+                f"Previous findings:\n{accumulated_findings}\n\n"
+                f"Post-fix validation errors:\n{re_report.summary()}")
+            continue
 
-    re_reviewer_prompt = build_reviewer_fn(
-        project_root, progress, stage, re_report.summary(),
-        lane_type=lane_type, lane_character_id=lane_char)
+        # Re-review after fix
+        re_reviewer_prompt = build_reviewer_fn(
+            project_root, progress, stage, re_report.summary(),
+            lane_type=lane_type, lane_character_id=lane_char)
 
-    re_review = run_with_retry_fn(
-        reviewer_backend, re_reviewer_prompt, timeout_seconds=600)
+        re_review = run_with_retry_fn(
+            reviewer_backend, re_reviewer_prompt, timeout_seconds=600)
 
-    if not re_review.success:
-        logger.error("%s Re-review failed: %s",
-                     lane_label, re_review.error)
-        return LaneResult(
-            lane_id=lane_id, lane_type=lane_type,
-            passed=False, error=f"Re-review error: {re_review.error}")
+        if not re_review.success:
+            logger.error("%s Re-review after fix %d failed: %s",
+                         lane_label, fix_attempt, re_review.error)
+            return LaneResult(
+                lane_id=lane_id, lane_type=lane_type,
+                passed=False,
+                error=f"Re-review error after fix {fix_attempt}: "
+                      f"{re_review.error}")
 
-    re_verdict = parse_verdict_fn(re_review.text)
-    if re_verdict["verdict"] == "PASS":
-        logger.info("%s Fix successful, re-review PASS", lane_label)
-        return LaneResult(
-            lane_id=lane_id, lane_type=lane_type,
-            passed=True, verdict_text=re_review.text)
-    else:
-        logger.info("%s Fix unsuccessful, still FAIL", lane_label)
-        return LaneResult(
-            lane_id=lane_id, lane_type=lane_type,
-            passed=False,
-            findings=re_verdict.get("findings", findings))
+        re_verdict = parse_verdict_fn(re_review.text)
+        if re_verdict["verdict"] == "PASS":
+            logger.info("%s Fix %d successful, re-review PASS",
+                        lane_label, fix_attempt)
+            return LaneResult(
+                lane_id=lane_id, lane_type=lane_type,
+                passed=True, verdict_text=re_review.text)
+
+        # Still FAIL — accumulate findings for next attempt
+        new_findings = re_verdict.get("findings", "")
+        accumulated_findings = (
+            f"Previous findings:\n{accumulated_findings}\n\n"
+            f"After fix attempt {fix_attempt}:\n{new_findings}")
+        logger.info("%s Fix %d unsuccessful, still FAIL",
+                    lane_label, fix_attempt)
+
+    # All fix attempts exhausted
+    logger.info("%s All %d fix attempts exhausted, lane FAIL",
+                lane_label, max_fix_attempts)
+    return LaneResult(
+        lane_id=lane_id, lane_type=lane_type,
+        passed=False, findings=accumulated_findings)
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +479,7 @@ class GateIssue:
     Fields:
         message: human-readable issue text (also what gets printed)
         severity: ``"error"`` (fails the gate) or ``"warning"`` (logged only)
-        lane_type: ``"world"`` or ``"character"`` when the issue is attributable
+        lane_type: ``"world"``, ``"char_snapshot"``, or ``"char_support"`` when the issue is attributable
             to a single lane; ``""`` when it is unattributed (rare — only
             structural failures with no clear owner like ``stage_id`` parse
             failure)
@@ -446,7 +493,7 @@ class GateIssue:
     """
     message: str
     severity: str             # "error" | "warning"
-    lane_type: str = ""       # "world" | "character" | ""
+    lane_type: str = ""       # "world" | "char_snapshot" | "char_support" | ""
     lane_id: str = ""         # "world" | char_id | ""
     category: str = ""
 
@@ -558,34 +605,46 @@ def run_commit_gate(
             ))
 
     for char_id in character_ids:
+        # Check snapshot (owned by char_snapshot lane)
         char_snap_path = (work_dir / "characters" / char_id / "canon"
                           / "stage_snapshots" / f"{stage_id}.json")
         if not char_snap_path.exists():
             issues.append(GateIssue(
                 message=f"角色快照缺失: {char_snap_path}",
                 severity="error",
-                lane_type="character", lane_id=char_id,
+                lane_type="char_snapshot", lane_id=char_id,
                 category="snapshot_missing",
             ))
-            continue
-        try:
-            cs_data = json.loads(
-                char_snap_path.read_text(encoding="utf-8"))
-            cs_stage = cs_data.get("stage_id", "")
-            if cs_stage != stage_id:
+        else:
+            try:
+                cs_data = json.loads(
+                    char_snap_path.read_text(encoding="utf-8"))
+                cs_stage = cs_data.get("stage_id", "")
+                if cs_stage != stage_id:
+                    issues.append(GateIssue(
+                        message=(f"[{char_id}] 角色快照 stage_id 不匹配: "
+                                 f"expected={stage_id}, got={cs_stage}"),
+                        severity="error",
+                        lane_type="char_snapshot", lane_id=char_id,
+                        category="snapshot_stage_id",
+                    ))
+            except (json.JSONDecodeError, ValueError):
                 issues.append(GateIssue(
-                    message=(f"[{char_id}] 角色快照 stage_id 不匹配: "
-                             f"expected={stage_id}, got={cs_stage}"),
+                    message=f"[{char_id}] 角色快照 JSON 解析失败",
                     severity="error",
-                    lane_type="character", lane_id=char_id,
-                    category="snapshot_stage_id",
+                    lane_type="char_snapshot", lane_id=char_id,
+                    category="snapshot_parse",
                 ))
-        except (json.JSONDecodeError, ValueError):
+
+        # Check memory_timeline existence (owned by char_support lane)
+        mt_path = (work_dir / "characters" / char_id / "canon"
+                   / "memory_timeline" / f"{stage_id}.json")
+        if not mt_path.exists():
             issues.append(GateIssue(
-                message=f"[{char_id}] 角色快照 JSON 解析失败",
+                message=f"[{char_id}] memory_timeline 缺失: {mt_path}",
                 severity="error",
-                lane_type="character", lane_id=char_id,
-                category="snapshot_parse",
+                lane_type="char_support", lane_id=char_id,
+                category="snapshot_missing",
             ))
 
     # --- Check 4 + 5 + 5b: programmatically-maintained files ---
@@ -622,30 +681,32 @@ def run_commit_gate(
 
     for char_id in character_ids:
         char_dir = work_dir / "characters" / char_id / "canon"
+        # Catalog is derived from snapshot → route to char_support for PP rerun
         char_catalog = char_dir / "stage_catalog.json"
         if not char_catalog.exists():
             issues.append(GateIssue(
                 message=f"[{char_id}] stage_catalog.json 缺失: {char_catalog}",
                 severity="error",
-                lane_type="character", lane_id=char_id,
+                lane_type="char_support", lane_id=char_id,
                 category="catalog_missing",
             ))
         else:
             _validate_catalog_has_stage(
                 char_catalog, stage_id, issues,
-                label=char_id, lane_type="character", lane_id=char_id)
+                label=char_id, lane_type="char_support", lane_id=char_id)
+        # Digest is derived from memory_timeline → route to char_support
         digest = char_dir / "memory_digest.jsonl"
         if not digest.exists():
             issues.append(GateIssue(
                 message=f"[{char_id}] memory_digest.jsonl 缺失: {digest}",
                 severity="error",
-                lane_type="character", lane_id=char_id,
+                lane_type="char_support", lane_id=char_id,
                 category="digest_missing",
             ))
         else:
             _validate_digest_has_stage(
                 digest, stage_id, issues,
-                label=char_id, lane_type="character", lane_id=char_id)
+                label=char_id, lane_type="char_support", lane_id=char_id)
 
     # --- Check 6: cross-entity reference resolution (warn-only) ---
     if world_snapshot.exists():

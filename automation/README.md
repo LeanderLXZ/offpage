@@ -1,6 +1,6 @@
 # 自动化提取编排器
 
-用脚本驱动 Claude Code CLI（或 Codex CLI）自动完成多阶段的 1+N 并行提取（世界 + 角色全并行）。
+用脚本驱动 Claude Code CLI（或 Codex CLI）自动完成多阶段的 1+2N 并行提取（世界 + 角色快照 + 角色支持层全并行）。
 
 ## 架构
 
@@ -29,24 +29,24 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 
 1. Git preflight check（工作区干净、分支正确）
 2. **智能跳过**：若产物已在磁盘（world + 各角色 snapshot），直接跳到 3
-3. 构建 prompt → 运行 1+N 提取 agent（世界 + 各角色全并行，无先后依赖）
+3. 构建 prompt → 运行 1+2N 提取 agent（1 world + N char_snapshot + N char_support，全并行无先后依赖）
 4. **程序化后处理**：L1 JSON 修复 + 生成 memory_digest + 生成 world_event_digest + 更新 stage_catalog
-5. **并行审校通道**（world + 各角色各一条通道）：
-   - 每条通道独立：程序化校验 → 语义审校 → 定点修复（如需）
-   - 通道间并行运行，互不阻塞
-6. **提交门控**（程序化，0 token）：确认全通道 PASS + 交叉一致性检查；
+5. **并行审校通道**（1+2N：world + char_snapshot×N + char_support×N）：
+   - 每条通道独立：程序化校验 → 语义审校 → 定点修复（×2，如需）
+   - 通道间并行运行，互不阻塞，无交叉实体读取
+6. **提交门控**（程序化，0 token）：确认全通道 PASS + 结构一致性检查；
    失败时按 category 级联恢复（详见 `docs/requirements.md §11.4b 失败处理 B`）
-7. **失败分级**（lane 独立重试优先，全量回滚为最后手段）：
-   - 通道内可修复（schema 层或小范围字段错误）→ autofix → 定点修复 → 再审校 → 继续
+7. **失败分级**（lane 独立重试优先，无全量回滚）：
+   - 通道内可修复（schema 层或小范围字段错误）→ autofix → 定点修复(×2) → 再审校 → 继续
    - 通道内不可修复（系统性偏差、修复瀑布走完仍 FAIL）→ **仅该 lane 回滚产物**
-     + 该 lane 单独重提取（≤ `lane_max_retries`=2 次），已通过 lane 保留
+     + 该 lane 单独重提取（≤ `lane_max_retries`=1 次），已通过 lane 保留
    - 提交门控失败按 category 路由：
      - `catalog_missing` / `digest_missing` → **post_processing 重跑**（免费）+ 重新过门控
      - `snapshot_*` / `lane_review` → 仅该 lane 回滚重提取
        （与审校失败共享 `lane_retries` 配额）
-     - 无 lane 归属或配额耗尽 → 全 stage rollback
-   - 任一 lane 耗尽 `lane_max_retries` 仍失败 → **全 stage rollback**
-     + 标记 FAILED → 进入 stage 级重试（≤ `max_retries`=2 次）
+     - 无 lane 归属或配额耗尽 → stage ERROR
+   - 任一 lane 耗尽 `lane_max_retries` 仍失败 → stage ERROR（无 stage 级重试；
+     `--resume` 重置 ERROR → PENDING）
 
 ## 依赖
 
@@ -146,7 +146,7 @@ works/{work_id}/analysis/.extraction.lock
 
 - 提取 agent：3600 秒（60 分钟）超时后自动 kill
 - 审校 agent：600 秒（10 分钟）超时后自动 kill
-- 每个 stage 最多重试 2 次
+- 无 stage 级自动重试；lane 耗尽 `lane_max_retries` 后 stage → ERROR
 
 ### 进度监控
 
@@ -165,13 +165,17 @@ automation/
 ├── README.md
 ├── prompt_templates/               ← 提取和审校的 prompt 模板
 │   ├── analysis.md
-│   ├── world_extraction.md         ← 世界层提取（与角色并行）
-│   ├── character_extraction.md     ← 角色层提取（与世界并行）
-│   ├── semantic_review_world.md    ← 世界层语义审校（per-lane）
-│   ├── semantic_review_character.md ← 角色层语义审校（per-lane）
-│   ├── semantic_review.md          ← 统一审校兜底模板
-│   ├── targeted_fix.md             ← 定点修复
-│   ├── coordinated_extraction.md   ← reviewer / targeted-fix 共享的读取清单来源
+│   ├── world_extraction.md              ← 世界层提取
+│   ├── character_snapshot_extraction.md ← 角色快照提取（char_snapshot lane）
+│   ├── character_support_extraction.md  ← 角色支持层提取（char_support lane）
+│   ├── character_extraction.md          ← 旧统一角色提取（legacy，保留兼容）
+│   ├── semantic_review_world.md         ← 世界层语义审校
+│   ├── semantic_review_char_snapshot.md ← 角色快照语义审校
+│   ├── semantic_review_char_support.md  ← 角色支持层语义审校
+│   ├── semantic_review_character.md     ← 旧统一角色审校（legacy，保留兼容）
+│   ├── semantic_review.md               ← 统一审校兜底模板
+│   ├── targeted_fix.md                  ← 定点修复
+│   ├── coordinated_extraction.md        ← 旧统一提取（legacy）
 │   └── scene_split.md
 └── persona_extraction/             ← Python 包
     ├── __init__.py
@@ -249,7 +253,7 @@ L2 超时默认 600s（`repair_timeout` 参数可配置）。
 - **Phase 3 progress 自愈**：若 Phase 2 已完成但 `phase3_stages.json`
   缺失或损坏，从 `stage_plan.json` 重建（全部 stage 标 pending），避免
   落到 fresh-start 路径重新提示选角色 + 覆写 pipeline.json
-- Resume 时自动重置 blocked stage（retry 耗尽的），无需手动编辑 progress
+- Resume 时自动重置 ERROR stage → PENDING，无需手动编辑 progress
 - **Progress 与 `--end-stage` 分离**：progress 始终包含完整 stage plan，
   `--end-stage` 仅控制本次执行范围（同 Phase 4 模式）
 - **`--end-stage` 严格前缀语义**：Phase 3 命中 `--end-stage` 停止时，**不会**

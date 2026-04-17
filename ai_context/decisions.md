@@ -53,10 +53,10 @@ constraints beyond what the architecture docs already say.
     boundaries (target 10 ch, min 5, max 15). Stage N cumulative
     through 1..N. `stage_id` is a meaningful Chinese name.
 13. Phase 2.5 produces world foundation + character baselines (skeleton
-    drafts) from full-book context. Phase 3 uses 1+N split extraction
-    per stage; any stage may correct any existing baseline or
-    already-written asset across the whole work package. Targeted
-    supplement only when gaps remain.
+    drafts) from full-book context. Phase 3 uses 1+2N split extraction
+    per stage (1 world + N char_snapshot + N char_support); any stage
+    may correct any existing baseline (via char_support lane) or
+    already-written asset across the whole work package.
 14. No per-stage report files; update progress in-place.
 15. `target_voice_map` / `target_behavior_map` use specific character
     names for main / important characters (≥3–5 examples each); generic

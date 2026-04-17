@@ -132,10 +132,11 @@
 3. **阶段 2.5 — Baseline 产出**：基于全书摘要上下文，产出世界 foundation
    (`world/foundation/foundation.json`) 和已确认角色的 identity baseline
    (`identity.json`, `manifest.json`)。这些是初稿，后续阶段可修正
-4. **阶段 3 — 1+N 分层阶段提取**：逐 stage 读原文，采用 1+N 架构：先一次
-   世界提取，再 N 次角色提取并行。每次调用只传最近一个 snapshot/memory，
-   不传全部历史。首阶段额外创建 `voice_rules.json`、`behavior_rules.json`、
-   `boundaries.json`、`failure_modes.json`。任何阶段可修正任何已写入的 baseline
+4. **阶段 3 — 1+2N 分层阶段提取**：逐 stage 读原文，采用 1+2N 架构：1 次
+   世界提取 + N 次角色快照提取 + N 次角色支撑提取并行。每次调用只传最近
+   一个 snapshot/memory，不传全部历史。首阶段额外创建 `voice_rules.json`、
+   `behavior_rules.json`、`boundaries.json`、`failure_modes.json`。任何阶段
+   可修正任何已写入的 baseline
 5. **阶段 3.5 — 跨阶段一致性检查**：Phase 3 全部 stage 提交后，运行程序化
    跨阶段一致性检查（零 token），可选 LLM 裁定标记项。有 error 时阻断 Phase 4
 6. **阶段 4 — 场景切分**：Phase 3.5 通过后，逐 stage 范围读原文，按自然场景

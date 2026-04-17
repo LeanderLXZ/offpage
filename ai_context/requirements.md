@@ -132,18 +132,18 @@ extraction anchor only.
 
 Python orchestrator in `automation/`. Phase 0 parallel summarization
 (`--concurrency`, default 10) → Phase 1 analysis → Phase 2 user confirm
-→ Phase 2.5 baseline production → Phase 3 stage loop (1+N split
-extraction, post-processing, parallel review lanes, commit gate, git
-commit) → Phase 3.5 cross-stage consistency → Phase 4 scene archive
-(independent).
+→ Phase 2.5 baseline production → Phase 3 stage loop (1+2N split
+extraction: 1 world + N char_snapshot + N char_support, post-processing,
+parallel review lanes, commit gate, git commit) → Phase 3.5 cross-stage
+consistency → Phase 4 scene archive (independent).
 
 **Lane-attributed retry** unifies review and commit-gate failures: a
 lane fail rolls back only that lane's products and re-extracts that
-lane (shared `lane_max_retries`=2). Gate failures
-cascade by category (`catalog_missing` / `digest_missing` → free PP
-rerun; `snapshot_*` / `lane_review` → lane re-extract; unattributed /
-exhausted → full rollback). Full-stage rollback is last resort
-(≤ `max_retries`=2).
+lane (shared `lane_max_retries`=1). Targeted fix ×2 within each lane.
+Gate failures cascade by category (`catalog_missing` / `digest_missing`
+→ free PP rerun; `snapshot_*` / `lane_review` → lane re-extract;
+unattributed / exhausted → stage ERROR). No stage-level retry;
+`--resume` resets ERROR → PENDING.
 
 Commit-ordering contract: git commit first; only non-empty SHA →
 COMMITTED; empty → FAILED (resume retries). `--end-stage` strict prefix:
