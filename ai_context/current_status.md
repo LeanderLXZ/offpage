@@ -37,24 +37,25 @@ Python package `automation/persona_extraction` with CLI `persona-extract`.
 Supports Claude CLI and Codex CLI backends. Full pipeline design in
 `architecture.md`. Key features:
 
-- Stage-internal parallelism (1+N LLM calls per stage). Character
-  extraction does not read world snapshot — cross-consistency verified
-  at commit gate. Every stage may correct baselines.
+- Stage-internal parallelism (1+2N LLM calls per stage: 1 world +
+  N char_snapshot + N char_support). Character extraction split into
+  snapshot (stage_snapshot only) and support (memory_timeline + baseline
+  corrections). No inter-lane dependency; cross-consistency at commit gate.
 - Programmatic post-processing (0 token, idempotent): generates
   `memory_digest.jsonl`, `world_event_digest.jsonl`, and upserts
   `stage_catalog.json`.
-- Parallel review lanes (world + each character): schema autofix →
-  validate → semantic review → targeted fix.
+- Parallel review lanes (1+2N: world + char_snapshot×N + char_support×N):
+  schema autofix → validate → semantic review → targeted fix (×2).
+  No cross-entity reads — each reviewer only sees its own lane.
 - Commit gate — structural + identifier level; warn-only cross-entity
-  reference resolution. Content conflicts = character reviewer's job.
+  reference resolution. Gate issues attributed by lane type.
 - **Lane-attributed retry** across review and gate (shared
-  `lane_max_retries`=2). Full-stage rollback is last resort
-  (`max_retries`=2).
+  `lane_max_retries`=1). No stage-level retry — exhausted quota →
+  ERROR; `--resume` resets to PENDING.
 - Gate failure cascade by category: `catalog_missing` /
   `digest_missing` / `world_event_digest_missing` → free PP rerun;
-  `snapshot_*` / `lane_review` → lane re-extract; else → full rollback.
-  Gate emits hard errors when catalogs / digests are absent (no silent
-  skip).
+  `snapshot_*` / `lane_review` → lane re-extract; unattributed /
+  exhausted → stage ERROR.
 - Three-level JSON repair (L1 regex → L2 LLM 600s → L3 full re-run) in
   Phase 0 and Phase 3.
 - Phase 0 parallel summarization + completion gate blocks Phase 1.

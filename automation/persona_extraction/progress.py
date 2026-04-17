@@ -11,13 +11,13 @@ Progress files live under:
 State machine per stage (Phase 3):
   pending → extracting → extracted → post_processing → reviewing
                 │                                          │
-                └→ error                                   ├→ passed → committed
-                                                           │              │
-                                                           └→ failed ─────┘
-                                                                  └→ retrying → extracting
+                └→ error ← failed                         ├→ passed → committed
+                     │                                     │
+                     └→ pending (--resume)                 └→ failed → error
 
-Targeted fix is handled inside a review lane (validate → review → fix →
-re-verify) and does not surface as a stage-level state.
+No stage-level retry. Targeted fix (×2) is handled inside a review lane
+(validate → review → fix → re-verify) and does not surface as a
+stage-level state.
 """
 
 from __future__ import annotations
@@ -294,25 +294,23 @@ class StageState(str, Enum):
     PASSED = "passed"
     COMMITTED = "committed"
     FAILED = "failed"
-    RETRYING = "retrying"
     ERROR = "error"
 
 
-# Valid transitions
+# Valid transitions — no stage-level retry (RETRYING state removed).
+# ERROR is terminal within a run; --resume resets ERROR → PENDING.
 _TRANSITIONS: dict[StageState, set[StageState]] = {
     StageState.PENDING:          {StageState.EXTRACTING, StageState.EXTRACTED,
                                   StageState.ERROR},
     StageState.EXTRACTING:       {StageState.EXTRACTED, StageState.ERROR},
     StageState.EXTRACTED:        {StageState.POST_PROCESSING,
-                                  StageState.REVIEWING},  # REVIEWING kept for compat
+                                  StageState.REVIEWING},
     StageState.POST_PROCESSING:  {StageState.REVIEWING, StageState.ERROR},
     StageState.REVIEWING:        {StageState.PASSED, StageState.FAILED},
     StageState.PASSED:           {StageState.COMMITTED, StageState.FAILED},
     StageState.COMMITTED:        set(),  # terminal
-    StageState.FAILED:           {StageState.RETRYING},
-    StageState.RETRYING:         {StageState.EXTRACTING, StageState.EXTRACTED,
-                                  StageState.ERROR},
-    StageState.ERROR:            {StageState.EXTRACTING, StageState.PENDING},
+    StageState.FAILED:           {StageState.ERROR},
+    StageState.ERROR:            {StageState.PENDING},  # --resume resets
 }
 
 
@@ -322,8 +320,6 @@ class StageEntry:
     chapters: str               # e.g. "0001-0010"
     chapter_count: int
     state: StageState = StageState.PENDING
-    retry_count: int = 0
-    max_retries: int = 2
     last_reviewer_feedback: str = ""
     committed_sha: str = ""
     last_updated: str = ""
@@ -331,16 +327,14 @@ class StageEntry:
     fail_source: str = ""  # "programmatic" or "semantic" — which check caused FAIL
     # Per-lane retry tracking (lane_key → retry_count). Keys are the lane
     # identifiers used by review_lanes: "world" for the world lane,
-    # "character:{char_id}" for each character lane. Lane retries are
-    # bounded by ``lane_max_retries`` and **shared between review-failure
-    # retries and commit-gate failure cascades** — both consume the same
-    # counter so a stage cannot ping-pong the budget. When any lane
-    # exhausts its quota, the whole stage falls back to full-stage
-    # rollback (see orchestrator._process_stage Step 4-5 and
-    # requirements §11.4b/§11.5). Cleared only after the commit gate
-    # finally PASSes (or on stage-level rollback).
+    # "char_snapshot:{char_id}" / "char_support:{char_id}" for character
+    # sub-lanes. Lane retries are bounded by ``lane_max_retries`` and
+    # **shared between review-failure retries and commit-gate failure
+    # cascades**. When any lane exhausts its quota, the stage transitions
+    # to ERROR and stops (no stage-level retry). Cleared only after the
+    # commit gate finally PASSes.
     lane_retries: dict[str, int] = field(default_factory=dict)
-    lane_max_retries: int = 2
+    lane_max_retries: int = 1
 
     def can_transition(self, target: StageState) -> bool:
         return target in _TRANSITIONS.get(self.state, set())
@@ -360,8 +354,6 @@ class StageEntry:
             "chapters": self.chapters,
             "chapter_count": self.chapter_count,
             "state": self.state.value,
-            "retry_count": self.retry_count,
-            "max_retries": self.max_retries,
             "last_reviewer_feedback": self.last_reviewer_feedback,
             "committed_sha": self.committed_sha,
             "last_updated": self.last_updated,
@@ -378,15 +370,13 @@ class StageEntry:
             chapters=d["chapters"],
             chapter_count=d["chapter_count"],
             state=StageState(d.get("state", "pending")),
-            retry_count=d.get("retry_count", 0),
-            max_retries=d.get("max_retries", 2),
             last_reviewer_feedback=d.get("last_reviewer_feedback", ""),
             committed_sha=d.get("committed_sha", ""),
             last_updated=d.get("last_updated", ""),
             error_message=d.get("error_message", ""),
             fail_source=d.get("fail_source", ""),
             lane_retries=dict(d.get("lane_retries", {})),
-            lane_max_retries=d.get("lane_max_retries", 2),
+            lane_max_retries=d.get("lane_max_retries", 1),
         )
 
 
@@ -405,8 +395,8 @@ class Phase3Progress:
 
         Stages are sequential — stage N+1 depends on stage N's output.
         We scan in order and return the first non-committed stage that is
-        actionable.  If a stage is stuck (failed/error beyond max retries),
-        we return None to block the pipeline rather than skipping ahead.
+        actionable.  If a stage is stuck (ERROR/FAILED), we return None
+        to block the pipeline — no stage-level auto-retry.
         """
         for b in self.stages:
             if b.state == StageState.COMMITTED:
@@ -414,21 +404,15 @@ class Phase3Progress:
             # In-progress states (interrupted run) — resume immediately
             if b.state in (StageState.EXTRACTING, StageState.EXTRACTED,
                            StageState.POST_PROCESSING, StageState.REVIEWING,
-                           StageState.PASSED, StageState.RETRYING):
+                           StageState.PASSED):
                 return b
             # Pending — normal next stage
             if b.state == StageState.PENDING:
                 return b
-            # Failed — retry if allowed, otherwise block
-            if b.state == StageState.FAILED:
-                if b.retry_count < b.max_retries:
-                    return b
-                return None  # blocked — needs manual intervention
-            # Error — retry if allowed, otherwise block
-            if b.state == StageState.ERROR:
-                if b.retry_count < b.max_retries:
-                    return b
-                return None  # blocked — needs manual intervention
+            # Failed / Error — blocked, needs manual intervention
+            # (--resume resets ERROR → PENDING)
+            if b.state in (StageState.FAILED, StageState.ERROR):
+                return None
         return None
 
     def all_committed(self) -> bool:
@@ -531,7 +515,7 @@ class Phase3Progress:
           - state == PENDING:
               * any per-stage artifact present → delete (partial run)
           - state in {EXTRACTING, EXTRACTED, POST_PROCESSING, REVIEWING,
-                      PASSED, RETRYING, FAILED, ERROR}:
+                      PASSED, FAILED, ERROR}:
               * delete any per-stage artifacts, revert to PENDING
 
         Returns counts: {"reverted": N, "purged_files": M, "sha_missing": K}.
@@ -556,7 +540,6 @@ class Phase3Progress:
                         purged_files += 1
                     stage.state = StageState.PENDING
                     stage.committed_sha = ""
-                    stage.retry_count = 0
                     stage.error_message = ""
                     stage.fail_source = ""
                     stage.last_reviewer_feedback = ""
@@ -576,7 +559,6 @@ class Phase3Progress:
                 p.unlink()
                 purged_files += 1
             stage.state = StageState.PENDING
-            stage.retry_count = 0
             stage.error_message = ""
             stage.fail_source = ""
             stage.last_reviewer_feedback = ""

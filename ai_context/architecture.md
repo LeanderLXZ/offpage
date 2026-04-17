@@ -198,53 +198,53 @@ or `codex` call, no shared session memory, file-based context.
   (`identity.json`, `manifest.json` + 4 skeleton baselines) from
   full-book context. Drafts — subsequent stages may correct.
 - **Phase 3 — Coordinated stage extraction** (per-stage loop):
-  1. Extraction: 1+N LLM calls in parallel (world + N characters; no
-     world → character dependency).
+  1. Extraction: 1+2N LLM calls in parallel (1 world + N char_snapshot
+     + N char_support; no inter-lane dependency). Each character is
+     split into two independent processes: **char_snapshot** produces
+     `stage_snapshots/{stage_id}.json`; **char_support** produces
+     `memory_timeline/{stage_id}.json` + baseline corrections.
+     char_support does NOT receive the previous snapshot.
   2. Programmatic post-processing (0 token, idempotent): L1 JSON repair
      + generate `memory_digest.jsonl` + `world_event_digest.jsonl` +
      upsert `stage_catalog.json`. `memory_digest.summary` = 1:1 copy of
      `digest_summary`; `world_event_digest.summary` = 1:1 copy of world
      `stage_events` entry. 5-level importance inferred by keyword. IDs
      use `{TYPE}-S{stage:03d}-{seq:02d}`; stage encoded in ID.
-  3. Parallel review lanes: world + each character independently runs
-     schema autofix → programmatic validate → semantic review →
-     targeted fix via `ThreadPoolExecutor`. Cascade: L0 schema autofix
-     (0 token) → L1 validate → L2/3 targeted LLM fix → lane
-     re-extraction.
+  3. Parallel review lanes (1+2N): world + char_snapshot×N +
+     char_support×N. Each lane independently runs schema autofix →
+     programmatic validate → semantic review → targeted fix (×2) via
+     `ThreadPoolExecutor`. No cross-entity reads — each reviewer only
+     sees its own lane's outputs.
   4. Commit gate (提交门控) — programmatic (0 token), **structural +
      identifier level only**: snapshot existence, `stage_id` alignment,
      catalog / digest coverage; warn-only cross-entity reference
-     resolution (world `relationship_shifts` / `character_status_changes`
-     names should resolve via world cast or active character aliases).
-     Content-level world-vs-character conflicts = character reviewer's
-     job. Memory digest stage parsed from `M-S{stage:03d}-` prefix
-     (schema forbids `stage_id` field on digest entries).
+     resolution. Gate issues attributed to lane types: snapshot checks
+     → `char_snapshot`; memory/digest checks → `char_support`.
   5. Git commit — **commit-ordering contract**: git commit first; only
      non-empty SHA → `COMMITTED`; empty SHA reverts to `FAILED` so
      resume retries.
 
   **Lane-attributed retry** (unified across review and gate): lane FAIL
   → only that lane's products roll back + that lane re-extracts
-  (≤ `lane_max_retries`=2); previously PASSED lanes preserved. After
-  any lane re-extraction, re-run post-processing (idempotent) and
-  re-review **all** lanes (cross-dependency: world reviewer reads
-  character memory_timelines, character reviewers read world snapshot).
-  Gate failures cascade by category:
+  (≤ `lane_max_retries`=1); previously PASSED lanes preserved. After
+  lane re-extraction, re-run post-processing (idempotent) and re-review
+  only the retried lanes (no cross-entity dependency). Gate failures
+  cascade by category:
   - `catalog_missing` / `digest_missing` (in
     `POST_PROCESSING_RECOVERABLE`) → free PP rerun + re-gate
   - `snapshot_*` / `lane_review` → lane re-extract sharing the same
     `lane_retries` quota as review failures
-  - unattributed structural / exhausted quota → full-stage rollback +
-    stage-level retry (≤ `max_retries`=2)
+  - unattributed structural / exhausted quota → stage ERROR (no
+    stage-level retry; `--resume` resets ERROR → PENDING)
 
-  Lane-retry budget shared across review and gate paths; cleared only
-  when gate finally PASSes (pre-gate clearing would let a stage
-  ping-pong the quota).
+  **No stage-level retry**: when any lane exhausts its retry quota, the
+  stage goes to ERROR. `--resume` resets to PENDING for a fresh attempt.
 
-  Every stage may correct any existing baseline. Character extraction
-  does NOT read world snapshot. Extraction prompts do NOT read
-  `baseline_merge.md`, `memory_digest.jsonl`, or `stage_catalog.json` —
-  self-contained snapshot contract embedded in prompt.
+  Every stage may correct any existing baseline (via char_support lane).
+  Character extraction does NOT read world snapshot. Extraction prompts
+  do NOT read `baseline_merge.md`, `memory_digest.jsonl`, or
+  `stage_catalog.json` — self-contained snapshot contract embedded in
+  prompt.
 
 - **Phase 3.5 — Cross-stage consistency**: after all Phase 3 commits, 8
   programmatic checks (0 token): alias consistency, field completeness,

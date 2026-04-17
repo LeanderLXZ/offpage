@@ -13,7 +13,7 @@
 3. 全书分析（Phase 1：身份合并 → 世界观 → 阶段规划 → 候选角色）
 4. 活跃角色确认（Phase 2，用户参与）
 5. Baseline 产出（Phase 2.5，全书视野）
-6. 1+N 分层阶段提取（Phase 3，世界 → 角色并行 + memory_timeline）
+6. 1+2N 分层阶段提取（Phase 3，world + char_snapshot×N + char_support×N 并行）
 7. 跨阶段一致性检查（Phase 3.5）
 8. 场景切分（Phase 4，scene_archive，独立阶段）
 9. 针对性补充提取
@@ -67,7 +67,7 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 ### 4. 活跃角色确认（Phase 2）
 
 - **用户参与**：用户从候选中选择要建包的目标角色
-- 确认后进入 baseline 产出和 1+N 分层提取模式
+- 确认后进入 baseline 产出和 1+2N 分层提取模式
 
 ### 5. Baseline 产出（Phase 2.5）
 
@@ -89,11 +89,16 @@ baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
 （error），voice_rules/behavior_rules/boundaries/failure_modes 为建议
 （warning）。验证失败阻断 Phase 3。
 
-### 6. 1+N 并行阶段提取
+### 6. 1+2N 并行阶段提取
 
-每个阶段 N 采用 1+N 并行架构：世界提取（1 次调用）与各角色提取（N 次调用）**同一 stage 内全并行执行**，无先后依赖。每次调用只传最近一个 stage_snapshot 和 memory_timeline（不传全部历史），减少输入规模。提取超时 3600s。
+每个阶段采用 1+2N 并行架构：世界提取（1 次调用）+ 各角色快照提取（N 次调用）+ 各角色支持层提取（N 次调用），**同一 stage 内全并行执行**，无先后依赖。
 
-#### 6.1 世界信息提取（1 次调用，与角色并行）
+- **char_snapshot** 进程：产出 `stage_snapshots/{stage_id}.json`，接收前一阶段快照作为 delta/风格参照
+- **char_support** 进程：产出 `memory_timeline/{stage_id}.json` + baseline 修正，**不接收**前一阶段快照
+
+每次调用只传最近一个相关产物（不传全部历史），减少输入规模。提取超时 3600s。
+
+#### 6.1 世界信息提取（1 次调用）
 
 每阶段产出或更新（LLM 产出）：
 
@@ -102,7 +107,17 @@ baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
 
 **对应提示词**：`automation/prompt_templates/world_extraction.md`
 
-#### 6.2 角色信息提取（N 次并行调用，与世界并行）
+#### 6.2 角色快照提取（N 次并行调用，char_snapshot lane）
+
+每阶段产出：
+
+- `characters/{character_id}/canon/stage_snapshots/{stage_id}.json` —
+  **自包含快照**，包含该阶段的完整 voice_state、behavior_state、
+  boundary_state、relationships、personality、mood、knowledge
+
+**对应提示词**：`automation/prompt_templates/character_snapshot_extraction.md`
+
+#### 6.3 角色支持层提取（N 次并行调用，char_support lane）
 
 每阶段产出或更新：
 
@@ -116,11 +131,10 @@ baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
 
 **阶段文件**（LLM 产出）：
 
-- `characters/{character_id}/canon/stage_snapshots/{stage_id}.json` —
-  **自包含快照**，包含该阶段的完整 voice_state、behavior_state、
-  boundary_state、relationships、personality、mood、knowledge
 - `characters/{character_id}/canon/memory_timeline/{stage_id}.json` —
   该阶段的角色记忆条目
+
+**对应提示词**：`automation/prompt_templates/character_support_extraction.md`
 
 **程序化维护**（0 token，提取后由 `post_processing.py` 自动生成）：
 
@@ -279,17 +293,17 @@ orchestrator (Python)
     │
     ├── 用户确认 → 交互式选择角色、确认阶段规划、设定提取范围
     │
-    ├── 提取循环 → 每个 stage (1+N 全并行):
+    ├── 提取循环 → 每个 stage (1+2N 全并行):
     │       ├── git preflight
-    │       ├── claude -p ×(1+N) (世界+角色全并行, 3600s)
+    │       ├── claude -p ×(1+2N) (world + char_snapshot×N + char_support×N, 3600s)
     │       ├── 程序化后处理 (digest/catalog, 0 token, idempotent upsert)
-    │       ├── 并行审校通道 (world + 各角色独立):
+    │       ├── 并行审校通道 (world + char_snapshot×N + char_support×N):
     │       │       ├── Level 0 schema autofix (0 token)
     │       │       ├── Level 1 程序化校验 (Python/jsonschema)
-    │       │       ├── claude -p (语义审校, per-lane)
-    │       │       └── [局部问题] → claude -p (定点修复) → 重跑检查
+    │       │       ├── claude -p (语义审校, per-lane, 无交叉实体读取)
+    │       │       └── [局部问题] → claude -p (定点修复 ×2) → 重跑检查
     │       ├── [lane FAIL] → 仅该 lane 回滚产物 + 单独重提取
-    │       │       (≤ lane_max_retries=2, 已通过 lane 保留；
+    │       │       (≤ lane_max_retries=1, 已通过 lane 保留；
     │       │        详见 requirements.md §11.4b)
     │       ├── 提交门控 (程序化跨通道一致性, 0 token)
     │       │       ├── [PASS] → git commit
@@ -298,9 +312,9 @@ orchestrator (Python)
     │       │       ├── [snapshot miss / lane_review miss]
     │       │       │       → 仅该 lane 回滚 + 重提取
     │       │       │       (与审校失败共享 lane_retries 配额)
-    │       │       └── [无法定位 / 配额耗尽] → 全 stage rollback
-    │       └── 全 stage rollback → 整 stage 重试
-    │               (最后手段, ≤ max_retries=2)
+    │       │       └── [无法定位 / 配额耗尽] → stage ERROR
+    │       └── 配额耗尽 → stage ERROR (无 stage 级重试;
+    │               --resume 重置 ERROR → PENDING)
     │
     ├── 跨阶段一致性检查 (Phase 3.5):
     │       ├── 程序化检查 (Python, 0 token)
@@ -312,23 +326,23 @@ orchestrator (Python)
 
 关键设计决策：
 
-- 每个 stage 拆分为 1+N 次独立 `claude -p` 调用（世界 + N 角色），**同一 stage 内全并行**，不共享 session 内存
-- 世界和角色间无执行依赖——角色不读世界快照，客观事实一致性由 commit gate 跨通道检查保证
-- 阶段间上下文通过文件系统传递；只传最近一个 snapshot/memory（不传全部历史）
-- 每个 stage 都可修正和补充 baseline（不限 stage 1）
+- 每个 stage 拆分为 1+2N 次独立 `claude -p` 调用（1 world + N char_snapshot + N char_support），**同一 stage 内全并行**，不共享 session 内存
+- 各 lane 间无执行依赖——角色不读世界快照，客观事实一致性由 commit gate 跨通道检查保证
+- 阶段间上下文通过文件系统传递；char_snapshot 只传最近一个 snapshot；char_support 只传最近一个 memory_timeline（不传全部历史）
+- 每个 stage 都可修正和补充 baseline（通过 char_support lane）
 - 四层质量检查：schema autofix（程序化，0 token）+ 程序化校验（免费）+
-  每通道语义审校（LLM，world + 各角色独立并行）+
-  提交门控（程序化跨通道一致性，0 token）
+  每通道语义审校（LLM，world + char_snapshot×N + char_support×N 独立并行，
+  无交叉实体读取）+ 提交门控（程序化跨通道一致性，0 token）
 - 修复瀑布（Fix Cascade）：Level 0 schema autofix（0 token）→ Level 1
-  程序化校验 → Level 2/3 定点 LLM 修复 → lane 独立重提取。
+  程序化校验 → Level 2/3 定点 LLM 修复（×2 次尝试）→ lane 独立重提取。
   系统性问题（文件缺失/结构错误/理解偏差）→ 仅失败 lane 回滚重提取
 - 提交门控级联（Gate Cascade）：门控产物为 `GateIssue(message, severity,
   lane_type, lane_id, category)`，按 category 路由 —
   `catalog_missing`/`digest_missing` ∈ `POST_PROCESSING_RECOVERABLE` →
   免费 post_processing 重跑 + 重新过门控；`snapshot_*`/`lane_review` →
   仅该 lane 回滚重提取（与审校失败共享 `lane_retries` 配额）；
-  无 lane 归属或配额耗尽 → 全 stage rollback。`lane_retries` 计数器
-  仅在门控最终 PASS 后清零，避免 review/gate 之间反复消耗配额
+  无 lane 归属或配额耗尽 → stage ERROR（无 stage 级重试）。`lane_retries`
+  计数器仅在门控最终 PASS 后清零，避免 review/gate 之间反复消耗配额
 - 提取在独立 git 分支进行，每 stage 单独 commit（精确回滚）；全部完成后
   squash merge 回 main（干净历史），extraction 分支可删除
 - 支持 Claude CLI 和 Codex CLI 两种后端
@@ -338,7 +352,7 @@ orchestrator (Python)
 - PID 锁防止重复运行，启动时检查工作区干净
 - `--background` 模式：后台运行，SSH 断开后存活，日志写入 `extraction.log`
 - `--max-runtime` 总时间限制，到期后在 stage 间优雅停止
-- 子进程硬超时（提取 3600s、审校 600s）+ 每 stage 最多重试 2 次
+- 子进程硬超时（提取 3600s、审校 600s）
 - Token/context limit 与 rate limit 区分：前者不重试（相同 prompt 必定再超限），
   后者递增退避重试
 - Baseline 恢复：resume 时自动检测 Phase 2.5 产出完整性，缺失则补跑

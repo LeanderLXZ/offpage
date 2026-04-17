@@ -128,8 +128,8 @@ def validate_lane(
     """Run programmatic checks scoped to a single review lane.
 
     Args:
-        lane_type: "world", "character", or "all" (full stage).
-        lane_character_id: Required when lane_type is "character".
+        lane_type: "world", "char_snapshot", "char_support", or "all".
+        lane_character_id: Required when lane_type starts with "char_".
     """
     if lane_type == "all":
         return validate_stage(project_root, work_id, stage_id,
@@ -141,11 +141,38 @@ def validate_lane(
 
     if lane_type == "world":
         issues.extend(_check_world(work_dir, stage_id, schema_dir))
-    elif lane_type == "character" and lane_character_id:
-        importance_map = _load_importance_map(project_root, work_id)
-        issues.extend(_check_character(
-            work_dir, lane_character_id, stage_id, schema_dir,
-            importance_map))
+    elif lane_type == "char_snapshot" and lane_character_id:
+        # Snapshot lane: stage_snapshot existence + schema + depth checks
+        char_dir = work_dir / "characters" / lane_character_id / "canon"
+        snapshot_path = char_dir / "stage_snapshots" / f"{stage_id}.json"
+        if not snapshot_path.exists():
+            issues.append(ValidationIssue(
+                "error", str(snapshot_path),
+                f"Character stage snapshot missing for "
+                f"{lane_character_id}"))
+        else:
+            snapshot = _load_json(snapshot_path)
+            if snapshot is not None:
+                issues.extend(_validate_schema(
+                    snapshot,
+                    schema_dir / "stage_snapshot.schema.json",
+                    str(snapshot_path)))
+                importance_map = _load_importance_map(
+                    project_root, work_id)
+                issues.extend(_check_snapshot_depth(
+                    snapshot, str(snapshot_path), importance_map))
+    elif lane_type == "char_support" and lane_character_id:
+        # Support lane: memory_timeline + baselines + manifest
+        char_dir = work_dir / "characters" / lane_character_id / "canon"
+        memory_path = char_dir / "memory_timeline" / f"{stage_id}.json"
+        if not memory_path.exists():
+            issues.append(ValidationIssue(
+                "error", str(memory_path),
+                f"Memory timeline missing for {lane_character_id} "
+                f"stage {stage_id}"))
+        else:
+            issues.extend(
+                _check_memory_timeline(memory_path, schema_dir))
         issues.extend(_check_baselines(
             work_dir, lane_character_id, schema_dir))
         issues.extend(_check_manifest(
