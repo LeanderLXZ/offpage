@@ -51,6 +51,7 @@ class RetryPolicy:
     t1_max: int = 3
     t2_max: int = 3
     t3_max: int = 1
+    t3_max_per_file: int = 1  # global cap per file across entire run
     max_total_rounds: int = 5
 
 
@@ -60,6 +61,7 @@ class RepairConfig:
     max_rounds: int = 5
     block_on: Literal["error", "all"] = "error"
     run_semantic: bool = True
+    l3_gate_enabled: bool = True
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
 
 

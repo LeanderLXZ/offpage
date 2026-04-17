@@ -46,7 +46,10 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
   `memory_digest.jsonl`, `world_event_digest.jsonl`, and upserts
   `stage_catalog.json`.
 - `repair_agent.run()` — unified check (L0–L3) + fix (T0–T3) + verify.
-  Field-level surgical patches. Repair fail → stage ERROR; `--resume`
+  Field-level surgical patches. Phase B embeds an L3 gate that
+  re-checks modified semantic-flagged files mid-loop (closes the
+  window where T3 could claim a false fix). T3 globally capped at 1
+  per file (`t3_max_per_file`). Repair fail → stage ERROR; `--resume`
   resets to PENDING.
 - Three-level JSON repair (L1 regex → L2 LLM 600s → L3 full re-run)
   in Phase 0 only.

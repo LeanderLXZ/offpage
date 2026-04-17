@@ -93,8 +93,16 @@ constraints beyond what the architecture docs already say.
     (L0 json_syntax → L1 schema → L2 structural → L3 semantic) ×
     four-tier fixers (T0 programmatic → T1 local_patch → T2
     source_patch → T3 file_regen), orthogonal. Field-level surgical
-    patches via json_path. Semantic LLM at most 2 calls per file
-    (initial + final verify); total scales with the number of files. Missing catalog / digest routes to PP rerun.
+    patches via json_path. Phase B embeds an **L3 gate** — after the
+    L0–L2 scoped recheck, files modified this round that had Phase A
+    semantic issues get a fresh L3 call whose findings feed the next
+    round's issue queue; this closes the window where T3 could falsely
+    claim to fix a semantic error. T3 is **globally capped** at
+    `t3_max_per_file=1` per file across the whole run (full-file regen
+    is expensive and a second regen rarely helps). Phase C reuses the
+    last gate result when possible, so total semantic cost = 1 per file
+    in Phase A + at most (modified L3 files) × rounds gate calls.
+    Missing catalog / digest routes to PP rerun.
 26. Extraction runs on a dedicated git branch. Each passing stage
     committed. Rollback = `git reset` to last committed stage. After
     all stages complete, squash-merge to main.

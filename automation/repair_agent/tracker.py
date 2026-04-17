@@ -12,6 +12,14 @@ class IssueTracker:
     def __init__(self) -> None:
         self._history: dict[str, list[RepairAttempt]] = {}
         self._prev_fingerprints: dict[str, Issue] = {}
+        # Global per-file tier-usage counters. Currently read by the
+        # coordinator to enforce `RetryPolicy.t3_max_per_file`, but the
+        # shape is general (tier -> count) so other tiers can opt in.
+        self._tier_uses_per_file: dict[str, dict[int, int]] = {}
+        # Ordered log of L3 gate blocking-fingerprint sets, one entry per
+        # gate invocation. Used by is_l3_gate_reemerge() to detect when
+        # semantic issues refuse to converge across consecutive rounds.
+        self._l3_gate_history: list[set[str]] = []
 
     # ------------------------------------------------------------------
     # Round diff
@@ -58,3 +66,36 @@ class IssueTracker:
         prev_fps = {i.fingerprint for i in prev_report.persisting}
         curr_fps = {i.fingerprint for i in curr_report.persisting}
         return prev_fps == curr_fps and len(curr_fps) > 0
+
+    # ------------------------------------------------------------------
+    # Per-file tier usage (T3 global cap enforcement)
+    # ------------------------------------------------------------------
+
+    def record_tier_use_on_file(self, file_path: str, tier: int) -> None:
+        """Increment the tier-use counter for a file."""
+        per_tier = self._tier_uses_per_file.setdefault(file_path, {})
+        per_tier[tier] = per_tier.get(tier, 0) + 1
+
+    def tier_uses_on_file(self, file_path: str, tier: int) -> int:
+        """Return how many times ``tier`` has been applied to this file."""
+        return self._tier_uses_per_file.get(file_path, {}).get(tier, 0)
+
+    # ------------------------------------------------------------------
+    # L3 gate reemergence detection
+    # ------------------------------------------------------------------
+
+    def record_l3_gate(self, fingerprints: set[str]) -> None:
+        """Record the blocking fingerprint set returned by one L3 gate run."""
+        self._l3_gate_history.append(set(fingerprints))
+
+    def is_l3_gate_reemerge(self) -> bool:
+        """True when the two most recent non-empty L3 gate runs match.
+
+        Means fixes changed the data but the LLM keeps flagging the same
+        set of semantic issues — further fixing won't converge.
+        """
+        if len(self._l3_gate_history) < 2:
+            return False
+        last = self._l3_gate_history[-1]
+        prev = self._l3_gate_history[-2]
+        return bool(last) and last == prev

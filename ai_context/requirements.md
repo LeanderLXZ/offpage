@@ -141,9 +141,15 @@ consistency → Phase 4 scene archive (independent).
 quality gate: check → fix → verify in one process. Field-level surgical
 patches via json_path (no whole-file rollback). Four-layer checkers
 (L0–L3) × four-tier fixers (T0–T3), orthogonal. Fixers escalate from the
-lowest available tier per issue category. Semantic LLM at most 2 calls
-per file (initial + final verify); total scales with the number of files
-passed in. Repair fail → stage ERROR; `--resume` resets ERROR → PENDING.
+lowest available tier per issue category. Phase B embeds an **L3 gate**
+that re-runs semantic checking on files modified during the round, so
+false "fixed" claims from T1/T2/T3 get caught before Phase C. T3
+(file_regen) is globally capped at `t3_max_per_file=1` per file across
+the whole run — a second regen rarely helps and is expensive. Phase C
+reuses the last gate result when possible. Semantic LLM cost = 1 call
+per file in Phase A + at most (modified L3 files) × rounds gate calls,
+no extra call at Phase C when the gate ran. Repair fail → stage ERROR;
+`--resume` resets ERROR → PENDING.
 
 Commit-ordering contract: git commit first; only non-empty SHA →
 COMMITTED; empty → FAILED (resume retries). `--end-stage` strict prefix:
