@@ -221,7 +221,9 @@ or `codex` call, no shared session memory, file-based context.
        only, 0 token) after each fix. Safety valves: regression
        protection, convergence detection, total round limit (default 5).
      - Phase C: final semantic verify (if Phase A found semantic
-       issues). Semantic LLM at most 2 calls total.
+       issues). Semantic LLM at most 2 calls **per file** (one in A,
+       at most one in C) — total cost scales with file count, not a
+       flat 2.
      Field-level surgical patching via json_path — no whole-file
      rollback. Checkers and fixers are orthogonal (any L can need any T).
   4. Git commit — **commit-ordering contract**: git commit first; only
@@ -261,9 +263,9 @@ or `codex` call, no shared session memory, file-based context.
 - Smart resume: PENDING stage with extraction output already on disk
   skips LLM extraction, jumps to post-processing.
 - Repair agent: unified check + fix system (`automation/repair_agent/`)
-  replaces per-lane review, commit gate, and fix cascade. Field-level
-  surgical patches instead of whole-file rollback. Phase 4 = programmatic
-  only (no repair agent).
+  — the per-stage quality gate in Phase 3. Field-level surgical patches
+  via json_path (no whole-file rollback). Phase 4 = programmatic only
+  (no repair agent).
 - Dedicated git branch; each passing stage committed; rollback = `git
   reset`; squash-merge to main on completion.
 - Phase 3 and Phase 4 independent PID locks — can run in parallel.
