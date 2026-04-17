@@ -7,13 +7,8 @@ Flow:
        a. Git preflight
        b. World + char_snapshot + char_support extraction (1+2N LLM calls)
        c. Programmatic post-processing (memory_digest + stage_catalog)
-       d. Parallel review lanes (world + char_snapshot×N + char_support×N)
-          · targeted fix ×2 within each lane
-          · lane FAIL → per-lane rollback + lane re-extraction
-            (≤ ``lane_max_retries``=1 per lane), passed lanes preserved
-          · exhausted quota → stage ERROR (no stage-level retry)
-       e. Commit gate (programmatic cross-consistency)
-       f. Git commit
+       d. Repair agent (L0–L3 check → T0–T3 fix loop → final verify)
+       e. Git commit
   3.5 Cross-stage consistency check (programmatic, zero tokens)
   4. Scene archive (per-chapter parallel, programmatic validation only)
 """
@@ -27,7 +22,6 @@ import signal
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +33,6 @@ from .git_utils import (
     rollback_to_head,
     squash_merge_to,
 )
-from .json_repair import try_repair_json_file
 from .llm_backend import LLMBackend, LLMResult, run_with_retry
 from .post_processing import run_stage_post_processing
 from .process_guard import PidLock, fmt_memory, get_rss_mb
@@ -59,21 +52,21 @@ from .prompt_builder import (
     build_baseline_prompt,
     build_char_snapshot_prompt,
     build_char_support_prompt,
-    build_reviewer_prompt,
     build_summarization_prompt,
-    build_targeted_fix_prompt,
     build_world_extraction_prompt,
 )
-from .review_lanes import (
-    POST_PROCESSING_RECOVERABLE,
-    GateIssue,
-    lane_key,
-    rollback_lane_files,
-    run_commit_gate,
-    run_parallel_review,
-)
+from .json_repair import try_repair_json_file
 from .scene_archive import run_scene_archive
-from .validator import validate_baseline, validate_lane
+from .validator import validate_baseline
+from ..repair_agent import (
+    FileEntry as RepairFileEntry,
+    RepairConfig,
+    RepairResult,
+    RetryPolicy,
+    SourceContext,
+    run as run_repair,
+    validate_only as repair_validate_only,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -407,6 +400,76 @@ class ExtractionOrchestrator:
                 return False
 
         return True
+
+    def _collect_stage_files(
+        self,
+        work_dir: Path,
+        stage_id: str,
+        target_characters: list[str],
+    ) -> list[RepairFileEntry]:
+        """Build the file list for repair agent validation."""
+        import json as _json
+        schema_dir = self.project_root / "schemas"
+        files: list[RepairFileEntry] = []
+
+        def _entry(path: Path, schema_name: str) -> RepairFileEntry | None:
+            if not path.exists():
+                return None
+            schema_path = schema_dir / schema_name
+            schema = None
+            if schema_path.exists():
+                try:
+                    schema = _json.loads(
+                        schema_path.read_text(encoding="utf-8"))
+                except (ValueError, OSError):
+                    pass
+            return RepairFileEntry(path=str(path), schema=schema)
+
+        # World stage snapshot
+        world_ss = work_dir / "world" / "stage_snapshots" / f"{stage_id}.json"
+        e = _entry(world_ss, "world_stage_snapshot.schema.json")
+        if e:
+            files.append(e)
+
+        # World event digest
+        world_ed = (work_dir / "world" / "event_digest"
+                    / f"{stage_id}.jsonl")
+        e = _entry(world_ed, "world_event_digest_entry.schema.json")
+        if e:
+            files.append(e)
+
+        for char_id in target_characters:
+            char_dir = work_dir / "characters" / char_id / "canon"
+
+            # Character stage snapshot
+            e = _entry(
+                char_dir / "stage_snapshots" / f"{stage_id}.json",
+                "stage_snapshot.schema.json")
+            if e:
+                files.append(e)
+
+            # Memory timeline
+            e = _entry(
+                char_dir / "memory_timeline" / f"{stage_id}.json",
+                "memory_timeline_entry.schema.json")
+            if e:
+                files.append(e)
+
+            # Memory digest
+            e = _entry(
+                char_dir / "memory_digest" / f"{stage_id}.jsonl",
+                "memory_digest_entry.schema.json")
+            if e:
+                files.append(e)
+
+            # Stage catalog
+            e = _entry(
+                char_dir / "stage_catalog.json",
+                "stage_catalog.schema.json")
+            if e:
+                files.append(e)
+
+        return files
 
     def run_summarization(self) -> Path:
         """Summarize all chapters in chunks, return summaries directory."""
@@ -1238,21 +1301,7 @@ class ExtractionOrchestrator:
             stage.transition(StageState.REVIEWING)
             phase3.save(self.project_root)
 
-        # --- Step 4: Parallel review lanes with lane-independent retry ---
-        #
-        # Retry model (requirements §11.4b + §11.5):
-        #   - Each review lane runs the fix cascade (schema autofix →
-        #     programmatic validation → semantic review → targeted fix ×2).
-        #   - If a lane still FAILs after the cascade, it is retried
-        #     *independently*: only that lane's on-disk products are
-        #     rolled back, only that lane's extraction is re-run, and
-        #     other lanes' PASS results are preserved.
-        #   - Each lane has its own retry counter (lane_max_retries=1).
-        #   - No cross-entity review: each reviewer only reads its own
-        #     lane outputs. After lane re-extraction, only the retried
-        #     lane is re-reviewed (no need to invalidate other lanes).
-        #   - When a lane exhausts its retry quota, the stage transitions
-        #     to ERROR and stops (no stage-level retry).
+        # --- Step 4: Repair agent (check → fix → verify) ---
         if stage.state == StageState.REVIEWING:
             # Safety check: verify extraction output still exists on disk
             work_dir = self.project_root / "works" / pipeline.work_id
@@ -1269,349 +1318,68 @@ class ExtractionOrchestrator:
                 phase3.save(self.project_root)
                 return
 
-            n_lanes = 1 + 2 * len(pipeline.target_characters)
-            lane_results: list = []
+            tracker.start_step()
+            tracker.print_step(4, 5, "Repair agent")
 
-            # Helpers shared by the review-fail and gate-fail recovery
-            # paths. Both consume the same per-lane retry budget
-            # (stage.lane_retries) — see requirements §11.4b 失败处理 B.
-            def _rerun_post_processing() -> None:
-                stage_order = next(
-                    (i for i, b in enumerate(phase3.stages)
-                     if b.stage_id == stage.stage_id), 0)
-                pp_issues = run_stage_post_processing(
-                    project_root=self.project_root,
-                    work_id=pipeline.work_id,
-                    stage_id=stage.stage_id,
-                    stage_order=stage_order,
-                    character_ids=pipeline.target_characters,
-                    chapter_range=stage.chapters,
-                )
-                for issue in pp_issues:
-                    print(f"    [WARN] {issue}")
+            # Build file list for repair agent
+            repair_files = self._collect_stage_files(
+                work_dir, stage.stage_id, pipeline.target_characters)
 
-            def _re_extract_and_post_process(
-                    targets: list[tuple[str, str, str]]) -> bool:
-                """Re-extract the named lanes in parallel, then refresh
-                post-processing. On extraction failure, transitions to
-                ERROR and returns False — caller MUST early-return."""
-                errors: list[str] = []
-                with ThreadPoolExecutor(
-                        max_workers=len(targets)) as executor:
-                    futures = []
-                    for lt, lid, fb in targets:
-                        if lt == "world":
-                            futures.append(
-                                executor.submit(_extract_world, fb))
-                        elif lt == "char_snapshot":
-                            futures.append(
-                                executor.submit(
-                                    _extract_char_snapshot, lid, fb))
-                        elif lt == "char_support":
-                            futures.append(
-                                executor.submit(
-                                    _extract_char_support, lid, fb))
-                    for future in as_completed(futures):
-                        lane_type, lane_id, result = future.result()
-                        if not result.success:
-                            errors.append(
-                                f"{lane_type}:{lane_id}: "
-                                f"{result.error or 'unknown'}")
-                            print(f"    [ERROR] {lane_type}:{lane_id} "
-                                  f"re-extraction failed: {result.error}")
+            # Build source context for T2/T3 fixes
+            source_ctx = SourceContext(
+                work_path=str(work_dir),
+                stage_id=stage.stage_id,
+                chapter_summaries_dir=str(
+                    work_dir / "analysis" / "chapter_summaries"),
+                chapters_dir=str(
+                    work_dir / "sources" / "chapters"),
+            )
 
-                if errors:
-                    print("    [FAIL] Lane re-extraction errors — "
-                          "stage ERROR")
-                    rollback_to_head(self.project_root)
-                    stage.lane_retries = {}
-                    stage.error_message = "; ".join(errors)
-                    stage.transition(StageState.FAILED)
-                    stage.transition(StageState.ERROR)
-                    phase3.save(self.project_root)
-                    return False
+            # LLM callable for semantic checker + T1/T2/T3 fixers
+            def _llm_call(prompt: str, timeout: int = 600) -> str:
+                result = run_with_retry(
+                    self.reviewer_backend or self.backend,
+                    prompt, timeout=timeout)
+                return result.text
 
-                _rerun_post_processing()
-                return True
+            repair_result = run_repair(
+                files=repair_files,
+                config=RepairConfig(
+                    run_semantic=True,
+                    retry_policy=RetryPolicy(),
+                ),
+                source_context=source_ctx,
+                llm_call=_llm_call,
+            )
 
-            def _stage_error(feedback: str) -> None:
-                """Terminal failure — stage goes to ERROR (no stage retry)."""
+            tracker.record_step(ProgressTracker.STEP_REVIEW)
+
+            if repair_result.passed:
+                tracker.print_step_done(
+                    4, 5, "Repair agent", "PASS")
+            else:
+                n_errors = sum(
+                    1 for i in repair_result.issues
+                    if i.severity == "error")
+                tracker.print_step_done(
+                    4, 5, "Repair agent",
+                    f"FAIL — {n_errors} errors remaining")
+                print(repair_result.report)
                 rollback_to_head(self.project_root)
-                stage.last_reviewer_feedback = feedback
-                stage.lane_retries = {}
+                stage.error_message = repair_result.report
                 stage.transition(StageState.FAILED)
                 stage.transition(StageState.ERROR)
                 phase3.save(self.project_root)
-
-            outer_round = 0
-            while True:  # OUTER: review lanes + commit gate
-                outer_round += 1
-
-                # ----- Inner: parallel review with lane-level retry -----
-                # No cross-entity review: after lane re-extraction, only
-                # re-review the retried lanes (others keep their PASS).
-                review_filter: list[str] | None = None  # None = all lanes
-                all_results: dict[str, "LaneResult"] = {}  # lane_key → result
-
-                while True:
-                    tracker.start_step()
-                    n_reviewing = (n_lanes if review_filter is None
-                                   else len(review_filter))
-                    round_label = (
-                        f"Parallel review lanes ({n_reviewing} lanes)"
-                        if review_filter is None
-                        else f"Parallel review lanes "
-                             f"(re-review {n_reviewing} lane(s))"
-                    )
-                    tracker.print_step(4, 6, round_label)
-
-                    new_results = run_parallel_review(
-                        project_root=self.project_root,
-                        progress=pipeline,
-                        stage=stage,
-                        backend=self.backend,
-                        reviewer_backend=self.reviewer_backend,
-                        validate_fn=validate_lane,
-                        build_reviewer_fn=partial(
-                            build_reviewer_prompt, stages=phase3.stages),
-                        build_fix_fn=partial(
-                            build_targeted_fix_prompt, stages=phase3.stages),
-                        parse_verdict_fn=_parse_verdict,
-                        is_fixable_fn=_is_fixable,
-                        run_with_retry_fn=run_with_retry,
-                        lane_filter=review_filter,
-                    )
-
-                    # Merge into all_results
-                    for r in new_results:
-                        lk = lane_key(r.lane_type, r.lane_id)
-                        all_results[lk] = r
-
-                    lane_results = list(all_results.values())
-                    passed_lanes = sum(1 for r in lane_results if r.passed)
-                    failed_lane_results = [
-                        r for r in lane_results if not r.passed]
-                    for r in new_results:
-                        status = "PASS" if r.passed else "FAIL"
-                        detail = (r.error or r.findings[:200]
-                                  if not r.passed else "")
-                        print(f"    [{r.lane_type}:{r.lane_id}] {status}"
-                              f"{' — ' + detail if detail else ''}")
-
-                    if not failed_lane_results:
-                        tracker.record_step(ProgressTracker.STEP_REVIEW)
-                        tracker.print_step_done(
-                            4, 6, "Parallel review lanes",
-                            f"{n_lanes}/{n_lanes} passed")
-                        break  # inner — proceed to gate
-
-                    retriable = []
-                    exhausted = []
-                    for r in failed_lane_results:
-                        lk = lane_key(r.lane_type, r.lane_id)
-                        used = stage.lane_retries.get(lk, 0)
-                        if used < stage.lane_max_retries:
-                            retriable.append(r)
-                        else:
-                            exhausted.append(r)
-
-                    if exhausted:
-                        tracker.print_step_done(
-                            4, 6, "Parallel review lanes",
-                            f"{passed_lanes}/{n_lanes} passed — "
-                            f"lane retries exhausted")
-                        feedback = "\n".join(
-                            f"[{r.lane_type}:{r.lane_id}] "
-                            f"{r.error or r.findings[:500]}"
-                            for r in failed_lane_results)
-                        exhausted_ids = ", ".join(
-                            f"[{r.lane_type}:{r.lane_id}]"
-                            for r in exhausted)
-                        print(f"    [FAIL] Lane retry exhausted for "
-                              f"{exhausted_ids} — stage ERROR")
-                        _stage_error(feedback)
-                        return
-
-                    retry_targets: list[tuple[str, str, str]] = []
-                    retry_lane_keys: list[str] = []
-                    for r in retriable:
-                        lk = lane_key(r.lane_type, r.lane_id)
-                        stage.lane_retries[lk] = (
-                            stage.lane_retries.get(lk, 0) + 1)
-                        feedback = (r.error or r.findings[:2000]
-                                    or "(lane review failed)")
-                        retry_targets.append(
-                            (r.lane_type, r.lane_id, feedback))
-                        retry_lane_keys.append(lk)
-                        rollback_lane_files(
-                            self.project_root, pipeline.work_id,
-                            stage.stage_id, r.lane_type,
-                            (r.lane_id
-                             if r.lane_type.startswith("char_")
-                             else None),
-                        )
-                    phase3.save(self.project_root)
-
-                    tracker.print_step_done(
-                        4, 6, "Parallel review lanes",
-                        f"{passed_lanes}/{n_lanes} passed, "
-                        f"retrying {len(retriable)} lane(s): "
-                        + ", ".join(
-                            f"[{lt}:{lid}]"
-                            for lt, lid, _ in retry_targets))
-
-                    if not _re_extract_and_post_process(retry_targets):
-                        return
-
-                    # Next iteration: only re-review retried lanes
-                    review_filter = retry_lane_keys
-
-                # ----- Step 5: Commit gate (programmatic, 0 token) -----
-                tracker.start_step()
-                gate_label = ("Commit gate" if outer_round == 1
-                              else f"Commit gate (round {outer_round})")
-                tracker.print_step(5, 6, gate_label)
-
-                gate_passed, gate_issues = run_commit_gate(
-                    project_root=self.project_root,
-                    work_id=pipeline.work_id,
-                    stage_id=stage.stage_id,
-                    character_ids=pipeline.target_characters,
-                    lane_results=lane_results,
-                )
-
-                if gate_passed:
-                    tracker.print_step_done(5, 6, gate_label, "PASS")
-                    break  # outer
-
-                # Gate failed → cascade by issue category. See requirements
-                # §11.4b 失败处理 B for the routing table.
-                for issue in gate_issues:
-                    tag = (f"{issue.lane_key_str or '?'}/"
-                           f"{issue.category or '?'}")
-                    print(f"    [GATE] [{tag}] {issue.message}")
-
-                # Warnings are informational ��� only errors drive recovery.
-                gate_errors = [i for i in gate_issues
-                               if i.severity == "error"]
-
-                if any(not i.lane_type for i in gate_errors):
-                    # Unattributable structural failure — no recovery path.
-                    print("    [FAIL] Gate has unattributable issues "
-                          "— stage ERROR")
-                    feedback = "\n".join(
-                        f"[gate/{i.category}] {i.message}"
-                        for i in gate_errors)
-                    _stage_error(feedback)
-                    return
-
-                # Tier 1: post-processing rerun is free (no quota cost).
-                # Try it first when every error is PP-recoverable.
-                if all(i.category in POST_PROCESSING_RECOVERABLE
-                       for i in gate_errors):
-                    print(f"    [GATE] {len(gate_errors)} catalog/digest "
-                          f"issue(s) — rerunning post_processing "
-                          f"(no quota)")
-                    _rerun_post_processing()
-                    gate_passed, gate_issues = run_commit_gate(
-                        project_root=self.project_root,
-                        work_id=pipeline.work_id,
-                        stage_id=stage.stage_id,
-                        character_ids=pipeline.target_characters,
-                        lane_results=lane_results,
-                    )
-                    if gate_passed:
-                        tracker.print_step_done(
-                            5, 6, gate_label, "PASS (after PP rerun)")
-                        break  # outer
-                    for issue in gate_issues:
-                        tag = (f"{issue.lane_key_str or '?'}/"
-                               f"{issue.category or '?'}")
-                        print(f"    [GATE] [{tag}] {issue.message}")
-                    gate_errors = [i for i in gate_issues
-                                   if i.severity == "error"]
-                    if any(not i.lane_type for i in gate_errors):
-                        print("    [FAIL] Gate still has unattributable "
-                              "issues after PP rerun — stage ERROR")
-                        feedback = "\n".join(
-                            f"[gate/{i.category}] {i.message}"
-                            for i in gate_errors)
-                        _stage_error(feedback)
-                        return
-
-                # Tier 2: lane re-extract for attributable failures.
-                # Group errors by lane and consume the shared lane_retries
-                # quota — same budget as review-failure retries.
-                # gate_errors already filters out warnings (built above).
-                by_lane: dict[tuple[str, str], list[GateIssue]] = {}
-                for i in gate_errors:
-                    by_lane.setdefault(
-                        (i.lane_type, i.lane_id), []).append(i)
-
-                gate_retriable: list[tuple[str, str, list[GateIssue]]] = []
-                gate_exhausted: list[tuple[str, str, list[GateIssue]]] = []
-                for (lt, lid), issues in by_lane.items():
-                    lk = lane_key(lt, lid)
-                    used = stage.lane_retries.get(lk, 0)
-                    if used < stage.lane_max_retries:
-                        gate_retriable.append((lt, lid, issues))
-                    else:
-                        gate_exhausted.append((lt, lid, issues))
-
-                if gate_exhausted:
-                    exhausted_ids = ", ".join(
-                        f"[{lt}:{lid}]"
-                        for lt, lid, _ in gate_exhausted)
-                    print(f"    [FAIL] Gate lane retry exhausted for "
-                          f"{exhausted_ids} — stage ERROR")
-                    feedback = "\n".join(
-                        f"[gate/{i.category}] {i.message}"
-                        for i in gate_errors)
-                    _stage_error(feedback)
-                    return
-
-                gate_retry_targets: list[tuple[str, str, str]] = []
-                for lt, lid, issues in gate_retriable:
-                    lk = lane_key(lt, lid)
-                    stage.lane_retries[lk] = (
-                        stage.lane_retries.get(lk, 0) + 1)
-                    feedback = "\n".join(
-                        f"[gate/{i.category}] {i.message}"
-                        for i in issues)
-                    gate_retry_targets.append((lt, lid, feedback))
-                    rollback_lane_files(
-                        self.project_root, pipeline.work_id,
-                        stage.stage_id, lt,
-                        lid if lt.startswith("char_") else None,
-                    )
-                phase3.save(self.project_root)
-
-                tracker.print_step_done(
-                    5, 6, gate_label,
-                    f"FAIL — re-extracting "
-                    f"{len(gate_retry_targets)} lane(s): "
-                    + ", ".join(
-                        f"[{lt}:{lid}]"
-                        for lt, lid, _ in gate_retry_targets))
-
-                if not _re_extract_and_post_process(gate_retry_targets):
-                    return
-                # Loop back: outer while → re-run all review lanes + gate.
-
-            # Outer loop exited via break (gate PASS).
-            if stage.lane_retries:
-                print(f"    [INFO] Lane retries used: "
-                      f"{dict(stage.lane_retries)}")
-                stage.lane_retries = {}
-                phase3.save(self.project_root)
+                return
 
             stage.transition(StageState.PASSED)
             phase3.save(self.project_root)
 
-        # --- Step 6: Git commit ---
+
+        # --- Step 5: Git commit ---
         if stage.state == StageState.PASSED:
             tracker.start_step()
-            tracker.print_step(6, 6, "Git commit")
+            tracker.print_step(5, 5, "Git commit")
 
             # Attempt the git commit first. Only after a real SHA comes back
             # do we transition to COMMITTED. If commit_stage returns None
@@ -1630,7 +1398,7 @@ class ExtractionOrchestrator:
                     "git commit produced no object — aborting COMMITTED "
                     "transition")
                 phase3.save(self.project_root)
-                tracker.print_step_done(6, 6, "Git commit", "no-op/failed")
+                tracker.print_step_done(5, 5, "Git commit", "no-op/failed")
                 return
 
             # Commit succeeded — now transition state and clear feedback.
@@ -1641,7 +1409,7 @@ class ExtractionOrchestrator:
             stage.transition(StageState.COMMITTED)
             phase3.save(self.project_root)
 
-            tracker.print_step_done(6, 6, "Git commit", sha)
+            tracker.print_step_done(5, 5, "Git commit", sha)
             tracker.finish_stage()
 
     def _run_consistency_check(self) -> bool:
@@ -1882,77 +1650,6 @@ class ExtractionOrchestrator:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _parse_verdict(text: str) -> dict[str, str]:
-    """Extract PASS/FAIL verdict from reviewer output."""
-    verdict = "UNKNOWN"
-    findings = ""
-
-    for line in text.split("\n"):
-        stripped = line.strip().upper()
-        if stripped.startswith("VERDICT:"):
-            v = stripped.replace("VERDICT:", "").strip()
-            if "PASS" in v:
-                verdict = "PASS"
-            elif "FAIL" in v:
-                verdict = "FAIL"
-
-    # Extract findings section
-    in_findings = False
-    finding_lines: list[str] = []
-    for line in text.split("\n"):
-        if line.strip().upper().startswith("FINDINGS:"):
-            in_findings = True
-            continue
-        if in_findings:
-            if line.strip().upper().startswith(
-                    ("STYLE_CONSISTENCY:", "SUMMARY:", "VERDICT:")):
-                break
-            finding_lines.append(line)
-
-    findings = "\n".join(finding_lines).strip()
-
-    return {"verdict": verdict, "findings": findings}
-
-
-def _is_fixable(verdict: dict[str, str]) -> bool:
-    """Determine if reviewer findings are fixable with targeted edits.
-
-    Fixable: all error-level findings point to specific fields/values.
-    Systemic (not fixable): file missing, large sections empty, structural
-    errors, or understanding-level mistakes.
-    """
-    findings = verdict.get("findings", "")
-    if not findings:
-        return False
-
-    # Systemic signals — these require full re-extraction
-    systemic_signals = [
-        "文件缺失", "file missing", "file not found",
-        "整体", "全部为空", "completely empty",
-        "结构错误", "structural error", "schema",
-        "理解偏差", "方向错误", "misunderstand",
-        "大段缺失", "大量缺失", "missing entire",
-        "voice_map 为空", "behavior_state 为空",
-        "未生成", "not generated", "not produced",
-    ]
-    lower = findings.lower()
-    for signal in systemic_signals:
-        if signal.lower() in lower:
-            return False
-
-    # Count error-level findings
-    error_count = 0
-    for line in findings.split("\n"):
-        if "severity: error" in line.lower():
-            error_count += 1
-
-    # Too many errors → systemic, not worth patching
-    if error_count > 5:
-        return False
-
-    return True
-
 
 def _check_stage_plan_limits(
     stage_plan: dict[str, Any],

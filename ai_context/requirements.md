@@ -137,13 +137,12 @@ extraction: 1 world + N char_snapshot + N char_support, post-processing,
 parallel review lanes, commit gate, git commit) → Phase 3.5 cross-stage
 consistency → Phase 4 scene archive (independent).
 
-**Lane-attributed retry** unifies review and commit-gate failures: a
-lane fail rolls back only that lane's products and re-extracts that
-lane (shared `lane_max_retries`=1). Targeted fix ×2 within each lane.
-Gate failures cascade by category (`catalog_missing` / `digest_missing`
-→ free PP rerun; `snapshot_*` / `lane_review` → lane re-extract;
-unattributed / exhausted → stage ERROR). No stage-level retry;
-`--resume` resets ERROR → PENDING.
+**Repair agent** (`automation/repair_agent/`) replaces per-lane review,
+commit gate, and fix cascade. Field-level surgical patches via json_path
+(no whole-file rollback). Four-layer checkers (L0–L3) × four-tier fixers
+(T0–T3), orthogonal. Fixers escalate from lowest available tier per
+issue category. Semantic LLM at most 2 calls (initial + final verify).
+Repair fail → stage ERROR; `--resume` resets ERROR → PENDING.
 
 Commit-ordering contract: git commit first; only non-empty SHA →
 COMMITTED; empty → FAILED (resume retries). `--end-stage` strict prefix:

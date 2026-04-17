@@ -146,7 +146,7 @@ baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
 - `world/world_event_digest.jsonl` — 从世界 snapshot `stage_events` 自动累积
   （ID 格式 `E-S###-##`，`summary` 即 `stage_events` 原文 1:1 复制，
   importance 按关键词推断）。世界/角色层边界的判定在落笔时完成
-  （LLM 写入 `stage_events` 时自控 + 世界审校通道读取角色 memory_timeline 反查泄漏），
+  （LLM 写入 `stage_events` 时自控 + repair agent 语义检查层可检测泄漏），
   digest 本身不做过滤。
 
 **自包含快照的生成规则**：
@@ -297,24 +297,12 @@ orchestrator (Python)
     │       ├── git preflight
     │       ├── claude -p ×(1+2N) (world + char_snapshot×N + char_support×N, 3600s)
     │       ├── 程序化后处理 (digest/catalog, 0 token, idempotent upsert)
-    │       ├── 并行审校通道 (world + char_snapshot×N + char_support×N):
-    │       │       ├── Level 0 schema autofix (0 token)
-    │       │       ├── Level 1 程序化校验 (Python/jsonschema)
-    │       │       ├── claude -p (语义审校, per-lane, 无交叉实体读取)
-    │       │       └── [局部问题] → claude -p (定点修复 ×2) → 重跑检查
-    │       ├── [lane FAIL] → 仅该 lane 回滚产物 + 单独重提取
-    │       │       (≤ lane_max_retries=1, 已通过 lane 保留；
-    │       │        详见 requirements.md §11.4b)
-    │       ├── 提交门控 (程序化跨通道一致性, 0 token)
-    │       │       ├── [PASS] → git commit
-    │       │       ├── [catalog/digest miss] → post_processing 重跑
-    │       │       │       + 重新过门控 (免费, 不消耗 lane_retries)
-    │       │       ├── [snapshot miss / lane_review miss]
-    │       │       │       → 仅该 lane 回滚 + 重提取
-    │       │       │       (与审校失败共享 lane_retries 配额)
-    │       │       └── [无法定位 / 配额耗尽] → stage ERROR
-    │       └── 配额耗尽 → stage ERROR (无 stage 级重试;
-    │               --resume 重置 ERROR → PENDING)
+    │       ├── repair_agent.run() (统一检测+修复):
+    │       │       ├── Phase A: L0–L3 全量检查
+    │       │       ├── Phase B: 修复循环 (T0→T1→T2→T3 逐层升级)
+    │       │       └── Phase C: 最终语义验证
+    │       ├── [PASS] → git commit
+    │       └── [FAIL] → stage ERROR (--resume 重置 → PENDING)
     │
     ├── 跨阶段一致性检查 (Phase 3.5):
     │       ├── 程序化检查 (Python, 0 token)
@@ -327,25 +315,17 @@ orchestrator (Python)
 关键设计决策：
 
 - 每个 stage 拆分为 1+2N 次独立 `claude -p` 调用（1 world + N char_snapshot + N char_support），**同一 stage 内全并行**，不共享 session 内存
-- 各 lane 间无执行依赖——角色不读世界快照，客观事实一致性由 commit gate 跨通道检查保证
 - 阶段间上下文通过文件系统传递；char_snapshot 只传最近一个 snapshot；char_support 只传最近一个 memory_timeline（不传全部历史）
-- 每个 stage 都可修正和补充 baseline（通过 char_support lane）
-- 四层质量检查：schema autofix（程序化，0 token）+ 程序化校验（免费）+
-  每通道语义审校（LLM，world + char_snapshot×N + char_support×N 独立并行，
-  无交叉实体读取）+ 提交门控（程序化跨通道一致性，0 token）
-- 修复瀑布（Fix Cascade）：Level 0 schema autofix（0 token）→ Level 1
-  程序化校验 → Level 2/3 定点 LLM 修复（×2 次尝试）→ lane 独立重提取。
-  系统性问题（文件缺失/结构错误/理解偏差）→ 仅失败 lane 回滚重提取
-- 提交门控级联（Gate Cascade）：门控产物为 `GateIssue(message, severity,
-  lane_type, lane_id, category)`，仅 error 级别驱动恢复级联（warning 仅记录
-  日志、不消耗 retry 预算）。按 category 路由 —
-  `catalog_missing`/`digest_missing`/`world_event_digest_missing` ∈
-  `POST_PROCESSING_RECOVERABLE` → 免费 post_processing 重跑 + 重新过门控
-  （含 world_event_digest 条目数 ≠ stage_events 数的 1:1 不一致）；
-  `snapshot_*`/`lane_review` → 仅该 lane 回滚重提取（与审校失败共享
-  `lane_retries` 配额）；无 lane 归属或配额耗尽 → stage ERROR（无 stage 级
-  重试）。`lane_retries` 计数器仅在门控最终 PASS 后清零，避免 review/gate
-  之间反复消耗配额
+- 每个 stage 都可修正和补充 baseline（通过 char_support 提取）
+- **Repair Agent（统一检测+修复）**：独立模块 `automation/repair_agent/`，
+  各 phase 通过统一接口调用。四层检查器（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
+  与四层修复器（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成）**正交**——
+  任何层的 issue 都可能需要任何 tier 的修复。修复从最低可用 tier 开始逐层升级，
+  每个 tier 有独立重试次数（T0=1, T1=3, T2=3, T3=1）。
+  语义 LLM 最多调用 2 次（Phase A 初检 + Phase C 终验），修复循环内只用 0-token L0–L2 复检。
+  字段级精确修补（json_path 定位），不整文件回滚。
+  安全阀：回归保护（introduced ≥ resolved → 停机）、收敛检测（持续集不变 → 升级）、
+  总轮次限制（默认 5 轮）
 - 提取在独立 git 分支进行，每 stage 单独 commit（精确回滚）；全部完成后
   squash merge 回 main（干净历史），extraction 分支可删除
 - 支持 Claude CLI 和 Codex CLI 两种后端
@@ -355,7 +335,7 @@ orchestrator (Python)
 - PID 锁防止重复运行，启动时检查工作区干净
 - `--background` 模式：后台运行，SSH 断开后存活，日志写入 `extraction.log`
 - `--max-runtime` 总时间限制，到期后在 stage 间优雅停止
-- 子进程硬超时（提取 3600s、审校 600s）
+- 子进程硬超时（提取 3600s、repair agent LLM 调用 600s）
 - Token/context limit 与 rate limit 区分：前者不重试（相同 prompt 必定再超限），
   后者递增退避重试
 - Baseline 恢复：resume 时自动检测 Phase 2.5 产出完整性，缺失则补跑
