@@ -175,7 +175,6 @@ automation/
 │   ├── semantic_review_character.md     ← 旧统一角色审校（legacy，保留兼容）
 │   ├── semantic_review.md               ← 统一审校兜底模板
 │   ├── targeted_fix.md                  ← 定点修复
-│   ├── coordinated_extraction.md        ← 旧统一提取（legacy）
 │   └── scene_split.md
 └── persona_extraction/             ← Python 包
     ├── __init__.py

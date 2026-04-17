@@ -576,6 +576,7 @@ def run_commit_gate(
     # --- Check 2 + 3: snapshot existence and stage_id alignment ---
     world_snapshot = (work_dir / "world" / "stage_snapshots"
                       / f"{stage_id}.json")
+    n_world_events = 0  # used later for digest count check
     if not world_snapshot.exists():
         issues.append(GateIssue(
             message=f"世界快照缺失: {world_snapshot}",
@@ -596,6 +597,9 @@ def run_commit_gate(
                     lane_type="world", lane_id="world",
                     category="snapshot_stage_id",
                 ))
+            n_world_events = len([
+                e for e in ws_data.get("stage_events", [])
+                if isinstance(e, str) and e.strip()])
         except (json.JSONDecodeError, ValueError):
             issues.append(GateIssue(
                 message=f"世界快照 JSON 解析失败: {world_snapshot}",
@@ -677,7 +681,8 @@ def run_commit_gate(
     else:
         _validate_world_event_digest_has_stage(
             world_event_digest, stage_id, issues,
-            lane_type="world", lane_id="world")
+            lane_type="world", lane_id="world",
+            expected_event_count=n_world_events)
 
     for char_id in character_ids:
         char_dir = work_dir / "characters" / char_id / "canon"
@@ -827,6 +832,7 @@ def _validate_world_event_digest_has_stage(
     digest_path: Path, stage_id: str,
     issues: list["GateIssue"],
     *, lane_type: str, lane_id: str,
+    expected_event_count: int = 0,
 ) -> None:
     """Check that world_event_digest contains entries for the given stage.
 
@@ -834,6 +840,11 @@ def _validate_world_event_digest_has_stage(
     mirroring memory_digest (see ``world_event_digest_entry.schema.json``).
     A miss is attributed to the world lane and routed to post_processing,
     which rebuilds the digest from the world snapshot's ``stage_events``.
+
+    When ``expected_event_count`` > 0, also verifies 1:1 count match between
+    digest entries and stage_events.  A mismatch (e.g. after targeted fix
+    shrinks stage_events) triggers a PP-recoverable error so the orchestrator
+    re-runs post_processing to restore the invariant.
     """
     try:
         text = digest_path.read_text(encoding="utf-8").strip()
@@ -854,7 +865,7 @@ def _validate_world_event_digest_has_stage(
                 category="world_event_digest_missing",
             ))
             return
-        found = False
+        stage_entry_count = 0
         for line in text.splitlines():
             line = line.strip()
             if not line:
@@ -862,14 +873,23 @@ def _validate_world_event_digest_has_stage(
             try:
                 entry = json.loads(line)
                 if _stage_from_id(entry.get("event_id", "")) == stage_num:
-                    found = True
-                    break
+                    stage_entry_count += 1
             except json.JSONDecodeError:
                 continue
-        if not found:
+        if stage_entry_count == 0:
             issues.append(GateIssue(
                 message=(f"world_event_digest 缺少阶段 "
                          f"S{stage_num:03d} 的条目"),
+                severity="error",
+                lane_type=lane_type, lane_id=lane_id,
+                category="world_event_digest_missing",
+            ))
+        elif (expected_event_count > 0
+              and stage_entry_count != expected_event_count):
+            issues.append(GateIssue(
+                message=(f"world_event_digest 条目数 ({stage_entry_count}) "
+                         f"与 stage_events ({expected_event_count}) 不一致 "
+                         f"— 需重新生成"),
                 severity="error",
                 lane_type=lane_type, lane_id=lane_id,
                 category="world_event_digest_missing",

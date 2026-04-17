@@ -11,7 +11,10 @@ from .git_utils import preflight_check
 from .llm_backend import create_backend
 from .orchestrator import ExtractionOrchestrator
 from .process_guard import launch_background
-from .progress import Phase3Progress, PipelineProgress, migrate_legacy_progress
+from .progress import (
+    Phase3Progress, PipelineProgress, StageEntry,
+    migrate_legacy_progress,
+)
 from .scene_archive import run_scene_archive
 
 # Phase 4 does not need git preflight (no commits) and uses its own lock.
@@ -205,6 +208,34 @@ def main(argv: list[str] | None = None) -> None:
             # Try new format first, then legacy migration
             pipeline = PipelineProgress.load(project_root, args.work_id)
             phase3 = Phase3Progress.load(project_root, args.work_id)
+
+            # Self-heal: rebuild phase3 from stage_plan when pipeline has
+            # phase_2 done but phase3_stages.json was deleted/corrupted.
+            if (pipeline and pipeline.is_done("phase_2")
+                    and phase3 is None):
+                stage_plan_path = (
+                    project_root / "works" / args.work_id
+                    / "analysis" / "stage_plan.json")
+                if stage_plan_path.exists():
+                    import json as _json
+                    sp = _json.loads(
+                        stage_plan_path.read_text(encoding="utf-8"))
+                    phase3 = Phase3Progress(
+                        work_id=args.work_id,
+                        stage_size=sp.get("default_stage_size", 10),
+                        stages=[
+                            StageEntry(
+                                stage_id=b["stage_id"],
+                                chapters=b["chapters"],
+                                chapter_count=b.get("chapter_count", 10),
+                            )
+                            for b in sp.get("stages", [])
+                        ],
+                    )
+                    phase3.save(project_root)
+                    print(f"[REBUILT] phase3_stages.json from stage_plan "
+                          f"({len(phase3.stages)} stages, all pending).")
+
             if not pipeline or not phase3:
                 migrated = migrate_legacy_progress(
                     project_root, args.work_id)
@@ -214,6 +245,17 @@ def main(argv: list[str] | None = None) -> None:
                 else:
                     print(f"[ERROR] No existing progress for '{args.work_id}'.")
                     sys.exit(1)
+
+            # Self-heal: reconcile phase3 with actual disk state.
+            rec = phase3.reconcile_with_disk(
+                project_root, pipeline.target_characters)
+            if rec["reverted"] or rec["purged_files"]:
+                print(f"[RECONCILE] Phase 3: reverted {rec['reverted']} "
+                      f"stage(s), purged {rec['purged_files']} stale "
+                      f"artifact(s), {rec['sha_missing']} committed_sha "
+                      f"missing from git")
+                phase3.save(project_root)
+
             orch.pipeline = pipeline
             orch.phase3 = phase3
             orch.run_extraction_loop(pipeline, phase3,

@@ -1491,21 +1491,25 @@ class ExtractionOrchestrator:
                            f"{issue.category or '?'}")
                     print(f"    [GATE] [{tag}] {issue.message}")
 
-                if any(not i.lane_type for i in gate_issues):
+                # Warnings are informational ��� only errors drive recovery.
+                gate_errors = [i for i in gate_issues
+                               if i.severity == "error"]
+
+                if any(not i.lane_type for i in gate_errors):
                     # Unattributable structural failure — no recovery path.
                     print("    [FAIL] Gate has unattributable issues "
                           "— stage ERROR")
                     feedback = "\n".join(
                         f"[gate/{i.category}] {i.message}"
-                        for i in gate_issues)
+                        for i in gate_errors)
                     _stage_error(feedback)
                     return
 
                 # Tier 1: post-processing rerun is free (no quota cost).
-                # Try it first when every issue is PP-recoverable.
+                # Try it first when every error is PP-recoverable.
                 if all(i.category in POST_PROCESSING_RECOVERABLE
-                       for i in gate_issues):
-                    print(f"    [GATE] {len(gate_issues)} catalog/digest "
+                       for i in gate_errors):
+                    print(f"    [GATE] {len(gate_errors)} catalog/digest "
                           f"issue(s) — rerunning post_processing "
                           f"(no quota)")
                     _rerun_post_processing()
@@ -1524,20 +1528,23 @@ class ExtractionOrchestrator:
                         tag = (f"{issue.lane_key_str or '?'}/"
                                f"{issue.category or '?'}")
                         print(f"    [GATE] [{tag}] {issue.message}")
-                    if any(not i.lane_type for i in gate_issues):
+                    gate_errors = [i for i in gate_issues
+                                   if i.severity == "error"]
+                    if any(not i.lane_type for i in gate_errors):
                         print("    [FAIL] Gate still has unattributable "
                               "issues after PP rerun — stage ERROR")
                         feedback = "\n".join(
                             f"[gate/{i.category}] {i.message}"
-                            for i in gate_issues)
+                            for i in gate_errors)
                         _stage_error(feedback)
                         return
 
                 # Tier 2: lane re-extract for attributable failures.
-                # Group issues by lane and consume the shared lane_retries
+                # Group errors by lane and consume the shared lane_retries
                 # quota — same budget as review-failure retries.
+                # gate_errors already filters out warnings (built above).
                 by_lane: dict[tuple[str, str], list[GateIssue]] = {}
-                for i in gate_issues:
+                for i in gate_errors:
                     by_lane.setdefault(
                         (i.lane_type, i.lane_id), []).append(i)
 
@@ -1559,7 +1566,7 @@ class ExtractionOrchestrator:
                           f"{exhausted_ids} — stage ERROR")
                     feedback = "\n".join(
                         f"[gate/{i.category}] {i.message}"
-                        for i in gate_issues)
+                        for i in gate_errors)
                     _stage_error(feedback)
                     return
 

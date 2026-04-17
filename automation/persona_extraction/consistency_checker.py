@@ -573,9 +573,10 @@ def _check_world_event_digest(
                 f"(expected {n_events} from stage_events)"))
         elif len(stage_digest) != n_events:
             issues.append(ConsistencyIssue(
-                "warning", "world_event_digest",
+                "error", "world_event_digest",
                 f"world/{stage_id}",
                 f"world_event_digest has {len(stage_digest)} entries "
-                f"but stage_events has {n_events} items"))
+                f"but stage_events has {n_events} items "
+                f"(1:1 mapping required)"))
 
     return issues
