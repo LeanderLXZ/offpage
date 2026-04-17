@@ -29,8 +29,8 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 4. **程序化后处理**：生成 memory_digest + 生成 world_event_digest + 更新 stage_catalog
 5. **Repair Agent**（统一检测+修复，详见 `docs/requirements.md §11.4`）：
    - Phase A：四层检查（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
-   - Phase B：修复循环，按 tier 逐层升级（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成）
-   - Phase C：最终语义验证（仅 Phase A 有语义问题时触发）
+   - Phase B：修复循环，按 tier 逐层升级（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成，T3 全局每文件最多 1 次）。每轮末嵌 **L3 gate** 对"本轮改过的语义问题文件"再跑一次 L3，防止谎报
+   - Phase C：最终确认——优先复用最后一次 gate 的结果（无新增 LLM 调用）
    - 安全阀：回归保护、收敛检测、总轮次限制
    - 全部通过 → git commit；有 error 级别问题未解决 → stage ERROR
 
@@ -225,11 +225,15 @@ Phase 3 的文件校验和修复由独立的 `repair_agent` 模块负责。
 | T0 | programmatic | 0 token | 正则修 JSON、类型转换、ID 格式、缺失字段 |
 | T1 | local_patch | 少量 token | 字段级 LLM 修复（不读原文） |
 | T2 | source_patch | 中等 token | 字段级 LLM 修复（带原文章节） |
-| T3 | file_regen | 大量 token | 全文件 LLM 重生成（最后手段） |
+| T3 | file_regen | 大量 token | 全文件 LLM 重生成（最后手段，**全局每文件最多触发 1 次** `t3_max_per_file=1`） |
 
-**三阶段运行**：Phase A 全量检查 → Phase B 修复循环 → Phase C 最终语义验证。
-语义 LLM **每个文件最多调用 2 次**（Phase A 初检 + Phase C 终验，文件级计数），
-修复循环内只用 0-token 的 L0–L2 复检。
+**三阶段运行**：Phase A 全量检查 → Phase B 修复循环（内嵌 **L3 gate**）
+→ Phase C 最终确认。Phase B 每轮在 L0–L2 scoped recheck 之后，会对
+"本轮被修改 + Phase A 有语义问题" 的文件集合再跑一次 L3，把语义结果
+回灌进下一轮 issue 队列——避免 T1/T2/T3 谎报语义修复成功。Phase C
+优先复用最后一次 gate 的结果，不再单独调用 L3。语义 LLM 成本 = Phase A
+每文件 1 次 + Phase B 每轮最多 (被改的 L3 文件数) 次 + Phase C 0 次
+（有 gate 复用时）。
 
 代码：`repair_agent/`
 

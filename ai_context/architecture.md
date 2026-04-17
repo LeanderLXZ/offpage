@@ -217,13 +217,20 @@ or `codex` call, no shared session memory, file-based context.
        lower-layer errors skip higher layers.
      - Phase B: fix loop. Issues grouped by starting tier
        (`START_TIER[category]`), escalating T0→T1→T2→T3 with per-tier
-       retry counts (T0=1, T1=3, T2=3, T3=1). Scoped recheck (L0–L2
-       only, 0 token) after each fix. Safety valves: regression
-       protection, convergence detection, total round limit (default 5).
-     - Phase C: final semantic verify (if Phase A found semantic
-       issues). Semantic LLM at most 2 calls **per file** (one in A,
-       at most one in C) — total cost scales with file count, not a
-       flat 2.
+       retry counts (T0=1, T1=3, T2=3, T3=1) plus a **global per-file
+       T3 cap** (`t3_max_per_file=1` — files that exhausted their T3
+       budget are dropped from future T3 escalations). Scoped recheck
+       (L0–L2, 0 token) after each fix. An **L3 gate** then re-runs
+       semantic checking on files that (a) had semantic issues in
+       Phase A and (b) were modified this round; gate findings feed
+       back into the next round's issue queue. Safety valves:
+       regression, convergence, L3 gate reemerge (two consecutive
+       gates return identical blocking set → semantic layer isn't
+       converging, break), total round limit (default 5).
+     - Phase C: final confirmation. Always does a cheap L0–L2 sweep;
+       for L3, reuses the last Phase B gate result (no new LLM call)
+       when the gate ran. Fallback: if Phase A had semantic issues
+       but Phase B never modified an L3 file, Phase C runs L3 once.
      Field-level surgical patching via json_path — no whole-file
      rollback. Checkers and fixers are orthogonal (any L can need any T).
   4. Git commit — **commit-ordering contract**: git commit first; only

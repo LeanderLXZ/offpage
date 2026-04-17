@@ -1581,7 +1581,7 @@ issue.category 决定起始层:
 | T0 programmatic | JSON 语法修复（转义、尾逗号、截断闭合）+ schema 违规修复（截断/填充/类型转换/enum 模糊匹配/补空字段）+ ID 格式正则替换 | 0 token | 1 |
 | T1 local_patch | 字段级微修补——不需要原文。LLM 根据 issue 描述 + 当前字段值 + 同文件上下文生成 patch。适用于：补写示例、调整数值、补充缺失子字段 | 少量 token | 3 |
 | T2 source_patch | 字段级原文修补——需要回到原始章节。两步定位：(1) 在 chapter_summaries 中按关键词搜索定位相关章节号（0 token）；(2) 加载原始章节文本作为 LLM 上下文。适用于：事实性错误修正、遗漏事件补充、关系偏差修正 | 中等 token | 3 |
-| T3 file_regen | 全文件重生成——整个文件 + 完整上下文 → LLM 重新生成。仅在文件 >50% 字段有 error 级 issue 时触发 | 大量 token | 1 |
+| T3 file_regen | 全文件重生成——整个文件 + 完整上下文 → LLM 重新生成。仅在文件 >50% 字段有 error 级 issue 时触发。**全局每文件最多触发 1 次**——跨整个 repair 流程（不是每轮 1 次）；用尽后该文件若仍有 blocking 问题，直接 ERROR 停机 | 大量 token | 1（全局/文件） |
 
 **同层重试的差异化策略**（避免盲目重跑）：
 
@@ -1606,39 +1606,66 @@ class RetryPolicy:
     t0_max: int = 1
     t1_max: int = 3
     t2_max: int = 3
-    t3_max: int = 1
-    max_total_rounds: int = 5  # 整个 validate→fix 循环上限
+    t3_max: int = 1              # 单轮内 T3 最多尝试次数
+    t3_max_per_file: int = 1     # 整个 repair 流程中每个文件累计 T3 次数
+    max_total_rounds: int = 5    # 整个 validate→fix 循环上限
 ```
+
+`t3_max_per_file` 是硬性全局上限：文件 A 若已经走过一次 T3，任何后续轮次
+都不会对 A 再触发 T3，即使该文件又出现新的 blocking 问题。这是 T3 成本
+太高（整文件 LLM 重写）且二次重写往往引入新问题的保护措施。
 
 #### 11.4.5 三阶段运作流程
 
-整个修复过程分为三阶段。语义审校（LLM）对每个文件**最多调用 2 次**
-——Phase A 初检一次，Phase C 终验至多一次。若传入 N 个文件，则 Phase A
-贡献 N 次 LLM 调用，Phase C 至多再 N 次；修复循环内只走 0-token 的
-L0–L2 程序化复检：
+整个修复过程分为三阶段。**L3（语义层）检查通过 Phase B 内嵌的"L3 gate"
+动态复核**，以避免"T1/T2/T3 声称修好了语义问题，但 Phase B 没有复查
+就进入 Phase C 才发现没修好"的漏洞。
 
 ```
-阶段 A: 首次全量检查 (每文件 1 次 LLM)
+阶段 A: 首次全量检查 (每文件 1 次 LLM 调用 L3)
   L0 → L1 → L2 → L3(semantic)
-  产出完整 issue list
-  semantic checker: 每个文件调用 LLM 一次
+  产出完整 issue list; 记录"Phase A 有 L3 问题"的文件集合 L3_files
 
-阶段 B: 修复循环 (多轮, 每轮只做程序化复检)
-  按 issue 分组: 先处理所有 T0 类, 再 T1, 再 T2
-  每次 fix 后: scoped recheck (只 L0+L1+L2, 只检查被 patch 的字段)
-  semantic checker: 不调用
+阶段 B: 修复循环 (多轮)
+  每一轮:
+    1. 按 issue 分组: 先 T0, 再 T1, 再 T2, 最后 T3 (受 tier 配额约束)
+    2. 每次 fix 后 scoped recheck: 只 L0+L1+L2, 检查被 patch 的子树
+    3. 本轮结束后, 若 L3_files 中的任一文件本轮被 patch 过:
+       → L3 gate: 对被 patch 的 L3_files 子集重跑 L3
+       → L3 gate 产出的新 issue 直接并入下轮 issue 队列
+       → 若同文件已用尽 t3_max_per_file, 即便 gate 报错也不会再升 T3,
+         该文件保留为 ERROR 产物
+    4. tracker 记录 gate 指纹集合, 供"L3 gate 反复"安全阀检测
+  semantic checker 在 B 中按需调用, 但只针对本轮被 patch 过的 L3_files
 
-阶段 C: 最终语义复核 (每文件至多 1 次 LLM)
-  只在阶段 A 发现过 semantic issue 时才跑
-  只复核有过 semantic issue 的字段 (范围缩小)
-  semantic checker: 每个文件至多再调用 LLM 一次
+阶段 C: 最终语义确认 (0 次新增 LLM 调用)
+  复用 Phase B 最后一轮 gate 的结果: 若 gate 返回空 → 通过
+  若 gate 仍返回 blocking issue → ERROR 出报告
+  Phase C 不再独立触发 L3 checker
 ```
+
+**L3 gate 触发条件**：一个文件进入 gate 当且仅当以下两点同时满足——
+(1) 它在 Phase A 就有过 L3 issue（即属于 L3_files 集合）；
+(2) 本轮 Phase B 的修复操作改动过该文件。
+没被改动的文件 gate 不会重复跑（节省 LLM 调用）。
+
+**L3 gate 失败后的升级链**：gate 返回的 issue 其 `category` 为
+`semantic`，按 `START_TIER` 从 T1 起尝试（T1×3 → T2×3 → T3）。若
+该文件的 `t3_max_per_file` 已耗尽，T3 不再触发——这是最后的止损点，
+避免无限 LLM 重写。
+
+**LLM 预算（给定 N 个文件、其中 M 个有 Phase A 语义问题、最多 R 轮）**：
+- Phase A: N 次（每文件一次）
+- Phase B: 最多 M × R 次 L3 gate 调用（只复核被改动过的 L3_files）
+- Phase C: 0 次新增
 
 **Scoped recheck**：fix 一个字段后，不重跑全部 checker，只对被修改的
 json_path 子树重跑 L0+L1+L2（毫秒级），加少量跨字段全局一致性规则。
+这只覆盖 L0–L2；L3 由本节定义的 gate 机制在轮末统一处理。
 
 **字段级 patch**：所有 fixer（T3 除外）通过 `field_patch` 写回——只替换
-指定 json_path 的值，其他字段完全不动，保持原始 key 顺序。
+指定 json_path 的值，其他字段完全不动，保持原始 key 顺序。T3 会整文件
+替换，因此它的 per-file 使用次数被 `t3_max_per_file` 硬性约束。
 
 #### 11.4.6 Issue 追踪与安全阀
 
@@ -1656,6 +1683,11 @@ class RoundReport:
 - **Regression 保护**：一轮修复的 `introduced` ≥ `resolved` → 停止该 tier，
   升级到下一层
 - **收敛检测**：连续两轮 `persisting` 指纹完全一致 → 该 tier 修不动，升级
+- **L3 gate 反复**：连续两轮 L3 gate 返回的 blocking 指纹集合完全一致
+  → 语义层无法收敛（修复动作没有改变 LLM 审校结果），直接 break
+  出修复循环进入 Phase C 出 ERROR 报告，避免在 L3 上烧 token 打转
+- **T3 全局配额**：`t3_max_per_file` 耗尽后该文件永不再触发 T3——这是
+  上一条以外的另一个独立止损：即使 L3 gate 还在报新问题，也不会升级到 T3
 - **总轮次上限**：`max_total_rounds`（默认 5）到了直接停机出报告
 
 #### 11.4.7 各 Phase 出口验证
