@@ -80,7 +80,39 @@ element has exactly these fields:
 Output ONLY the JSON object. No markdown fences, no commentary.
 """
 
-_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+def _extract_first_json_object(text: str) -> str | None:
+    """Return the first balanced JSON object in ``text`` or None.
+
+    Walks the string tracking brace depth and string/escape state so nested
+    objects and braces inside string values don't fool it. A greedy
+    ``\\{.*\\}`` regex would overshoot on multi-object responses.
+    """
+    depth = 0
+    start = -1
+    in_str = False
+    escape = False
+    for i, ch in enumerate(text):
+        if in_str:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth == 0:
+                continue
+            depth -= 1
+            if depth == 0 and start >= 0:
+                return text[start:i + 1]
+    return None
 
 
 class Triager:
@@ -179,6 +211,13 @@ class Triager:
         """Convert a verified verdict into a persistable SourceNote."""
         if not verdict.evidence_verified or verdict.chapter_number is None:
             return None
+        # Schema hard constraint: issue_category enum is ["semantic"].
+        # Reject anything else before it reaches notes_writer / disk.
+        if issue.category != "semantic":
+            logger.warning(
+                "triage: refusing to build SourceNote for non-semantic "
+                "issue %s (category=%s)", issue.fingerprint, issue.category)
+            return None
         chapter_text = self._retriever.load_chapter_text(
             source_ctx, verdict.chapter_number)
         if not chapter_text:
@@ -273,12 +312,12 @@ class Triager:
         try:
             data = json.loads(response.strip())
         except json.JSONDecodeError:
-            m = _JSON_OBJECT_RE.search(response)
-            if not m:
+            extracted = _extract_first_json_object(response)
+            if extracted is None:
                 logger.warning("triage: could not parse LLM response")
                 return []
             try:
-                data = json.loads(m.group(0))
+                data = json.loads(extracted)
             except json.JSONDecodeError:
                 logger.warning("triage: LLM response not valid JSON")
                 return []
