@@ -162,6 +162,8 @@ automation/
 │   ├── tracker.py                  ← 跨轮次 Issue 追踪 + 安全阀
 │   ├── field_patch.py              ← json_path 字段级精确替换
 │   ├── context_retriever.py        ← 原文定位（chapter_summaries → chapters）
+│   ├── triage.py                   ← 源文件问题判定（引文逐字校验）
+│   ├── notes_writer.py             ← SourceNote 原子追加到 extraction_notes/
 │   ├── checkers/                   ← 四层检查器（L0–L3）
 │   │   ├── json_syntax.py          ← L0：JSON 语法
 │   │   ├── schema.py               ← L1：jsonschema 校验
@@ -234,6 +236,28 @@ Phase 3 的文件校验和修复由独立的 `repair_agent` 模块负责。
 优先复用最后一次 gate 的结果，不再单独调用 L3。语义 LLM 成本 = Phase A
 每文件 1 次 + Phase B 每轮最多 (被改的 L3 文件数) 次 + Phase C 0 次
 （有 gate 复用时）。
+
+**源文件问题 triage**（`triage_enabled=True`，默认开启）：某些 L3 残留其实是
+源小说本身的 bug（作者矛盾、typo、名称/代称混用、世界规则冲突等）。在两个
+触发点做轻量级 LLM 判定：
+- **pre-T3**：若 `_run_fixer_with_escalation` 即将升级到 T3，先做一次 triage；
+  全部接受则跳过 20 分钟的 T3
+- **post-L3-gate**：每轮 L3 gate 出结果后，对 gate_blocking 再过一次 triage
+
+接受的硬条件（程序校验，非 LLM 自述）：(1) issue 必须是 `semantic`；
+(2) 引用 `chapter_number + line_range + 逐字 quote`，程序用
+`chapter_text.find(quote) >= 0` 校验；(3) 每文件接受上限 `accept_cap_per_file=3`；
+(4) `discrepancy_type` 必须是闭集中之一（author_contradiction / typo /
+name_mixup / pronoun_confusion / title_drift / time_shift / space_conflict
+/ duplicated_passage / world_rule_conflict / death_state_conflict / logic_jump /
+other）。T2/T3 fixer prompts 带有 `source_inherent` 自报通道，可直接把证据
+交给 triager 做 prior。接受的 issue 以 `SourceNote` 形式原子追加到
+`{entity}/canon/extraction_notes/{stage_id}.jsonl`，note_id 格式
+`SN-S{stage:03d}-{seq:02d}`；stage 保持 COMMITTED，不新增状态。
+
+**T3_CORRUPTED 硬停**：T3 跑完后立即对被重写文件做 scoped L0–L2 检查；
+发现任何 L0–L2 错误即中止 Phase B 并 FAIL，**不走 triage**——机械损坏
+不可能是"源文件的错"。
 
 代码：`repair_agent/`
 

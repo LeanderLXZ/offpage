@@ -14,6 +14,7 @@ Public API::
 
 from .coordinator import run, validate_only
 from .protocol import (
+    DISCREPANCY_TYPES,
     FileEntry,
     Issue,
     RepairConfig,
@@ -21,9 +22,13 @@ from .protocol import (
     RetryPolicy,
     RoundReport,
     SourceContext,
+    SourceEvidence,
+    SourceNote,
+    TriageVerdict,
 )
 
 __all__ = [
+    "DISCREPANCY_TYPES",
     "FileEntry",
     "Issue",
     "RepairConfig",
@@ -31,6 +36,9 @@ __all__ = [
     "RetryPolicy",
     "RoundReport",
     "SourceContext",
+    "SourceEvidence",
+    "SourceNote",
+    "TriageVerdict",
     "run",
     "validate_only",
 ]

@@ -231,6 +231,26 @@ or `codex` call, no shared session memory, file-based context.
        for L3, reuses the last Phase B gate result (no new LLM call)
        when the gate ran. Fallback: if Phase A had semantic issues
        but Phase B never modified an L3 file, Phase C runs L3 once.
+     - **Source-discrepancy triage** (optional, `triage_enabled=True`):
+       lightweight LLM pass that decides whether residual L3 issues are
+       author bugs in the source novel (contradictions, typos, name
+       mixups, etc.) rather than extraction errors. Runs twice:
+       (1) pre-T3, to skip the expensive T3 regen when all residuals
+       are source-inherent; (2) post-L3-gate and pre-FAIL. Every
+       accepted verdict MUST cite chapter + line range + verbatim
+       quote; the program rejects any verdict whose quote is not a
+       literal substring of the chapter. A per-file accept cap
+       (`accept_cap_per_file=3`) prevents blanket rationalization.
+       T2/T3 fixers also have a self-report channel — they can return
+       the same evidence structure instead of fabricating a fix, which
+       the triager uses as a prior. Accepted issues persist as
+       `SourceNote` entries at `{entity}/canon/extraction_notes/
+       {stage_id}.jsonl` (world artifacts under `world/extraction_notes/`)
+       with SHA-256 anchoring for later staleness detection.
+     - **T3 corruption hard-stop**: after any T3 run, a scoped L0–L2
+       check on the regenerated files; if any L0–L2 error appears,
+       the coordinator aborts Phase B with `T3_CORRUPTED` and does NOT
+       invoke triage (mechanical errors cannot be "source's fault").
      Field-level surgical patching via json_path — no whole-file
      rollback. Checkers and fixers are orthogonal (any L can need any T).
   4. Git commit — **commit-ordering contract**: git commit first; only

@@ -62,7 +62,83 @@ class RepairConfig:
     block_on: Literal["error", "all"] = "error"
     run_semantic: bool = True
     l3_gate_enabled: bool = True
+    triage_enabled: bool = True          # source-discrepancy triage on L3
+    accept_cap_per_file: int = 3         # max SourceNotes per file
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
+
+
+# Allowed values for SourceNote.discrepancy_type. Keep in sync with the
+# jsonschema at schemas/source_note.schema.json.
+DISCREPANCY_TYPES: tuple[str, ...] = (
+    "author_contradiction",
+    "typo",
+    "name_mixup",
+    "pronoun_confusion",
+    "title_drift",
+    "time_shift",
+    "space_conflict",
+    "duplicated_passage",
+    "world_rule_conflict",
+    "death_state_conflict",
+    "logic_jump",
+    "other",
+)
+
+
+@dataclass
+class SourceEvidence:
+    """Evidence anchoring a source_inherent claim to an original chapter.
+
+    All fields must be program-verified before a SourceNote is written:
+    ``quote`` is a verbatim substring of the chapter text; both SHA-256
+    hashes cover the corresponding text content.
+    """
+    chapter_number: int
+    line_range: tuple[int, int]
+    quote: str
+    quote_sha256: str
+    chapter_sha256: str
+
+
+@dataclass
+class SourceNote:
+    """One accepted source-inherent L3 issue (`accept_with_notes`)."""
+    note_id: str                       # SN-S{stage:03d}-{seq:02d}
+    stage_id: str
+    file: str                          # path of the extracted product
+    json_path: str
+    issue_fingerprint: str
+    issue_category: str                # always "semantic"
+    issue_rule: str
+    issue_severity: str
+    issue_message: str
+    discrepancy_type: str              # one of DISCREPANCY_TYPES
+    source_evidence: SourceEvidence
+    rationale: str
+    extraction_choice: str
+    future_fixer_hint: dict[str, Any]
+    accepted_at: str                   # ISO 8601 with timezone
+    triage_round: int                  # 1 = pre-T3, 2 = post-T3
+
+
+@dataclass
+class TriageVerdict:
+    """Per-issue output of one triage decision, pre-validation.
+
+    Either produced by the standalone triage LLM call, or self-reported
+    by T2 / T3 fixers through their ``source_inherent`` return channel.
+    The coordinator only accepts a verdict when both ``source_inherent``
+    and ``evidence_verified`` are true.
+    """
+    issue_fingerprint: str
+    source_inherent: bool
+    discrepancy_type: str = "other"
+    chapter_number: int | None = None
+    line_range: tuple[int, int] | None = None
+    quote: str = ""
+    rationale: str = ""
+    extraction_choice: str = ""
+    evidence_verified: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +204,12 @@ class FixResult:
     """Result from a single fixer invocation."""
     patched_paths: list[str] = field(default_factory=list)
     resolved_fingerprints: set[str] = field(default_factory=set)
+    # T2/T3 self-reported source_inherent candidates. Keyed by issue
+    # fingerprint; each value is an un-validated TriageVerdict. The
+    # coordinator runs the same quote-substring verification on these
+    # as it does on the standalone triage LLM output.
+    source_inherent_candidates: dict[str, TriageVerdict] = field(
+        default_factory=dict)
 
 
 @dataclass
@@ -137,3 +219,4 @@ class RepairResult:
     issues: list[Issue] = field(default_factory=list)
     history: dict[str, list[RepairAttempt]] = field(default_factory=dict)
     report: str = ""
+    accepted_notes: list[SourceNote] = field(default_factory=list)
