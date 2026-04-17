@@ -301,7 +301,10 @@ orchestrator (Python)
     │       ├── 程序化后处理 (digest/catalog, 0 token, idempotent upsert)
     │       ├── repair_agent.run() (统一检测+修复):
     │       │       ├── Phase A: L0–L3 全量检查
-    │       │       ├── Phase B: 修复循环 (T0→T1→T2→T3 逐层升级 + 每轮末 L3 gate)
+    │       │       ├── Phase B: 修复循环 (T0→T1→T2→T3 逐层升级
+    │       │       │       + 每轮末 L3 gate
+    │       │       │       + 源文件问题 triage: pre-T3 & post-gate
+    │       │       │       + T3_CORRUPTED 硬停: T3 后 L0–L2 扫描)
     │       │       └── Phase C: 最终确认 (复用最后一次 L3 gate 结果)
     │       ├── [PASS] → git commit
     │       └── [FAIL] → stage ERROR (--resume 重置 → PENDING)
@@ -331,6 +334,20 @@ orchestrator (Python)
   安全阀：回归保护（introduced ≥ resolved → 停机）、收敛检测（持续集不变 → 升级）、
   **L3 gate 反复**（连续两轮 gate 返回相同 blocking 集合 → 语义层不收敛 → 出 Phase C 报错）、
   总轮次限制（默认 5 轮）
+- **源文件问题 triage**（`triage_enabled`）：某些 L3 残留不是提取错误，而是源小说本身的 bug
+  （作者逻辑矛盾、typo、角色名/代称混用、世界规则冲突等）。在两个点做一次轻量级 LLM 判定：
+  （1）**pre-T3**——若残留全是源文件自带问题，跳过 20 分钟的 T3 全文件重生成；
+  （2）**post-L3-gate**——T3 跑完后的最后一次"接受与否"机会。反作弊完全程序化：
+  每条接受判定必须引用 `chapter_number + line_range + 逐字 quote`，程序用
+  `chapter_text.find(quote) >= 0` 校验；每文件接受上限 `accept_cap_per_file=3`；
+  issue 必须是 L3 `semantic`（L0–L2 机械错误一律拒绝）。T2/T3 修复器自带 "source_inherent"
+  自报通道，可直接把证据交给 triager 做 prior。被接受的 issue 写入
+  `{entity}/canon/extraction_notes/{stage_id}.jsonl`（世界级产物写到 `world/extraction_notes/`），
+  附带 SHA-256 锚定以便将来原章节改动时自动标记 stale。stage 仍标记 COMMITTED，
+  sidecar notes 作为审计痕迹和未来 fixer 的线索。
+- **T3_CORRUPTED 硬停**：T3 跑完后立即对被重写文件做一次 scoped L0–L2 检查；
+  一旦发现任何 L0–L2 错误（JSON 语法/schema/结构被破坏），Phase B 直接以
+  `T3_CORRUPTED` 中止并 FAIL，**不走 triage**——机械损坏不可能是"源文件的错"。
 - 提取在独立 git 分支进行，每 stage 单独 commit（精确回滚）；全部完成后
   squash merge 回 main（干净历史），extraction 分支可删除
 - 支持 Claude CLI 和 Codex CLI 两种后端

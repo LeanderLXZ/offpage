@@ -148,8 +148,24 @@ false "fixed" claims from T1/T2/T3 get caught before Phase C. T3
 the whole run — a second regen rarely helps and is expensive. Phase C
 reuses the last gate result when possible. Semantic LLM cost = 1 call
 per file in Phase A + at most (modified L3 files) × rounds gate calls,
-no extra call at Phase C when the gate ran. Repair fail → stage ERROR;
-`--resume` resets ERROR → PENDING.
+no extra call at Phase C when the gate ran.
+
+**Source-discrepancy triage** (`triage_enabled=True`): a lightweight LLM
+pass decides, at (a) pre-T3 and (b) post-L3-gate, whether residual L3
+issues are bugs in the source novel itself (author contradictions,
+typos, name/pronoun confusion, etc.) rather than extraction errors.
+Anti-cheat is program-enforced: every accepted verdict must cite
+chapter + line range + verbatim quote; the program verifies the quote
+is a literal chapter substring; a per-file accept cap
+(`accept_cap_per_file=3`) bounds acceptance. T2/T3 fixers can also
+self-report the same evidence in lieu of a fabricated fix, feeding the
+triager as priors. Accepted issues persist to
+`{entity}/canon/extraction_notes/{stage_id}.jsonl`
+(`world/extraction_notes/` for world-level files); the stage remains
+COMMITTED with sidecar notes. A post-T3 scoped L0–L2 check aborts
+with `T3_CORRUPTED` if T3 broke shape — no triage in that path.
+
+Repair fail → stage ERROR; `--resume` resets ERROR → PENDING.
 
 Commit-ordering contract: git commit first; only non-empty SHA →
 COMMITTED; empty → FAILED (resume retries). `--end-stage` strict prefix:

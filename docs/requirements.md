@@ -1609,6 +1609,16 @@ class RetryPolicy:
     t3_max: int = 1              # 单轮内 T3 最多尝试次数
     t3_max_per_file: int = 1     # 整个 repair 流程中每个文件累计 T3 次数
     max_total_rounds: int = 5    # 整个 validate→fix 循环上限
+
+@dataclass
+class RepairConfig:
+    max_rounds: int = 5
+    block_on: Literal["error", "all"] = "error"
+    run_semantic: bool = True
+    l3_gate_enabled: bool = True
+    triage_enabled: bool = True         # L3 源文件自带问题分诊
+    accept_cap_per_file: int = 3        # 每文件最多 accept_with_notes 条数
+    retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
 ```
 
 `t3_max_per_file` 是硬性全局上限：文件 A 若已经走过一次 T3，任何后续轮次
@@ -1619,7 +1629,9 @@ class RetryPolicy:
 
 整个修复过程分为三阶段。**L3（语义层）检查通过 Phase B 内嵌的"L3 gate"
 动态复核**，以避免"T1/T2/T3 声称修好了语义问题，但 Phase B 没有复查
-就进入 Phase C 才发现没修好"的漏洞。
+就进入 Phase C 才发现没修好"的漏洞。T3 前后各有一次**source_discrepancy
+triage**——判断残留的语义问题是否为源文件自带（作者原作的矛盾/错字/称呼
+混乱等），是则走 `accept_with_notes` 通道、不算 FAIL。
 
 ```
 阶段 A: 首次全量检查 (每文件 1 次 LLM 调用 L3)
@@ -1628,19 +1640,31 @@ class RetryPolicy:
 
 阶段 B: 修复循环 (多轮)
   每一轮:
-    1. 按 issue 分组: 先 T0, 再 T1, 再 T2, 最后 T3 (受 tier 配额约束)
-    2. 每次 fix 后 scoped recheck: 只 L0+L1+L2, 检查被 patch 的子树
-    3. 本轮结束后, 若 L3_files 中的任一文件本轮被 patch 过:
+    1. 按 issue 分组: 先 T0, 再 T1, 再 T2 (正常跑)
+    2. 升级到 T3 前, 若某文件仍有 L3 blocking issue:
+       → Triage-1 (轻量 LLM, 单 batch/文件):
+          对该文件所有残留 L3 issue 一次性判定是否为"源文件自带"
+          → 返回 source_inherent 的附章节号+行区间+逐字引文, 程序校验
+            引文确实是源章节子串; 未通过校验一律当 false
+          → 通过校验的记入 accept_with_notes (受 accept_cap_per_file 约束)
+          → 剩余未接受的 issue 集合才跑 T3
+          → 若全部被接受 → 跳过 T3 (节省 8-20 min 整文件重写)
+    3. T3 跑完后, 立即对该文件做 L0+L1+L2 快速校验 (T3 corruption 止损):
+       → 有任何 error → 该文件标 T3_CORRUPTED, stage FAIL, 不再进 triage
+    4. 每次 fix 后 scoped recheck: 只 L0+L1+L2, 检查被 patch 的子树
+    5. 本轮结束后, 若 L3_files 中的任一文件本轮被 patch 过:
        → L3 gate: 对被 patch 的 L3_files 子集重跑 L3
-       → L3 gate 产出的新 issue 直接并入下轮 issue 队列
-       → 若同文件已用尽 t3_max_per_file, 即便 gate 报错也不会再升 T3,
-         该文件保留为 ERROR 产物
-    4. tracker 记录 gate 指纹集合, 供"L3 gate 反复"安全阀检测
+       → 若 gate 仍有 blocking → Triage-2 (与 Triage-1 同机制):
+          通过校验 & 未超 cap 的记入 accept_with_notes、从队列剔除
+          剩余的按 L3 gate 原有逻辑并入下轮 issue 队列
+    6. tracker 记录 gate 指纹集合, 供"L3 gate 反复"安全阀检测
   semantic checker 在 B 中按需调用, 但只针对本轮被 patch 过的 L3_files
+  Triage 调用的文本加载走 chapter LRU 缓存 (与 T2 共享)
 
 阶段 C: 最终语义确认 (0 次新增 LLM 调用)
-  复用 Phase B 最后一轮 gate 的结果: 若 gate 返回空 → 通过
-  若 gate 仍返回 blocking issue → ERROR 出报告
+  复用 Phase B 最后一轮 gate 的结果 (已经 triage 过):
+    → 若 gate 返回空 → 通过
+    → 若 gate 仍返回 blocking issue → ERROR 出报告
   Phase C 不再独立触发 L3 checker
 ```
 
@@ -1657,7 +1681,16 @@ class RetryPolicy:
 **LLM 预算（给定 N 个文件、其中 M 个有 Phase A 语义问题、最多 R 轮）**：
 - Phase A: N 次（每文件一次）
 - Phase B: 最多 M × R 次 L3 gate 调用（只复核被改动过的 L3_files）
+  + 最多 M × R × 2 次 triage 调用（每文件 T3 前/后各一次，上限；
+    实际大多数文件只触发 1 次甚至 0 次）
 - Phase C: 0 次新增
+
+**Triage 优化**：
+- 单文件一次 LLM 调用批量处理该文件所有残留 L3 issue（不是 per-issue）
+- T2 和 triage 共享 `chapter LRU cache` 避免重复加载原章节
+- T2/T3 的 prompt 内置"source_inherent 自报通道"——fixer 在确信无法
+  修复时可返回 `source_inherent=true + 引文`，coordinator 接受这些
+  自报（仍走同一套引文字面校验）作为 triage 输入的先验
 
 **Scoped recheck**：fix 一个字段后，不重跑全部 checker，只对被修改的
 json_path 子树重跑 L0+L1+L2（毫秒级），加少量跨字段全局一致性规则。
@@ -1688,9 +1721,111 @@ class RoundReport:
   出修复循环进入 Phase C 出 ERROR 报告，避免在 L3 上烧 token 打转
 - **T3 全局配额**：`t3_max_per_file` 耗尽后该文件永不再触发 T3——这是
   上一条以外的另一个独立止损：即使 L3 gate 还在报新问题，也不会升级到 T3
+- **T3 corrupted 止损**：T3 跑完立即对该文件做 L0+L1+L2 快速校验；
+  有任何 error → 该文件标 T3_CORRUPTED，stage FAIL；此时不再进 triage，
+  不再 accept_with_notes（结构坏掉的文件不值得接受）
+- **Accept 每文件上限**：单文件最多接受 `accept_cap_per_file`（默认 3）
+  条 source_inherent 记录；超过上限的 issue 按 blocking 处理。意图：
+  防止 LLM 为偷懒把大量问题都标成"源文件自带"
 - **总轮次上限**：`max_total_rounds`（默认 5）到了直接停机出报告
 
-#### 11.4.7 各 Phase 出口验证
+#### 11.4.7 Source discrepancy triage + accept_with_notes
+
+**适用范围**：**仅 L3（semantic）issue**。L0/L1/L2 是机械校验——JSON 语法、
+schema、结构业务规则、ID 格式——这些问题不可能"是源文件自带"，一律 FAIL，
+不进 triage。
+
+**Triage 流程**（每次调用）：
+
+1. Coordinator 收集同一文件的所有残留 L3 issue
+2. `ContextRetriever`（带 chapter LRU cache）加载该 stage 全部源章节文本
+3. 构造一次 batch prompt：issue list + 源章节文本 → LLM
+4. LLM 对每条 issue 返回：
+   ```
+   {
+     "issue_fingerprint": "...",
+     "source_inherent": true/false,
+     "discrepancy_type": "author_contradiction" | "typo" | ...,
+     "chapter_number": int,
+     "line_range": [start, end],
+     "quote": "逐字引文",
+     "rationale": "为什么这是源文件错误而非提取错误"
+   }
+   ```
+5. 程序逐条校验：
+   - 章节存在、`line_range` 合法
+   - `quote` **必须是该章节文本的字面子串**（`chapter_text.find(quote) >= 0`）
+   - 校验失败 → 忽略本条，该 issue 仍算 blocking
+6. 校验通过的按文件 cap 截断，多余部分回退到 blocking
+7. 被接受的 issue 生成 `SourceNote`，从 issue 队列移除
+8. 未被接受的按原流程继续（进 T3，或走 L3 gate 升级链）
+
+**discrepancy_type 枚举**：
+- `author_contradiction` — 原作跨章/章内逻辑矛盾
+- `typo` — 错字、别字、漏字
+- `name_mixup` — 人物姓名写错
+- `pronoun_confusion` — 代词使用混乱（他/她、视角漂移）
+- `title_drift` — 称谓漂移（非剧情合理的叫法变化）
+- `time_shift` — 时序/时间量矛盾
+- `space_conflict` — 空间矛盾（同时在两地、距离翻转）
+- `duplicated_passage` — 段落重复（作者拼接错误或遗忘）
+- `world_rule_conflict` — 设定规则前后不一致
+- `death_state_conflict` — 死亡/存活状态矛盾未解释
+- `logic_jump` — 逻辑跳跃、因果缺失
+- `other` — 上述分类不适用
+
+**SourceNote 数据结构**：
+
+```python
+@dataclass
+class SourceEvidence:
+    chapter_number: int
+    line_range: tuple[int, int]
+    quote: str                  # 逐字引文，已通过字面校验
+    quote_sha256: str           # 引文 SHA256
+    chapter_sha256: str         # 源章节文件 SHA256（变动检测）
+
+@dataclass
+class SourceNote:
+    note_id: str                # SN-S###-##, 每 stage/entity 递增
+    stage_id: str
+    file: str                   # 被接受的产物文件路径
+    json_path: str              # issue 的 json_path
+    issue_fingerprint: str
+    issue_category: str         # 固定为 "semantic"
+    issue_rule: str
+    issue_severity: str         # 接受前的 severity
+    issue_message: str
+    discrepancy_type: str       # 见上面枚举
+    source_evidence: SourceEvidence
+    rationale: str
+    extraction_choice: str      # 告诉下游我们采用了哪个版本/处理
+    future_fixer_hint: dict     # {resolvable_when, manual_action, ...}
+    accepted_at: str            # ISO 8601
+    triage_round: int           # 1 = T3 前, 2 = T3 后
+```
+
+**存储**：`canon/extraction_notes/{stage_id}.jsonl`（每 entity 各自一个目录树）
+- 角色文件的 note → `characters/{char}/canon/extraction_notes/{stage_id}.jsonl`
+- 世界文件的 note → `world/extraction_notes/{stage_id}.jsonl`
+- jsonschema 定义：`schemas/source_note.schema.json`
+- note_id：`SN-S{stage:03d}-{seq:02d}`，seq 在同文件、同 stage 内递增
+
+**源章节变更检测**：`chapter_sha256` 提供审计线索——当源章节文件改动后，
+下次 `--resume` 时 loader 检测 hash 失配，可自动把该 note 标 stale、对应
+issue 重新走 triage 流程。**本次实现不包含该自动 resume 逻辑**，只记录
+字段供后续使用。
+
+**Fixer 自报通道**（效率优化）：
+- T2 和 T3 的 system prompt 追加指令：如判定 issue 是源文件自带、
+  无法通过任何修复解决，返回 JSON 字段 `{"source_inherent": true,
+  "discrepancy_type": "...", "chapter_number": int, "line_range": [.,.],
+  "quote": "...", "rationale": "..."}` 而不是捏造修复
+- Coordinator 收到这类自报后，走同一套**程序化引文校验**并计入 triage
+  的初始候选集合，triage 针对剩余未自报的 issue 再发一次 LLM
+- 若 T2 的自报已覆盖该文件全部残留 L3 issue，triage LLM 完全可以省略
+
+#### 11.4.8 各 Phase 出口验证
 
 每个 Phase 完成后通过 repair agent 统一校验，避免错误延迟到下游：
 
