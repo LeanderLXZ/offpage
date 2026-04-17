@@ -309,11 +309,11 @@ core_wounds 记录最底层的创伤根源。
 - `chapters: list[int]` + `chapter_count: int`
 - `state: StageState` — 枚举：PENDING / EXTRACTING / EXTRACTED / POST_PROCESSING / REVIEWING / PASSED / FAILED / ERROR / RETRYING / COMMITTED
 - `retry_count: int` + `max_retries: int = 2` — **阶段级**重试计数（全阶段回滚后重新进入阶段）
-- `lane_retries: dict[str, int]` + `lane_max_retries: int = 2` — **通道级**重试计数；key 由 `review_lanes.lane_key()` 生成（`"world"` / `"character:{id}"`）；仅在 lane 重试路径使用，成功提交或全阶段回滚后清空
+- `lane_retries: dict[str, int]` + `lane_max_retries: int = 1` — 遗留字段，保留以兼容旧进度文件反序列化，当前架构不使用
 - `committed_sha: str` — git commit SHA（仅 COMMITTED 态非空）
 - `error_message: str` — 最近一次错误摘要
-- `fail_source: str` — 失败来源标签（validator / reviewer / gate / commit）
-- `last_reviewer_feedback: str` — 审校反馈（供下次重提取时作为 prompt 上下文）
+- `fail_source: str` — 失败来源标签
+- `last_reviewer_feedback: str` — 遗留字段，保留以兼容旧进度文件反序列化
 
-向后兼容：旧版 `phase3_stages.json` 反序列化时，`lane_retries` / `lane_max_retries` 自动使用默认值（空 dict / 2）。
+向后兼容：旧版 `phase3_stages.json` 反序列化时，遗留字段自动使用默认值。
 

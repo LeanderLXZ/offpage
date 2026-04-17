@@ -45,19 +45,11 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
   `memory_digest.jsonl`, `world_event_digest.jsonl`, and upserts
   `stage_catalog.json`.
 - Parallel review lanes (1+2N: world + char_snapshot×N + char_support×N):
-  schema autofix → validate → semantic review → targeted fix (×2).
-  No cross-entity reads — each reviewer only sees its own lane.
-- Commit gate — structural + identifier level; warn-only cross-entity
-  reference resolution. Gate issues attributed by lane type.
-- **Lane-attributed retry** across review and gate (shared
-  `lane_max_retries`=1). No stage-level retry — exhausted quota →
-  ERROR; `--resume` resets to PENDING.
-- Gate failure cascade by category: `catalog_missing` /
-  `digest_missing` / `world_event_digest_missing` → free PP rerun;
-  `snapshot_*` / `lane_review` → lane re-extract; unattributed /
-  exhausted → stage ERROR.
-- Three-level JSON repair (L1 regex → L2 LLM 600s → L3 full re-run) in
-  Phase 0 and Phase 3.
+  `repair_agent.run()` — unified check (L0–L3) + fix (T0–T3) + verify.
+  Field-level surgical patches. Repair fail → stage ERROR; `--resume`
+  resets to PENDING.
+- Three-level JSON repair (L1 regex → L2 LLM 600s → L3 full re-run)
+  in Phase 0 only.
 - Phase 0 parallel summarization + completion gate blocks Phase 1.
 - Git integration: dedicated branch, per-stage commits, auto-rollback,
   squash-merge to main. Commit-ordering contract prevents fake-committed
