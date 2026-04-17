@@ -50,8 +50,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--model", "-m",
-        default="claude-opus-4-6",
-        help="Model for extraction (default: claude-opus-4-6)",
+        default="claude-opus-4-7",
+        help="Model for extraction (default: claude-opus-4-7)",
     )
     parser.add_argument(
         "--effort",
