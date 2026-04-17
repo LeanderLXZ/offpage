@@ -495,15 +495,21 @@ def run_stage_post_processing(
     stage_order: int,
     character_ids: list[str],
     chapter_range: str,
-) -> list[str]:
+) -> tuple[list[str], list[str]]:
     """Run all programmatic post-processing for a completed stage.
 
     Called after world + character extraction succeeds, before review.
     Generates memory_digest, world_event_digest, and updates stage_catalogs.
 
-    Returns a list of issues (empty = all clean).
+    Returns ``(errors, warnings)``. ``errors`` are blocking preconditions
+    (missing / unparsable extraction output) — when non-empty the caller
+    MUST abort the stage before the repair gate runs, because the repair
+    agent cannot meaningfully check absent files. ``warnings`` are
+    internal digest / catalog anomalies that the repair agent can catch
+    via its own checks.
     """
-    issues: list[str] = []
+    errors: list[str] = []
+    warnings: list[str] = []
     work_dir = project_root / "works" / work_id
     schema_dir = project_root / "schemas"
 
@@ -520,7 +526,7 @@ def run_stage_post_processing(
             snapshot_data = json.loads(
                 world_snapshot_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, ValueError) as e:
-            issues.append(f"Cannot parse world snapshot: {e}")
+            errors.append(f"Cannot parse world snapshot: {e}")
             snapshot_data = {}
 
         if snapshot_data:
@@ -535,7 +541,7 @@ def run_stage_post_processing(
                 chapter_scope=chapter_scope,
                 schema_dir=schema_dir,
             )
-            issues.extend(f"[world catalog] {i}" for i in catalog_issues)
+            warnings.extend(f"[world catalog] {i}" for i in catalog_issues)
 
             # world_event_digest — resolve character names for best-effort
             # involved_characters extraction
@@ -565,10 +571,10 @@ def run_stage_post_processing(
                 schema_dir=schema_dir,
                 character_names=char_names,
             )
-            issues.extend(
+            warnings.extend(
                 f"[world event digest] {i}" for i in wed_issues)
     else:
-        issues.append(f"World snapshot not found: {world_snapshot_path}")
+        errors.append(f"World snapshot not found: {world_snapshot_path}")
 
     # --- Per-character: memory_digest + stage_catalog ---
     for char_id in character_ids:
@@ -577,13 +583,18 @@ def run_stage_post_processing(
         # memory_digest
         timeline_path = char_dir / "memory_timeline" / f"{stage_id}.json"
         digest_path = char_dir / "memory_digest.jsonl"
-        digest_issues = generate_memory_digest(
-            timeline_path=timeline_path,
-            digest_path=digest_path,
-            stage_id=stage_id,
-            schema_dir=schema_dir,
-        )
-        issues.extend(f"[{char_id} digest] {i}" for i in digest_issues)
+        if not timeline_path.exists():
+            errors.append(
+                f"[{char_id}] memory_timeline not found: {timeline_path}")
+        else:
+            digest_issues = generate_memory_digest(
+                timeline_path=timeline_path,
+                digest_path=digest_path,
+                stage_id=stage_id,
+                schema_dir=schema_dir,
+            )
+            warnings.extend(
+                f"[{char_id} digest] {i}" for i in digest_issues)
 
         # stage_catalog
         snapshot_path = char_dir / "stage_snapshots" / f"{stage_id}.json"
@@ -594,7 +605,7 @@ def run_stage_post_processing(
                 snapshot_data = json.loads(
                     snapshot_path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, ValueError) as e:
-                issues.append(f"[{char_id}] Cannot parse snapshot: {e}")
+                errors.append(f"[{char_id}] Cannot parse snapshot: {e}")
                 continue
 
             catalog_issues = upsert_stage_catalog(
@@ -609,13 +620,13 @@ def run_stage_post_processing(
                 chapter_scope=chapter_scope,
                 schema_dir=schema_dir,
             )
-            issues.extend(
+            warnings.extend(
                 f"[{char_id} catalog] {i}" for i in catalog_issues)
         else:
-            issues.append(
+            errors.append(
                 f"[{char_id}] Snapshot not found: {snapshot_path}")
 
-    return issues
+    return errors, warnings
 
 
 def _parse_chapter_scope(chapter_range: str) -> dict[str, str] | None:

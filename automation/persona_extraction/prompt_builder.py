@@ -193,11 +193,6 @@ def build_baseline_prompt(
 
 
 # ---------------------------------------------------------------------------
-# Coordinated extraction prompt (LEGACY — kept for backward compatibility;
-# orchestrator now uses build_world_extraction_prompt + build_char_snapshot_prompt + build_char_support_prompt)
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # 1+2N split extraction prompts
 # ---------------------------------------------------------------------------
 

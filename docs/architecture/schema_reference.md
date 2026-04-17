@@ -8,7 +8,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 ### work_manifest.schema.json
 
 **用途**：作品入库 manifest。
-**位置**：`works/{work_id}/manifest.json`
+**位置**：`sources/works/{work_id}/manifest.json`
 **关键字段**：work_id, title, language, source_types, ingestion_status
 
 ---

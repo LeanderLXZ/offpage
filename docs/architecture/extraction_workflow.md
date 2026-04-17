@@ -28,7 +28,7 @@
 - 归一化章节：`sources/works/{work_id}/normalized/`
 - 创建元数据：`sources/works/{work_id}/metadata/book_metadata.json`
   和 `chapter_index.json`
-- 创建作品 manifest：`works/{work_id}/manifest.json`
+- 创建作品 manifest：`sources/works/{work_id}/manifest.json`
 
 **对应提示词**：无（手动或脚本）
 
@@ -163,7 +163,9 @@ baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
 - memory_timeline `digest_summary`：30–50 字（schema 硬门控，独立撰写，
   非 `event_description` 机械截断，直接作为 memory_digest 的来源）
 
-**对应提示词**：`automation/prompt_templates/character_extraction.md`（每个角色独立调用）
+**对应提示词**：步骤 6 按 1+2N 拆分为 `character_snapshot_extraction.md`
+（角色快照）与 `character_support_extraction.md`（memory_timeline + baseline
+校正）两个独立提示词，各角色并行调用。详见上文步骤 6a / 6b。
 
 ### 7. 跨阶段一致性检查（Phase 3.5）
 

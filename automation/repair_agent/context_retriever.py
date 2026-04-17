@@ -99,7 +99,12 @@ class ContextRetriever:
     # ------------------------------------------------------------------
 
     def _get_stage_chapters(self, ctx: SourceContext) -> list[int]:
-        """Get chapter numbers for the stage from stage_plan.json."""
+        """Get chapter numbers for the stage from stage_plan.json.
+
+        ``stage_plan.json`` stores ``chapters`` as a string ``"NNNN-NNNN"``
+        (zero-padded inclusive range). A list form ``[start, end]`` is also
+        accepted as a tolerant fallback.
+        """
         work_path = Path(ctx.work_path)
         plan_path = work_path / "analysis" / "stage_plan.json"
         if not plan_path.exists():
@@ -107,11 +112,19 @@ class ContextRetriever:
         try:
             plan = json.loads(plan_path.read_text(encoding="utf-8"))
             for stage in plan.get("stages", []):
-                if stage.get("stage_id") == ctx.stage_id:
-                    chapters = stage.get("chapters", [])
-                    if isinstance(chapters, list) and len(chapters) == 2:
-                        return list(range(chapters[0], chapters[1] + 1))
-                    return chapters
+                if stage.get("stage_id") != ctx.stage_id:
+                    continue
+                chapters = stage.get("chapters")
+                if isinstance(chapters, str):
+                    m = re.match(r"^(\d+)\s*-\s*(\d+)$", chapters.strip())
+                    if m:
+                        start, end = int(m.group(1)), int(m.group(2))
+                        if end >= start:
+                            return list(range(start, end + 1))
+                    return []
+                if isinstance(chapters, list) and len(chapters) == 2:
+                    return list(range(int(chapters[0]), int(chapters[1]) + 1))
+                return []
         except (json.JSONDecodeError, OSError):
             pass
         return []
