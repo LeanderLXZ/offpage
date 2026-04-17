@@ -47,8 +47,8 @@ class IssueTracker:
     # ------------------------------------------------------------------
 
     def is_regression(self, report: RoundReport) -> bool:
-        """True if a round introduced more issues than it resolved."""
-        return len(report.introduced) >= len(report.resolved) and len(report.introduced) > 0
+        """True if a round introduced strictly more issues than it resolved."""
+        return len(report.introduced) > len(report.resolved)
 
     def is_stalled(self, prev_report: RoundReport | None,
                    curr_report: RoundReport) -> bool:

@@ -225,7 +225,7 @@ class ProgrammaticFixer(BaseFixer):
         parent_path = issue.json_path
         new_path = f"{parent_path}.{field_name}" if parent_path != "$" else f"$.{field_name}"
         try:
-            return apply_field_patch(content, parent_path + "." + field_name, "")
+            return apply_field_patch(content, new_path, "")
         except (KeyError, IndexError):
             return None
 

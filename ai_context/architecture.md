@@ -199,7 +199,7 @@ or `codex` call, no shared session memory, file-based context.
   full-book context. Drafts — subsequent stages may correct.
 - **Phase 3 — Coordinated stage extraction** (per-stage loop):
   1. Extraction: 1+2N LLM calls in parallel (1 world + N char_snapshot
-     + N char_support; no inter-lane dependency). Each character is
+     + N char_support; no inter-process dependency). Each character is
      split into two independent processes: **char_snapshot** produces
      `stage_snapshots/{stage_id}.json`; **char_support** produces
      `memory_timeline/{stage_id}.json` + baseline corrections.

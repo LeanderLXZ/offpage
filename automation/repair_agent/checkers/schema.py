@@ -52,7 +52,7 @@ class SchemaChecker(BaseChecker):
         for error in sorted(validator.iter_errors(data),
                             key=lambda e: list(e.absolute_path)):
             path_parts = [str(p) for p in error.absolute_path]
-            json_path = prefix + "." + ".".join(path_parts) if path_parts else prefix
+            json_path = (prefix + "." + ".".join(path_parts)) if path_parts else prefix
             issues.append(Issue(
                 file=file_path,
                 json_path=json_path,

@@ -29,9 +29,9 @@ class ContextRetriever:
     ) -> str:
         """Return relevant chapter text for a T2 source_patch fix.
 
-        Attempt 1: top-3 chapters
-        Attempt 2: top-5 + adjacent chapters
-        Attempt 3: all chapters in the stage
+        attempt_num 0: top-3 chapters
+        attempt_num 1: top-5 + adjacent chapters
+        attempt_num ≥2: all chapters in the stage
         """
         stage_chapters = self._get_stage_chapters(source_ctx)
         if not stage_chapters:

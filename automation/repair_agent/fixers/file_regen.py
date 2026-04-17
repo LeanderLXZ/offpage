@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from . import BaseFixer
 from ..context_retriever import ContextRetriever
+from ..field_patch import write_patched_file
 from ..protocol import FileEntry, FixResult, Issue, SourceContext
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,6 @@ class FileRegenFixer(BaseFixer):
                 logger.warning("T3 regen failed for %s: %s", file_path, exc)
                 continue
 
-            from ..field_patch import write_patched_file
             f.content = new_content
             write_patched_file(file_path, new_content)
             for issue in file_issues:
