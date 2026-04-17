@@ -248,8 +248,7 @@ Phase 0（章节归纳）仍使用 `persona_extraction/json_repair.py` 的三级
 - **Token/context limit → 不重试**（相同 prompt 必定再次超限），直接标记
   ERROR 并回滚，避免浪费重试配额
 - 脚本崩溃 → 重启后加 `--resume` 从最后一个 committed stage 继续
-- 提取失败 → lane-attributed 优先（仅清失败 lane 文件 + 重跑该 lane），
-  仅在 lane 配额耗尽或不可归属时才全仓库回滚未提交变更
+- 提取失败 → 自动回滚未提交的文件变更（全仓库范围，不仅限于 `works/`）
 - **Baseline 恢复**：`--resume` 时自动检测 Phase 2.5 baseline 是否完成，
   缺失则补跑，避免后续 stage 因缺少 identity.json 而全部失败
 - **Baseline 出口验证**：Phase 2.5 完成后运行 `validate_baseline()`

@@ -1293,11 +1293,7 @@ class ExtractionOrchestrator:
                 stage.transition(StageState.EXTRACTING)
                 phase3.save(self.project_root)
 
-                # Initial submission set; shrinks each retry round to the
-                # subset of lanes whose previous attempt errored.
-                pending: list[tuple[str, str]] = [("world", "world")]
-                pending.extend(
-                    ("character", c) for c in pipeline.target_characters)
+                extraction_errors: list[str] = []
 
                 with ThreadPoolExecutor(
                         max_workers=n_workers) as executor:
@@ -1316,8 +1312,13 @@ class ExtractionOrchestrator:
                             print(f"    [ERROR] {proc_type}:{proc_id} "
                                   f"extraction failed: {result.error}")
 
+                if extraction_errors:
+                    print("    Rolling back uncommitted changes...")
+                    rollback_to_head(self.project_root)
+                    stage.transition(StageState.ERROR)
+                    stage.error_message = "; ".join(extraction_errors)
                     phase3.save(self.project_root)
-                    pending = next_pending
+                    return
 
                 tracker.record_step(ProgressTracker.STEP_EXTRACTION)
                 tracker.print_step_done(2, 5,
