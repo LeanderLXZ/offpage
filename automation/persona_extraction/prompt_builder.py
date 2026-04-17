@@ -197,74 +197,6 @@ def build_baseline_prompt(
 # orchestrator now uses build_world_extraction_prompt + build_char_snapshot_prompt + build_char_support_prompt)
 # ---------------------------------------------------------------------------
 
-def build_extraction_prompt(
-    project_root: Path,
-    progress: PipelineProgress,
-    stage: StageEntry,
-    *,
-    stages: list[StageEntry] | None = None,
-    reviewer_feedback: str = "",
-) -> str:
-    """Build prompt for coordinated world + character extraction.
-
-    Not invoked by the main extraction orchestrator (which uses 1+2N split
-    lanes), but retained as the shared read-list builder for reviewer and
-    targeted-fix prompts.
-    """
-    template = _load_template("coordinated_extraction.md")
-
-    work_id = progress.work_id
-    work_dir = project_root / "works" / work_id
-    source_dir = project_root / "sources" / "works" / work_id
-
-    # Determine previous stage output for style reference
-    prev_stage = _find_previous_committed_stage(stages or [], stage)
-    prev_world_snapshot = ""
-    prev_char_snapshots: dict[str, str] = {}
-    if prev_stage:
-        ws_path = (work_dir / "world" / "stage_snapshots"
-                   / f"{prev_stage.stage_id}.json")
-        if ws_path.exists():
-            prev_world_snapshot = str(ws_path)
-        for char_id in progress.target_characters:
-            cs_path = (work_dir / "characters" / char_id / "canon"
-                       / "stage_snapshots" / f"{prev_stage.stage_id}.json")
-            if cs_path.exists():
-                prev_char_snapshots[char_id] = str(cs_path)
-
-    # Build file read list for the agent
-    files_to_read = _build_read_list(
-        project_root, work_id, progress.target_characters,
-        stage, prev_stage)
-
-    context = {
-        "work_id": work_id,
-        "stage_id": stage.stage_id,
-        "chapters": stage.chapters,
-        "chapter_range": stage.chapters,
-        "target_characters": ", ".join(progress.target_characters),
-        "target_characters_list": json.dumps(
-            progress.target_characters, ensure_ascii=False),
-        "source_dir": str(source_dir),
-        "work_dir": str(work_dir),
-        "schemas_dir": str(project_root / "schemas"),
-        "prev_world_snapshot": prev_world_snapshot,
-        "prev_char_snapshots_json": json.dumps(
-            prev_char_snapshots, ensure_ascii=False),
-        "files_to_read": "\n".join(f"- {f}" for f in files_to_read),
-        "is_first_stage": bool(stages) and stage.stage_id == stages[0].stage_id,
-        "reviewer_feedback": reviewer_feedback,
-        "retry_note": (
-            f"\n\n## 重试注意\n\n"
-            f"上一次提取被 reviewer 打回，具体问题如下：\n\n"
-            f"{reviewer_feedback}\n\n"
-            f"请重点修复以上问题。"
-        ) if reviewer_feedback else "",
-    }
-
-    return _render_template(template, context)
-
-
 # ---------------------------------------------------------------------------
 # 1+2N split extraction prompts
 # ---------------------------------------------------------------------------
@@ -787,24 +719,6 @@ def _build_character_read_list(
         project_root, work_id, character_id, stage, prev_stage)
     files.extend(_build_char_support_read_list(
         project_root, work_id, character_id, stage, prev_stage))
-    return _deduplicate(files)
-
-
-def _build_read_list(
-    project_root: Path,
-    work_id: str,
-    character_ids: list[str],
-    stage: StageEntry,
-    prev_stage: StageEntry | None,
-) -> list[str]:
-    """Legacy: combined read list for coordinated extraction (kept for
-    backward compatibility with reviewer/targeted-fix prompts)."""
-    # Merge world + all character lists
-    files = _build_world_read_list(
-        project_root, work_id, stage, prev_stage)
-    for char_id in character_ids:
-        files.extend(_build_character_read_list(
-            project_root, work_id, char_id, stage, prev_stage))
     return _deduplicate(files)
 
 

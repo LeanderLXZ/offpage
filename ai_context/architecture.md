@@ -217,7 +217,8 @@ or `codex` call, no shared session memory, file-based context.
      sees its own lane's outputs.
   4. Commit gate (提交门控) — programmatic (0 token), **structural +
      identifier level only**: snapshot existence, `stage_id` alignment,
-     catalog / digest coverage; warn-only cross-entity reference
+     catalog / digest coverage, world_event_digest count = stage_events
+     count (1:1 enforcement); warn-only cross-entity reference
      resolution. Gate issues attributed to lane types: snapshot checks
      → `char_snapshot`; memory/digest checks → `char_support`.
   5. Git commit — **commit-ordering contract**: git commit first; only
@@ -228,10 +229,12 @@ or `codex` call, no shared session memory, file-based context.
   → only that lane's products roll back + that lane re-extracts
   (≤ `lane_max_retries`=1); previously PASSED lanes preserved. After
   lane re-extraction, re-run post-processing (idempotent) and re-review
-  only the retried lanes (no cross-entity dependency). Gate failures
-  cascade by category:
-  - `catalog_missing` / `digest_missing` (in
-    `POST_PROCESSING_RECOVERABLE`) → free PP rerun + re-gate
+  only the retried lanes (no cross-entity dependency). Gate recovery
+  cascade only processes error-severity issues; warnings (e.g.
+  cross-entity reference warnings) are logged but do not consume retry
+  budget. Gate failures cascade by category:
+  - `catalog_missing` / `digest_missing` / `world_event_digest_missing`
+    (in `POST_PROCESSING_RECOVERABLE`) → free PP rerun + re-gate
   - `snapshot_*` / `lane_review` → lane re-extract sharing the same
     `lane_retries` quota as review failures
   - unattributed structural / exhausted quota → stage ERROR (no

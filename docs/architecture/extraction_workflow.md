@@ -337,12 +337,15 @@ orchestrator (Python)
   程序化校验 → Level 2/3 定点 LLM 修复（×2 次尝试）→ lane 独立重提取。
   系统性问题（文件缺失/结构错误/理解偏差）→ 仅失败 lane 回滚重提取
 - 提交门控级联（Gate Cascade）：门控产物为 `GateIssue(message, severity,
-  lane_type, lane_id, category)`，按 category 路由 —
-  `catalog_missing`/`digest_missing` ∈ `POST_PROCESSING_RECOVERABLE` →
-  免费 post_processing 重跑 + 重新过门控；`snapshot_*`/`lane_review` →
-  仅该 lane 回滚重提取（与审校失败共享 `lane_retries` 配额）；
-  无 lane 归属或配额耗尽 → stage ERROR（无 stage 级重试）。`lane_retries`
-  计数器仅在门控最终 PASS 后清零，避免 review/gate 之间反复消耗配额
+  lane_type, lane_id, category)`，仅 error 级别驱动恢复级联（warning 仅记录
+  日志、不消耗 retry 预算）。按 category 路由 —
+  `catalog_missing`/`digest_missing`/`world_event_digest_missing` ∈
+  `POST_PROCESSING_RECOVERABLE` → 免费 post_processing 重跑 + 重新过门控
+  （含 world_event_digest 条目数 ≠ stage_events 数的 1:1 不一致）；
+  `snapshot_*`/`lane_review` → 仅该 lane 回滚重提取（与审校失败共享
+  `lane_retries` 配额）；无 lane 归属或配额耗尽 → stage ERROR（无 stage 级
+  重试）。`lane_retries` 计数器仅在门控最终 PASS 后清零，避免 review/gate
+  之间反复消耗配额
 - 提取在独立 git 分支进行，每 stage 单独 commit（精确回滚）；全部完成后
   squash merge 回 main（干净历史），extraction 分支可删除
 - 支持 Claude CLI 和 Codex CLI 两种后端
