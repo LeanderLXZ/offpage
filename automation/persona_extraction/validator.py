@@ -1,25 +1,24 @@
-"""Programmatic validator — Layer 1 (no LLM tokens).
+"""Programmatic validator — Phase 2.5 baseline gate.
 
-Checks JSON schema compliance, structural completeness, and field
-presence. Runs before the semantic reviewer to catch format issues for free.
+After Phase 2.5 produces baseline outputs (identity, manifest, world
+foundation, and the skeleton voice/behavior/boundary/failure-mode files)
+this validator checks that every file parses as JSON, matches its schema
+and carries the required non-empty fields. It runs before Phase 3 starts
+so baseline issues surface immediately rather than during stage
+extraction.
 
-Before validation, any malformed JSON files are automatically repaired
-via the three-level repair pipeline (see ``json_repair.py``).
+Stage-level validation lives in ``repair_agent`` (L0–L3 checkers +
+T0–T3 fixers), driven by ``orchestrator.run_stage_extraction``.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .json_repair import try_repair_json_file, try_repair_jsonl_file
-
-_MEMORY_ID_RE = re.compile(r"^M-S(\d{3})-(\d{2})$")
-_EVENT_ID_RE = re.compile(r"^E-S(\d{3})-(\d{2})$")
-_STAGE_NUM_RE = re.compile(r"S(\d{3})")
+from .json_repair import try_repair_json_file
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +61,13 @@ class ValidationReport:
         return "\n".join(lines)
 
 
-def _load_importance_map(project_root: Path, work_id: str) -> dict[str, str]:
+def load_importance_map(project_root: Path,
+                        work_id: str) -> dict[str, str]:
     """Load character importance from candidate_characters.json.
 
-    Returns {character_name: importance} e.g. {"角色A": "主角", "角色B": "重要配角"}.
+    Returns ``{character_id: importance}`` (e.g. ``{"角色A": "主角"}``).
+    Consumed by the repair agent's StructuralChecker to raise the
+    minimum example count for main / important characters.
     """
     path = (project_root / "works" / work_id / "analysis"
             / "candidate_characters.json")
@@ -78,81 +80,6 @@ def _load_importance_map(project_root: Path, work_id: str) -> dict[str, str]:
                 if c.get("character_id")}
     except (json.JSONDecodeError, OSError, KeyError):
         return {}
-
-
-def validate_stage(
-    project_root: Path,
-    work_id: str,
-    stage_id: str,
-    character_ids: list[str],
-    schema_dir: Path | None = None,
-) -> ValidationReport:
-    """Run all programmatic checks for a stage's output."""
-    issues: list[ValidationIssue] = []
-    schema_dir = schema_dir or (project_root / "schemas")
-    work_dir = project_root / "works" / work_id
-
-    # ---- World checks ----
-    issues.extend(_check_world(work_dir, stage_id, schema_dir))
-
-    # ---- Character checks (for each target character) ----
-    importance_map = _load_importance_map(project_root, work_id)
-    for char_id in character_ids:
-        issues.extend(_check_character(
-            work_dir, char_id, stage_id, schema_dir, importance_map))
-
-    # ---- Baseline file checks (Phase 2.5 creates, any stage may update) ----
-    for char_id in character_ids:
-        issues.extend(_check_baselines(work_dir, char_id, schema_dir))
-
-    # ---- Manifest checks ----
-    for char_id in character_ids:
-        issues.extend(_check_manifest(work_dir, char_id, schema_dir))
-
-    # ---- Cross-consistency ----
-    issues.extend(_check_cross_consistency(work_dir, stage_id, character_ids))
-
-    passed = not any(i.severity == "error" for i in issues)
-    return ValidationReport(passed=passed, issues=issues)
-
-
-def validate_lane(
-    project_root: Path,
-    work_id: str,
-    stage_id: str,
-    character_ids: list[str],
-    lane_type: str = "all",
-    lane_character_id: str | None = None,
-    schema_dir: Path | None = None,
-) -> ValidationReport:
-    """Run programmatic checks scoped to a single review lane.
-
-    Args:
-        lane_type: "world", "character", or "all" (full stage).
-        lane_character_id: Required when lane_type is "character".
-    """
-    if lane_type == "all":
-        return validate_stage(project_root, work_id, stage_id,
-                              character_ids, schema_dir)
-
-    issues: list[ValidationIssue] = []
-    schema_dir = schema_dir or (project_root / "schemas")
-    work_dir = project_root / "works" / work_id
-
-    if lane_type == "world":
-        issues.extend(_check_world(work_dir, stage_id, schema_dir))
-    elif lane_type == "character" and lane_character_id:
-        importance_map = _load_importance_map(project_root, work_id)
-        issues.extend(_check_character(
-            work_dir, lane_character_id, stage_id, schema_dir,
-            importance_map))
-        issues.extend(_check_baselines(
-            work_dir, lane_character_id, schema_dir))
-        issues.extend(_check_manifest(
-            work_dir, lane_character_id, schema_dir))
-
-    passed = not any(i.severity == "error" for i in issues)
-    return ValidationReport(passed=passed, issues=issues)
 
 
 def validate_baseline(
@@ -183,14 +110,14 @@ def validate_baseline(
             issues.append(ValidationIssue(
                 "error", str(foundation_path), "work_id is empty"))
 
-    # fixed_relationships.json (warn only — non-critical)
+    # fixed_relationships.json — required output of Phase 2.5
     fixed_rel_path = (work_dir / "world" / "foundation"
                       / "fixed_relationships.json")
     if not fixed_rel_path.exists():
         issues.append(ValidationIssue(
-            "warning", str(fixed_rel_path),
+            "error", str(fixed_rel_path),
             "fixed_relationships.json not produced "
-            "(Phase 2.5 should create)"))
+            "(Phase 2.5 must create)"))
     else:
         try_repair_json_file(fixed_rel_path)
         fr_data = _load_json(fixed_rel_path)
@@ -280,498 +207,6 @@ def validate_baseline(
 
 
 # ---------------------------------------------------------------------------
-# World validation
-# ---------------------------------------------------------------------------
-
-def _check_world(work_dir: Path, stage_id: str,
-                 schema_dir: Path) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
-    world_dir = work_dir / "world"
-
-    # stage_catalog.json exists
-    catalog_path = world_dir / "stage_catalog.json"
-    if not catalog_path.exists():
-        issues.append(ValidationIssue(
-            "error", str(catalog_path), "stage_catalog.json missing"))
-    else:
-        catalog = _load_json(catalog_path)
-        if catalog is not None:
-            # Check stage_id exists in catalog
-            stage_ids = [s.get("stage_id") for s in catalog.get("stages", [])]
-            if stage_id not in stage_ids:
-                issues.append(ValidationIssue(
-                    "error", str(catalog_path),
-                    f"stage_id '{stage_id}' not found in stage_catalog"))
-
-    # World stage snapshot exists and validates
-    snapshot_path = world_dir / "stage_snapshots" / f"{stage_id}.json"
-    if not snapshot_path.exists():
-        issues.append(ValidationIssue(
-            "error", str(snapshot_path), "World stage snapshot missing"))
-    else:
-        snapshot = _load_json(snapshot_path)
-        if snapshot is not None:
-            issues.extend(_validate_schema(
-                snapshot, schema_dir / "world_stage_snapshot.schema.json",
-                str(snapshot_path)))
-            # Check key fields are non-empty
-            for fld in ("snapshot_summary", "evidence_refs",
-                        "stage_events"):
-                val = snapshot.get(fld)
-                if not val:
-                    issues.append(ValidationIssue(
-                        "warning", str(snapshot_path),
-                        f"Field '{fld}' is empty or missing"))
-    # World event digest — auto-generated by post_processing; validate format
-    wed_path = world_dir / "world_event_digest.jsonl"
-    if wed_path.exists():
-        issues.extend(_check_world_event_digest(wed_path, schema_dir))
-
-    return issues
-
-
-def _check_world_event_digest(path: Path,
-                              schema_dir: Path) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
-    schema_path = schema_dir / "world_event_digest_entry.schema.json"
-
-    text = path.read_text(encoding="utf-8").strip()
-    if not text:
-        return issues
-
-    if not all(_is_valid_json_line(line) for line in text.splitlines()):
-        ok, desc = try_repair_jsonl_file(path)
-        if ok:
-            logger.info("Auto-repaired %s (%s)", path.name, desc)
-            text = path.read_text(encoding="utf-8").strip()
-
-    for i, line in enumerate(text.splitlines()):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            issues.append(ValidationIssue(
-                "error", f"{path}:line[{i}]",
-                "Invalid JSON line in world_event_digest"))
-            continue
-
-        issues.extend(_validate_schema(entry, schema_path,
-                                       f"{path}:line[{i}]"))
-
-        eid = entry.get("event_id", "")
-        if not _EVENT_ID_RE.match(eid):
-            issues.append(ValidationIssue(
-                "error", f"{path}:line[{i}]",
-                f"event_id '{eid}' does not match 'E-S###-##' pattern"))
-
-    return issues
-
-
-# ---------------------------------------------------------------------------
-# Character validation
-# ---------------------------------------------------------------------------
-
-def _check_character(work_dir: Path, char_id: str, stage_id: str,
-                     schema_dir: Path,
-                     importance_map: dict[str, str] | None = None,
-                     ) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
-    char_dir = work_dir / "characters" / char_id / "canon"
-
-    # Stage snapshot
-    snapshot_path = char_dir / "stage_snapshots" / f"{stage_id}.json"
-    if not snapshot_path.exists():
-        issues.append(ValidationIssue(
-            "error", str(snapshot_path),
-            f"Character stage snapshot missing for {char_id}"))
-    else:
-        snapshot = _load_json(snapshot_path)
-        if snapshot is not None:
-            issues.extend(_validate_schema(
-                snapshot, schema_dir / "stage_snapshot.schema.json",
-                str(snapshot_path)))
-            issues.extend(_check_snapshot_depth(
-                snapshot, str(snapshot_path), importance_map))
-
-    # Memory timeline (.json array format)
-    memory_path = char_dir / "memory_timeline" / f"{stage_id}.json"
-    if not memory_path.exists():
-        issues.append(ValidationIssue(
-            "error", str(memory_path),
-            f"Memory timeline missing for {char_id} stage {stage_id}"))
-    else:
-        issues.extend(_check_memory_timeline(memory_path, schema_dir))
-
-    # Memory digest (should have entries for this stage)
-    digest_path = char_dir / "memory_digest.jsonl"
-    if not digest_path.exists():
-        issues.append(ValidationIssue(
-            "warning", str(digest_path),
-            f"memory_digest.jsonl missing for {char_id}"))
-    else:
-        issues.extend(_check_memory_digest(
-            digest_path, stage_id, schema_dir))
-
-    # Stage catalog — schema validation + entry completeness
-    catalog_path = char_dir / "stage_catalog.json"
-    if not catalog_path.exists():
-        issues.append(ValidationIssue(
-            "warning", str(catalog_path),
-            f"Character stage_catalog.json missing for {char_id}"))
-    else:
-        catalog = _load_json(catalog_path)
-        if catalog is not None:
-            issues.extend(_validate_schema(
-                catalog, schema_dir / "stage_catalog.schema.json",
-                str(catalog_path)))
-
-    return issues
-
-
-def _min_examples_for_target(target: str,
-                             importance_map: dict[str, str]) -> int:
-    """Return minimum example count based on character importance.
-
-    主角 → 5, 重要配角 → 3, others/unknown → 1.
-    Uses substring matching (target_type may contain extra context).
-    """
-    for name, importance in importance_map.items():
-        if name in target:
-            if importance == "主角":
-                return 5
-            if importance == "重要配角":
-                return 3
-            return 1
-    return 1
-
-
-def _check_snapshot_depth(snapshot: dict,
-                          label: str,
-                          importance_map: dict[str, str] | None = None,
-                          ) -> list[ValidationIssue]:
-    """Deep checks on snapshot self-containedness and quality.
-
-    Args:
-        importance_map: {character_name: importance} from candidate_characters.
-            主角 targets require ≥5 examples, 重要配角 ≥3, others ≥1.
-    """
-    issues: list[ValidationIssue] = []
-    _imp = importance_map or {}
-
-    # --- Top-level sections must exist and be non-empty ---
-    for section in ("voice_state", "behavior_state",
-                    "boundary_state", "relationships"):
-        if not snapshot.get(section):
-            issues.append(ValidationIssue(
-                "error", label,
-                f"Self-contained field '{section}' is empty "
-                f"(snapshot must be self-contained)"))
-
-    if not snapshot.get("evidence_refs"):
-        issues.append(ValidationIssue(
-            "warning", label, "evidence_refs is empty"))
-
-    # --- voice_state depth ---
-    vs = snapshot.get("voice_state") or {}
-    if vs:
-        if not vs.get("emotional_voice_map"):
-            issues.append(ValidationIssue(
-                "warning", label,
-                "voice_state.emotional_voice_map is empty — "
-                "emotions will lack voice differentiation"))
-        if not vs.get("target_voice_map"):
-            issues.append(ValidationIssue(
-                "warning", label,
-                "voice_state.target_voice_map is empty — "
-                "different targets will sound the same"))
-        else:
-            for i, entry in enumerate(vs["target_voice_map"]):
-                examples = entry.get("dialogue_examples") or []
-                target = entry.get("target_type", f"[{i}]")
-                min_ex = _min_examples_for_target(target, _imp)
-                if len(examples) < min_ex:
-                    issues.append(ValidationIssue(
-                        "warning", label,
-                        f"target_voice_map '{target}' has "
-                        f"{len(examples)} dialogue_examples "
-                        f"(want >={min_ex})"))
-
-    # --- behavior_state depth ---
-    bs = snapshot.get("behavior_state") or {}
-    if bs:
-        if not bs.get("target_behavior_map"):
-            issues.append(ValidationIssue(
-                "warning", label,
-                "behavior_state.target_behavior_map is empty — "
-                "different targets will behave identically"))
-        else:
-            for i, entry in enumerate(bs["target_behavior_map"]):
-                examples = entry.get("action_examples") or []
-                target = entry.get("target_type", f"[{i}]")
-                min_ex = _min_examples_for_target(target, _imp)
-                if len(examples) < min_ex:
-                    issues.append(ValidationIssue(
-                        "warning", label,
-                        f"target_behavior_map '{target}' has "
-                        f"{len(examples)} action_examples "
-                        f"(want >={min_ex})"))
-
-    # --- relationships depth ---
-    rels = snapshot.get("relationships") or []
-    for i, rel in enumerate(rels):
-        target = rel.get("target_character_id") or rel.get(
-            "target_label", f"[{i}]")
-        if not rel.get("driving_events"):
-            issues.append(ValidationIssue(
-                "warning", label,
-                f"relationship '{target}' missing driving_events"))
-        if not rel.get("relationship_history_summary"):
-            issues.append(ValidationIssue(
-                "warning", label,
-                f"relationship '{target}' missing "
-                f"relationship_history_summary"))
-
-    # --- character_arc check (stages after the first) ---
-    stage_delta = snapshot.get("stage_delta")
-    character_arc = snapshot.get("character_arc")
-    if stage_delta and not character_arc:
-        issues.append(ValidationIssue(
-            "warning", label,
-            "character_arc is missing — "
-            "snapshot should include overall arc from stage 1 to current"))
-
-    return issues
-
-
-def _check_baselines(work_dir: Path, char_id: str,
-                     schema_dir: Path) -> list[ValidationIssue]:
-    """Validate baseline files against their schemas."""
-    issues: list[ValidationIssue] = []
-    char_dir = work_dir / "characters" / char_id / "canon"
-
-    baseline_checks = [
-        ("voice_rules.json", "voice_rules.schema.json"),
-        ("behavior_rules.json", "behavior_rules.schema.json"),
-        ("boundaries.json", "boundaries.schema.json"),
-        ("failure_modes.json", "failure_modes.schema.json"),
-    ]
-
-    for data_file, schema_file in baseline_checks:
-        data_path = char_dir / data_file
-        if not data_path.exists():
-            # Baselines created in Phase 2.5; may not exist if skipped
-            continue
-        data = _load_json(data_path)
-        if data is not None:
-            issues.extend(_validate_schema(
-                data, schema_dir / schema_file, str(data_path)))
-
-    # --- identity.json depth checks ---
-    identity_path = char_dir / "identity.json"
-    if identity_path.exists():
-        identity = _load_json(identity_path)
-        if identity is not None:
-            issues.extend(_validate_schema(
-                identity, schema_dir / "identity.schema.json",
-                str(identity_path)))
-            if not identity.get("core_wounds"):
-                issues.append(ValidationIssue(
-                    "warning", str(identity_path),
-                    "core_wounds is empty — identity should include "
-                    "root psychological traumas"))
-            if not identity.get("key_relationships"):
-                issues.append(ValidationIssue(
-                    "warning", str(identity_path),
-                    "key_relationships is empty — identity should "
-                    "include cross-story relationship arcs"))
-    return issues
-
-
-def _check_manifest(work_dir: Path, char_id: str,
-                    schema_dir: Path) -> list[ValidationIssue]:
-    """Validate manifest.json and check paths point to real directories."""
-    issues: list[ValidationIssue] = []
-    manifest_path = work_dir / "characters" / char_id / "manifest.json"
-
-    if not manifest_path.exists():
-        issues.append(ValidationIssue(
-            "warning", str(manifest_path),
-            f"manifest.json missing for {char_id}"))
-        return issues
-
-    data = _load_json(manifest_path)
-    if data is None:
-        return issues
-
-    issues.extend(_validate_schema(
-        data, schema_dir / "character_manifest.schema.json",
-        str(manifest_path)))
-
-    # Check that paths.stage_snapshot_root points to real directory
-    paths = data.get("paths") or {}
-    snapshot_root = paths.get("stage_snapshot_root", "")
-    if snapshot_root:
-        actual_dir = work_dir / snapshot_root
-        if not actual_dir.exists():
-            issues.append(ValidationIssue(
-                "error", str(manifest_path),
-                f"stage_snapshot_root '{snapshot_root}' does not exist "
-                f"(expected: {actual_dir})"))
-
-    return issues
-
-
-def _check_memory_timeline(path: Path,
-                           schema_dir: Path) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
-    schema_path = schema_dir / "memory_timeline_entry.schema.json"
-
-    data = _load_json(path)
-    if data is None:
-        issues.append(ValidationIssue(
-            "error", str(path), "Cannot parse memory timeline JSON"))
-        return issues
-
-    if not isinstance(data, list):
-        issues.append(ValidationIssue(
-            "error", str(path),
-            "Memory timeline must be a JSON array"))
-        return issues
-
-    if len(data) == 0:
-        issues.append(ValidationIssue(
-            "warning", str(path), "Memory timeline is empty"))
-        return issues
-
-    for i, entry in enumerate(data):
-        label = f"{path}:entry[{i}]"
-        if not isinstance(entry, dict):
-            issues.append(ValidationIssue("error", label, "Not an object"))
-            continue
-
-        issues.extend(_validate_schema(entry, schema_path, label))
-
-        mid = entry.get("memory_id", "")
-        if not _MEMORY_ID_RE.match(mid):
-            issues.append(ValidationIssue(
-                "error", label,
-                f"memory_id '{mid}' does not match 'M-S###-##' pattern"))
-
-    return issues
-
-
-def _check_memory_digest(path: Path, stage_id: str,
-                         schema_dir: Path) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
-    schema_path = schema_dir / "memory_digest_entry.schema.json"
-
-    text = path.read_text(encoding="utf-8").strip()
-    if not text:
-        issues.append(ValidationIssue(
-            "warning", str(path), "memory_digest.jsonl is empty"))
-        return issues
-
-    # Auto-repair if needed
-    if not all(_is_valid_json_line(line) for line in text.splitlines()):
-        ok, desc = try_repair_jsonl_file(path)
-        if ok:
-            logger.info("Auto-repaired %s (%s)", path.name, desc)
-            text = path.read_text(encoding="utf-8").strip()
-
-    # Derive current stage's stage number from the stage_id (e.g. 阶段01 → 1).
-    # Stage for digest entries is carried by the S### segment of memory_id
-    # (authoritative); no separate stage_id field is stored.
-    current_stage_num: int | None = None
-    m = _STAGE_NUM_RE.search(stage_id)
-    if m:
-        current_stage_num = int(m.group(1))
-    else:
-        # Fall back to extracting any digits (e.g. 阶段01 → 01)
-        digits = re.search(r"(\d+)", stage_id)
-        if digits:
-            current_stage_num = int(digits.group(1))
-
-    stage_entries = 0
-    for i, line in enumerate(text.splitlines()):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            issues.append(ValidationIssue(
-                "error", f"{path}:line[{i}]",
-                "Invalid JSON line in memory_digest"))
-            continue
-
-        issues.extend(_validate_schema(entry, schema_path,
-                                       f"{path}:line[{i}]"))
-
-        mid = entry.get("memory_id", "")
-        mm = _MEMORY_ID_RE.match(mid)
-        if not mm:
-            issues.append(ValidationIssue(
-                "error", f"{path}:line[{i}]",
-                f"memory_id '{mid}' does not match "
-                f"'M-S###-##' pattern"))
-        elif current_stage_num is not None:
-            if int(mm.group(1)) == current_stage_num:
-                stage_entries += 1
-
-    if stage_entries == 0:
-        issues.append(ValidationIssue(
-            "warning", str(path),
-            f"No digest entries found for stage '{stage_id}'"))
-
-    return issues
-
-
-# ---------------------------------------------------------------------------
-# Cross-consistency
-# ---------------------------------------------------------------------------
-
-def _check_cross_consistency(work_dir: Path, stage_id: str,
-                             character_ids: list[str]) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
-
-    # World and character snapshots should use the same stage_id
-    world_snapshot = work_dir / "world" / "stage_snapshots" / f"{stage_id}.json"
-    for char_id in character_ids:
-        char_snapshot = (work_dir / "characters" / char_id / "canon"
-                         / "stage_snapshots" / f"{stage_id}.json")
-        if world_snapshot.exists() and not char_snapshot.exists():
-            issues.append(ValidationIssue(
-                "error", str(char_snapshot),
-                f"World snapshot exists for {stage_id} but character "
-                f"snapshot missing for {char_id}"))
-        if char_snapshot.exists() and not world_snapshot.exists():
-            issues.append(ValidationIssue(
-                "error", str(world_snapshot),
-                f"Character snapshot exists for {char_id}/{stage_id} but "
-                f"world snapshot missing"))
-
-    # stage_catalog counts should match
-    world_catalog = work_dir / "world" / "stage_catalog.json"
-    if world_catalog.exists():
-        wc = _load_json(world_catalog)
-        if wc:
-            world_stages = {s.get("stage_id") for s in wc.get("stages", [])}
-            snapshot_dir = work_dir / "world" / "stage_snapshots"
-            if snapshot_dir.exists():
-                snapshot_files = {f.stem for f in snapshot_dir.glob("*.json")}
-                missing = world_stages - snapshot_files
-                if missing:
-                    issues.append(ValidationIssue(
-                        "warning", str(snapshot_dir),
-                        f"stage_catalog has stages without snapshots: "
-                        f"{missing}"))
-
-    return issues
-
-
-# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -792,17 +227,6 @@ def _load_json(path: Path, *, auto_repair: bool = True) -> dict | list | None:
     except OSError as e:
         logger.warning("Cannot load %s: %s", path, e)
         return None
-
-
-def _is_valid_json_line(line: str) -> bool:
-    line = line.strip()
-    if not line:
-        return True
-    try:
-        json.loads(line)
-        return True
-    except (json.JSONDecodeError, ValueError):
-        return False
 
 
 def _validate_schema(data: dict, schema_path: Path,

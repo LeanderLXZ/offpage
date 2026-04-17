@@ -100,7 +100,7 @@ The default startup packet should prefer summaries and selected-stage views.
 
 Load by default:
 
-- `works/{work_id}/manifest.json`
+- `sources/works/{work_id}/manifest.json`
 - `works/{work_id}/world/manifest.json`
 - selected `world/stage_snapshots/{stage_id}.json`
 - `works/{work_id}/world/foundation/foundation.json` + `fixed_relationships.json`

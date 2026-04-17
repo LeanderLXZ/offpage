@@ -198,55 +198,46 @@ or `codex` call, no shared session memory, file-based context.
   (`identity.json`, `manifest.json` + 4 skeleton baselines) from
   full-book context. Drafts — subsequent stages may correct.
 - **Phase 3 — Coordinated stage extraction** (per-stage loop):
-  1. Extraction: 1+N LLM calls in parallel (world + N characters; no
-     world → character dependency).
-  2. Programmatic post-processing (0 token, idempotent): L1 JSON repair
-     + generate `memory_digest.jsonl` + `world_event_digest.jsonl` +
-     upsert `stage_catalog.json`. `memory_digest.summary` = 1:1 copy of
+  1. Extraction: 1+2N LLM calls in parallel (1 world + N char_snapshot
+     + N char_support; no inter-process dependency). Each character is
+     split into two independent processes: **char_snapshot** produces
+     `stage_snapshots/{stage_id}.json`; **char_support** produces
+     `memory_timeline/{stage_id}.json` + baseline corrections.
+     char_support does NOT receive the previous snapshot.
+  2. Programmatic post-processing (0 token, idempotent): generate
+     `memory_digest.jsonl` + `world_event_digest.jsonl` + upsert
+     `stage_catalog.json`. `memory_digest.summary` = 1:1 copy of
      `digest_summary`; `world_event_digest.summary` = 1:1 copy of world
      `stage_events` entry. 5-level importance inferred by keyword. IDs
      use `{TYPE}-S{stage:03d}-{seq:02d}`; stage encoded in ID.
-  3. Parallel review lanes: world + each character independently runs
-     schema autofix → programmatic validate → semantic review →
-     targeted fix via `ThreadPoolExecutor`. Cascade: L0 schema autofix
-     (0 token) → L1 validate → L2/3 targeted LLM fix → lane
-     re-extraction.
-  4. Commit gate (提交门控) — programmatic (0 token), **structural +
-     identifier level only**: snapshot existence, `stage_id` alignment,
-     catalog / digest coverage; warn-only cross-entity reference
-     resolution (world `relationship_shifts` / `character_status_changes`
-     names should resolve via world cast or active character aliases).
-     Content-level world-vs-character conflicts = character reviewer's
-     job. Memory digest stage parsed from `M-S{stage:03d}-` prefix
-     (schema forbids `stage_id` field on digest entries).
-  5. Git commit — **commit-ordering contract**: git commit first; only
+  3. Repair agent (`automation/repair_agent/`): unified check + fix
+     system. Three-phase operation:
+     - Phase A: full validation (L0 json_syntax → L1 schema → L2
+       structural → L3 semantic). Checkers are layered — files with
+       lower-layer errors skip higher layers.
+     - Phase B: fix loop. Issues grouped by starting tier
+       (`START_TIER[category]`), escalating T0→T1→T2→T3 with per-tier
+       retry counts (T0=1, T1=3, T2=3, T3=1). Scoped recheck (L0–L2
+       only, 0 token) after each fix. Safety valves: regression
+       protection, convergence detection, total round limit (default 5).
+     - Phase C: final semantic verify (if Phase A found semantic
+       issues). Semantic LLM at most 2 calls **per file** (one in A,
+       at most one in C) — total cost scales with file count, not a
+       flat 2.
+     Field-level surgical patching via json_path — no whole-file
+     rollback. Checkers and fixers are orthogonal (any L can need any T).
+  4. Git commit — **commit-ordering contract**: git commit first; only
      non-empty SHA → `COMMITTED`; empty SHA reverts to `FAILED` so
      resume retries.
 
-  **Lane-attributed retry** (unified across initial extraction, review,
-  and gate): lane FAIL → only that lane's products roll back + that
-  lane re-extracts (≤ `lane_max_retries`=2); previously PASSED lanes
-  preserved. After any lane re-extraction, re-run post-processing
-  (idempotent) and re-review **all** lanes (cross-dependency: world
-  reviewer reads character memory_timelines, character reviewers read
-  world snapshot). Gate failures cascade by category:
-  - `catalog_missing` / `digest_missing` (in
-    `POST_PROCESSING_RECOVERABLE`) → free PP rerun + re-gate
-  - `snapshot_*` / `lane_review` → lane re-extract sharing the same
-    `lane_retries` quota as review AND initial-extraction lane errors
-  - unattributed structural / exhausted quota → full-stage rollback +
-    stage-level retry (≤ `max_retries`=2)
+  Repair agent FAIL (error-level issues unresolved) → stage ERROR.
+  `--resume` resets ERROR → PENDING for a fresh attempt.
 
-  Lane-retry budget shared across initial extraction, review, and gate
-  paths; cleared only when gate finally PASSes (pre-gate clearing would
-  let a stage ping-pong the quota). Lane re-extraction LLM failures not
-  escalated — missing snapshot caught by next gate iteration's
-  `snapshot_missing` path.
-
-  Every stage may correct any existing baseline. Character extraction
-  does NOT read world snapshot. Extraction prompts do NOT read
-  `baseline_merge.md`, `memory_digest.jsonl`, or `stage_catalog.json` —
-  self-contained snapshot contract embedded in prompt.
+  Every stage may correct any existing baseline (via char_support).
+  Character extraction does NOT read world snapshot. Extraction prompts
+  do NOT read `baseline_merge.md`, `memory_digest.jsonl`, or
+  `stage_catalog.json` — self-contained snapshot contract embedded in
+  prompt.
 
 - **Phase 3.5 — Cross-stage consistency**: after all Phase 3 commits, 8
   programmatic checks (0 token): alias consistency, field completeness,
@@ -271,9 +262,10 @@ or `codex` call, no shared session memory, file-based context.
 
 - Smart resume: PENDING stage with extraction output already on disk
   skips LLM extraction, jumps to post-processing.
-- Three-layer quality check per stage: programmatic validation (free) +
-  per-lane semantic review (independent LLM) + commit gate (programmatic
-  cross-consistency). Phase 4 = programmatic only.
+- Repair agent: unified check + fix system (`automation/repair_agent/`)
+  — the per-stage quality gate in Phase 3. Field-level surgical patches
+  via json_path (no whole-file rollback). Phase 4 = programmatic only
+  (no repair agent).
 - Dedicated git branch; each passing stage committed; rollback = `git
   reset`; squash-merge to main on completion.
 - Phase 3 and Phase 4 independent PID locks — can run in parallel.
