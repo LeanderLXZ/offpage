@@ -87,9 +87,17 @@ class SemanticChecker(BaseChecker):
         prompt_parts = [SEMANTIC_REVIEW_SYSTEM, "\n--- FILE ---\n"]
 
         content_str = json.dumps(content, ensure_ascii=False, indent=2)
-        # Truncate very large files to stay within context limits
-        if len(content_str) > 50000:
-            content_str = content_str[:50000] + "\n... (truncated)"
+        # Truncate very large files to stay within context limits. Log a
+        # warning when we truncate so the tail of the file (where the LLM
+        # might catch real semantic issues) isn't silently dropped.
+        _SEMANTIC_MAX_CHARS = 50000
+        if len(content_str) > _SEMANTIC_MAX_CHARS:
+            logger.warning(
+                "Semantic review truncated %s: %d chars → %d chars "
+                "(tail dropped from review)",
+                file_path, len(content_str), _SEMANTIC_MAX_CHARS)
+            content_str = (content_str[:_SEMANTIC_MAX_CHARS]
+                           + "\n... (truncated)")
         prompt_parts.append(content_str)
 
         if focus_paths:

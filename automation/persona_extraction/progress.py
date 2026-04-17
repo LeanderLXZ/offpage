@@ -324,11 +324,6 @@ class StageEntry:
     last_updated: str = ""
     error_message: str = ""
     fail_source: str = ""  # "programmatic" or "semantic" — which check caused FAIL
-    # Legacy fields — kept for backward-compatible deserialization of
-    # existing progress files. Not used by the current repair_agent
-    # architecture.
-    lane_retries: dict[str, int] = field(default_factory=dict)
-    lane_max_retries: int = 1
 
     def can_transition(self, target: StageState) -> bool:
         return target in _TRANSITIONS.get(self.state, set())
@@ -342,6 +337,21 @@ class StageEntry:
         self.state = target
         self.last_updated = _now_iso()
 
+    def force_reset_to_pending(self, reason: str) -> None:
+        """Reset this stage to PENDING regardless of current state.
+
+        Used by disk reconcile / resume flows when on-disk artifacts are
+        missing or inconsistent with the progress record. The regular
+        ``transition`` map deliberately omits paths back to PENDING to
+        prevent accidental regression — this method is the escape hatch
+        and requires a short reason for auditability.
+        """
+        if not reason:
+            raise ValueError("force_reset_to_pending requires a reason")
+        self.state = StageState.PENDING
+        self.error_message = reason
+        self.last_updated = _now_iso()
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "stage_id": self.stage_id,
@@ -353,12 +363,11 @@ class StageEntry:
             "last_updated": self.last_updated,
             "error_message": self.error_message,
             "fail_source": self.fail_source,
-            "lane_retries": dict(self.lane_retries),
-            "lane_max_retries": self.lane_max_retries,
         }
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> StageEntry:
+        # Unknown keys are silently dropped (forward-compatible load).
         return cls(
             stage_id=d["stage_id"],
             chapters=d["chapters"],
@@ -369,8 +378,6 @@ class StageEntry:
             last_updated=d.get("last_updated", ""),
             error_message=d.get("error_message", ""),
             fail_source=d.get("fail_source", ""),
-            lane_retries=dict(d.get("lane_retries", {})),
-            lane_max_retries=d.get("lane_max_retries", 1),
         )
 
 
@@ -532,12 +539,13 @@ class Phase3Progress:
                     for p in existing:
                         p.unlink()
                         purged_files += 1
-                    stage.state = StageState.PENDING
+                    reason = ("committed artifacts missing on disk"
+                              if len(existing) < len(paths)
+                              else "committed_sha not found in git")
                     stage.committed_sha = ""
-                    stage.error_message = ""
                     stage.fail_source = ""
                     stage.last_reviewer_feedback = ""
-                    stage.lane_retries = {}
+                    stage.force_reset_to_pending(reason)
                     reverted += 1
                 continue
 
@@ -552,11 +560,10 @@ class Phase3Progress:
             for p in existing:
                 p.unlink()
                 purged_files += 1
-            stage.state = StageState.PENDING
-            stage.error_message = ""
             stage.fail_source = ""
             stage.last_reviewer_feedback = ""
-            stage.lane_retries = {}
+            stage.force_reset_to_pending(
+                f"reconcile from {stage.state.value}")
             reverted += 1
 
         return {"reverted": reverted, "purged_files": purged_files,

@@ -6,9 +6,6 @@ Zero LLM tokens.  ``jsonschema`` is a hard dependency.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from . import BaseChecker
 from ..protocol import FileEntry, Issue
 
@@ -35,8 +32,11 @@ class SchemaChecker(BaseChecker):
             if content is None:
                 continue
 
-            # For JSONL, validate each entry against the schema
-            if Path(f.path).suffix == ".jsonl" and isinstance(content, list):
+            # JSONL files decode to lists; some JSON files also hold arrays
+            # of entries (e.g., memory_timeline/{stage_id}.json). In both
+            # cases the schema describes a single entry, so iterate when
+            # content is a list and validate per-entry.
+            if isinstance(content, list):
                 for idx, entry in enumerate(content):
                     issues.extend(
                         self._validate_one(entry, f.schema, f.path,

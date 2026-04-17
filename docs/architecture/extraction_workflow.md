@@ -322,7 +322,7 @@ orchestrator (Python)
   与四层修复器（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成）**正交**——
   任何层的 issue 都可能需要任何 tier 的修复。修复从最低可用 tier 开始逐层升级，
   每个 tier 有独立重试次数（T0=1, T1=3, T2=3, T3=1）。
-  语义 LLM 最多调用 2 次（Phase A 初检 + Phase C 终验），修复循环内只用 0-token L0–L2 复检。
+  语义 LLM **每个文件最多调用 2 次**（Phase A 初检 + Phase C 终验），修复循环内只用 0-token L0–L2 复检。
   字段级精确修补（json_path 定位），不整文件回滚。
   安全阀：回归保护（introduced ≥ resolved → 停机）、收敛检测（持续集不变 → 升级）、
   总轮次限制（默认 5 轮）

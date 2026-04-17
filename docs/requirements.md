@@ -1612,23 +1612,26 @@ class RetryPolicy:
 
 #### 11.4.5 三阶段运作流程
 
-整个修复过程分为三阶段，语义审校（LLM）最多调用 2 次：
+整个修复过程分为三阶段。语义审校（LLM）对每个文件**最多调用 2 次**
+——Phase A 初检一次，Phase C 终验至多一次。若传入 N 个文件，则 Phase A
+贡献 N 次 LLM 调用，Phase C 至多再 N 次；修复循环内只走 0-token 的
+L0–L2 程序化复检：
 
 ```
-阶段 A: 首次全量检查 (1 次)
+阶段 A: 首次全量检查 (每文件 1 次 LLM)
   L0 → L1 → L2 → L3(semantic)
   产出完整 issue list
-  semantic checker: LLM 第 1 次
+  semantic checker: 每个文件调用 LLM 一次
 
 阶段 B: 修复循环 (多轮, 每轮只做程序化复检)
   按 issue 分组: 先处理所有 T0 类, 再 T1, 再 T2
   每次 fix 后: scoped recheck (只 L0+L1+L2, 只检查被 patch 的字段)
   semantic checker: 不调用
 
-阶段 C: 最终语义复核 (至多 1 次)
+阶段 C: 最终语义复核 (每文件至多 1 次 LLM)
   只在阶段 A 发现过 semantic issue 时才跑
   只复核有过 semantic issue 的字段 (范围缩小)
-  semantic checker: LLM 第 2 次
+  semantic checker: 每个文件至多再调用 LLM 一次
 ```
 
 **Scoped recheck**：fix 一个字段后，不重跑全部 checker，只对被修改的

@@ -228,7 +228,8 @@ Phase 3 的文件校验和修复由独立的 `repair_agent` 模块负责。
 | T3 | file_regen | 大量 token | 全文件 LLM 重生成（最后手段） |
 
 **三阶段运行**：Phase A 全量检查 → Phase B 修复循环 → Phase C 最终语义验证。
-语义 LLM 最多调用 2 次（初检 + 终验），修复循环内只用 0-token 的 L0–L2 复检。
+语义 LLM **每个文件最多调用 2 次**（Phase A 初检 + Phase C 终验，文件级计数），
+修复循环内只用 0-token 的 L0–L2 复检。
 
 代码：`repair_agent/`
 

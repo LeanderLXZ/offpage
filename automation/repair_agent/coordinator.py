@@ -43,11 +43,12 @@ logger = logging.getLogger(__name__)
 
 def _build_pipeline(
     llm_call: Callable[..., str] | None = None,
+    importance_map: dict[str, str] | None = None,
 ) -> CheckerPipeline:
     pipeline = CheckerPipeline()
     pipeline.register(JsonSyntaxChecker())
     pipeline.register(SchemaChecker())
-    pipeline.register(StructuralChecker())
+    pipeline.register(StructuralChecker(importance_map=importance_map))
     pipeline.register(SemanticChecker(llm_call=llm_call))
     return pipeline
 
@@ -81,9 +82,11 @@ def validate_only(
     files: list[FileEntry],
     llm_call: Callable[..., str] | None = None,
     run_semantic: bool = False,
+    importance_map: dict[str, str] | None = None,
 ) -> list[Issue]:
     """Run all checkers without any repair. Returns issue list."""
-    pipeline = _build_pipeline(llm_call=llm_call)
+    pipeline = _build_pipeline(llm_call=llm_call,
+                                importance_map=importance_map)
     return pipeline.run(files, run_semantic=run_semantic)
 
 
@@ -92,12 +95,20 @@ def run(
     config: RepairConfig | None = None,
     source_context: SourceContext | None = None,
     llm_call: Callable[..., str] | None = None,
+    importance_map: dict[str, str] | None = None,
 ) -> RepairResult:
-    """Three-phase repair: check → fix loop → verify."""
+    """Three-phase repair: check → fix loop → verify.
+
+    Args:
+        importance_map: ``{character_id: importance}`` — raises the
+            structural min-examples threshold for main / important
+            characters (主角 → 5, 重要配角 → 3, others → 1).
+    """
     if config is None:
         config = RepairConfig()
 
-    pipeline = _build_pipeline(llm_call=llm_call)
+    pipeline = _build_pipeline(llm_call=llm_call,
+                                importance_map=importance_map)
     fixers = _build_fixers(llm_call=llm_call)
     tracker = IssueTracker()
 

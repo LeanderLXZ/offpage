@@ -93,8 +93,8 @@ constraints beyond what the architecture docs already say.
     (L0 json_syntax → L1 schema → L2 structural → L3 semantic) ×
     four-tier fixers (T0 programmatic → T1 local_patch → T2
     source_patch → T3 file_regen), orthogonal. Field-level surgical
-    patches via json_path. Semantic LLM at most 2 calls (initial +
-    final verify). Missing catalog / digest routes to PP rerun.
+    patches via json_path. Semantic LLM at most 2 calls per file
+    (initial + final verify); total scales with the number of files. Missing catalog / digest routes to PP rerun.
 26. Extraction runs on a dedicated git branch. Each passing stage
     committed. Rollback = `git reset` to last committed stage. After
     all stages complete, squash-merge to main.

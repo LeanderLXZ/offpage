@@ -57,7 +57,7 @@ from .prompt_builder import (
 )
 from .json_repair import try_repair_json_file
 from .scene_archive import run_scene_archive
-from .validator import validate_baseline
+from .validator import load_importance_map, validate_baseline
 from ..repair_agent import (
     FileEntry as RepairFileEntry,
     RepairConfig,
@@ -405,25 +405,75 @@ class ExtractionOrchestrator:
         self,
         work_dir: Path,
         stage_id: str,
+        stage_num: int,
         target_characters: list[str],
     ) -> list[RepairFileEntry]:
-        """Build the file list for repair agent validation."""
+        """Build the file list for repair agent validation.
+
+        Digest files (memory_digest.jsonl, world_event_digest.jsonl) are
+        accumulated across all stages. For per-stage repair we load the
+        file and filter entries whose ID segment matches this stage's
+        S{stage_num:03d} marker, then pass the filtered list as pre-loaded
+        content — keeping the repair scope limited to the current stage.
+        """
         import json as _json
+        import re as _re
         schema_dir = self.project_root / "schemas"
         files: list[RepairFileEntry] = []
+
+        def _load_schema(schema_name: str) -> dict | None:
+            schema_path = schema_dir / schema_name
+            if not schema_path.exists():
+                return None
+            try:
+                return _json.loads(
+                    schema_path.read_text(encoding="utf-8"))
+            except (ValueError, OSError):
+                return None
 
         def _entry(path: Path, schema_name: str) -> RepairFileEntry | None:
             if not path.exists():
                 return None
-            schema_path = schema_dir / schema_name
-            schema = None
-            if schema_path.exists():
+            return RepairFileEntry(
+                path=str(path), schema=_load_schema(schema_name))
+
+        stage_pat = _re.compile(rf"-S{stage_num:03d}-")
+
+        def _jsonl_stage_entry(
+            path: Path, schema_name: str, id_fields: tuple[str, ...],
+        ) -> RepairFileEntry | None:
+            """Load accumulated jsonl; keep only entries whose id belongs
+            to the current stage; return FileEntry with pre-filtered list
+            content (preserves accumulated path for reporting)."""
+            if not path.exists():
+                return None
+            kept: list[dict] = []
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError:
+                return None
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
                 try:
-                    schema = _json.loads(
-                        schema_path.read_text(encoding="utf-8"))
-                except (ValueError, OSError):
-                    pass
-            return RepairFileEntry(path=str(path), schema=schema)
+                    obj = _json.loads(line)
+                except _json.JSONDecodeError:
+                    continue
+                if not isinstance(obj, dict):
+                    continue
+                for f_key in id_fields:
+                    val = obj.get(f_key)
+                    if isinstance(val, str) and stage_pat.search(val):
+                        kept.append(obj)
+                        break
+            if not kept:
+                return None
+            return RepairFileEntry(
+                path=str(path),
+                schema=_load_schema(schema_name),
+                content=kept,
+            )
 
         # World stage snapshot
         world_ss = work_dir / "world" / "stage_snapshots" / f"{stage_id}.json"
@@ -431,10 +481,11 @@ class ExtractionOrchestrator:
         if e:
             files.append(e)
 
-        # World event digest
-        world_ed = (work_dir / "world" / "event_digest"
-                    / f"{stage_id}.jsonl")
-        e = _entry(world_ed, "world_event_digest_entry.schema.json")
+        # World event digest (accumulated; filter to this stage)
+        world_ed = work_dir / "world" / "world_event_digest.jsonl"
+        e = _jsonl_stage_entry(
+            world_ed, "world_event_digest_entry.schema.json",
+            id_fields=("event_id",))
         if e:
             files.append(e)
 
@@ -448,17 +499,19 @@ class ExtractionOrchestrator:
             if e:
                 files.append(e)
 
-            # Memory timeline
+            # Memory timeline (JSON array; schema is per-entry — checker
+            # iterates lists regardless of suffix)
             e = _entry(
                 char_dir / "memory_timeline" / f"{stage_id}.json",
                 "memory_timeline_entry.schema.json")
             if e:
                 files.append(e)
 
-            # Memory digest
-            e = _entry(
-                char_dir / "memory_digest" / f"{stage_id}.jsonl",
-                "memory_digest_entry.schema.json")
+            # Memory digest (accumulated; filter to this stage)
+            e = _jsonl_stage_entry(
+                char_dir / "memory_digest.jsonl",
+                "memory_digest_entry.schema.json",
+                id_fields=("memory_id",))
             if e:
                 files.append(e)
 
@@ -1038,7 +1091,6 @@ class ExtractionOrchestrator:
                 b.transition(StageState.PENDING)
                 b.error_message = ""
                 b.last_reviewer_feedback = ""
-                b.lane_retries = {}
                 phase3.save(self.project_root)
 
         completed_before = phase3.completed_stage_count()
@@ -1128,14 +1180,13 @@ class ExtractionOrchestrator:
         tracker.start_stage()
         tracker.print_stage_header(stage)
 
-        # Lane-scoped extraction closures — defined here so both the
-        # initial parallel extraction (Step 2) and the lane-independent
-        # retry loop (Step 4) can call them. Each accepts an optional
-        # per-lane reviewer feedback string.
+        # Per-process extraction closures — used by the parallel
+        # extraction (Step 2). Each accepts an optional reviewer feedback
+        # string (passed on resume after a repair-agent FAIL).
         def _extract_world(
             feedback: str = "",
         ) -> tuple[str, str, LLMResult]:
-            """Returns (lane_type, lane_id, result)."""
+            """Returns (process_type, process_id, result)."""
             prompt = build_world_extraction_prompt(
                 self.project_root, pipeline, stage,
                 stages=phase3.stages,
@@ -1148,7 +1199,7 @@ class ExtractionOrchestrator:
             char_id: str,
             feedback: str = "",
         ) -> tuple[str, str, LLMResult]:
-            """Returns (lane_type, lane_id, result)."""
+            """Returns (process_type, process_id, result)."""
             prompt = build_char_snapshot_prompt(
                 self.project_root, pipeline, stage, char_id,
                 stages=phase3.stages,
@@ -1161,7 +1212,7 @@ class ExtractionOrchestrator:
             char_id: str,
             feedback: str = "",
         ) -> tuple[str, str, LLMResult]:
-            """Returns (lane_type, lane_id, result)."""
+            """Returns (process_type, process_id, result)."""
             prompt = build_char_support_prompt(
                 self.project_root, pipeline, stage, char_id,
                 stages=phase3.stages,
@@ -1182,7 +1233,8 @@ class ExtractionOrchestrator:
             print("  [RESUME] Interrupted during extraction, "
                   "rolling back and restarting...")
             rollback_to_head(self.project_root)
-            stage.state = StageState.PENDING
+            stage.force_reset_to_pending(
+                "resume from interrupted EXTRACTING")
             phase3.save(self.project_root)
 
         if stage.state == StageState.PASSED:
@@ -1196,7 +1248,7 @@ class ExtractionOrchestrator:
         if stage.state == StageState.PENDING:
             # --- Step 1: Git preflight ---
             tracker.start_step()
-            tracker.print_step(1, 6, "Git preflight")
+            tracker.print_step(1, 5, "Git preflight")
             problems = preflight_check(
                 self.project_root, pipeline.extraction_branch or None,
                 ignore_patterns=["extraction_progress.json",
@@ -1209,7 +1261,7 @@ class ExtractionOrchestrator:
                 stage.error_message = "; ".join(problems)
                 phase3.save(self.project_root)
                 return
-            tracker.print_step_done(1, 6, "Git preflight")
+            tracker.print_step_done(1, 5, "Git preflight")
 
             # --- Smart skip: if extraction output already on disk ---
             if self._extraction_output_exists(
@@ -1223,7 +1275,7 @@ class ExtractionOrchestrator:
                 tracker.start_step()
                 n_chars = len(pipeline.target_characters)
                 n_workers = 1 + 2 * n_chars
-                tracker.print_step(2, 6,
+                tracker.print_step(2, 5,
                                    f"Extraction (1 world + "
                                    f"{n_chars} snapshot + "
                                    f"{n_chars} support parallel)")
@@ -1241,12 +1293,12 @@ class ExtractionOrchestrator:
                         futures.append(
                             executor.submit(_extract_char_support, c))
                     for future in as_completed(futures):
-                        lane_type, lane_id, result = future.result()
+                        proc_type, proc_id, result = future.result()
                         if not result.success:
                             extraction_errors.append(
-                                f"{lane_type}:{lane_id}: "
+                                f"{proc_type}:{proc_id}: "
                                 f"{result.error or 'unknown'}")
-                            print(f"    [ERROR] {lane_type}:{lane_id} "
+                            print(f"    [ERROR] {proc_type}:{proc_id} "
                                   f"extraction failed: {result.error}")
 
                 if extraction_errors:
@@ -1258,7 +1310,7 @@ class ExtractionOrchestrator:
                     return
 
                 tracker.record_step(ProgressTracker.STEP_EXTRACTION)
-                tracker.print_step_done(2, 6,
+                tracker.print_step_done(2, 5,
                                         f"Extraction "
                                         f"(1+{2 * n_chars} parallel)")
 
@@ -1272,7 +1324,7 @@ class ExtractionOrchestrator:
                 phase3.save(self.project_root)
 
             tracker.start_step()
-            tracker.print_step(3, 6, "Post-processing (digest + catalog)")
+            tracker.print_step(3, 5, "Post-processing (digest + catalog)")
 
             # Determine stage order (0-based index in stages list)
             stage_order = next(
@@ -1295,7 +1347,7 @@ class ExtractionOrchestrator:
                 # be validated by the review lanes below.
 
             tracker.record_step(ProgressTracker.STEP_VALIDATION)
-            tracker.print_step_done(3, 6, "Post-processing",
+            tracker.print_step_done(3, 5, "Post-processing",
                                     f"{len(pp_issues)} issues")
 
             stage.transition(StageState.REVIEWING)
@@ -1314,16 +1366,23 @@ class ExtractionOrchestrator:
                 print("  [RESUME] Extraction output missing for REVIEWING "
                       "stage, rolling back and restarting...")
                 rollback_to_head(self.project_root)
-                stage.state = StageState.PENDING
+                stage.force_reset_to_pending(
+                    "resume from REVIEWING without on-disk output")
                 phase3.save(self.project_root)
                 return
 
             tracker.start_step()
             tracker.print_step(4, 5, "Repair agent")
 
-            # Build file list for repair agent
+            # Build file list for repair agent. Stage number is the
+            # 1-indexed position of this stage in the plan, used to filter
+            # accumulated digest files (IDs carry S{stage_num:03d} segment).
+            stage_num = next(
+                (i + 1 for i, b in enumerate(phase3.stages)
+                 if b.stage_id == stage.stage_id), 1)
             repair_files = self._collect_stage_files(
-                work_dir, stage.stage_id, pipeline.target_characters)
+                work_dir, stage.stage_id, stage_num,
+                pipeline.target_characters)
 
             # Build source context for T2/T3 fixes
             source_ctx = SourceContext(
@@ -1339,8 +1398,11 @@ class ExtractionOrchestrator:
             def _llm_call(prompt: str, timeout: int = 600) -> str:
                 result = run_with_retry(
                     self.reviewer_backend or self.backend,
-                    prompt, timeout=timeout)
+                    prompt, timeout_seconds=timeout)
                 return result.text
+
+            importance_map = load_importance_map(
+                self.project_root, pipeline.work_id)
 
             repair_result = run_repair(
                 files=repair_files,
@@ -1350,6 +1412,7 @@ class ExtractionOrchestrator:
                 ),
                 source_context=source_ctx,
                 llm_call=_llm_call,
+                importance_map=importance_map,
             )
 
             tracker.record_step(ProgressTracker.STEP_REVIEW)
@@ -1392,7 +1455,6 @@ class ExtractionOrchestrator:
             if not sha:
                 print("    [FAIL] Git commit returned no SHA "
                       "(empty diff or commit failure).")
-                stage.lane_retries = {}
                 stage.transition(StageState.FAILED)
                 stage.error_message = (
                     "git commit produced no object — aborting COMMITTED "
@@ -1511,6 +1573,13 @@ class ExtractionOrchestrator:
         Like Phase 4's chapter expansion pattern: every run re-reads the
         stage plan and appends any stages not yet tracked.  Existing
         stage states are preserved.
+
+        Drift protection: the existing phase3 progress must be a prefix of
+        the plan (stage_ids must match position-for-position up to the
+        length of phase3.stages). If the user edited stage_plan.json in a
+        way that renames or removes an already-tracked stage, we abort
+        rather than silently append a divergent tail. The fix is to
+        restore the plan or to restart Phase 3 explicitly.
         """
         plan_path = (self.project_root / "works" / self.work_id
                      / "analysis" / "stage_plan.json")
@@ -1519,6 +1588,31 @@ class ExtractionOrchestrator:
 
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
         full_stages = plan.get("stages", [])
+        plan_ids = [b.get("stage_id") for b in full_stages]
+
+        # --- Drift detection: plan must match existing phase3 prefix ---
+        existing_ids = [b.stage_id for b in phase3.stages]
+        limit = min(len(existing_ids), len(plan_ids))
+        mismatches: list[tuple[int, str, str]] = []
+        for i in range(limit):
+            if existing_ids[i] != plan_ids[i]:
+                mismatches.append((i, existing_ids[i], plan_ids[i]))
+
+        missing_from_plan = [
+            sid for sid in existing_ids if sid not in plan_ids]
+
+        if mismatches or missing_from_plan:
+            lines = ["[ERROR] stage_plan.json diverges from phase3 progress."]
+            for i, old, new in mismatches:
+                lines.append(f"  position {i}: progress='{old}' plan='{new}'")
+            for sid in missing_from_plan:
+                lines.append(f"  missing from plan: '{sid}'")
+            lines.append(
+                "  Existing progress is not a prefix of the current plan. "
+                "Restore stage_plan.json, or restart Phase 3 by deleting "
+                "works/{work_id}/analysis/progress/phase3_stages.json.")
+            print("\n".join(lines))
+            sys.exit(1)
 
         current_count = len(phase3.stages)
         effective_max = max_stages if (max_stages is not None

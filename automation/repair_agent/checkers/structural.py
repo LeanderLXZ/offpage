@@ -36,7 +36,10 @@ class StructuralChecker(BaseChecker):
                 continue
             p = Path(f.path)
 
-            if p.suffix == ".jsonl":
+            # List content covers both .jsonl and .json-array files
+            # (e.g., memory_timeline/{stage_id}.json). Both need ID-format
+            # checks driven by the entry's own ID field.
+            if isinstance(content, list):
                 issues.extend(self._check_jsonl(f.path, content, p.name))
             elif isinstance(content, dict):
                 issues.extend(self._check_dict(f.path, content, p))
@@ -95,19 +98,23 @@ class StructuralChecker(BaseChecker):
                             context={"current_length": char_len, "max": 80},
                         ))
 
-        # --- relationships driving_events ---
-        if "relationships" in data and isinstance(data["relationships"], dict):
-            for target, rel in data["relationships"].items():
-                if isinstance(rel, dict):
-                    events = rel.get("driving_events")
-                    if not events or (isinstance(events, list) and len(events) == 0):
-                        issues.append(Issue(
-                            file=path,
-                            json_path=f"$.relationships[{target}].driving_events",
-                            category="structural", severity="warning",
-                            rule="driving_events_non_empty",
-                            message=f"No driving_events for relationship with {target}",
-                        ))
+        # --- relationships driving_events (schema: array of objects) ---
+        if "relationships" in data and isinstance(data["relationships"], list):
+            for idx, rel in enumerate(data["relationships"]):
+                if not isinstance(rel, dict):
+                    continue
+                target = (rel.get("target_label")
+                          or rel.get("target_character_id")
+                          or f"#{idx}")
+                events = rel.get("driving_events")
+                if not events or (isinstance(events, list) and len(events) == 0):
+                    issues.append(Issue(
+                        file=path,
+                        json_path=f"$.relationships[{idx}].driving_events",
+                        category="structural", severity="warning",
+                        rule="driving_events_non_empty",
+                        message=f"No driving_events for relationship with {target}",
+                    ))
 
         # --- character_arc required with stage_delta ---
         if "stage_delta" in data and "character_arc" not in data:
@@ -163,15 +170,19 @@ class StructuralChecker(BaseChecker):
         self, path: str, data: dict, state_key: str,
         map_key: str, examples_key: str,
     ) -> list[Issue]:
+        """Validate target_voice_map / target_behavior_map (schema: array
+        of objects keyed by ``target_type``).
+        """
         issues: list[Issue] = []
         state = data.get(state_key, {})
-        target_map = state.get(map_key, {})
-        if not isinstance(target_map, dict):
+        target_map = state.get(map_key, [])
+        if not isinstance(target_map, list):
             return issues
 
-        for target_name, entry in target_map.items():
+        for idx, entry in enumerate(target_map):
             if not isinstance(entry, dict):
                 continue
+            target_name = entry.get("target_type") or f"#{idx}"
             examples = entry.get(examples_key, [])
             if not isinstance(examples, list):
                 continue
@@ -181,11 +192,12 @@ class StructuralChecker(BaseChecker):
             if count < threshold:
                 issues.append(Issue(
                     file=path,
-                    json_path=f"$.{state_key}.{map_key}[{target_name}].{examples_key}",
+                    json_path=(f"$.{state_key}.{map_key}[{idx}]"
+                               f".{examples_key}"),
                     category="structural", severity="error",
                     rule="min_examples",
-                    message=(f"{examples_key} for '{target_name}' ({importance}): "
-                             f"{count} < {threshold}"),
+                    message=(f"{examples_key} for '{target_name}' "
+                             f"({importance}): {count} < {threshold}"),
                     context={
                         "current": count, "required": threshold,
                         "importance": importance, "target": target_name,
