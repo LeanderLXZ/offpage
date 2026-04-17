@@ -457,9 +457,17 @@ def _run_fixer_with_escalation(
                     modified_files.add(f_path)
 
             if tier == 3:
+                # A T3 regen writes the file even when every remaining issue
+                # is self-reported as source_inherent — `resolved_fingerprints`
+                # alone would miss those files and let the T3 cap + corruption
+                # check be bypassed. Union with self-report fingerprints.
+                t3_touched_fps = (
+                    set(result.resolved_fingerprints)
+                    | set(result.source_inherent_candidates.keys())
+                )
                 t3_files = {
                     fingerprint_to_file.get(fp)
-                    for fp in result.resolved_fingerprints
+                    for fp in t3_touched_fps
                     if fingerprint_to_file.get(fp)
                 }
                 for f_path in t3_files:
@@ -529,8 +537,16 @@ def _run_triage_round(
     if not issues:
         return []
 
+    # Only L3 `semantic` issues are eligible for accept_with_notes.
+    # Mechanical errors (L0 syntax / L1 schema / L2 structural) can't be
+    # "the source novel's fault" — keep them in the queue untouched.
+    semantic_issues = [i for i in issues if i.category == "semantic"]
+    non_semantic = [i for i in issues if i.category != "semantic"]
+    if not semantic_issues:
+        return list(issues)
+
     by_file: dict[str, list[Issue]] = {}
-    for i in issues:
+    for i in semantic_issues:
         by_file.setdefault(i.file, []).append(i)
 
     now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -585,7 +601,10 @@ def _run_triage_round(
             "triage round %d: accepted %d issue(s) as source_inherent",
             triage_round, len(round_notes))
 
-    return [i for i in issues if i.fingerprint not in accepted_fps]
+    remaining_semantic = [
+        i for i in semantic_issues if i.fingerprint not in accepted_fps
+    ]
+    return non_semantic + remaining_semantic
 
 
 def _build_report(issues: list[Issue], tracker: IssueTracker,
