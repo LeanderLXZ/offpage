@@ -15,9 +15,8 @@ State machine per stage (Phase 3):
                      │                                     │
                      └→ pending (--resume)                 └→ failed → error
 
-No stage-level retry. Targeted fix (×2) is handled inside a review lane
-(validate → review → fix → re-verify) and does not surface as a
-stage-level state.
+No stage-level retry. Repair is handled by repair_agent (check → fix →
+verify loop) and does not surface as a stage-level state.
 """
 
 from __future__ import annotations
@@ -282,9 +281,9 @@ class Phase0Progress:
 class StageState(str, Enum):
     """Phase 3 stage states.
 
-    Review-lane ``targeted fix`` is handled internally within a lane
-    (validate → review → fix → re-verify); it is NOT a stage-level state.
-    ``FAILED`` here already covers post-review rollback paths.
+    Repair is handled by ``repair_agent`` (check → fix → verify loop);
+    it is NOT a stage-level state.
+    ``FAILED`` here already covers post-repair rollback paths.
     """
     PENDING = "pending"
     EXTRACTING = "extracting"

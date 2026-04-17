@@ -134,7 +134,7 @@ Python orchestrator in `automation/`. Phase 0 parallel summarization
 (`--concurrency`, default 10) → Phase 1 analysis → Phase 2 user confirm
 → Phase 2.5 baseline production → Phase 3 stage loop (1+2N split
 extraction: 1 world + N char_snapshot + N char_support, post-processing,
-parallel review lanes, commit gate, git commit) → Phase 3.5 cross-stage
+repair agent, git commit) → Phase 3.5 cross-stage
 consistency → Phase 4 scene archive (independent).
 
 **Repair agent** (`automation/repair_agent/`) replaces per-lane review,

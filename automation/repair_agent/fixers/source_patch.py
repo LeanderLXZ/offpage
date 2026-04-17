@@ -53,7 +53,11 @@ class SourcePatchFixer(BaseFixer):
         attempt_num: int = 0,
         max_attempts: int = 3,
     ) -> FixResult:
-        if self._llm_call is None or source_context is None:
+        if self._llm_call is None:
+            return FixResult()
+        if source_context is None:
+            logger.warning("T2: source_context is None — skipping %d issues",
+                           len(issues))
             return FixResult()
 
         patched: list[str] = []

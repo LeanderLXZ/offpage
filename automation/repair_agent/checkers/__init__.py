@@ -68,12 +68,13 @@ class CheckerPipeline:
         max_layer: int = 2,
         **kwargs,
     ) -> list[Issue]:
-        """Run checkers only on patched paths — used during fix loop.
+        """Run L0–L2 checkers during fix loop (no semantic).
 
-        Semantic (L3) is never run during scoped recheck.
+        All files are re-checked (not just patched ones) because a fix
+        can introduce new issues or uncover previously-masked ones.
+        ``patched_paths`` is passed as a hint for checkers that support
+        optimized re-validation.
         """
-        # For scoped recheck, we run the same checkers but pass
-        # patched_paths hint for checkers that support it.
         return self.run(
             files,
             max_layer=min(max_layer, 2),

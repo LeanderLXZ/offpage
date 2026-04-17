@@ -47,9 +47,11 @@ class JsonSyntaxChecker(BaseChecker):
                 continue
             try:
                 if p.suffix == ".jsonl":
+                    entries = []
                     for i, line in enumerate(text.splitlines(), 1):
                         if line.strip():
-                            json.loads(line)
+                            entries.append(json.loads(line))
+                    f.content = entries  # cache parsed JSONL entries
                 else:
                     parsed = json.loads(text)
                     f.content = parsed  # cache for later checkers

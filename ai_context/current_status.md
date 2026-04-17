@@ -40,12 +40,11 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
 - Stage-internal parallelism (1+2N LLM calls per stage: 1 world +
   N char_snapshot + N char_support). Character extraction split into
   snapshot (stage_snapshot only) and support (memory_timeline + baseline
-  corrections). No inter-lane dependency; cross-consistency at commit gate.
+  corrections). No inter-process dependency.
 - Programmatic post-processing (0 token, idempotent): generates
   `memory_digest.jsonl`, `world_event_digest.jsonl`, and upserts
   `stage_catalog.json`.
-- Parallel review lanes (1+2N: world + char_snapshot×N + char_support×N):
-  `repair_agent.run()` — unified check (L0–L3) + fix (T0–T3) + verify.
+- `repair_agent.run()` — unified check (L0–L3) + fix (T0–T3) + verify.
   Field-level surgical patches. Repair fail → stage ERROR; `--resume`
   resets to PENDING.
 - Three-level JSON repair (L1 regex → L2 LLM 600s → L3 full re-run)

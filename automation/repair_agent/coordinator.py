@@ -151,8 +151,8 @@ def run(
             break
 
         # Scoped recheck (L0–L2 only, 0 token)
-        recheck_issues = pipeline.run(
-            files, max_layer=2, run_semantic=False)
+        recheck_issues = pipeline.run_scoped(
+            files, patched_paths=[], max_layer=2)
         recheck_blocking = _filter_blocking(recheck_issues, config)
 
         report = tracker.diff(current_issues, recheck_blocking)
@@ -253,26 +253,15 @@ def _run_fixer_with_escalation(
             if not remaining:
                 break
 
+            attempted = list(remaining)
             result = fixer_obj.fix(
                 files=files,
-                issues=remaining,
+                issues=attempted,
                 strategy="standard",
                 source_context=source_context,
                 attempt_num=attempt,
                 max_attempts=max_retries,
             )
-
-            # Record attempts
-            for issue in remaining:
-                status = ("resolved" if issue.fingerprint in result.resolved_fingerprints
-                          else "persisting")
-                tracker.record_attempt(RepairAttempt(
-                    issue_fingerprint=issue.fingerprint,
-                    tier=tier,
-                    attempt_num=attempt,
-                    strategy="standard",
-                    result=status,
-                ))
 
             if result.patched_paths:
                 any_patched = True
@@ -282,6 +271,18 @@ def _run_fixer_with_escalation(
                 i for i in remaining
                 if i.fingerprint not in result.resolved_fingerprints
             ]
+
+            # Record attempts only for issues that were actually attempted
+            for issue in attempted:
+                status = ("resolved" if issue.fingerprint in result.resolved_fingerprints
+                          else "persisting")
+                tracker.record_attempt(RepairAttempt(
+                    issue_fingerprint=issue.fingerprint,
+                    tier=tier,
+                    attempt_num=attempt,
+                    strategy="standard",
+                    result=status,
+                ))
 
         # Escalate remaining to next tier
         if remaining:
