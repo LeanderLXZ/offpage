@@ -325,14 +325,9 @@ class StageEntry:
     last_updated: str = ""
     error_message: str = ""
     fail_source: str = ""  # "programmatic" or "semantic" — which check caused FAIL
-    # Per-lane retry tracking (lane_key → retry_count). Keys are the lane
-    # identifiers used by review_lanes: "world" for the world lane,
-    # "char_snapshot:{char_id}" / "char_support:{char_id}" for character
-    # sub-lanes. Lane retries are bounded by ``lane_max_retries`` and
-    # **shared between review-failure retries and commit-gate failure
-    # cascades**. When any lane exhausts its quota, the stage transitions
-    # to ERROR and stops (no stage-level retry). Cleared only after the
-    # commit gate finally PASSes.
+    # Legacy fields — kept for backward-compatible deserialization of
+    # existing progress files. Not used by the current repair_agent
+    # architecture.
     lane_retries: dict[str, int] = field(default_factory=dict)
     lane_max_retries: int = 1
 
