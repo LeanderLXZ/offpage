@@ -82,3 +82,22 @@ class CheckerPipeline:
             patched_paths=patched_paths,
             **kwargs,
         )
+
+    def run_layer(
+        self,
+        files: list[FileEntry],
+        layer: int,
+        **kwargs,
+    ) -> list[Issue]:
+        """Run exactly one checker layer, bypassing the prior-error skip.
+
+        Used by the Phase B L3 gate to re-check semantic layer on files
+        that have been patched this round, without re-running L0-L2.
+        Returns an empty list if no checker is registered at this layer.
+        """
+        issues: list[Issue] = []
+        for checker in self._checkers:
+            if checker.layer != layer:
+                continue
+            issues.extend(checker.check(files, **kwargs))
+        return issues
