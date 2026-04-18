@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/source_note.schema.json",
+  "title": "源文件自带问题记录（accept_with_notes）",
+  "description": "repair agent triage 阶段判定为源文件自带的 L3 语义 issue 的记录。存储在 {entity}/canon/extraction_notes/{stage_id}.jsonl，每行一个对象。stage 视为通过，但保留可审计信息供未来 fixer 使用。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "note_id",
+    "stage_id",
+    "file",
+    "json_path",
+    "issue_fingerprint",
+    "issue_category",
+    "issue_rule",
+    "issue_severity",
+    "issue_message",
+    "discrepancy_type",
+    "source_evidence",
+    "rationale",
+    "extraction_choice",
+    "future_fixer_hint",
+    "accepted_at",
+    "triage_round"
+  ],
+  "properties": {
+    "note_id": {
+      "type": "string",
+      "pattern": "^SN-S[0-9]{3}-[0-9]{2}$",
+      "description": "note 唯一标识，格式 SN-S{stage:03d}-{seq:02d}。seq 在同文件、同 stage 内从 01 递增。"
+    },
+    "stage_id": {
+      "type": "string",
+      "pattern": "^S[0-9]{3}$"
+    },
+    "file": {
+      "type": "string",
+      "description": "被接受的产物文件路径，相对 work 根目录。"
+    },
+    "json_path": {
+      "type": "string",
+      "description": "issue 指向的字段 json_path。"
+    },
+    "issue_fingerprint": {
+      "type": "string",
+      "description": "原 issue 的 fingerprint `{file}::{json_path}::{rule}`。"
+    },
+    "issue_category": {
+      "type": "string",
+      "enum": ["semantic"],
+      "description": "只有 semantic 类 issue 可以 accept_with_notes；其他层的 issue 不允许走本通道。"
+    },
+    "issue_rule": {
+      "type": "string"
+    },
+    "issue_severity": {
+      "type": "string",
+      "enum": ["error", "warning"],
+      "description": "接受前的 severity（通常是 error，否则也不会走修复链）。"
+    },
+    "issue_message": {
+      "type": "string"
+    },
+    "discrepancy_type": {
+      "type": "string",
+      "enum": [
+        "author_contradiction",
+        "typo",
+        "name_mixup",
+        "pronoun_confusion",
+        "title_drift",
+        "time_shift",
+        "space_conflict",
+        "duplicated_passage",
+        "world_rule_conflict",
+        "death_state_conflict",
+        "logic_jump",
+        "other"
+      ],
+      "description": "源文件问题的分类。详见 docs/requirements.md §11.4.7。"
+    },
+    "source_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "chapter_number",
+        "line_range",
+        "quote",
+        "quote_sha256",
+        "chapter_sha256"
+      ],
+      "properties": {
+        "chapter_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "line_range": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "[起始行, 结束行]，含端点。"
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 1,
+          "description": "源章节逐字引文。程序在接受前已校验 chapter_text.find(quote) >= 0。"
+        },
+        "quote_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "chapter_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "源章节文件的 SHA-256。源章节改动后 hash 失配，loader 可据此标记 note 为 stale。"
+        }
+      }
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "description": "为什么这是源文件错误而不是提取错误的说明。"
+    },
+    "extraction_choice": {
+      "type": "string",
+      "description": "提取时做出的处理决定（例如采用了哪个版本、保留哪种说法）。"
+    },
+    "future_fixer_hint": {
+      "type": "object",
+      "description": "留给未来手动修正或新 fixer 的线索。字段自由。",
+      "additionalProperties": true
+    },
+    "accepted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "triage_round": {
+      "type": "integer",
+      "enum": [1, 2],
+      "description": "1 = 在 T3 触发之前被 triage 接受；2 = T3 跑完且 L3 gate 仍有残留时被 triage 接受。"
+    }
+  }
+}

@@ -18,7 +18,31 @@ logger = logging.getLogger(__name__)
 
 
 class ContextRetriever:
-    """Retrieves original chapter text relevant to an issue."""
+    """Retrieves original chapter text relevant to an issue.
+
+    Keeps an in-memory cache of loaded chapter text keyed by absolute
+    path so T2 source_patch and the triage step don't re-read the same
+    chapters from disk within a repair run. The cache is unbounded but
+    one ``ContextRetriever`` is scoped to a single ``repair_agent.run()``
+    invocation, so memory stays small in practice.
+    """
+
+    def __init__(self) -> None:
+        self._chapter_text_cache: dict[str, str] = {}
+        self._chapter_summary_cache: dict[str, str] = {}
+
+    def load_chapter_text(self, source_ctx: SourceContext,
+                          chapter_num: int) -> str:
+        """Public accessor: load one chapter's text with caching.
+
+        Used by the triage step, which needs to verify verbatim quotes
+        against specific chapters without the keyword-ranking flow.
+        """
+        return self._load_chapter(Path(source_ctx.chapters_dir), chapter_num)
+
+    def get_stage_chapters(self, ctx: SourceContext) -> list[int]:
+        """Public accessor: chapter numbers belonging to this stage."""
+        return self._get_stage_chapters(ctx)
 
     def retrieve(
         self,
@@ -162,6 +186,16 @@ class ContextRetriever:
     def _load_chapter_summary(self, summaries_dir: Path,
                               chapter_num: int) -> str:
         """Load a chapter summary from the summaries directory."""
+        cache_key = f"{summaries_dir}::{chapter_num}"
+        if cache_key in self._chapter_summary_cache:
+            return self._chapter_summary_cache[cache_key]
+
+        result = self._read_chapter_summary(summaries_dir, chapter_num)
+        self._chapter_summary_cache[cache_key] = result
+        return result
+
+    def _read_chapter_summary(self, summaries_dir: Path,
+                              chapter_num: int) -> str:
         # Try common naming patterns
         for pattern in [f"{chapter_num:04d}.json", f"{chapter_num}.json"]:
             path = summaries_dir / pattern
@@ -194,13 +228,20 @@ class ContextRetriever:
         return ""
 
     def _load_chapter(self, chapters_dir: Path, chapter_num: int) -> str:
-        """Load original chapter text."""
+        """Load original chapter text (cached within this retriever)."""
+        cache_key = f"{chapters_dir}::{chapter_num}"
+        if cache_key in self._chapter_text_cache:
+            return self._chapter_text_cache[cache_key]
+
         for pattern in [f"{chapter_num:04d}.txt", f"{chapter_num}.txt",
                         f"chapter_{chapter_num:04d}.txt"]:
             path = chapters_dir / pattern
             if path.exists():
                 try:
-                    return path.read_text(encoding="utf-8")
+                    text = path.read_text(encoding="utf-8")
+                    self._chapter_text_cache[cache_key] = text
+                    return text
                 except OSError:
                     continue
+        self._chapter_text_cache[cache_key] = ""
         return ""

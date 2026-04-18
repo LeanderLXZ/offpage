@@ -301,8 +301,11 @@ orchestrator (Python)
     │       ├── 程序化后处理 (digest/catalog, 0 token, idempotent upsert)
     │       ├── repair_agent.run() (统一检测+修复):
     │       │       ├── Phase A: L0–L3 全量检查
-    │       │       ├── Phase B: 修复循环 (T0→T1→T2→T3 逐层升级)
-    │       │       └── Phase C: 最终语义验证
+    │       │       ├── Phase B: 修复循环 (T0→T1→T2→T3 逐层升级
+    │       │       │       + 每轮末 L3 gate
+    │       │       │       + 源文件问题 triage: pre-T3 & post-gate
+    │       │       │       + T3_CORRUPTED 硬停: T3 后 L0–L2 扫描)
+    │       │       └── Phase C: 最终确认 (复用最后一次 L3 gate 结果)
     │       ├── [PASS] → git commit
     │       └── [FAIL] → stage ERROR (--resume 重置 → PENDING)
     │
@@ -323,11 +326,28 @@ orchestrator (Python)
   各 phase 通过统一接口调用。四层检查器（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
   与四层修复器（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成）**正交**——
   任何层的 issue 都可能需要任何 tier 的修复。修复从最低可用 tier 开始逐层升级，
-  每个 tier 有独立重试次数（T0=1, T1=3, T2=3, T3=1）。
-  语义 LLM **每个文件最多调用 2 次**（Phase A 初检 + Phase C 终验），修复循环内只用 0-token L0–L2 复检。
+  每个 tier 有独立重试次数（T0=1, T1=3, T2=3, T3=1），T3 还受 `t3_max_per_file=1` 的全局每文件上限约束。
+  Phase B 每轮在 L0–L2 scoped recheck 后，对"本轮被修改 + Phase A 有过 L3 问题"的
+  文件集合跑一次 **L3 gate**，把语义层的失败回灌进下一轮 issue 队列——关闭
+  "T3 谎报语义已修但 Phase C 才发现" 的窗口。Phase C 优先复用最后一次 gate 的结果。
   字段级精确修补（json_path 定位），不整文件回滚。
   安全阀：回归保护（introduced ≥ resolved → 停机）、收敛检测（持续集不变 → 升级）、
+  **L3 gate 反复**（连续两轮 gate 返回相同 blocking 集合 → 语义层不收敛 → 出 Phase C 报错）、
   总轮次限制（默认 5 轮）
+- **源文件问题 triage**（`triage_enabled`）：某些 L3 残留不是提取错误，而是源小说本身的 bug
+  （作者逻辑矛盾、typo、角色名/代称混用、世界规则冲突等）。在两个点做一次轻量级 LLM 判定：
+  （1）**pre-T3**——若残留全是源文件自带问题，跳过 20 分钟的 T3 全文件重生成；
+  （2）**post-L3-gate**——T3 跑完后的最后一次"接受与否"机会。反作弊完全程序化：
+  每条接受判定必须引用 `chapter_number + line_range + 逐字 quote`，程序用
+  `chapter_text.find(quote) >= 0` 校验；每文件接受上限 `accept_cap_per_file=3`；
+  issue 必须是 L3 `semantic`（L0–L2 机械错误一律拒绝）。T2/T3 修复器自带 "source_inherent"
+  自报通道，可直接把证据交给 triager 做 prior。被接受的 issue 写入
+  `{entity}/canon/extraction_notes/{stage_id}.jsonl`（世界级产物写到 `world/extraction_notes/`），
+  附带 SHA-256 锚定以便将来原章节改动时自动标记 stale。stage 仍标记 COMMITTED，
+  sidecar notes 作为审计痕迹和未来 fixer 的线索。
+- **T3_CORRUPTED 硬停**：T3 跑完后立即对被重写文件做一次 scoped L0–L2 检查；
+  一旦发现任何 L0–L2 错误（JSON 语法/schema/结构被破坏），Phase B 直接以
+  `T3_CORRUPTED` 中止并 FAIL，**不走 triage**——机械损坏不可能是"源文件的错"。
 - 提取在独立 git 分支进行，每 stage 单独 commit（精确回滚）；全部完成后
   squash merge 回 main（干净历史），extraction 分支可删除
 - 支持 Claude CLI 和 Codex CLI 两种后端
