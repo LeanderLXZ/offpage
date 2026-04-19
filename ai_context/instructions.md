@@ -59,6 +59,18 @@ Layer summary:
 - `ai_context/` — compressed current truth
 - `docs/architecture/` — formal architecture documentation
 - `docs/logs/` — timestamped historical records (write-mostly)
+- `docs/todo_list.md` — see next section
+
+## TODO list file (`docs/todo_list.md`)
+
+Chinese-language working queue of planned-but-unfinished engineering
+tasks (file paths, line numbers, change lists, verification, deps).
+Sections: 立即执行 / 下一步 / 讨论中（未定案）. Read-on-demand —
+**not** part of the session-start `ai_context/` reading order.
+
+Full usage rules (what to record, how to update, when to delete, how to
+read) live inside `docs/todo_list.md` itself under `## 文件说明`. Read
+that section before editing the list; do not duplicate the rules here.
 
 ## Project Focus
 
