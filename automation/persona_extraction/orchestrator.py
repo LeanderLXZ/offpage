@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from .consistency_checker import run_consistency_check, save_report
+from .failed_lane_log import write_failed_lane_log
 from .git_utils import (
     commit_stage,
     create_extraction_branch,
@@ -1191,6 +1192,22 @@ class ExtractionOrchestrator:
         tracker.start_stage()
         tracker.print_stage_header(stage)
 
+        work_root = self.project_root / "works" / pipeline.work_id
+
+        def _log_lane_failure(lane_type: str, lane_id: str,
+                              prompt_length: int):
+            def _cb(result: LLMResult, _attempt: int) -> None:
+                try:
+                    path = write_failed_lane_log(
+                        work_root, stage.stage_id, lane_type, lane_id,
+                        result, prompt_length)
+                    if path is not None:
+                        print(f"    [LOG] {lane_type}:{lane_id} failure → "
+                              f"{path.relative_to(self.project_root)}")
+                except Exception:  # noqa: BLE001
+                    logger.exception("failed to write lane failure log")
+            return _cb
+
         # Per-process extraction closures — used by the parallel
         # extraction (Step 2). Each accepts an optional reviewer feedback
         # string (passed on resume after a repair-agent FAIL).
@@ -1203,7 +1220,9 @@ class ExtractionOrchestrator:
                 stages=phase3.stages,
                 reviewer_feedback=feedback)
             result = run_with_retry(
-                self.backend, prompt, timeout_seconds=3600)
+                self.backend, prompt, timeout_seconds=3600,
+                lane_name="world",
+                on_failure=_log_lane_failure("world", "world", len(prompt)))
             return "world", "world", result
 
         def _extract_char_snapshot(
@@ -1216,7 +1235,10 @@ class ExtractionOrchestrator:
                 stages=phase3.stages,
                 reviewer_feedback=feedback)
             result = run_with_retry(
-                self.backend, prompt, timeout_seconds=3600)
+                self.backend, prompt, timeout_seconds=3600,
+                lane_name=f"char_snapshot:{char_id}",
+                on_failure=_log_lane_failure(
+                    "char_snapshot", char_id, len(prompt)))
             return "char_snapshot", char_id, result
 
         def _extract_char_support(
@@ -1229,7 +1251,10 @@ class ExtractionOrchestrator:
                 stages=phase3.stages,
                 reviewer_feedback=feedback)
             result = run_with_retry(
-                self.backend, prompt, timeout_seconds=3600)
+                self.backend, prompt, timeout_seconds=3600,
+                lane_name=f"char_support:{char_id}",
+                on_failure=_log_lane_failure(
+                    "char_support", char_id, len(prompt)))
             return "char_support", char_id, result
 
         # Handle state resumption — reset interrupted states.

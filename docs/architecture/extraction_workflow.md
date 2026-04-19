@@ -167,6 +167,24 @@ baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
 （角色快照）与 `character_support_extraction.md`（memory_timeline + baseline
 校正）两个独立提示词，各角色并行调用。详见上文步骤 6a / 6b。
 
+#### 6.4 Lane 级失败诊断
+
+任一 lane 调用失败时（含超时、exit≠0、token_limit、rate_limit），
+自动在 `works/{work_id}/analysis/progress/failed_lanes/` 写入单独日志：
+
+- 文件名：`{stage_id}__{lane_type}_{lane_id}__{pid}.log`
+- 内容：lane 元数据 + `duration` + `returncode` + 从 CLI JSON 解析到的
+  `subtype` / `num_turns` / `total_cost_usd` + 完整 stdout + stderr
+- 每次重试都写一份（按 pid 去重），便于重试序列复盘
+- `run_with_retry` 通过 `on_failure` 回调把每次失败的 `LLMResult`
+  交回编排层落盘
+- prompt 本身不入盘（可由 git 状态 + stage_id 复现；日志只记 CLI 输出）
+- 目录随 `progress/` 一并被 `.gitignore`
+
+PID 打印 / heartbeat 行统一带 `[{lane_name}]` 标签
+（`[world]` / `[char_snapshot:<id>]` / `[char_support:<id>]`），
+日志 tail 时不需反推 PID 与 lane 的对应关系。
+
 ### 7. 跨阶段一致性检查（Phase 3.5）
 
 Phase 3 全部 stage 提交后、进入 Phase 4 之前，运行跨阶段一致性检查。

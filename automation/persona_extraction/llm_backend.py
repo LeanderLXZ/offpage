@@ -83,6 +83,50 @@ class LLMResult:
     error: str | None = None
     pid: int | None = None
     duration_seconds: float = 0.0
+    # Diagnostic fields populated on failure (and when parseable on success).
+    # raw_stdout is capped at 20KB; full stdout goes to the per-lane log file
+    # written by the orchestrator.
+    raw_stdout: str = ""
+    raw_stderr: str = ""
+    subtype: str | None = None
+    num_turns: int | None = None
+    total_cost_usd: float | None = None
+
+
+_RAW_STDOUT_CAP = 20_000
+_RAW_STDERR_CAP = 20_000
+
+
+def _parse_claude_json(stdout: str) -> dict[str, Any]:
+    """Extract diagnostic fields from claude --output-format json stdout.
+
+    Returns an empty dict if stdout is not valid JSON or not a dict. Claude
+    CLI emits structured JSON even on some non-zero exits (e.g. touching
+    --max-turns), so this best-effort parse extracts subtype / num_turns /
+    total_cost_usd whenever available.
+    """
+    try:
+        data = json.loads(stdout)
+    except (json.JSONDecodeError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def _build_diagnostic_error(returncode: int, stderr: str,
+                            parsed: dict[str, Any]) -> str:
+    """Prepend parsed subtype/num_turns to the error message for visibility."""
+    prefix_parts: list[str] = [f"exit {returncode}"]
+    if parsed:
+        tags: list[str] = []
+        if parsed.get("subtype"):
+            tags.append(f"subtype={parsed['subtype']}")
+        if parsed.get("num_turns") is not None:
+            tags.append(f"num_turns={parsed['num_turns']}")
+        if tags:
+            prefix_parts.append(f"[{' '.join(tags)}]")
+    return f"{' '.join(prefix_parts)}: {stderr}"
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +142,8 @@ class LLMBackend(ABC):
 
     @abstractmethod
     def run(self, prompt: str, *, allowed_tools: list[str] | None = None,
-            timeout_seconds: int = 600) -> LLMResult:
+            timeout_seconds: int = 600,
+            lane_name: str | None = None) -> LLMResult:
         ...
 
     @abstractmethod
@@ -129,8 +174,10 @@ class ClaudeBackend(LLMBackend):
         return "claude"
 
     def run(self, prompt: str, *, allowed_tools: list[str] | None = None,
-            timeout_seconds: int = 600) -> LLMResult:
+            timeout_seconds: int = 600,
+            lane_name: str | None = None) -> LLMResult:
         tools = allowed_tools or CLAUDE_DEFAULT_TOOLS
+        lane_tag = f"[{lane_name}]" if lane_name else "[lane]"
 
         cmd: list[str] = [
             self._claude_bin, "-p", prompt,
@@ -144,8 +191,8 @@ class ClaudeBackend(LLMBackend):
         if self.effort:
             cmd.extend(["--effort", self.effort])
 
-        logger.info("Running claude -p  (max_turns=%d, timeout=%ds)",
-                     self.max_turns, timeout_seconds)
+        logger.info("Running claude -p  (max_turns=%d, timeout=%ds, lane=%s)",
+                     self.max_turns, timeout_seconds, lane_name or "?")
         logger.debug("Prompt length: %d chars", len(prompt))
 
         start = time.monotonic()
@@ -154,7 +201,7 @@ class ClaudeBackend(LLMBackend):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
 
-        print(f"    PID {proc.pid} started")
+        print(f"    PID {proc.pid} started {lane_tag}")
 
         # Heartbeat thread — prints elapsed + memory every 30s
         stop_event = threading.Event()
@@ -166,31 +213,49 @@ class ClaudeBackend(LLMBackend):
                 child_mem = fmt_memory(get_rss_mb(proc.pid))
                 orch_mem = fmt_memory(get_rss_mb(orch_pid))
                 print(f"    ... running [{_fmt_elapsed(elapsed)}]"
-                      f"  PID {proc.pid}"
+                      f"  PID {proc.pid} {lane_tag}"
                       f"  Mem: claude={child_mem} orch={orch_mem}")
 
         hb = threading.Thread(target=heartbeat, daemon=True)
         hb.start()
 
+        stdout = ""
+        stderr = ""
+        timed_out = False
         try:
             stdout, stderr = proc.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
             proc.kill()
-            proc.communicate()
-            duration = time.monotonic() - start
-            return LLMResult(success=False, text="",
-                             error="claude -p timed out",
-                             pid=proc.pid, duration_seconds=duration)
+            try:
+                stdout, stderr = proc.communicate()
+            except Exception:  # noqa: BLE001
+                stdout, stderr = stdout or "", stderr or ""
+            timed_out = True
         finally:
             stop_event.set()
             hb.join(timeout=2)
 
         duration = time.monotonic() - start
-        child_mem = fmt_memory(get_rss_mb(proc.pid))
-        print(f"    PID {proc.pid} finished [{_fmt_elapsed(duration)}]")
+        print(f"    PID {proc.pid} finished {lane_tag} "
+              f"[{_fmt_elapsed(duration)}]")
+
+        parsed = _parse_claude_json(stdout)
+        raw_stdout_capped = (stdout or "")[:_RAW_STDOUT_CAP]
+        raw_stderr_capped = (stderr or "")[:_RAW_STDERR_CAP]
+
+        if timed_out:
+            return LLMResult(
+                success=False, text="",
+                error="claude -p timed out",
+                pid=proc.pid, duration_seconds=duration,
+                raw_stdout=raw_stdout_capped,
+                raw_stderr=raw_stderr_capped,
+                subtype=parsed.get("subtype"),
+                num_turns=parsed.get("num_turns"),
+                total_cost_usd=parsed.get("total_cost_usd"))
 
         if proc.returncode != 0:
-            stderr_s = stderr.strip()
+            stderr_s = (stderr or "").strip()
             lower = stderr_s.lower()
             # Detect token/context limit (not retryable — same prompt
             # will hit the same limit)
@@ -203,30 +268,50 @@ class ClaudeBackend(LLMBackend):
                 return LLMResult(
                     success=False, text="",
                     error=f"token_limit: {stderr_s}",
-                    pid=proc.pid, duration_seconds=duration)
+                    pid=proc.pid, duration_seconds=duration,
+                    raw_stdout=raw_stdout_capped,
+                    raw_stderr=raw_stderr_capped,
+                    subtype=parsed.get("subtype"),
+                    num_turns=parsed.get("num_turns"),
+                    total_cost_usd=parsed.get("total_cost_usd"))
             # Detect rate-limit (retryable)
             rate_limit_signals = ["rate limit", "rate_limit", "too many requests"]
             if any(sig in lower for sig in rate_limit_signals):
-                return LLMResult(success=False, text="",
-                                 error=f"rate_limit: {stderr_s}",
-                                 pid=proc.pid, duration_seconds=duration)
-            return LLMResult(success=False, text="",
-                             error=f"exit {proc.returncode}: {stderr_s}",
-                             pid=proc.pid, duration_seconds=duration)
+                return LLMResult(
+                    success=False, text="",
+                    error=f"rate_limit: {stderr_s}",
+                    pid=proc.pid, duration_seconds=duration,
+                    raw_stdout=raw_stdout_capped,
+                    raw_stderr=raw_stderr_capped,
+                    subtype=parsed.get("subtype"),
+                    num_turns=parsed.get("num_turns"),
+                    total_cost_usd=parsed.get("total_cost_usd"))
+            return LLMResult(
+                success=False, text="",
+                error=_build_diagnostic_error(proc.returncode, stderr_s,
+                                              parsed),
+                pid=proc.pid, duration_seconds=duration,
+                raw_stdout=raw_stdout_capped,
+                raw_stderr=raw_stderr_capped,
+                subtype=parsed.get("subtype"),
+                num_turns=parsed.get("num_turns"),
+                total_cost_usd=parsed.get("total_cost_usd"))
 
-        # Parse JSON output
-        try:
-            data = json.loads(stdout)
-        except json.JSONDecodeError:
+        if not parsed:
             # Fallback: treat raw stdout as text
-            return LLMResult(success=True, text=stdout.strip(),
-                             pid=proc.pid, duration_seconds=duration)
+            return LLMResult(success=True, text=(stdout or "").strip(),
+                             pid=proc.pid, duration_seconds=duration,
+                             raw_stdout=raw_stdout_capped)
 
-        result_text = data.get("result", stdout.strip())
-        session_id = data.get("session_id")
-        return LLMResult(success=True, text=result_text, raw=data,
+        result_text = parsed.get("result", (stdout or "").strip())
+        session_id = parsed.get("session_id")
+        return LLMResult(success=True, text=result_text, raw=parsed,
                          session_id=session_id,
-                         pid=proc.pid, duration_seconds=duration)
+                         pid=proc.pid, duration_seconds=duration,
+                         raw_stdout=raw_stdout_capped,
+                         subtype=parsed.get("subtype"),
+                         num_turns=parsed.get("num_turns"),
+                         total_cost_usd=parsed.get("total_cost_usd"))
 
 
 # ---------------------------------------------------------------------------
@@ -245,12 +330,15 @@ class CodexBackend(LLMBackend):
         return "codex"
 
     def run(self, prompt: str, *, allowed_tools: list[str] | None = None,
-            timeout_seconds: int = 600) -> LLMResult:
+            timeout_seconds: int = 600,
+            lane_name: str | None = None) -> LLMResult:
         cmd: list[str] = ["codex", "--quiet", "--full-auto", prompt]
         if self.model:
             cmd.extend(["--model", self.model])
+        lane_tag = f"[{lane_name}]" if lane_name else "[lane]"
 
-        logger.info("Running codex --full-auto  (timeout=%ds)", timeout_seconds)
+        logger.info("Running codex --full-auto  (timeout=%ds, lane=%s)",
+                    timeout_seconds, lane_name or "?")
 
         start = time.monotonic()
         proc = subprocess.Popen(
@@ -258,7 +346,7 @@ class CodexBackend(LLMBackend):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
 
-        print(f"    PID {proc.pid} started")
+        print(f"    PID {proc.pid} started {lane_tag}")
 
         stop_event = threading.Event()
         orch_pid = os.getpid()
@@ -269,35 +357,53 @@ class CodexBackend(LLMBackend):
                 child_mem = fmt_memory(get_rss_mb(proc.pid))
                 orch_mem = fmt_memory(get_rss_mb(orch_pid))
                 print(f"    ... running [{_fmt_elapsed(elapsed)}]"
-                      f"  PID {proc.pid}"
+                      f"  PID {proc.pid} {lane_tag}"
                       f"  Mem: codex={child_mem} orch={orch_mem}")
 
         hb = threading.Thread(target=heartbeat, daemon=True)
         hb.start()
 
+        stdout = ""
+        stderr = ""
+        timed_out = False
         try:
             stdout, stderr = proc.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
             proc.kill()
-            proc.communicate()
-            duration = time.monotonic() - start
-            return LLMResult(success=False, text="",
-                             error="codex timed out",
-                             pid=proc.pid, duration_seconds=duration)
+            try:
+                stdout, stderr = proc.communicate()
+            except Exception:  # noqa: BLE001
+                stdout, stderr = stdout or "", stderr or ""
+            timed_out = True
         finally:
             stop_event.set()
             hb.join(timeout=2)
 
         duration = time.monotonic() - start
-        print(f"    PID {proc.pid} finished [{_fmt_elapsed(duration)}]")
+        print(f"    PID {proc.pid} finished {lane_tag} "
+              f"[{_fmt_elapsed(duration)}]")
+
+        raw_stdout_capped = (stdout or "")[:_RAW_STDOUT_CAP]
+        raw_stderr_capped = (stderr or "")[:_RAW_STDERR_CAP]
+
+        if timed_out:
+            return LLMResult(success=False, text="",
+                             error="codex timed out",
+                             pid=proc.pid, duration_seconds=duration,
+                             raw_stdout=raw_stdout_capped,
+                             raw_stderr=raw_stderr_capped)
 
         if proc.returncode != 0:
-            return LLMResult(success=False, text="",
-                             error=f"exit {proc.returncode}: {stderr.strip()}",
-                             pid=proc.pid, duration_seconds=duration)
+            return LLMResult(
+                success=False, text="",
+                error=f"exit {proc.returncode}: {(stderr or '').strip()}",
+                pid=proc.pid, duration_seconds=duration,
+                raw_stdout=raw_stdout_capped,
+                raw_stderr=raw_stderr_capped)
 
-        return LLMResult(success=True, text=stdout.strip(),
-                         pid=proc.pid, duration_seconds=duration)
+        return LLMResult(success=True, text=(stdout or "").strip(),
+                         pid=proc.pid, duration_seconds=duration,
+                         raw_stdout=raw_stdout_capped)
 
 
 # ---------------------------------------------------------------------------
@@ -336,11 +442,24 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
                    allowed_tools: list[str] | None = None,
                    max_retries: int = 3,
                    cooldown_seconds: int = 60,
-                   timeout_seconds: int = 600) -> LLMResult:
-    """Run prompt with automatic retry on rate-limit and fast-fail errors."""
+                   timeout_seconds: int = 600,
+                   lane_name: str | None = None,
+                   on_failure: Any = None) -> LLMResult:
+    """Run prompt with automatic retry on rate-limit and fast-fail errors.
+
+    ``on_failure`` is called once per failed attempt with the LLMResult, so
+    callers can persist per-lane diagnostic logs for every attempt (including
+    intermediate retries) rather than only the final one.
+    """
     for attempt in range(1, max_retries + 1):
         result = backend.run(prompt, allowed_tools=allowed_tools,
-                             timeout_seconds=timeout_seconds)
+                             timeout_seconds=timeout_seconds,
+                             lane_name=lane_name)
+        if not result.success and on_failure is not None:
+            try:
+                on_failure(result, attempt)
+            except Exception:  # noqa: BLE001
+                logger.exception("on_failure callback raised")
         if result.success:
             return result
         # Token/context limit — same prompt will fail again, don't retry

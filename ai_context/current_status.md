@@ -83,6 +83,12 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
   30s heartbeat.
 - Fast empty-failure backoff (30s → 60s → 120s); token / context errors
   not retried.
+- Phase 3 lane-level failure diagnostic logs:
+  `works/{work_id}/analysis/progress/failed_lanes/{stage_id}__{lane_type}_{lane_id}__{pid}.log`
+  captures full stdout + stderr + parsed `subtype` / `num_turns` /
+  `total_cost_usd` on every failed lane attempt (including retries).
+  PID prints and heartbeats carry lane tags (`[world]` /
+  `[char_snapshot:<id>]` / `[char_support:<id>]`).
 - `jsonschema` is a HARD dependency (no silent gate downgrade).
 
 ### Memory System and Retrieval Design
