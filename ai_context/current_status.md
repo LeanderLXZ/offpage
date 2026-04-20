@@ -149,6 +149,7 @@ extraction completion.
   `progress/`, `chapter_summaries/`, `scene_splits/`, `evidence/*` local
 - `works/*/world/`, `works/*/characters/`, `works/*/indexes/` tracked;
   `works/*/retrieval/` local-only
-- `docs/logs/` write-mostly; do not proactively read
+- `docs/logs/` and `docs/review_reports/` write-mostly; do not proactively
+  read
 - No per-stage report files; update progress in-place
 - Stages split by natural story boundaries (target 10, min 5, max 15)
