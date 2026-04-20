@@ -187,6 +187,7 @@ class ClaudeBackend(LLMBackend):
             "--max-turns", str(self.max_turns),
             "--dangerously-skip-permissions",
             "--allowedTools", ",".join(tools),
+            "--append-system-prompt", "[extraction_worker_mode]",
         ]
         if self.model:
             cmd.extend(["--model", self.model])
