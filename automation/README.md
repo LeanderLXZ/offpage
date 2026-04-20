@@ -50,7 +50,7 @@ pip install jsonschema   # 一次性，必需
 `persona_extraction/config.py::load_config()`。覆盖优先级（高→低）：
 
 ```
-CLI flag  >  环境变量  >  config.toml  >  config.local.toml  >  代码默认值
+CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
 ```
 
 `config.local.toml`（同目录、git-ignored）按键覆盖 `config.toml`，
@@ -65,8 +65,9 @@ CLI flag  >  环境变量  >  config.toml  >  config.local.toml  >  代码默认
 - `[phase4]` 章节并发、短路熔断阈值
 - `[repair_agent]` 各 tier 重试次数、triage 设置
 - `[backoff]` 快速空失败退避序列
-- `[rate_limit]` Token 限额暂停策略（reset 缓冲、解析失败 fallback、
-  周限额上限/动作）
+- `[rate_limit]` Token 限额暂停策略（reset 缓冲、DST 感知时区解析、
+  解析失败 fallback、周限额上限/动作、probe leader 选举 TTL、probe
+  会话累计等待硬停 `probe_max_wait_h`）
 - `[runtime]` 默认 runtime 上限、心跳间隔、默认 backend
 - `[logging]` `failed_lanes/` 保留天数
 - `[git]` extraction 分支前缀、auto squash-merge 开关

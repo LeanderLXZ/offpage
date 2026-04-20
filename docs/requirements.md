@@ -2212,11 +2212,13 @@ CLI `--start-phase` 参数（0/1/2/2.5/3/3.5/4），默认 auto（自动检测�
 #### 覆盖优先级（高 → 低）
 
 ```
-CLI flag  >  环境变量  >  config.toml  >  代码默认值
+CLI flag  >  config.local.toml  >  config.toml  >  代码 dataclass 默认值
 ```
 
 任一上层未提供时透传到下层。CLI 显式给出 `--concurrency 5` 即覆盖
 TOML 中的同名键；TOML 缺失键时回落到代码内部 dataclass 默认。
+`config.local.toml` 是同目录可选的 git-ignored 覆盖文件，按键二次覆盖
+主配置，方便在不同部署机调整阈值而不污染版本库。
 
 #### 收录范围
 
@@ -2312,8 +2314,11 @@ TOML 中的同名键；TOML 缺失键时回落到代码内部 dataclass 默认�
 | `detected_by` | string | 首次撞限的 lane 标识（如 `char_snapshot:Character B`） |
 | `buffer_applied_s` | int | 实际加在 reset 上的 buffer 秒数 |
 | `merged_count` | int | 合并次数（用于诊断） |
+| `probing_by_pid` | int / null | unknown fallback 下的 probe leader PID；null 表示待选举 |
+| `probing_claim_at` | string (ISO 8601) / null | leader claim 刷新时刻，过 `probe_claim_ttl_s` 视为失效 |
+| `probe_session_started_at` | string (ISO 8601) / null | 本次 probe 会话首次进入 fallback 的时刻，用于累计硬停判定 |
 
-写盘原子性：`tempfile + os.replace`；并发合并通过 `fcntl.flock` 保护读取-修改-写入全流程，并取双方 `resume_at` 的较晚者。
+写盘原子性：`tempfile + os.replace`；并发合并通过 `fcntl.flock` 保护读取-修改-写入全流程，并取双方 `resume_at` 的较晚者。合并时保留已有的 `probing_by_pid` / `probe_session_started_at`，不被后续 5h/weekly 类型的 pause 覆盖。
 
 #### 11.13.4 撞限检测
 
@@ -2332,37 +2337,56 @@ reset 时间正则（按优先级匹配）：
 2. `[Rr]esets? in (\d+)h(\d+)?m?` — 相对时长（如 `Resets in 2h30m`）
 3. ISO 8601 时间戳（如 `2026-04-19T20:00:00-07:00`）
 
+时区缩写解析：PT / MT / CT / ET 等可能跨 DST 的缩写通过 `zoneinfo.ZoneInfo`
+（`America/Los_Angeles` 等）解析，让 reset 时刻在夏令时和冬令时窗口都对齐
+wall-clock；PST / PDT 等明确缩写仍走固定偏移表。`zoneinfo` 缺库回退 UTC。
+
 匹配失败 → 走 fallback（§11.13.5）。
 
-#### 11.13.5 解析失败 fallback：探测式
+#### 11.13.5 解析失败 fallback：探测式（单 leader 全局选举）
 
-当 reset 时间不可解析时，执行最小成本探测：
+当 reset 时间不可解析时（`reason = "unknown"`），由**单一 leader lane**
+发起探测，避免多 lane 并发 probe 把额度耗掉：
 
 ```
-sleep parse_fallback_sleep_s （默认 1800s = 30 min）
-  ↓
-发起一次 claude -p 探测调用：
-  prompt = "1"
-  --max-turns 1
-  --output-format json
-  ↓
-返回 success → 限额已解除，清暂停文件，继续正常流程
-返回 rate_limit → 重写暂停文件（resume_at = now + parse_fallback_sleep_s），循环
+① Lane 读 pause 记录
+   ├─ probing_by_pid 为空 / claim 已过 probe_claim_ttl_s (默认 120s):
+   │     CAS 把自己 PID 写进 probing_by_pid，成为 leader
+   │     （第一次成为 leader 的 lane 同时写 probe_session_started_at = now）
+   └─ 否则：follower，sleep probe_follower_poll_s (默认 30s) 后复查 pause 记录
+
+② Leader 执行 probe：
+   sleep parse_fallback_sleep_s （默认 1800s = 30 min）
+     ↓
+   刷新 probing_claim_at（证明自己还活着）
+     ↓
+   发起一次 claude -p "1" --max-turns 1 --output-format json
+     ↓
+   返回 success  → 清 pause 文件，全体 lane 恢复正常流程
+   返回 rate_limit → 重写 pause 记录（保留 probing_by_pid +
+                    probe_session_started_at），继续循环
 ```
 
-探测调用的预期开销：< 100 input tokens + < 20 output tokens。
+探测调用的预期开销：< 100 input tokens + < 20 output tokens，且**每轮
+全局只有一次**。claim TTL 同时保护 leader 崩溃场景：超过 `probe_claim_ttl_s`
+未刷新 → follower 重新接手，不会出现全员永久等待。
 
-#### 11.13.6 周限额硬停机
+#### 11.13.6 硬停机
 
-`reason = "weekly"` 且 `resume_at - now ≥ weekly_max_wait_h`（默认 12h）时：
+两类硬停出口，统一通过 `RateLimitHardStop` 异常从 worker 线程抛出、主
+线程 `CliRunner` 捕获并 `sys.exit(2)`；两者都写
+`works/{work_id}/analysis/progress/rate_limit_exit.log`，保留
+`phase3_stages.json` 当前状态（已完成的 lane / stage 不丢）。
 
-1. 写 `works/{work_id}/analysis/progress/rate_limit_exit.log`，含
-   `detected_at` / `resume_at` / `detected_by` / 完整 stderr
-2. 保持 `phase3_stages.json` 当前状态不变（已完成的 lane / stage 不丢）
-3. `sys.exit(2)`（区别于普通错误 exit 1，外层 wrapper 可识别）
+| reason | 触发条件 | 默认阈值 | 配置键 |
+|--------|----------|----------|--------|
+| `weekly` | `reason = "weekly"` 且 `resume_at - now ≥ weekly_max_wait_h` | 12h | `[rate_limit].weekly_max_wait_h` / `weekly_over_limit_action` |
+| `probe_exhausted` | 单次 probe 会话累计 `now - probe_session_started_at ≥ probe_max_wait_h` | 6h | `[rate_limit].probe_max_wait_h` |
 
-`weekly_over_limit_action = "wait"` 强制无视阈值继续等待（适合后台
-脚本希望"无人值守跨周"的场景）。
+`weekly_over_limit_action = "wait"` 强制无视 weekly 阈值继续等待（适合
+后台脚本希望"无人值守跨周"的场景）；`probe_max_wait_h` 无等价覆盖开关，
+unknown fallback 永远有硬停兜底，避免 stderr 永远无法解析或
+Anthropic 侧长时间不可用时 cron/background 无限挂起。
 
 #### 11.13.7 与现有机制的交互
 
@@ -2370,9 +2394,10 @@ sleep parse_fallback_sleep_s （默认 1800s = 30 min）
 |------|------|
 | `run_with_retry` | rate_limit 路径**绕过**重试计数器，直接写暂停 + 返回 |
 | Lane 级 resume | 唤醒后由 lane-level resume 自动重跑失败 lane（§11.5） |
-| `--max-runtime` | 暂停时长不计入 runtime（在 `_check_runtime_limit` 中扣除） |
+| `--max-runtime` | 暂停时长不计入 runtime（在 `_check_runtime_limit` 中扣除）；N 个 lane 共享同一 pause 窗口时按 `resume_at` 去重只累计一次，避免 wall-clock 被重复扣 |
 | Phase 4 circuit breaker | 与 rate-limit 暂停**正交**：circuit breaker 防短时密集失败，rate-limit 暂停防限额超出 |
 | `_handle_interrupt` SIGTERM | 暂停期间收到信号会立即退出，下次 `--resume` 重新读暂停文件继续等 |
+| `RateLimitHardStop` | worker 线程抛出 → `Future.result()` 在主线程 re-raise → `CliRunner` 统一 `sys.exit(2)`；避免 worker 线程直接调 `sys.exit` 被吞 |
 
 #### 11.13.8 等价性论证
 
@@ -2398,6 +2423,9 @@ parse_fallback_strategy  = "probe"  # 解析失败处理：probe | fixed
 parse_fallback_sleep_s   = 1800     # probe 间隔；fixed 模式下的固定等待
 weekly_max_wait_h        = 12       # 周限额触达时的最大等待小时
 weekly_over_limit_action = "stop"   # "stop" → exit 2；"wait" → 强等
+probe_max_wait_h         = 6        # 单次 probe 会话累计等待硬停阈值
+probe_claim_ttl_s        = 120      # probe leader claim TTL
+probe_follower_poll_s    = 30       # follower 轮询 pause 记录间隔
 ```
 
 ---

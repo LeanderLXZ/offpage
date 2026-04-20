@@ -5,11 +5,11 @@ that callers (orchestrator, scene_archive, llm_backend, repair_agent) read
 default values from instead of hard-coding constants.
 
 Override priority (high → low):
-    CLI flag  >  env var  >  config.toml  >  config.local.toml override  >
-    code dataclass default
+    CLI flag  >  config.local.toml  >  config.toml  >  code dataclass default
 
-``config.local.toml`` (sibling of ``config.toml``) is git-ignored and lets a
-deployment override individual keys without modifying the tracked file.
+``config.local.toml`` (sibling of ``config.toml``) is git-ignored and lets
+a single developer override individual keys without modifying the tracked
+file.
 
 See ``docs/requirements.md`` §11.12 for the full configuration contract.
 """
@@ -87,6 +87,18 @@ class RateLimitConfig:
     parse_fallback_sleep_s: int = 1800
     weekly_max_wait_h: int = 12
     weekly_over_limit_action: str = "stop"   # "stop" | "wait"
+    # Probe hard-stop (§11.13.8): maximum wall-clock hours a single
+    # unknown-reason probe session may drag on before the controller
+    # raises RateLimitHardStop (→ CLI exit 2). Anchored on
+    # ``probe_session_started_at`` in the pause record.
+    probe_max_wait_h: int = 6
+    # Probe leader election (§11.13.6): only one lane per process calls
+    # ``probe_fn`` per window. Claims expire after this TTL so a crashed
+    # leader can't block the pool forever.
+    probe_claim_ttl_s: int = 120
+    # Follower poll interval: how long a non-leader lane sleeps before
+    # re-reading the pause record to see the leader's verdict.
+    probe_follower_poll_s: int = 30
 
 
 @dataclass(frozen=True)

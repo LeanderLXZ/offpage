@@ -5,7 +5,7 @@
 #
 # 加载入口：automation.persona_extraction.config.load_config()
 # 覆盖优先级（高 → 低）：
-#   CLI flag  >  环境变量  >  本文件  >  代码 dataclass 默认值
+#   CLI flag  >  config.local.toml  >  本文件  >  代码 dataclass 默认值
 #
 # 本地覆盖：可在同目录创建 `config.local.toml`（.gitignore），
 #   同名键二次覆盖，文件不存在时忽略。
@@ -136,6 +136,21 @@ parse_fallback_sleep_s  = 1800     # 30 分钟
 #   weekly_over_limit_action = "wait"：忽略阈值，无限等待
 weekly_max_wait_h        = 12
 weekly_over_limit_action = "stop"
+
+# Probe 硬停时长（§11.13.8）：单次 probe 会话累计等待 ≥ 本阈值 →
+# 写 rate_limit_exit.log + exit 2。用于防御 Anthropic 长时间不可用或
+# stderr 格式永远无法解析的情况，避免 cron/background 无限挂起。
+# 单位：小时。Anchored on pause 记录里的 probe_session_started_at。
+probe_max_wait_h = 6
+
+# Probe leader 选举（§11.13.6）：unknown 暂停下只有 leader lane 发起
+# claude -p probe 调用；其他 lane 静默等待 leader 更新 pause 记录。
+# claim 超过本 TTL 未刷新 → 视为 leader 已挂，其他 lane 可重新接手。
+probe_claim_ttl_s = 120
+
+# Follower 轮询间隔：非 leader lane 醒来后 re-read pause 记录前 sleep
+# 的秒数。取值应 ≤ probe_claim_ttl_s。
+probe_follower_poll_s = 30
 
 
 # ----------------------------------------------------------------
