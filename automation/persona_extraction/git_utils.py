@@ -139,9 +139,7 @@ def commit_stage(project_root: Path, stage_id: str,
         for f in files:
             _git(["add", f], project_root)
     else:
-        _git(["add", "works/"], project_root)
-
-    _git(["add", "-A", "works/"], project_root)
+        _git(["add", "-A", "works/"], project_root)
 
     status = _git(["status", "--porcelain"], project_root)
     if not status.stdout.strip():
