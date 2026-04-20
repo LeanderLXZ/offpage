@@ -416,9 +416,15 @@ orchestrator (Python)
 - PID 锁防止重复运行，启动时检查工作区干净
 - `--background` 模式：后台运行，SSH 断开后存活，日志写入 `extraction.log`
 - `--max-runtime` 总时间限制，到期后在 stage 间优雅停止
-- 子进程硬超时（提取 3600s、repair agent LLM 调用 600s）
+- 子进程硬超时（提取 3600s、repair agent LLM 调用 600s；阈值由
+  `automation/config.toml` 的 `[phase3]` 段控制）
 - Token/context limit 与 rate limit 区分：前者不重试（相同 prompt 必定再超限），
-  后者递增退避重试
+  后者由 `RateLimitController` 暂停所有新请求直到 reset，再重发同一 prompt
+  （**不消耗重试次数**，详见 `docs/requirements.md` §11.13）。订阅模式下
+  reset 时间从 stderr 解析（PT/PST/PDT/ET/UTC 等时区识别）；解析失败时
+  以最小 `claude -p "1" --max-turns 1` 探测限额是否解除。周限额等待 ≥
+  `[rate_limit].weekly_max_wait_h`（默认 12h）则写
+  `rate_limit_exit.log` 并以 exit code 2 停机
 - Baseline 恢复：resume 时自动检测 Phase 2.5 产出完整性，缺失则补跑
 - Progress 与 `--end-stage` 分离（同 Phase 4 模式）：progress 始终包含完整
   stage plan，`--end-stage` 仅控制运行时执行范围；入口防御性补全应对边缘情况

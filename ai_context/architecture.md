@@ -302,8 +302,17 @@ or `codex` call, no shared session memory, file-based context.
 - Dedicated git branch; each passing stage committed; rollback = `git
   reset`; squash-merge to main on completion.
 - Phase 3 and Phase 4 independent PID locks — can run in parallel.
-- Fast empty-failure backoff (30s exponential); Phase 4 circuit breaker
-  (≥8 failures / 60s → 180s pause).
+- Fast empty-failure backoff (sequence from
+  `[backoff].fast_empty_failure_backoff_s`); Phase 4 circuit breaker
+  (`[phase4].circuit_breaker_*`).
+- Token-limit auto-pause (§11.13): rate-limit / usage-limit errors
+  trigger `RateLimitController` → atomic
+  `works/{work_id}/analysis/progress/rate_limit_pause.json` (flock-
+  merged across lanes) → orchestrator pre-launch gate + every
+  `run_with_retry` blocks until reset → failed prompt re-runs without
+  consuming a retry slot. Probe fallback for unparseable resets;
+  weekly limits over `[rate_limit].weekly_max_wait_h` exit 2 with
+  `rate_limit_exit.log`. Pause time excluded from `--max-runtime`.
 - `--end-stage` strict prefix: finalization (Phase 3.5, squash-merge
   prompt, Phase 4) only after all stages COMMITTED; prefix run exits
   with a "re-run without --end-stage" hint.
@@ -313,8 +322,13 @@ or `codex` call, no shared session memory, file-based context.
   terminal + missing → PENDING; PENDING + artifact → purge; intermediate
   → purge + revert. Phase 3 verifies `committed_sha` via
   `git cat-file -e` (lost commits treated as missing).
-- Token / context-limit errors distinguished from rate limits (not
-  retried — same prompt will fail again).
+- Token / context-limit errors are not retried (same prompt would fail
+  again); rate-limit errors are out-of-band-paused, not retried.
+- Tunable knobs live in one TOML file (`automation/config.toml`,
+  loader `automation/persona_extraction/config.py`). Override priority:
+  CLI flag > env > `config.toml` > `config.local.toml` (git-ignored).
+  Sections: stage / phase0 / phase1 / phase3 / phase4 / repair_agent /
+  backoff / rate_limit / runtime / logging / git.
 
 See `automation/README.md` and `docs/requirements.md` §9–§12.
 See `docs/architecture/schema_reference.md` for schema documentation.

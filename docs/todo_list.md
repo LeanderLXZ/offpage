@@ -57,68 +57,50 @@
 
 ## 立即执行
 
-### [T-TOKEN-WATCH] 跨调用 token 累计 + 预启动 budget 检查
+（无）当前所有"立即执行"任务已完成。下一项请从下方"下一步"提升。
+
+---
+
+## 下一步
+
+### [T-SCENE-CAP] Phase 4 单章 scene 数量上限
 
 **动机**
 
-当前系统没有任何 token 使用监看机制：
-- 每次 claude -p 成功调用的 `usage.input_tokens` / `usage.output_tokens` / `total_cost_usd` 只在 LLMResult 里短暂存在（[llm_backend.py:225-228](automation/persona_extraction/llm_backend.py#L225-L228)），**未持久化**
-- 无法回答"本 work 提取迄今累计消耗多少 token / USD"
-- 无法在启动新阶段前判断"剩余 quota 够不够跑完这个阶段"
-- 订阅用户的 5-hour / weekly 限额、API 用户的 TPM 都可能在运行中触达，目前只能等 rate_limit 错误冒出来再处理
+Phase 4 LLM 在某些章节下会切出几十个超细粒度 scene（曾观测到 30+），
+后续 retrieval 命中率反而下降，且 review/合并耗时高。需要在
+`automation/config.toml` 加一个可配置的 per-chapter 上限（如
+`[phase4].max_scenes_per_chapter`，默认 ~12-15），LLM 输出超限时强制
+按"合并相邻短 scene"或"标记需手工审校"二选一。
 
 **改动清单**
 
-1. **累计 token 使用到 work-local jsonl**
-   - 路径：`works/{work_id}/analysis/progress/token_usage.jsonl`（local-only，不 commit）
-   - 每条记录一次成功的 claude -p 调用：
-     ```json
-     {"ts":"2026-04-18T10:02:36Z","stage_id":"阶段02_离开南林","lane":"char_snapshot:王枫","pid":179868,"duration_s":2325,"input_tokens":45823,"output_tokens":12045,"cache_read_tokens":...,"cache_write_tokens":...,"cost_usd":0.3421,"num_turns":8,"session_id":"..."}
-     ```
-   - 失败调用也记一条（含部分 usage，如果 stdout 可解析到）
-   - 写入点：`llm_backend.py` 成功路径的 `LLMResult` 构造后 → 调用新的 `token_usage.append(...)` 工具
-
-2. **新增 `token_usage` 工具模块**
-   - 位置：`automation/persona_extraction/token_usage.py`
-   - 接口：
-     - `append(work_root, record: dict)` — 原子追加一行（flock 防并发写冲突）
-     - `summary(work_root, since: datetime | None = None) -> dict` — 汇总区间内的总 token / USD
-     - `per_stage(work_root) -> dict[stage_id, summary]` — 按阶段分组
-
-3. **Orchestrator 启动时打印当前累计**
-   - 位置：`orchestrator.py` Phase 3 入口
-   - 打印形如：
-     ```
-     Token usage so far: input=12.4M  output=3.1M  cost=$48.21
-     Last stage avg: input=230K/lane  output=58K/lane  cost=$0.92/lane
-     ```
-   - 便于用户直观看消耗速率
-
-4. **阶段启动前的 budget 预检（可选 flag）**
-   - CLI flag `--token-budget-usd <N>` 和 `--token-budget-tokens <N>`（二选一）
-   - 每进入新阶段前，估算"剩 49-X 个阶段 × 历史阶段平均成本"是否超 budget
-   - 超了：打印警告，`--strict-budget` 时直接停机等用户
-   - 默认行为不变（无 flag 则不启用预检）
-
-5. **`--show-usage` 命令**
-   - `python -m automation.persona_extraction {work_id} --show-usage`（不跑提取，只打印累计）
-   - 用于独立查看而无需启动提取
+1. `automation/config.toml` 增加
+   `[phase4].max_scenes_per_chapter`（默认 15）+ 行为开关
+   `[phase4].scene_cap_action = "merge" | "flag"`
+2. `automation/persona_extraction/scene_archive.py::_process_chapter`
+   解析 LLM 输出后：若 `len(scenes) > max_scenes_per_chapter`，按
+   action 处理。`merge` 模式合并最短的相邻 scene 直到合规；`flag`
+   模式将该章节标记 ERROR + 写一条 review note 等待人工
+3. `prompt_builder.build_scene_split_prompt` 在 prompt 中告知上限
+   （让 LLM 自我约束，减少 fallback 触发频率）
+4. 单元测试：构造一个 30-scene 的伪 LLM 输出，验证 merge 后 ≤ 上限
+   且 scene_id / line_range 连续
 
 **验证方法**
 
-- 跑一个阶段（或手动触发单次 claude -p 成功调用），检查 `token_usage.jsonl` 有新行
-- 并发写冲突测试：并行 5 lane 同时写，确认无行损坏
-- `--show-usage` 打印和手工 awk 统计一致
+- 取曾出现 scene 数过多的章节重跑，确认 ≤ 上限且语义连贯
+- 抽样 10 个正常章节，确认默认值不会误伤
 
-**预估工作量**：150-200 行 Python，2-3 小时
+**预估工作量**：100-150 行 Python + prompt 微调，1-2 小时
 
-**依赖**：无（T-LOG 已完成并扩展了 `LLMResult`，可直接复用新增字段）
+**依赖**：无
 
 **完成标准**
 
-- 每次成功 claude -p 调用在 `token_usage.jsonl` 留一条
-- 运行开始打印累计摘要
-- `--show-usage` 可独立查询
+- 新键在 config.toml 中文档化
+- 任何 chapter 输出的最终 scene 数 ≤ `max_scenes_per_chapter`
+- `flag` 模式可触发 ERROR 并暴露给 review
 
 ---
 
@@ -130,12 +112,12 @@
 
 某次长 lane 跑 38m 后 exit 1，未被 `run_with_retry` 重试。用户提问：短时间内 exit 是否可以重试或退避？T-LOG 完成后，长时失败现在可见 `subtype` / `num_turns`，重试决策可基于实际信号。
 
-**现有机制**（[llm_backend.py:335-372 `run_with_retry`](automation/persona_extraction/llm_backend.py#L335-L372)）
+**现有机制**（[llm_backend.py `run_with_retry`](automation/persona_extraction/llm_backend.py)）
 
 | 错误类型 | 识别 | 处理 |
 |---|---|---|
-| `fast_empty_failure` | duration < 5s + stderr 空 + exit N | 重试 3 次（30s → 60s → 120s） |
-| `rate_limit` | stderr 含 "rate limit" / "too many requests" | 重试 3 次（60s → 120s → 180s） |
+| `fast_empty_failure` | duration < `[backoff].fast_empty_failure_threshold_s` + stderr 空 + exit N | 按 `[backoff].fast_empty_failure_backoff_s` 序列重试（默认 30s → 60s → 120s） |
+| `rate_limit` / `usage_limit` | stderr 含 "rate limit" / "weekly" / "5-hour" / "too many requests" | **暂停所有新请求**直到 reset，然后重发同一 prompt（**不消耗重试次数**，§11.13） |
 | `token_limit` | stderr 含 "context window" / "max_tokens" 等 | **不重试** |
 | 通用长时 exit N | stderr 空 + duration 长 | **不重试** |
 

@@ -186,7 +186,7 @@ def try_repair_json_file(
     *,
     backend: object | None = None,
     expected_key: str | None = None,
-    repair_timeout: int = 600,
+    repair_timeout: int | None = None,
 ) -> tuple[bool, str]:
     """Try to repair a JSON file. Returns (success, description).
 
@@ -242,7 +242,13 @@ def try_repair_json_file(
         return False, "L1 failed and backend is not an LLMBackend"
 
     prompt = build_llm_repair_prompt(content, str(path))
-    result = run_with_retry(backend, prompt, timeout_seconds=repair_timeout)
+    if repair_timeout is None:
+        from .config import get_config as _get_cfg
+        repair_timeout = _get_cfg().phase0.json_repair_l2_timeout_s
+    result = run_with_retry(
+        backend, prompt, timeout_seconds=repair_timeout,
+        lane_name=f"json_repair[{path.name}]",
+    )
 
     if not result.success:
         return False, f"L2 LLM repair call failed: {result.error}"

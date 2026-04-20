@@ -49,6 +49,9 @@ __pycache__/
 # Claude Code local config
 .claude/
 
+# Local automation config overrides (per-deployment, never committed)
+automation/config.local.toml
+
 # IDE / editor history
 .history/
 

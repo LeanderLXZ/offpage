@@ -187,6 +187,25 @@ constraints beyond what the architecture docs already say.
     L3 full re-run (last resort). See
     `automation/persona_extraction/json_repair.py`.
 
+## Configuration & Runtime Resilience
+
+45. Single-source TOML config at `automation/config.toml` (loader
+    `automation/persona_extraction/config.py`). Override priority:
+    CLI > env > `config.toml` > `config.local.toml`. All previously
+    hard-coded knobs (concurrency, timeouts, repair-agent retries,
+    circuit breaker, fast-fail backoff, rate-limit policy, runtime
+    defaults, git auto-merge) read from typed dataclass sections.
+46. Token-limit auto-pause (subscription model): when `claude -p`
+    returns a rate-limit / usage-limit error, `RateLimitController`
+    parses the timezone-aware reset time, writes a flock-merged
+    `rate_limit_pause.json`, blocks the orchestrator's pre-launch
+    gate plus every concurrent `run_with_retry`, and re-runs the
+    failed prompt after reset *without* consuming a retry slot.
+    Quality is equivalent to a no-limit run (modulo wait time).
+    Weekly limits over 12h trigger exit code 2 + persisted exit log.
+    Pause time excluded from `--max-runtime`. Detection-only — no
+    pre-flight quota query.
+
 ## Repository
 
 41. No novels, databases, indexes, large artifacts, or real user

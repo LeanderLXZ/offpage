@@ -7,6 +7,7 @@ import logging
 import sys
 from pathlib import Path
 
+from .config import get_config
 from .git_utils import preflight_check
 from .llm_backend import create_backend
 from .orchestrator import ExtractionOrchestrator
@@ -22,6 +23,7 @@ VALID_PHASES = ("auto", "0", "1", "2", "2.5", "3", "3.5", "4")
 
 
 def main(argv: list[str] | None = None) -> None:
+    cfg = get_config()
     parser = argparse.ArgumentParser(
         prog="persona-extract",
         description="Automated stage extraction for persona-engine",
@@ -39,8 +41,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--backend", "-b",
         choices=["claude", "codex"],
-        default="claude",
-        help="LLM backend to use (default: claude)",
+        default=cfg.runtime.default_backend,
+        help=f"LLM backend to use "
+             f"(default: {cfg.runtime.default_backend}, "
+             f"from [runtime].default_backend)",
     )
     parser.add_argument(
         "--reviewer-backend",
@@ -62,8 +66,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--max-turns",
         type=int,
-        default=50,
-        help="Max agent turns per invocation (default: 50)",
+        default=cfg.phase3.max_turns,
+        help=f"Max agent turns per invocation "
+             f"(default: {cfg.phase3.max_turns}, from [phase3].max_turns)",
     )
     parser.add_argument(
         "--characters", "-c",
@@ -94,8 +99,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--concurrency",
         type=int,
-        default=10,
-        help="Max parallel workers for Phase 0 and Phase 4 (default: 10)",
+        default=cfg.phase0.concurrency,
+        help=f"Max parallel workers for Phase 0 / Phase 4 "
+             f"(default: {cfg.phase0.concurrency}, "
+             f"from [phase0].concurrency / [phase4].concurrency)",
     )
     parser.add_argument(
         "--resume", action="store_true",
@@ -109,9 +116,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--max-runtime",
         type=int,
-        default=0,
-        help="Max total runtime in minutes (0 = unlimited). "
-             "Stops gracefully after limit.",
+        default=cfg.runtime.max_runtime_min_default,
+        help=f"Max total runtime in minutes (0 = unlimited; "
+             f"default: {cfg.runtime.max_runtime_min_default}, "
+             f"from [runtime].max_runtime_min_default). "
+             f"Rate-limit pause time is excluded.",
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true",

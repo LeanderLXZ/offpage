@@ -28,10 +28,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .config import get_config
 from .llm_backend import LLMBackend, run_with_retry
 from .json_repair import programmatic_repair
 from .process_guard import PidLock
 from .prompt_builder import build_scene_split_prompt
+from .rate_limit import RateLimitController, get_active as get_active_rl, set_active as set_active_rl
 
 logger = logging.getLogger(__name__)
 
@@ -355,7 +357,12 @@ def _process_chapter(
     entry.last_updated = _now_iso()
 
     # Run LLM
-    result = run_with_retry(backend, prompt, timeout_seconds=600)
+    cfg = get_config()
+    result = run_with_retry(
+        backend, prompt,
+        timeout_seconds=cfg.phase3.review_timeout_s,
+        lane_name=f"scene[{chapter_id}]",
+    )
 
     if not result.success:
         msg = result.error or "LLM call failed"
@@ -648,12 +655,24 @@ def run_scene_archive(
         print("[ERROR] Failed to acquire scene archive lock.")
         return False
 
+    # Install rate-limit controller so run_with_retry can pause/resume
+    # against the per-work pause file. If one is already installed (e.g.
+    # by the orchestrator running Phase 0-3.5), reuse it instead of
+    # shadowing.
+    work_root = project_root / "works" / work_id
+    own_controller = False
+    if get_active_rl() is None:
+        set_active_rl(RateLimitController(work_root))
+        own_controller = True
+
     try:
         return _run_scene_archive_inner(
             project_root, work_id, backend,
             concurrency=concurrency, end_stage=end_stage, resume=resume)
     finally:
         lock.release()
+        if own_controller:
+            set_active_rl(None)
 
 
 def _run_scene_archive_inner(
@@ -810,11 +829,20 @@ def _run_parallel(
     total = len(pending)
 
     # Circuit breaker: if recent_failures >= threshold within the window,
-    # pause all workers before submitting new tasks.
+    # pause all workers before submitting new tasks. Tunable via
+    # [phase4] in automation/config.toml. Independent of §11.13's token-
+    # limit pause: this guards short-burst failures, that one guards quota.
+    cfg = get_config()
     recent_failures: list[float] = []  # timestamps of recent failures
-    BREAKER_WINDOW = 60.0    # look-back window in seconds
-    BREAKER_THRESHOLD = 8    # failures within window to trigger pause
-    BREAKER_PAUSE = 180      # seconds to wait when tripped
+    BREAKER_WINDOW = float(cfg.phase4.circuit_breaker_window_s)
+    BREAKER_THRESHOLD = int(cfg.phase4.circuit_breaker_failure_threshold)
+    BREAKER_PAUSE = int(cfg.phase4.circuit_breaker_pause_s)
+
+    rl_controller = get_active_rl()
+
+    def _gate() -> None:
+        if rl_controller is not None:
+            rl_controller.wait_if_paused()
 
     print(f"\n  Processing {total} chapters with {concurrency} workers...\n")
 
@@ -825,6 +853,7 @@ def _run_parallel(
 
         # Seed initial stage
         for chapter_id in itertools.islice(pending_iter, concurrency):
+            _gate()
             future = executor.submit(
                 _process_chapter,
                 project_root, work_id, chapter_id,
@@ -875,6 +904,7 @@ def _run_parallel(
             # Submit new tasks to fill vacant slots
             for next_chapter in itertools.islice(
                     pending_iter, concurrency - len(futures)):
+                _gate()
                 future = executor.submit(
                     _process_chapter,
                     project_root, work_id, next_chapter,

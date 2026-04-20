@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+from .config import get_config
 from .consistency_checker import run_consistency_check, save_report
 from .failed_lane_log import write_failed_lane_log
 from .git_utils import (
@@ -63,6 +64,11 @@ from .prompt_builder import (
     build_world_extraction_prompt,
 )
 from .json_repair import try_repair_json_file
+from .rate_limit import (
+    RateLimitController,
+    get_active as get_active_rl,
+    set_active as set_active_rl,
+)
 from .scene_archive import run_scene_archive
 from .validator import load_importance_map, validate_baseline
 from ..repair_agent import (
@@ -268,6 +274,13 @@ class ExtractionOrchestrator:
         self._start_time = time.monotonic()
         self._lock = PidLock(project_root, work_id)
 
+        # Per-work rate-limit controller (§11.13). Installed as the
+        # process-wide singleton so deeply-nested run_with_retry calls
+        # (json_repair, scene_archive, repair_agent) find it.
+        work_root = project_root / "works" / work_id
+        self._rate_limit = RateLimitController(work_root)
+        set_active_rl(self._rate_limit)
+
         # Register signal handler for graceful shutdown
         signal.signal(signal.SIGINT, self._handle_interrupt)
         signal.signal(signal.SIGTERM, self._handle_interrupt)
@@ -284,13 +297,23 @@ class ExtractionOrchestrator:
         sys.exit(130)
 
     def _check_runtime_limit(self) -> bool:
-        """Return True if max runtime exceeded."""
+        """Return True if max runtime exceeded.
+
+        Time spent inside ``RateLimitController.wait_if_paused`` is excluded
+        from the elapsed accounting (§11.13.7) so a long token-limit pause
+        does not falsely trip the budget.
+        """
         if self.max_runtime_minutes <= 0:
             return False
-        elapsed_min = (time.monotonic() - self._start_time) / 60
+        elapsed_s = (time.monotonic() - self._start_time)
+        elapsed_s -= self._rate_limit.paused_seconds_total
+        elapsed_min = max(0.0, elapsed_s) / 60
         if elapsed_min >= self.max_runtime_minutes:
             print(f"\n[TIMEOUT] Max runtime ({self.max_runtime_minutes}min) "
-                  f"exceeded after {elapsed_min:.0f}min. Stopping gracefully.")
+                  f"exceeded after {elapsed_min:.0f}min "
+                  f"(paused excluded: "
+                  f"{self._rate_limit.paused_seconds_total / 60:.1f}min). "
+                  f"Stopping gracefully.")
             return True
         return False
 
@@ -341,8 +364,11 @@ class ExtractionOrchestrator:
             self.project_root, self.work_id,
             idx, total_chunks, start, end)
 
-        result = run_with_retry(self.backend, prompt,
-                                timeout_seconds=600)
+        result = run_with_retry(
+            self.backend, prompt,
+            timeout_seconds=get_config().phase3.review_timeout_s,
+            lane_name=f"summarize[chunk_{idx:03d}]",
+        )
 
         if not result.success:
             return idx, False, result.error or "LLM call failed"
@@ -726,7 +752,10 @@ class ExtractionOrchestrator:
         the plan file is deleted and the LLM is re-run with corrective
         feedback (up to MAX_ANALYSIS_RETRIES times).
         """
-        MAX_ANALYSIS_RETRIES = 2
+        cfg = get_config()
+        MAX_ANALYSIS_RETRIES = cfg.phase1.exit_validation_max_retry
+        STAGE_MIN = cfg.stage.min_chapter_count
+        STAGE_MAX = cfg.stage.max_chapter_count
         work_dir = self.project_root / "works" / self.work_id
         inc_dir = work_dir / "analysis"
         correction_feedback = ""
@@ -743,8 +772,11 @@ class ExtractionOrchestrator:
             prompt = build_analysis_prompt(
                 self.project_root, self.work_id,
                 correction_feedback=correction_feedback)
-            result = run_with_retry(self.backend, prompt,
-                                    timeout_seconds=1800)
+            result = run_with_retry(
+                self.backend, prompt,
+                timeout_seconds=get_config().phase3.extraction_timeout_s,
+                lane_name="phase1_analysis",
+            )
 
             if not result.success:
                 print(f"[ERROR] Analysis failed: {result.error}")
@@ -763,7 +795,11 @@ class ExtractionOrchestrator:
 
             # Phase 1 exit validation: check stage chapter_count limits
             if stage_plan:
-                violating = _check_stage_plan_limits(stage_plan)
+                violating = _check_stage_plan_limits(
+                    stage_plan,
+                    max_stage_size=STAGE_MAX,
+                    min_stage_size=STAGE_MIN,
+                )
                 if not violating:
                     break  # all good
 
@@ -774,10 +810,10 @@ class ExtractionOrchestrator:
                         for b in violating)
                     correction_feedback = (
                         f"上次产出的 stage plan 中有 {len(violating)} 个 stage "
-                        f"不满足 5-15 章限制：{details}。\n\n"
+                        f"不满足 {STAGE_MIN}-{STAGE_MAX} 章限制：{details}。\n\n"
                         "请重新生成 `stage_plan.json`，确保每个 stage "
-                        "的 chapter_count 在 5-15 范围内。对于跨度大的故事弧，"
-                        "必须在其中寻找次级剧情节点拆分为多个 stage；"
+                        f"的 chapter_count 在 {STAGE_MIN}-{STAGE_MAX} 范围内。"
+                        "对于跨度大的故事弧，必须在其中寻找次级剧情节点拆分为多个 stage；"
                         "对于过短的 stage，应合并到相邻 stage。\n\n"
                         "其他已产出的文件（world_overview.json、"
                         "candidate_characters.json）如果已存在且正确，"
@@ -825,7 +861,11 @@ class ExtractionOrchestrator:
 
         prompt = build_baseline_prompt(
             self.project_root, self.work_id, target_characters)
-        result = run_with_retry(self.backend, prompt, timeout_seconds=1800)
+        result = run_with_retry(
+            self.backend, prompt,
+            timeout_seconds=get_config().phase3.extraction_timeout_s,
+            lane_name="baseline",
+        )
 
         if not result.success:
             print(f"[ERROR] Baseline production failed: {result.error}")
@@ -956,7 +996,8 @@ class ExtractionOrchestrator:
 
         pipeline = PipelineProgress(
             work_id=self.work_id,
-            extraction_branch=f"extraction/{self.work_id}",
+            extraction_branch=(
+                f"{get_config().git.extraction_branch_prefix}{self.work_id}"),
             target_characters=selected,
         )
         pipeline.mark_done("phase_1")
@@ -1228,7 +1269,8 @@ class ExtractionOrchestrator:
                 stages=phase3.stages,
                 reviewer_feedback=feedback)
             result = run_with_retry(
-                self.backend, prompt, timeout_seconds=3600,
+                self.backend, prompt,
+                timeout_seconds=get_config().phase3.extraction_timeout_s,
                 lane_name="world",
                 on_failure=_log_lane_failure("world", "world", len(prompt)))
             result = _verify_lane("world", result)
@@ -1243,7 +1285,8 @@ class ExtractionOrchestrator:
                 stages=phase3.stages,
                 reviewer_feedback=feedback)
             result = run_with_retry(
-                self.backend, prompt, timeout_seconds=3600,
+                self.backend, prompt,
+                timeout_seconds=get_config().phase3.extraction_timeout_s,
                 lane_name=f"char_snapshot:{char_id}",
                 on_failure=_log_lane_failure(
                     "char_snapshot", char_id, len(prompt)))
@@ -1259,7 +1302,8 @@ class ExtractionOrchestrator:
                 stages=phase3.stages,
                 reviewer_feedback=feedback)
             result = run_with_retry(
-                self.backend, prompt, timeout_seconds=3600,
+                self.backend, prompt,
+                timeout_seconds=get_config().phase3.extraction_timeout_s,
                 lane_name=f"char_support:{char_id}",
                 on_failure=_log_lane_failure(
                     "char_support", char_id, len(prompt)))
@@ -1394,6 +1438,13 @@ class ExtractionOrchestrator:
                             baseline_paths(work_root, char_id))
 
                 extraction_errors: list[str] = []
+
+                # Pre-launch token-limit gate (§11.13.2): block here if
+                # another lane already recorded a pause. Lanes that hit
+                # the limit mid-flight pause inside run_with_retry; this
+                # gate prevents a fresh batch from launching during an
+                # active pause window.
+                self._rate_limit.wait_if_paused()
 
                 with ThreadPoolExecutor(
                         max_workers=n_workers) as executor:
@@ -1538,20 +1589,36 @@ class ExtractionOrchestrator:
             )
 
             # LLM callable for semantic checker + T1/T2/T3 fixers
-            def _llm_call(prompt: str, timeout: int = 600) -> str:
+            default_timeout = get_config().phase3.review_timeout_s
+
+            def _llm_call(prompt: str, timeout: int | None = None) -> str:
                 result = run_with_retry(
                     self.reviewer_backend or self.backend,
-                    prompt, timeout_seconds=timeout)
+                    prompt,
+                    timeout_seconds=timeout or default_timeout,
+                    lane_name=f"repair[{stage.stage_id}]",
+                )
                 return result.text
 
             importance_map = load_importance_map(
                 self.project_root, pipeline.work_id)
 
+            ra_cfg = get_config().repair_agent
             repair_result = run_repair(
                 files=repair_files,
                 config=RepairConfig(
+                    max_rounds=ra_cfg.total_round_limit,
                     run_semantic=True,
-                    retry_policy=RetryPolicy(),
+                    triage_enabled=ra_cfg.triage_enabled,
+                    accept_cap_per_file=ra_cfg.triage_accept_cap_per_file,
+                    retry_policy=RetryPolicy(
+                        t0_max=ra_cfg.t0_retry,
+                        t1_max=ra_cfg.t1_retry,
+                        t2_max=ra_cfg.t2_retry,
+                        t3_max=ra_cfg.t3_retry,
+                        t3_max_per_file=ra_cfg.t3_max_per_file,
+                        max_total_rounds=ra_cfg.total_round_limit,
+                    ),
                 ),
                 source_context=source_ctx,
                 llm_call=_llm_call,
@@ -1677,10 +1744,14 @@ class ExtractionOrchestrator:
         print(f"  Squash-merge to main will consolidate all extraction")
         print(f"  commits into a single clean commit.")
 
-        try:
-            answer = input("  Squash-merge to main now? [Y/n]: ").strip()
-        except EOFError:
-            answer = "n"
+        if get_config().git.auto_squash_merge:
+            print("  [auto] [git].auto_squash_merge = true; merging.")
+            answer = "y"
+        else:
+            try:
+                answer = input("  Squash-merge to main now? [Y/n]: ").strip()
+            except EOFError:
+                answer = "n"
 
         if answer.lower() == "n":
             print(f"  Skipped. You can manually merge later:\n"
