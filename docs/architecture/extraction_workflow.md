@@ -200,8 +200,15 @@ PID 打印 / heartbeat 行统一带 `[{lane_name}]` 标签
 
 **失败保留契约**：任一 lane 失败 → stage 迁移 ERROR，已完成 lane 的产物
 与 `lane_states` 条目全部保留在磁盘上，**不触发** `rollback_to_head`。
-只有 `REVIEWING without output` 这个外部擦盘安全网会 `clear_lane_states`
-后重走 PENDING——此时磁盘已无产物，无需回滚。
+外部擦盘安全网有两条分支，都复用 `_extraction_output_exists`（逐 lane 校验
+1+2N 产物存在且 JSON 可解析）：
+
+- **REVIEWING** 在恢复时若检测到产物缺失：`clear_lane_states` 后重走
+  PENDING——磁盘已无产物，无需回滚。
+- **PASSED** 在恢复时若检测到产物缺失：直接转 FAILED → ERROR（
+  `error_message="stage products missing after gate PASS — refusing to
+  commit deletions"`），拒绝把 `git add -A works/` 带入的删除一起提交；
+  操作者恢复文件后再 `--resume`。
 
 **`--resume` 行为**：
 

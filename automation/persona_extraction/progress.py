@@ -356,7 +356,7 @@ class StageEntry:
     committed_sha: str = ""
     last_updated: str = ""
     error_message: str = ""
-    fail_source: str = ""  # "programmatic" or "semantic" — which check caused FAIL
+    fail_source: str = ""  # "programmatic" / "semantic" / "external_delete" — what caused FAIL
     # Per-lane completion tracking for lane-level --resume. Keys follow
     # the "world" / "snapshot:{char_id}" / "support:{char_id}" convention.
     # Value "complete" = subprocess exited 0 AND output file parsed as JSON.
