@@ -46,8 +46,8 @@ users/*
 __pycache__/
 *.pyc
 
-# Claude Code local config
-.claude/
+# Claude Code local config (user-specific allowlist / overrides)
+.claude/settings.local.json
 
 # Local automation config overrides (per-deployment, never committed)
 automation/config.local.toml
