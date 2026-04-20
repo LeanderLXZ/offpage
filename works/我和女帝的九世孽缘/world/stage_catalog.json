@@ -1,18 +1,5 @@
 {
   "schema_version": "1.0",
   "work_id": "<work_id>",
-  "stages": [
-    {
-      "stage_id": "阶段01_<stage_title>初遇",
-      "order": 0,
-      "title": "<stage_title>初遇",
-      "summary": "万年间无极冰<character>消息后，Character B第九世于南域东阳皇朝荒郊的<stage_title>禁地复活。系统因本源耗尽暂封大半功能，仅留任务与基础面板可用。世间大帝据扫描仅剩一位且非极冰<character>，世人皆以为Character A已陨落，实则她选择破境重修以修复重伤帝身与道心，原拟在北境<location>降生却因虚空错乱坠落<stage_title>，沦为凡人之躯仅余三件法器与本命帝器寒剑。<stage_title>深处的小村柳村陷入饥荒绝境：狩猎队尽数失踪、村民骨瘦如柴、父母割肉喂子，唯靠守村神柳神（仙庭柳绫之分魂、聚灵九层）的青色结界抵御每夜涌出地表的骷髅怪物与邪物。世界格局看似回归宁静，实则<character>重修与男主复活在同一禁地不期而遇，新一轮纠葛在凡尘之中悄然铺开。",
-      "snapshot_path": "stage_snapshots/阶段01_<stage_title>初遇.json",
-      "timeline_anchor": "Character B第九世复活当下；距前次大战已过万年",
-      "chapter_scope": {
-        "from": "0001",
-        "to": "0010"
-      }
-    }
-  ]
+  "stages": []
 }
