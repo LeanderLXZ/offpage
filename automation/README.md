@@ -44,6 +44,33 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 pip install jsonschema   # 一次性，必需
 ```
 
+## 配置
+
+所有可调参数集中在 `automation/config.toml`，加载入口
+`persona_extraction/config.py::load_config()`。覆盖优先级（高→低）：
+
+```
+CLI flag  >  环境变量  >  config.toml  >  config.local.toml  >  代码默认值
+```
+
+`config.local.toml`（同目录、git-ignored）按键覆盖 `config.toml`，
+适合在不同部署机调整阈值而不污染版本库。
+
+主要分段：
+
+- `[stage]` 章节数边界（target/min/max）
+- `[phase0]` chunk 并发、L2 修复超时
+- `[phase1]` stage_plan 出口验证重试上限
+- `[phase3]` 提取 / 审校超时、`max_turns`
+- `[phase4]` 章节并发、短路熔断阈值
+- `[repair_agent]` 各 tier 重试次数、triage 设置
+- `[backoff]` 快速空失败退避序列
+- `[rate_limit]` Token 限额暂停策略（reset 缓冲、解析失败 fallback、
+  周限额上限/动作）
+- `[runtime]` 默认 runtime 上限、心跳间隔、默认 backend
+- `[logging]` `failed_lanes/` 保留天数
+- `[git]` extraction 分支前缀、auto squash-merge 开关
+
 ## 使用
 
 所有命令从**项目根目录**运行：
@@ -271,8 +298,15 @@ Phase 0（章节归纳）仍使用 `persona_extraction/json_repair.py` 的三级
 脚本可以在任何状态安全中断：
 
 - `Ctrl+C` / `kill <PID>` → 保存当前进度、释放锁后退出
-- `--max-runtime` 到期 → 当前 stage 结束后优雅停止
-- Rate limit → 自动等待后重试（递增退避）
+- `--max-runtime` 到期 → 当前 stage 结束后优雅停止；rate-limit 暂停时长
+  **不计入** runtime
+- **Rate limit / usage limit → 全局暂停**：写
+  `works/{work_id}/analysis/progress/rate_limit_pause.json`，所有新 LLM
+  请求阻塞到 reset；reset 后重发同一 prompt（**不消耗重试次数**）。
+  解析失败时以最小 `claude -p "1" --max-turns 1` 探测；周限额等待 ≥
+  `[rate_limit].weekly_max_wait_h`（默认 12h）→ 写
+  `rate_limit_exit.log` 并 exit code 2。详见
+  `docs/requirements.md` §11.13
 - **Token/context limit → 不重试**（相同 prompt 必定再次超限），直接标记
   ERROR 并回滚，避免浪费重试配额
 - 脚本崩溃 → 重启后加 `--resume` 从最后一个 committed stage 继续

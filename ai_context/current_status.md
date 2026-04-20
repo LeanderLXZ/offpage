@@ -67,8 +67,9 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
 - Resume auto-reset of blocked stages; progress / end-stage separation
   with strict prefix semantics for finalization.
 - Phase 4 scene archive: per-chapter parallel, independent PID lock,
-  programmatic validation only, circuit breaker (≥8 failures / 60s →
-  180s pause).
+  programmatic validation only, circuit breaker
+  (`[phase4].circuit_breaker_*` in `automation/config.toml`,
+  default ≥8 failures / 60s → 180s pause).
 - Baseline recovery tracked via `baseline_done`; Phase 2.5 exit
   validation runs on both fresh and `--resume` paths (re-runs Phase 2.5
   if existing baseline fails validation).
@@ -89,10 +90,29 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
   lane_states entry.
 - Process guard (PID lock), git preflight, SIGINT/SIGTERM graceful
   shutdown.
-- Background mode (`--background`), runtime limit (`--max-runtime`),
-  30s heartbeat.
-- Fast empty-failure backoff (30s → 60s → 120s); token / context errors
-  not retried.
+- Background mode (`--background`), runtime limit (`--max-runtime`,
+  default from `[runtime].max_runtime_min_default`), 30s heartbeat.
+- Fast empty-failure backoff (`[backoff].fast_empty_failure_backoff_s`,
+  default 30s → 60s → 120s); token / context errors not retried.
+- Token-limit auto-pause (§11.13, `automation/persona_extraction/`
+  `rate_limit.py`): when `claude -p` hits the 5h rolling window or the
+  weekly cap, the controller writes
+  `works/{work_id}/analysis/progress/rate_limit_pause.json`, blocks the
+  orchestrator's pre-launch gate plus every in-flight `run_with_retry`
+  call until reset, and (once cleared) re-runs the failed prompt without
+  consuming a retry slot. Reset times are timezone-aware (PT/PST/PDT/ET/
+  UTC); unparseable resets fall back to a minimal `claude -p "1"
+  --max-turns 1` probe loop. Weekly limits whose wait would exceed
+  `[rate_limit].weekly_max_wait_h` (default 12h) write `rate_limit_exit
+  .log` and exit 2 — distinct from regular exit 1. Pause time is
+  excluded from `--max-runtime` accounting (§11.13.7).
+- Single-source TOML config at `automation/config.toml` (loader at
+  `automation/persona_extraction/config.py`). Every previously
+  hard-coded knob — phase concurrency, lane timeouts, repair-agent
+  retries, circuit-breaker thresholds, fast-fail backoff sequence,
+  rate-limit policy, runtime defaults, git auto-merge — now reads from
+  one of the dataclass sections. Local override at
+  `automation/config.local.toml` (git-ignored) wins key-by-key.
 - Phase 3 lane-level failure diagnostic logs:
   `works/{work_id}/analysis/progress/failed_lanes/{stage_id}__{lane_type}_{lane_id}__{pid}.log`
   captures full stdout + stderr + parsed `subtype` / `num_turns` /

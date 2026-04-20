@@ -1858,7 +1858,7 @@ check→fix 循环（智能跳过：若产物已在磁盘上则直接进入修�
 
 #### 其他失败场景
 
-- Rate limit → 递增退避重试
+- Rate limit / usage limit → **暂停所有新 LLM 提交**直到 reset，详见 §11.13
 - Token/context limit → **不重试**，直接 ERROR（相同 prompt 必定再超限）
 - 脚本崩溃 → 从 progress 文件恢复
 - **Baseline 恢复**：`--resume` 时检测 Phase 2.5 产出完整性，缺失则补跑。
@@ -1967,7 +1967,9 @@ Backend `run()` 接受可选 `lane_name` 参数，用于在 PID 打印和 heartb
 
 - 后台运行模式，SSH/终端断开后进程继续执行
 - 输出重定向到日志文件，支持事后查看和实时跟踪
-- 总运行时间限制，到期后在 stage 间优雅停止（不打断正在进行的 stage）
+- 总运行时间限制，到期后在 stage 间优雅停止（不打断正在进行的 stage）；
+  rate-limit 暂停期间（§11.13）的等待时长**不计入**总运行时间，避免暂停
+  把整次运行挤过截止
 
 **进程互斥**：同一作品同时只允许一个提取进程运行。启动前应检查：
 
@@ -2200,6 +2202,203 @@ CLI `--start-phase` 参数（0/1/2/2.5/3/3.5/4），默认 auto（自动检测�
 
 `--end-stage` 语义：`None`（未指定）=全部，`0`=仅 baseline 不跑 stage，
 正整数=跑 N 个 stage。
+
+### 11.12 配置文件（TOML）
+
+提取流水线的所有"用户可调参数"集中到 `automation/config.toml`，通过
+`automation.persona_extraction.config.load_config()` 加载，避免在多个模块
+内散落硬编码值。
+
+#### 覆盖优先级（高 → 低）
+
+```
+CLI flag  >  环境变量  >  config.toml  >  代码默认值
+```
+
+任一上层未提供时透传到下层。CLI 显式给出 `--concurrency 5` 即覆盖
+TOML 中的同名键；TOML 缺失键时回落到代码内部 dataclass 默认。
+
+#### 收录范围
+
+仅收录"用户希望调整"的参数。**不**收录：
+
+- schema 内部硬约束（字段名、长度边界等）
+- 流程结构常量（lane 名约定、状态机字面量等）
+- 数据契约（ID 格式、目录布局等）
+
+#### 配置分节
+
+| Section | 用途 |
+|---------|------|
+| `[stage]` | 阶段规划目标/上下限章节数 |
+| `[phase0]` | 章节归纳并发、JSON 修复超时 |
+| `[phase1]` | 出口验证重试 |
+| `[phase3]` | 提取/审校超时、`--max-turns` |
+| `[phase4]` | 场景切分并发、circuit breaker |
+| `[repair_agent]` | 各 tier 重试、T3 全局上限、triage 接受上限、总轮数 |
+| `[backoff]` | 快速空失败的退避序列 |
+| `[rate_limit]` | reset buffer、解析失败 fallback、周限额阈值与动作 |
+| `[runtime]` | 默认 `--max-runtime`、心跳间隔、默认 backend |
+| `[logging]` | failed_lanes 日志保留天数 |
+| `[git]` | extraction 分支前缀、是否自动 squash-merge |
+
+`config.toml` 自身在仓库内提交（含详细中文注释）；各部署可通过本地未跟踪
+的 `automation/config.local.toml` 覆盖（同名键二次覆盖；不存在时忽略）。
+
+### 11.13 Token 限额暂停与恢复
+
+#### 11.13.1 设计目标
+
+订阅模式下 Claude Code 受 5 小时滚动窗口和周限额约束。撞限时若编排脚本
+继续提交新调用，会在每个 lane 都浪费 ~30s 启动开销，并把 retry 计数迅速
+耗尽，最终 stage 被标 ERROR、流水线退出。
+
+本机制保证：
+
+1. 任一 lane 撞 token limit 后，**立刻暂停所有新 LLM 提交**
+2. 等到限额刷新后**自动恢复**，无需用户干预
+3. 整个流程的最终产物**与无 limit 直跑等价**（除等待时长外）；不存在
+   半写入文件、错误产物、状态错位
+
+#### 11.13.2 总体流程
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  任一 lane 调用 claude -p                                    │
+│        │                                                    │
+│        ▼                                                    │
+│  撞 rate / usage limit?                                      │
+│        │                                                    │
+│  否 → 正常返回                                               │
+│        │                                                    │
+│  是 → 解析 stderr：                                           │
+│        ├─ 提取 reset 时刻（含时区）                           │
+│        ├─ 判断窗口类型：5h / weekly                           │
+│        └─ 失败 → 走 fallback（§11.13.5）                     │
+│        │                                                    │
+│        ▼                                                    │
+│  写 rate_limit_pause.json（原子 + 取最晚 resume_at）         │
+│        │                                                    │
+│        ▼                                                    │
+│  本 lane 直接返回失败（不消耗 retry 预算）                    │
+│                                                             │
+│  ── 与此并行 ──                                              │
+│                                                             │
+│  Orchestrator 提交任意新 lane 前：                            │
+│        │                                                    │
+│        ▼                                                    │
+│  读 rate_limit_pause.json                                    │
+│        │                                                    │
+│        ├─ resume_at 已过 → 清文件 → 继续                     │
+│        ├─ 5h 类型 + 等待时长 < weekly_max_wait_h →           │
+│        │      sleep 到 resume_at + buffer_s → 继续           │
+│        └─ weekly 类型 + 等待 ≥ weekly_max_wait_h →           │
+│               写 rate_limit_exit.log → exit 2                 │
+└────────────────────────────────────────────────────────────┘
+```
+
+#### 11.13.3 暂停文件契约
+
+路径：`works/{work_id}/analysis/progress/rate_limit_pause.json`
+（本地文件，`.gitignore`，与 `extraction.log` 同目录）。
+
+字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `resume_at` | string (ISO 8601 含时区 offset) | 可恢复时刻；多 lane 并发撞限时合并取**最晚**值 |
+| `reason` | `"5h_window"` / `"weekly"` / `"unknown"` | 错误归因，决定 weekly_max_wait_h 是否生效 |
+| `detected_at` | string (ISO 8601) | 首次写入时刻 |
+| `detected_by` | string | 首次撞限的 lane 标识（如 `char_snapshot:Character B`） |
+| `buffer_applied_s` | int | 实际加在 reset 上的 buffer 秒数 |
+| `merged_count` | int | 合并次数（用于诊断） |
+
+写盘原子性：`tempfile + os.replace`；并发合并通过 `fcntl.flock` 保护读取-修改-写入全流程，并取双方 `resume_at` 的较晚者。
+
+#### 11.13.4 撞限检测
+
+stderr 关键词匹配（大小写不敏感）：
+
+| 类型 | 关键词 |
+|------|--------|
+| `5h_window` | `5-hour limit`, `5h limit`, `usage limit` 且未含 `weekly` |
+| `weekly` | `weekly limit`, `weekly usage` |
+| 通用 retry | `rate limit`, `rate_limit`, `too many requests`, `429` |
+
+reset 时间正则（按优先级匹配）：
+
+1. `[Rr]esets? (?:at|in) (\d{1,2}:\d{2})\s*(am|pm)?\s*([A-Z]{2,3})?` —
+   绝对时刻（如 `Resets at 3:00 PM PT`）
+2. `[Rr]esets? in (\d+)h(\d+)?m?` — 相对时长（如 `Resets in 2h30m`）
+3. ISO 8601 时间戳（如 `2026-04-19T20:00:00-07:00`）
+
+匹配失败 → 走 fallback（§11.13.5）。
+
+#### 11.13.5 解析失败 fallback：探测式
+
+当 reset 时间不可解析时，执行最小成本探测：
+
+```
+sleep parse_fallback_sleep_s （默认 1800s = 30 min）
+  ↓
+发起一次 claude -p 探测调用：
+  prompt = "1"
+  --max-turns 1
+  --output-format json
+  ↓
+返回 success → 限额已解除，清暂停文件，继续正常流程
+返回 rate_limit → 重写暂停文件（resume_at = now + parse_fallback_sleep_s），循环
+```
+
+探测调用的预期开销：< 100 input tokens + < 20 output tokens。
+
+#### 11.13.6 周限额硬停机
+
+`reason = "weekly"` 且 `resume_at - now ≥ weekly_max_wait_h`（默认 12h）时：
+
+1. 写 `works/{work_id}/analysis/progress/rate_limit_exit.log`，含
+   `detected_at` / `resume_at` / `detected_by` / 完整 stderr
+2. 保持 `phase3_stages.json` 当前状态不变（已完成的 lane / stage 不丢）
+3. `sys.exit(2)`（区别于普通错误 exit 1，外层 wrapper 可识别）
+
+`weekly_over_limit_action = "wait"` 强制无视阈值继续等待（适合后台
+脚本希望"无人值守跨周"的场景）。
+
+#### 11.13.7 与现有机制的交互
+
+| 机制 | 交互 |
+|------|------|
+| `run_with_retry` | rate_limit 路径**绕过**重试计数器，直接写暂停 + 返回 |
+| Lane 级 resume | 唤醒后由 lane-level resume 自动重跑失败 lane（§11.5） |
+| `--max-runtime` | 暂停时长不计入 runtime（在 `_check_runtime_limit` 中扣除） |
+| Phase 4 circuit breaker | 与 rate-limit 暂停**正交**：circuit breaker 防短时密集失败，rate-limit 暂停防限额超出 |
+| `_handle_interrupt` SIGTERM | 暂停期间收到信号会立即退出，下次 `--resume` 重新读暂停文件继续等 |
+
+#### 11.13.8 等价性论证
+
+设无 limit 直跑产生事件序列 `E = e_1, e_2, ..., e_n`。开启本机制后实际
+执行序列 `E' = e_1, ..., e_k, [pause_1], e_{k+1}, ..., e_m, [pause_2], ...`，
+满足：
+
+- 每个 `e_i` 状态变化与无 limit 时相同（pause 期间无任何 LLM 调用 →
+  无 progress 写入 → 无产物变化）
+- 撞限失败的 lane 在 pause 后由 lane-level resume 重跑，幂等性由
+  §11.5 保证
+- 最终所有 stage 仍按 stage_plan 顺序进入 COMMITTED，与无 limit 直跑
+  完全一致
+
+实际执行时长差异 = ∑(pause_i.duration)，即纯等待开销。
+
+#### 11.13.9 相关 TOML 配置
+
+```toml
+[rate_limit]
+resume_buffer_s          = 60       # reset 时刻后再等多久
+parse_fallback_strategy  = "probe"  # 解析失败处理：probe | fixed
+parse_fallback_sleep_s   = 1800     # probe 间隔；fixed 模式下的固定等待
+weekly_max_wait_h        = 12       # 周限额触达时的最大等待小时
+weekly_over_limit_action = "stop"   # "stop" → exit 2；"wait" → 强等
+```
 
 ---
 

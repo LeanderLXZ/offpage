@@ -15,7 +15,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .config import get_config
 from .process_guard import fmt_memory, get_rss_mb
+from .rate_limit import classify_error, get_active as get_active_rl
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +210,7 @@ class ClaudeBackend(LLMBackend):
         orch_pid = os.getpid()
 
         def heartbeat() -> None:
-            while not stop_event.wait(30):
+            while not stop_event.wait(get_config().runtime.heartbeat_interval_s):
                 elapsed = time.monotonic() - start
                 child_mem = fmt_memory(get_rss_mb(proc.pid))
                 orch_mem = fmt_memory(get_rss_mb(orch_pid))
@@ -352,7 +354,7 @@ class CodexBackend(LLMBackend):
         orch_pid = os.getpid()
 
         def heartbeat() -> None:
-            while not stop_event.wait(30):
+            while not stop_event.wait(get_config().runtime.heartbeat_interval_s):
                 elapsed = time.monotonic() - start
                 child_mem = fmt_memory(get_rss_mb(proc.pid))
                 orch_mem = fmt_memory(get_rss_mb(orch_pid))
@@ -430,12 +432,41 @@ def _is_fast_empty_failure(result: LLMResult) -> bool:
     """Detect CLI launch failures: fast return + empty/generic error."""
     if result.success:
         return False
-    if result.duration_seconds is not None and result.duration_seconds < 5:
+    backoff_cfg = get_config().backoff
+    threshold = float(backoff_cfg.fast_empty_failure_threshold_s)
+    if result.duration_seconds is not None and result.duration_seconds < threshold:
         err = (result.error or "").strip()
         # "exit 1: " or "exit 1:" with empty stderr
         if err.startswith("exit") and err.rstrip(": ").replace("exit", "").strip().isdigit():
             return True
     return False
+
+
+def _probe_fn_for(backend: LLMBackend) -> Any:
+    """Build a minimal-cost probe callable for rate_limit fallback.
+
+    Sends ``"1"`` with ``--max-turns 1`` and a 60s timeout. Returns ``True``
+    iff the call succeeded *or* failed for a reason other than rate-limit.
+    Used by ``RateLimitController.wait_if_paused`` when the reset time
+    cannot be parsed from stderr.
+    """
+    def _probe() -> bool:
+        try:
+            r = backend.run(
+                "1", allowed_tools=[], timeout_seconds=60,
+                lane_name="rl_probe",
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("rate_limit probe raised")
+            return False
+        if r.success:
+            return True
+        err = (r.error or "").lower()
+        if "rate_limit" in err or classify_error(r.raw_stderr or "") != "unknown":
+            return False
+        # Any other error means the limit is no longer the gate.
+        return True
+    return _probe
 
 
 def run_with_retry(backend: LLMBackend, prompt: str, *,
@@ -445,13 +476,23 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
                    timeout_seconds: int = 600,
                    lane_name: str | None = None,
                    on_failure: Any = None) -> LLMResult:
-    """Run prompt with automatic retry on rate-limit and fast-fail errors.
+    """Run prompt with automatic retry on fast-fail errors.
+
+    Rate-limit handling is **out-of-band**: when ``rate_limit`` is detected,
+    we record a global pause via ``RateLimitController`` (if installed) and
+    block here until the reset passes, then re-run the same prompt without
+    consuming a retry slot. This keeps quality equivalent to a no-limit run.
 
     ``on_failure`` is called once per failed attempt with the LLMResult, so
     callers can persist per-lane diagnostic logs for every attempt (including
     intermediate retries) rather than only the final one.
     """
-    for attempt in range(1, max_retries + 1):
+    backoff_cfg = get_config().backoff
+    fast_backoff = backoff_cfg.fast_empty_failure_backoff_s
+
+    attempt = 0
+    while True:
+        attempt += 1
         result = backend.run(prompt, allowed_tools=allowed_tools,
                              timeout_seconds=timeout_seconds,
                              lane_name=lane_name)
@@ -467,25 +508,37 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
             logger.error("Token limit exceeded (not retryable): %s",
                          result.error)
             return result
-        # Rate limit — retryable with backoff
+        # Rate limit — pause globally, wait for reset, then re-run without
+        # consuming a retry slot (§11.13).
         if result.error and "rate_limit" in result.error:
+            controller = get_active_rl()
+            if controller is not None:
+                controller.record_pause(
+                    result.raw_stderr or result.error or "",
+                    lane_name=lane_name,
+                )
+                controller.wait_if_paused(probe_fn=_probe_fn_for(backend))
+                attempt -= 1   # pause does not consume a retry slot
+                continue
+            # No controller installed (e.g. ad-hoc test) → fall back to the
+            # legacy linear backoff so behaviour stays defined.
             if attempt < max_retries:
                 wait = cooldown_seconds * attempt
-                logger.warning("Rate limited (attempt %d/%d). "
+                logger.warning("Rate limited (no controller; attempt %d/%d). "
                                "Waiting %ds before retry...",
                                attempt, max_retries, wait)
                 time.sleep(wait)
                 continue
+            return result
         # Fast empty failure (CLI launch error) — retryable with backoff
         if _is_fast_empty_failure(result):
-            if attempt < max_retries:
-                wait = 30 * (2 ** (attempt - 1))  # 30s, 60s, 120s
+            if attempt <= len(fast_backoff):
+                wait = int(fast_backoff[attempt - 1])
                 logger.warning("Fast empty failure (attempt %d/%d, %.1fs). "
                                "Waiting %ds before retry...",
-                               attempt, max_retries,
+                               attempt, len(fast_backoff),
                                result.duration_seconds or 0, wait)
                 time.sleep(wait)
                 continue
         # Non-retryable error
         return result
-    return result  # type: ignore[possibly-undefined]

@@ -1,0 +1,176 @@
+# ============================================================
+# automation/config.toml
+# ------------------------------------------------------------
+# Persona Engine 自动化提取流水线配置
+#
+# 加载入口：automation.persona_extraction.config.load_config()
+# 覆盖优先级（高 → 低）：
+#   CLI flag  >  环境变量  >  本文件  >  代码 dataclass 默认值
+#
+# 本地覆盖：可在同目录创建 `config.local.toml`（.gitignore），
+#   同名键二次覆盖，文件不存在时忽略。
+# ============================================================
+
+
+# ----------------------------------------------------------------
+# [stage] 阶段规划
+# ----------------------------------------------------------------
+[stage]
+# Phase 1 stage_plan 出口验证使用的章节数边界。LLM 产出违反此区间的
+# stage 时，删除 stage_plan.json 并重跑 LLM（最多 phase1.exit_validation_max_retry
+# 次），仍违规则 abort。
+target_chapter_count = 10        # 典型目标章节数
+min_chapter_count    = 5         # 单 stage 最少章节数
+max_chapter_count    = 15        # 单 stage 最多章节数
+
+
+# ----------------------------------------------------------------
+# [phase0] Phase 0 章节归纳
+# ----------------------------------------------------------------
+[phase0]
+# 章节归纳 chunk 的并行度（ThreadPoolExecutor 线程数）。订阅模式下并发
+# 越高越容易撞 5h 限额；调小可降低限额风险。CLI `--concurrency` 同时
+# 影响 phase0 与 phase4，本键提供默认值。
+concurrency              = 10
+
+# Phase 0 内 L2 JSON 修复的 LLM 调用超时（秒）。L2 是"喂坏 JSON 给
+# LLM 修一次"，比正常归纳短得多。
+json_repair_l2_timeout_s = 600
+
+
+# ----------------------------------------------------------------
+# [phase1] Phase 1 全书分析
+# ----------------------------------------------------------------
+[phase1]
+# stage_plan 章节数违规时的最大 LLM 重试次数（详见 §11.9 出口验证）。
+exit_validation_max_retry = 2
+
+
+# ----------------------------------------------------------------
+# [phase3] Phase 3 阶段提取
+# ----------------------------------------------------------------
+[phase3]
+# 单次提取 LLM 调用硬超时（秒）。world / char_snapshot / char_support
+# 三种 lane 共用此值。订阅模式下推理耗时不固定，1h 给充足余量。
+extraction_timeout_s = 3600
+
+# 单次审校 / repair 内 LLM 调用硬超时（秒）。比提取短，因为审校 prompt
+# 输入更小、输出更确定。
+review_timeout_s     = 600
+
+# claude -p --max-turns 上限：单次会话内最多允许的 agentic 轮数。
+# 调高可让 agent 探索更多文件；调低可强制 agent 早返回。
+max_turns            = 50
+
+
+# ----------------------------------------------------------------
+# [phase4] Phase 4 场景切分
+# ----------------------------------------------------------------
+[phase4]
+# 章节级并行度（ThreadPoolExecutor）。Phase 4 是 work-level 全局任务，
+# 并行越高越快但也越容易撞限额。
+concurrency = 10
+
+# 短路熔断（防止短时密集失败榨干配额）：
+#   若 circuit_breaker_window_s 秒内累计失败次数 ≥ threshold，
+#   暂停 circuit_breaker_pause_s 秒后再继续。
+# 本机制与 §11.13 的 token-limit 暂停**正交**：前者防短时密集失败，
+# 后者防限额超出。
+circuit_breaker_failure_threshold = 8
+circuit_breaker_window_s          = 60
+circuit_breaker_pause_s           = 180
+
+
+# ----------------------------------------------------------------
+# [repair_agent] Phase 3 修复代理
+# ----------------------------------------------------------------
+[repair_agent]
+# 各 tier 的单轮重试次数上限（Phase B 修复循环内）。
+t0_retry = 1     # T0 程序化修复
+t1_retry = 3     # T1 局部 patch（快、便宜）
+t2_retry = 3     # T2 source_patch（带原文上下文）
+t3_retry = 1     # T3 全文件 regen（昂贵）
+
+# 单文件 T3 全局上限（跨整次运行）。T3 第二次重生成几乎不会成功，
+# 反而浪费 token；调高需谨慎。
+t3_max_per_file = 1
+
+# Phase B 修复循环最大轮数。一轮 = 一次完整 fix + scoped recheck。
+total_round_limit = 5
+
+# 是否启用源文本差异 triage（详见 §11.4.7）。关闭后将不允许把 L3
+# 残留接受为"作者本身的 bug"，所有 L3 issue 必须由 fixer 解决。
+triage_enabled = true
+
+# 单文件 triage 接受 SourceNote 的最大数。防止 LLM 把整个文件的
+# 残留全归因为"源文本问题"。
+triage_accept_cap_per_file = 3
+
+
+# ----------------------------------------------------------------
+# [backoff] 退避策略（非 token-limit）
+# ----------------------------------------------------------------
+[backoff]
+# 快速空失败检测：duration < threshold 且 stderr 空 → 视为 CLI 启动期
+# 瞬态错误，按 backoff 序列重试。
+fast_empty_failure_threshold_s = 5
+fast_empty_failure_backoff_s   = [30, 60, 120]
+
+
+# ----------------------------------------------------------------
+# [rate_limit] Token 限额暂停与恢复（§11.13）
+# ----------------------------------------------------------------
+[rate_limit]
+# reset 时刻后再等多少秒才恢复（避免与服务端时钟微小漂移抢跑）。
+resume_buffer_s = 60
+
+# 当 stderr 中无法解析 reset 时刻时的处理策略：
+#   "probe"  — sleep parse_fallback_sleep_s → 发一次最小 claude -p
+#              探测 → 仍限则循环
+#   "fixed"  — 一次性 sleep parse_fallback_sleep_s 然后继续
+parse_fallback_strategy = "probe"
+parse_fallback_sleep_s  = 1800     # 30 分钟
+
+# 周限额触达时的最大等待小时数。
+#   weekly_over_limit_action = "stop"：等待时长 ≥ 本阈值 → exit 2
+#   weekly_over_limit_action = "wait"：忽略阈值，无限等待
+weekly_max_wait_h        = 12
+weekly_over_limit_action = "stop"
+
+
+# ----------------------------------------------------------------
+# [runtime] 运行时
+# ----------------------------------------------------------------
+[runtime]
+# --max-runtime 默认值（分钟）。0 = 无限制。
+# 注意：rate-limit 暂停期不计入此时长（§11.13.7）。
+max_runtime_min_default = 360
+
+# 后台模式心跳间隔（秒）。每个 lane 的子进程也按此间隔打印
+# "... running"。
+heartbeat_interval_s = 30
+
+# 默认 LLM backend："claude" 或 "codex"。CLI `--backend` 覆盖。
+default_backend = "claude"
+
+
+# ----------------------------------------------------------------
+# [logging] 日志保留
+# ----------------------------------------------------------------
+[logging]
+# Phase 3 lane 失败诊断日志（works/{work_id}/analysis/progress/
+# failed_lanes/）的保留天数；超过则在下次启动时自动清理。0 = 永不
+# 清理。
+failed_lanes_retention_days = 30
+
+
+# ----------------------------------------------------------------
+# [git] Git 集成
+# ----------------------------------------------------------------
+[git]
+# extraction 分支名前缀。最终分支名为 `{prefix}{work_id}`。
+extraction_branch_prefix = "extraction/"
+
+# 全部 stage COMMITTED 后是否自动 squash-merge 回 master。false 时
+# 仅打印交互式提示，由用户确认。
+auto_squash_merge = false
