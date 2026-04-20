@@ -245,10 +245,12 @@ def _check_field_completeness(
         "active_aliases", "voice_state", "behavior_state", "boundary_state",
         "relationships", "knowledge_scope", "misunderstandings", "concealments",
         "emotional_baseline", "current_personality", "current_mood",
-        "current_status",
+        "current_status", "stage_events",
     ]
-    # stage_delta is only meaningful from the second stage onward
-    delta_field = "stage_delta"
+    # These fields are only meaningful from the second stage onward:
+    # first-stage snapshots may omit them (prompt: "第一个阶段可省略
+    # 或仅写起点状态").
+    non_first_stage_fields = ("stage_delta", "character_arc")
 
     for char_id in character_ids:
         for idx, stage_id in enumerate(stage_ids):
@@ -261,7 +263,7 @@ def _check_field_completeness(
 
             fields_to_check = list(required_fields)
             if idx > 0:
-                fields_to_check.append(delta_field)
+                fields_to_check.extend(non_first_stage_fields)
 
             for fld in fields_to_check:
                 val = snapshot.get(fld)
