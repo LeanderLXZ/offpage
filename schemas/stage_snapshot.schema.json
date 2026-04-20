@@ -617,7 +617,7 @@
               },
               "influenced_by": {
                 "type": "string",
-                "description": "导致此变化的角色或事件。例如：受萧尘为她挡剑影响。"
+                "description": "导致此变化的角色或事件。例如：受某关键他人的自我牺牲行为影响。"
               }
             }
           }
@@ -632,11 +632,11 @@
             "properties": {
               "change": {
                 "type": "string",
-                "description": "关系变化描述。例如：对萧尘从戒备转为信任。"
+                "description": "关系变化描述。例如：对某重要他人从戒备转为信任。"
               },
               "driving_event": {
                 "type": "string",
-                "description": "驱动此关系变化的事件。例如：萧尘放弃帝位陪她渡劫。"
+                "description": "驱动此关系变化的事件。例如：关键他人做出重大自我牺牲的行为。"
               }
             }
           }
@@ -664,7 +664,7 @@
       "properties": {
         "arc_summary": {
           "type": "string",
-          "description": "一句话概括角色从起点到当前的核心变化轨迹。例如：'从完全冰冷的前大帝，到被一个人的善意逐渐撬开冰层，开始在最脆弱时依赖对方'。"
+          "description": "一句话概括角色从起点到当前的核心变化轨迹。例如：'从初始封闭/戒备状态，经关键他人持续的善意接触，逐步转向选择性信任与依赖'。"
         },
         "arc_stages": {
           "type": "array",

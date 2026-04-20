@@ -1918,10 +1918,6 @@ Lane 名称约定：`world`、`snapshot:{char_id}`、`support:{char_id}`。
     boundaries / failure_modes），避免上次半写入污染
   - Preflight 放行本 stage 的 lane 产物路径
 
-**移除的旧行为**：lane 失败后的全量 `rollback_to_head` 与 EXTRACTING
-中断时的 `rollback_to_head` 均已移除——产物保留在磁盘，靠 `lane_states`
-+ JSON 校验做 resume 判定。
-
 **写盘原子性**：`phase3_stages.json` 使用 temp file + `os.replace`
 原子写，保证 SIGKILL 打断写盘时不会留下残缺 JSON。最坏情形丢失最后一
 条 `complete` 标记 → resume 时重跑该 lane（幂等）。
@@ -2311,7 +2307,7 @@ TOML 中的同名键；TOML 缺失键时回落到代码内部 dataclass 默认�
 | `resume_at` | string (ISO 8601 含时区 offset) | 可恢复时刻；多 lane 并发撞限时合并取**最晚**值 |
 | `reason` | `"5h_window"` / `"weekly"` / `"unknown"` | 错误归因，决定 weekly_max_wait_h 是否生效 |
 | `detected_at` | string (ISO 8601) | 首次写入时刻 |
-| `detected_by` | string | 首次撞限的 lane 标识（如 `char_snapshot:Character B`） |
+| `detected_by` | string | 首次撞限的 lane 标识（如 `char_snapshot:<character_id>`） |
 | `buffer_applied_s` | int | 实际加在 reset 上的 buffer 秒数 |
 | `merged_count` | int | 合并次数（用于诊断） |
 | `probing_by_pid` | int / null | unknown fallback 下的 probe leader PID；null 表示待选举 |

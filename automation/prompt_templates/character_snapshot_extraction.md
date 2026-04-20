@@ -103,7 +103,7 @@
 |------|-----------|------------------------|
 | stage_snapshot | 缺 `stage_events` | 必须有，≤ 10 条 50–80 字 |
 | stage_snapshot | 缺 `character_arc` | 非首阶段必须有弧线概览 |
-| stage_snapshot | `relationship_behavior_map` | 已移除，用 `target_behavior_map` |
+| stage_snapshot.behavior_state | `relationship_behavior_map` | stage 快照层用 `target_behavior_map`；`relationship_behavior_map` 仅在 baseline `behavior_rules.json` 使用 |
 
 ### 边界禁令
 

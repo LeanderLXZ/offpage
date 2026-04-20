@@ -38,6 +38,24 @@ After changes, grep for the old phrasing to catch stale references.
 - `ai_context/` remains English.
 - JSON field names may be English; content text follows work language.
 
+## Generic Placeholders in Canonical Docs
+
+`schemas/`, `docs/requirements.md`, `docs/architecture/`, `ai_context/`,
+`prompts/`, and `automation/prompt_templates/` describe the current
+design and are read by LLMs at extraction time. They must stay
+work-agnostic:
+
+- No real book titles, character names, place names, plot details.
+- Schema `description` examples stay structural ("例如：某关键他人做出
+  自我牺牲行为"), not narrative; or omit the example entirely.
+- Field identifiers in examples use placeholders like
+  `<character_id>` / `<stage_id>` / `阶段XX_<slug>`.
+- Do not narrate history ("旧 / legacy / 已废弃 / 原为 / 已移除 /
+  renamed from"). History lives in `docs/logs/` + git.
+
+Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
+`works/*/` sample outputs, git commit messages.
+
 ## Data Separation — Hard Rules
 
 - User data under `users/` — never touch `works/` canon from user context.
