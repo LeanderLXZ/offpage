@@ -17,6 +17,7 @@ prompt-related.
 - Full conversation history under `users/.../sessions/`
 - Full evidence under `works/.../analysis/evidence/`
 - Full history under `docs/logs/`
+- Past audit snapshots under `docs/review_reports/`
 - Databases, vector stores, indexes, or large generated artifacts
 
 ## When To Read Deeper

@@ -25,7 +25,8 @@ modifying code, schemas, prompts, or docs on your own initiative.
 
 - `prompts/` — only when the user asks or the task is prompt-related
 - `sources/`, full `users/.../sessions/`, `works/.../analysis/evidence/`,
-  `docs/logs/` — only when the task explicitly requires them
+  `docs/logs/`, `docs/review_reports/` — only when the task explicitly
+  requires them
 - Databases, vector stores, indexes, large generated artifacts
 
 See `ai_context/read_scope.md` for the full rule.

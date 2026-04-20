@@ -213,6 +213,8 @@ constraints beyond what the architecture docs already say.
 42. `works/*/analysis/` and `works/*/indexes/` tracked as canonical
     assets; `works/*/retrieval/` local-only.
 43. `docs/logs/` is write-mostly historical — do not proactively read.
+    `docs/review_reports/` follows the same rule (model-stamped audit
+    snapshots, not current truth).
 44. `prompts/` = manual scenarios only (ingest, review, supplement,
     cold start). Extraction prompts in `automation/prompt_templates/`;
     runtime rules in `simulation/prompt_templates/`. Each module
