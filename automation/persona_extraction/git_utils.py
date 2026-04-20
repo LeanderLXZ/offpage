@@ -10,17 +10,6 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-ROLLBACK_CLEAN_EXCLUDES = [
-    "__pycache__",
-    "*.pyc",
-    # Preserve progress, Phase 4 scene splits, and lock files even when
-    # Phase 3 performs a repo-wide rollback.
-    "works/*/analysis/.scene_archive.lock",
-    "works/*/analysis/scene_splits/",
-    "works/*/analysis/progress/",
-]
-
-
 @dataclass
 class GitStatus:
     clean: bool
@@ -174,26 +163,47 @@ def commit_stage(project_root: Path, stage_id: str,
     return sha
 
 
-def rollback_to_head(project_root: Path) -> bool:
-    """Discard all uncommitted changes (hard reset to HEAD).
+def reset_paths(project_root: Path, paths: list[Path]) -> bool:
+    """Restore the given paths to their HEAD state.
 
-    Restores tracked files and removes untracked files across the whole
-    repo (not just works/). Excludes caches plus Phase 4 scene archive
-    lock/progress artefacts so independent scene splitting state survives
-    a Phase 3 rollback.
+    For each path:
+
+    - If tracked at HEAD: ``git checkout HEAD -- <path>`` restores the
+      HEAD contents, undoing any partial uncommitted edits.
+    - If path is not tracked at HEAD (untracked or never committed):
+      remove the file from the working tree, if it exists. This keeps
+      "reset to the state before the current stage touched this file"
+      semantics consistent regardless of whether the file predates HEAD.
+
+    Used by the Phase 3 partial-resume flow to surgically reset
+    char_support baseline files before re-running an incomplete lane.
+
+    Returns True on success, False if any git operation failed.
     """
-    result = _git(["checkout", "--", "."], project_root)
-    clean_args = ["clean", "-fd"]
-    for pattern in ROLLBACK_CLEAN_EXCLUDES:
-        clean_args.append(f"--exclude={pattern}")
-    clean = _git(clean_args, project_root)
-    success = result.returncode == 0 and clean.returncode == 0
-    if success:
-        logger.info("Rolled back to HEAD (full-repo clean, scene_archive preserved)")
-    else:
-        logger.error("Rollback failed: checkout=%s clean=%s",
-                     result.stderr, clean.stderr)
-    return success
+    ok = True
+    for p in paths:
+        rel = p.relative_to(project_root) if p.is_absolute() else p
+        rel_str = str(rel)
+        # Check whether the path is tracked at HEAD. `cat-file -e` exits 0
+        # iff the object exists; this does not read the blob's contents.
+        probe = _git(["cat-file", "-e", f"HEAD:{rel_str}"], project_root)
+        if probe.returncode == 0:
+            co = _git(["checkout", "HEAD", "--", rel_str], project_root)
+            if co.returncode != 0:
+                logger.error("reset_paths checkout failed for %s: %s",
+                             rel_str, co.stderr)
+                ok = False
+        else:
+            # Not in HEAD — best we can do is remove any working-tree copy.
+            abs_path = (project_root / rel_str).resolve()
+            try:
+                if abs_path.exists():
+                    abs_path.unlink()
+            except OSError as exc:
+                logger.error("reset_paths unlink failed for %s: %s",
+                             rel_str, exc)
+                ok = False
+    return ok
 
 
 def rollback_last_commit(project_root: Path) -> bool:

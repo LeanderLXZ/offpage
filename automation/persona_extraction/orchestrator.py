@@ -31,8 +31,14 @@ from .git_utils import (
     commit_stage,
     create_extraction_branch,
     preflight_check,
-    rollback_to_head,
+    reset_paths,
     squash_merge_to,
+)
+from .lane_output import (
+    baseline_paths,
+    expected_lane_dirty_paths,
+    expected_lane_names,
+    verify_lane_output,
 )
 from .llm_backend import LLMBackend, LLMResult, run_with_retry
 from .post_processing import run_stage_post_processing
@@ -378,31 +384,18 @@ class ExtractionOrchestrator:
         target_characters: list[str],
         stage: StageEntry,
     ) -> bool:
-        """Check if extraction output already exists on disk for a stage.
+        """Check if extraction output is fully present and parseable for a stage.
 
-        Returns True when **all** three 1+2N outputs are present for the
-        stage: world snapshot, each character snapshot (from char_snapshot
-        process), and each character memory_timeline (from char_support
-        process). Missing any one means extraction is incomplete — skipping
-        to post-processing would silently drop the absent lane.
+        Returns True iff **every** lane's per-stage product file exists and
+        parses as JSON. Missing or corrupt files mean extraction is
+        incomplete — skipping to post-processing would silently drop the
+        absent lane.
         """
         work_dir = self.project_root / "works" / self.work_id
-        stage_id = stage.stage_id
-
-        # World snapshot must exist
-        world_ss = (work_dir / "world" / "stage_snapshots"
-                    / f"{stage_id}.json")
-        if not world_ss.exists():
-            return False
-
-        # Every character must have both snapshot AND memory_timeline
-        for char_id in target_characters:
-            char_canon = work_dir / "characters" / char_id / "canon"
-            char_ss = char_canon / "stage_snapshots" / f"{stage_id}.json"
-            char_tl = char_canon / "memory_timeline" / f"{stage_id}.json"
-            if not char_ss.exists() or not char_tl.exists():
+        for lane_name in expected_lane_names(target_characters):
+            ok, _why = verify_lane_output(work_dir, stage.stage_id, lane_name)
+            if not ok:
                 return False
-
         return True
 
     def _collect_stage_files(
@@ -1208,13 +1201,28 @@ class ExtractionOrchestrator:
                     logger.exception("failed to write lane failure log")
             return _cb
 
+        def _verify_lane(lane_name: str, result: LLMResult) -> LLMResult:
+            """On subprocess success, verify the lane's product JSON parses.
+            A missing or unparseable product downgrades the result to a
+            failure so the caller tags the lane as incomplete in
+            `lane_states`."""
+            if not result.success:
+                return result
+            ok, why = verify_lane_output(
+                work_root, stage.stage_id, lane_name)
+            if not ok:
+                result.success = False
+                result.error = f"output verify failed: {why}"
+            return result
+
         # Per-process extraction closures — used by the parallel
         # extraction (Step 2). Each accepts an optional reviewer feedback
-        # string (passed on resume after a repair-agent FAIL).
+        # string (passed on resume after a repair-agent FAIL). Each
+        # returns (process_type, process_id, result) where result.success
+        # is set only after subprocess success AND product JSON parse.
         def _extract_world(
             feedback: str = "",
         ) -> tuple[str, str, LLMResult]:
-            """Returns (process_type, process_id, result)."""
             prompt = build_world_extraction_prompt(
                 self.project_root, pipeline, stage,
                 stages=phase3.stages,
@@ -1223,13 +1231,13 @@ class ExtractionOrchestrator:
                 self.backend, prompt, timeout_seconds=3600,
                 lane_name="world",
                 on_failure=_log_lane_failure("world", "world", len(prompt)))
+            result = _verify_lane("world", result)
             return "world", "world", result
 
         def _extract_char_snapshot(
             char_id: str,
             feedback: str = "",
         ) -> tuple[str, str, LLMResult]:
-            """Returns (process_type, process_id, result)."""
             prompt = build_char_snapshot_prompt(
                 self.project_root, pipeline, stage, char_id,
                 stages=phase3.stages,
@@ -1239,13 +1247,13 @@ class ExtractionOrchestrator:
                 lane_name=f"char_snapshot:{char_id}",
                 on_failure=_log_lane_failure(
                     "char_snapshot", char_id, len(prompt)))
+            result = _verify_lane(f"snapshot:{char_id}", result)
             return "char_snapshot", char_id, result
 
         def _extract_char_support(
             char_id: str,
             feedback: str = "",
         ) -> tuple[str, str, LLMResult]:
-            """Returns (process_type, process_id, result)."""
             prompt = build_char_support_prompt(
                 self.project_root, pipeline, stage, char_id,
                 stages=phase3.stages,
@@ -1255,7 +1263,18 @@ class ExtractionOrchestrator:
                 lane_name=f"char_support:{char_id}",
                 on_failure=_log_lane_failure(
                     "char_support", char_id, len(prompt)))
+            result = _verify_lane(f"support:{char_id}", result)
             return "char_support", char_id, result
+
+        def _lane_key(proc_type: str, proc_id: str) -> str:
+            """Map closure-return identifiers to lane_states keys."""
+            if proc_type == "world":
+                return "world"
+            if proc_type == "char_snapshot":
+                return f"snapshot:{proc_id}"
+            if proc_type == "char_support":
+                return f"support:{proc_id}"
+            raise ValueError(f"unknown proc_type: {proc_type}")
 
         # Handle state resumption — reset interrupted states.
         # No stage-level retry: FAILED/ERROR are terminal within a run.
@@ -1266,9 +1285,11 @@ class ExtractionOrchestrator:
             return
 
         if stage.state == StageState.EXTRACTING:
+            # Partial-resume path: do not rollback. Completed lanes (if any)
+            # live in stage.lane_states; their products stay on disk. The
+            # PENDING branch below rebuilds the missing-lane set.
             print("  [RESUME] Interrupted during extraction, "
-                  "rolling back and restarting...")
-            rollback_to_head(self.project_root)
+                  "preserving completed lanes and resuming...")
             stage.force_reset_to_pending(
                 "resume from interrupted EXTRACTING")
             phase3.save(self.project_root)
@@ -1282,14 +1303,36 @@ class ExtractionOrchestrator:
                   "jumping to git commit step.")
 
         if stage.state == StageState.PENDING:
+            # Reconcile lane_states with disk before deciding what to run:
+            # a marker whose product file vanished (external delete, manual
+            # cleanup) must not be trusted.
+            for lane_name in list(stage.lane_states.keys()):
+                ok, _why = verify_lane_output(
+                    work_root, stage.stage_id, lane_name)
+                if not ok:
+                    stage.reset_lane(lane_name)
+            if stage.lane_states:
+                phase3.save(self.project_root)
+
+            is_partial_resume = bool(stage.lane_states)
+
             # --- Step 1: Git preflight ---
             tracker.start_step()
             tracker.print_step(1, 5, "Git preflight")
+            ignore_patterns = ["extraction_progress.json",
+                               "pipeline.json", "phase3_stages.json",
+                               "__pycache__"]
+            if is_partial_resume:
+                # Already-completed lane products are legitimate dirty
+                # files during a partial resume; so are baseline files
+                # that an incomplete support lane may have partially
+                # touched (we reset them to HEAD before re-running).
+                ignore_patterns.extend(expected_lane_dirty_paths(
+                    work_root, stage.stage_id,
+                    pipeline.target_characters))
             problems = preflight_check(
                 self.project_root, pipeline.extraction_branch or None,
-                ignore_patterns=["extraction_progress.json",
-                                 "pipeline.json", "phase3_stages.json",
-                                 "__pycache__"])
+                ignore_patterns=ignore_patterns)
             if problems:
                 for p in problems:
                     print(f"    [PROBLEM] {p}")
@@ -1299,47 +1342,92 @@ class ExtractionOrchestrator:
                 return
             tracker.print_step_done(1, 5, "Git preflight")
 
-            # --- Smart skip: if extraction output already on disk ---
+            # --- Smart skip: if all lane products on disk AND parse ---
+            # `_extraction_output_exists` runs verify_lane_output on every
+            # expected lane. When it returns True, the files are legitimate
+            # lane output — auto-backfill any missing lane_states markers
+            # so partial-resume logic stays consistent for older progress
+            # files written before T-RESUME.
             if self._extraction_output_exists(
                     pipeline.target_characters, stage):
-                print(f"  [SKIP] Extraction output already on disk for "
+                print(f"  [SKIP] All lane outputs present for "
                       f"{stage.stage_id}, jumping to post-processing")
+                for n in expected_lane_names(pipeline.target_characters):
+                    if not stage.is_lane_complete(n):
+                        stage.mark_lane_complete(n)
                 stage.transition(StageState.EXTRACTED)
                 phase3.save(self.project_root)
             else:
-                # --- Step 2: World + Character extraction (1+2N parallel) ---
-                tracker.start_step()
+                # --- Step 2: Extract only missing lanes ---
+                lanes_to_run = stage.missing_lanes(
+                    pipeline.target_characters)
                 n_chars = len(pipeline.target_characters)
-                n_workers = 1 + 2 * n_chars
-                tracker.print_step(2, 5,
-                                   f"Extraction (1 world + "
-                                   f"{n_chars} snapshot + "
-                                   f"{n_chars} support parallel)")
+                n_workers = max(1, len(lanes_to_run))
+                tracker.start_step()
+                if is_partial_resume:
+                    skipped = [n for n in expected_lane_names(
+                        pipeline.target_characters)
+                        if n not in lanes_to_run]
+                    tracker.print_step(
+                        2, 5,
+                        f"Extraction (partial resume: "
+                        f"{len(lanes_to_run)}/{1 + 2 * n_chars} lanes; "
+                        f"skipping {len(skipped)} complete)")
+                else:
+                    tracker.print_step(2, 5,
+                                       f"Extraction (1 world + "
+                                       f"{n_chars} snapshot + "
+                                       f"{n_chars} support parallel)")
                 stage.transition(StageState.EXTRACTING)
                 phase3.save(self.project_root)
+
+                # Before re-running a support lane, restore that
+                # character's 5 cumulative baseline files to HEAD so any
+                # partial write from the prior interrupted attempt is
+                # undone. No-op when the support lane is a fresh run
+                # (HEAD already reflects the last committed baseline).
+                for lane_name in lanes_to_run:
+                    if lane_name.startswith("support:"):
+                        char_id = lane_name[len("support:"):]
+                        reset_paths(
+                            self.project_root,
+                            baseline_paths(work_root, char_id))
 
                 extraction_errors: list[str] = []
 
                 with ThreadPoolExecutor(
                         max_workers=n_workers) as executor:
-                    futures = [executor.submit(_extract_world)]
-                    for c in pipeline.target_characters:
-                        futures.append(
-                            executor.submit(_extract_char_snapshot, c))
-                        futures.append(
-                            executor.submit(_extract_char_support, c))
+                    futures = []
+                    for lane_name in lanes_to_run:
+                        if lane_name == "world":
+                            futures.append(
+                                executor.submit(_extract_world))
+                        elif lane_name.startswith("snapshot:"):
+                            c = lane_name[len("snapshot:"):]
+                            futures.append(executor.submit(
+                                _extract_char_snapshot, c))
+                        elif lane_name.startswith("support:"):
+                            c = lane_name[len("support:"):]
+                            futures.append(executor.submit(
+                                _extract_char_support, c))
                     for future in as_completed(futures):
                         proc_type, proc_id, result = future.result()
-                        if not result.success:
+                        lane_key = _lane_key(proc_type, proc_id)
+                        if result.success:
+                            stage.mark_lane_complete(lane_key)
+                            phase3.save(self.project_root)
+                        else:
                             extraction_errors.append(
                                 f"{proc_type}:{proc_id}: "
                                 f"{result.error or 'unknown'}")
                             print(f"    [ERROR] {proc_type}:{proc_id} "
                                   f"extraction failed: {result.error}")
 
-                if extraction_errors:
-                    print("    Rolling back uncommitted changes...")
-                    rollback_to_head(self.project_root)
+                if not stage.all_lanes_complete(
+                        pipeline.target_characters):
+                    # Any lane still missing → stage ERROR, but
+                    # successful lane products + lane_states are
+                    # preserved for --resume.
                     stage.transition(StageState.ERROR)
                     stage.error_message = "; ".join(extraction_errors)
                     phase3.save(self.project_root)
@@ -1418,8 +1506,8 @@ class ExtractionOrchestrator:
             )
             if not has_output:
                 print("  [RESUME] Extraction output missing for REVIEWING "
-                      "stage, rolling back and restarting...")
-                rollback_to_head(self.project_root)
+                      "stage, clearing lane_states and restarting...")
+                stage.clear_lane_states()
                 stage.force_reset_to_pending(
                     "resume from REVIEWING without on-disk output")
                 phase3.save(self.project_root)

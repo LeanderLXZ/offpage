@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -31,6 +33,43 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _is_parseable_json(path: Path) -> bool:
+    """Return True if ``path`` exists and its contents parse as JSON."""
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            json.load(f)
+        return True
+    except (OSError, json.JSONDecodeError):
+        return False
+
+
+def _atomic_write_json(path: Path, data: Any) -> None:
+    """Write JSON to ``path`` atomically (temp file + os.replace).
+
+    Prevents SIGKILL during serialization from leaving a truncated file.
+    Worst case: the previous version is preserved, and the caller's most
+    recent state update is lost — but the file always parses.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=str(path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_name, path)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def _git_object_exists(project_root: Path, sha: str) -> bool:
@@ -112,7 +151,6 @@ class PipelineProgress:
 
     def save(self, project_root: Path) -> Path:
         path = self._path(project_root, self.work_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
         self.last_updated = _now_iso()
         data = {
             "work_id": self.work_id,
@@ -122,9 +160,7 @@ class PipelineProgress:
             "created_at": self.created_at,
             "last_updated": self.last_updated,
         }
-        path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2),
-            encoding="utf-8")
+        _atomic_write_json(path, data)
         logger.info("Pipeline progress saved: %s", path)
         return path
 
@@ -206,7 +242,6 @@ class Phase0Progress:
 
     def save(self, project_root: Path) -> Path:
         path = self._path(project_root, self.work_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
         self.last_updated = _now_iso()
         data = {
             "work_id": self.work_id,
@@ -219,9 +254,7 @@ class Phase0Progress:
             },
             "last_updated": self.last_updated,
         }
-        path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2),
-            encoding="utf-8")
+        _atomic_write_json(path, data)
         return path
 
     @classmethod
@@ -324,6 +357,11 @@ class StageEntry:
     last_updated: str = ""
     error_message: str = ""
     fail_source: str = ""  # "programmatic" or "semantic" — which check caused FAIL
+    # Per-lane completion tracking for lane-level --resume. Keys follow
+    # the "world" / "snapshot:{char_id}" / "support:{char_id}" convention.
+    # Value "complete" = subprocess exited 0 AND output file parsed as JSON.
+    # Key absent = lane never started or not yet confirmed complete.
+    lane_states: dict[str, str] = field(default_factory=dict)
 
     def can_transition(self, target: StageState) -> bool:
         return target in _TRANSITIONS.get(self.state, set())
@@ -352,6 +390,49 @@ class StageEntry:
         self.error_message = reason
         self.last_updated = _now_iso()
 
+    # ---- Lane-level helpers (T-RESUME) ----
+
+    def mark_lane_complete(self, lane_name: str) -> None:
+        """Mark a lane as complete. Caller must have verified subprocess
+        success AND product JSON parseability before calling."""
+        self.lane_states[lane_name] = "complete"
+        self.last_updated = _now_iso()
+
+    def is_lane_complete(self, lane_name: str) -> bool:
+        return self.lane_states.get(lane_name) == "complete"
+
+    def reset_lane(self, lane_name: str) -> None:
+        """Drop a lane's completion marker. Used before re-running a lane
+        on resume when its product file fails verification."""
+        if lane_name in self.lane_states:
+            del self.lane_states[lane_name]
+            self.last_updated = _now_iso()
+
+    def clear_lane_states(self) -> None:
+        """Drop all lane markers. Used when a stage is fully re-extracted
+        from scratch (e.g. reconcile found no complete products)."""
+        if self.lane_states:
+            self.lane_states = {}
+            self.last_updated = _now_iso()
+
+    @staticmethod
+    def expected_lane_names(target_characters: list[str]) -> list[str]:
+        names = ["world"]
+        for c in target_characters:
+            names.append(f"snapshot:{c}")
+            names.append(f"support:{c}")
+        return names
+
+    def all_lanes_complete(self, target_characters: list[str]) -> bool:
+        for name in self.expected_lane_names(target_characters):
+            if not self.is_lane_complete(name):
+                return False
+        return True
+
+    def missing_lanes(self, target_characters: list[str]) -> list[str]:
+        return [n for n in self.expected_lane_names(target_characters)
+                if not self.is_lane_complete(n)]
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "stage_id": self.stage_id,
@@ -363,6 +444,7 @@ class StageEntry:
             "last_updated": self.last_updated,
             "error_message": self.error_message,
             "fail_source": self.fail_source,
+            "lane_states": dict(self.lane_states),
         }
 
     @classmethod
@@ -378,6 +460,7 @@ class StageEntry:
             last_updated=d.get("last_updated", ""),
             error_message=d.get("error_message", ""),
             fail_source=d.get("fail_source", ""),
+            lane_states=dict(d.get("lane_states", {})),
         )
 
 
@@ -462,7 +545,6 @@ class Phase3Progress:
 
     def save(self, project_root: Path) -> Path:
         path = self._path(project_root, self.work_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
         self.last_updated = _now_iso()
         data = {
             "work_id": self.work_id,
@@ -470,9 +552,7 @@ class Phase3Progress:
             "stages": [b.to_dict() for b in self.stages],
             "last_updated": self.last_updated,
         }
-        path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2),
-            encoding="utf-8")
+        _atomic_write_json(path, data)
         logger.info("Phase 3 progress saved: %s", path)
         return path
 
@@ -499,25 +579,30 @@ class Phase3Progress:
                              ) -> dict[str, int]:
         """Reconcile stage states against on-disk artifacts and git history.
 
-        Per-stage expected artifacts:
-          - works/{wid}/world/stage_snapshots/{stage_id}.json
-          - works/{wid}/characters/{char}/canon/stage_snapshots/{stage_id}.json
-          - works/{wid}/characters/{char}/canon/memory_timeline/{stage_id}.json
-            for each character in target_characters
+        Per-stage expected artifacts (per-lane):
+          - world:         works/{wid}/world/stage_snapshots/{stage_id}.json
+          - snapshot:{c}:  works/{wid}/characters/{c}/canon/stage_snapshots/
+                             {stage_id}.json
+          - support:{c}:   works/{wid}/characters/{c}/canon/memory_timeline/
+                             {stage_id}.json
 
         Cumulative artifacts (memory_digest.jsonl, world_event_digest.jsonl,
         *_catalog.json) cannot be checked per-stage and are left alone.
 
-        Rules:
+        Lane-aware rules (T-RESUME):
           - state == COMMITTED:
               * any per-stage artifact missing OR committed_sha not in git
-                → revert to PENDING, clear committed_sha; remaining
-                  per-stage artifacts (if any) are deleted as orphans
-          - state == PENDING:
-              * any per-stage artifact present → delete (partial run)
-          - state in {EXTRACTING, EXTRACTED, POST_PROCESSING, REVIEWING,
-                      PASSED, FAILED, ERROR}:
-              * delete any per-stage artifacts, revert to PENDING
+                → revert to PENDING, clear committed_sha and lane_states;
+                  remaining per-stage artifacts are deleted as orphans
+          - all other states:
+              * for each lane marked complete in lane_states: the artifact
+                must exist AND parse as JSON. If not, drop the lane_states
+                entry and delete any partial file.
+              * for each artifact file not claimed by a complete lane_states
+                entry: delete as orphan.
+              * if state ∈ intermediate (EXTRACTING/EXTRACTED/POST_PROCESSING
+                /REVIEWING/PASSED/FAILED/ERROR): revert to PENDING while
+                preserving (validated) lane_states — enables partial resume.
 
         Returns counts: {"reverted": N, "purged_files": M, "sha_missing": K}.
         """
@@ -527,44 +612,61 @@ class Phase3Progress:
         sha_missing = 0
 
         for stage in self.stages:
-            paths = self._stage_artifact_paths(work_dir, stage.stage_id,
-                                                target_characters)
-            existing = [p for p in paths if p.exists()]
+            lane_paths = self._lane_to_path(
+                work_dir, stage.stage_id, target_characters)
+            all_paths = list(lane_paths.values())
+            existing = [p for p in all_paths if p.exists()]
 
             if stage.state == StageState.COMMITTED:
                 sha_ok = _git_object_exists(project_root, stage.committed_sha)
                 if not sha_ok:
                     sha_missing += 1
-                if len(existing) < len(paths) or not sha_ok:
+                if len(existing) < len(all_paths) or not sha_ok:
                     for p in existing:
                         p.unlink()
                         purged_files += 1
                     reason = ("committed artifacts missing on disk"
-                              if len(existing) < len(paths)
+                              if len(existing) < len(all_paths)
                               else "committed_sha not found in git")
                     stage.committed_sha = ""
                     stage.fail_source = ""
                     stage.last_reviewer_feedback = ""
+                    stage.clear_lane_states()
                     stage.force_reset_to_pending(reason)
                     reverted += 1
                 continue
 
-            if stage.state == StageState.PENDING:
-                if existing:
-                    for p in existing:
-                        p.unlink()
+            # All non-COMMITTED states share the same lane reconciliation.
+            # Validate each claimed lane_states entry against its file.
+            claimed_paths: set[Path] = set()
+            for lane_name in list(stage.lane_states.keys()):
+                path = lane_paths.get(lane_name)
+                if path is None:
+                    # Lane name no longer in expected set (character removed?).
+                    stage.reset_lane(lane_name)
+                    continue
+                if not path.exists() or not _is_parseable_json(path):
+                    stage.reset_lane(lane_name)
+                    if path.exists():
+                        path.unlink()
                         purged_files += 1
-                continue
+                    continue
+                claimed_paths.add(path)
 
-            # Intermediate states — discard any partial output, revert
+            # Delete orphan artifacts not claimed by any complete lane.
+            # The validation loop above may have already unlinked some
+            # files it found corrupt — guard with exists() check.
             for p in existing:
-                p.unlink()
-                purged_files += 1
-            stage.fail_source = ""
-            stage.last_reviewer_feedback = ""
-            stage.force_reset_to_pending(
-                f"reconcile from {stage.state.value}")
-            reverted += 1
+                if p not in claimed_paths and p.exists():
+                    p.unlink()
+                    purged_files += 1
+
+            if stage.state != StageState.PENDING:
+                stage.fail_source = ""
+                stage.last_reviewer_feedback = ""
+                stage.force_reset_to_pending(
+                    f"reconcile from {stage.state.value}")
+                reverted += 1
 
         return {"reverted": reverted, "purged_files": purged_files,
                 "sha_missing": sha_missing}
@@ -578,6 +680,22 @@ class Phase3Progress:
             paths.append(char_canon / "stage_snapshots" / f"{stage_id}.json")
             paths.append(char_canon / "memory_timeline" / f"{stage_id}.json")
         return paths
+
+    @staticmethod
+    def _lane_to_path(work_dir: Path, stage_id: str,
+                       target_characters: list[str]) -> dict[str, Path]:
+        """Map each expected lane name to its per-stage product file."""
+        lane_paths: dict[str, Path] = {
+            "world": work_dir / "world" / "stage_snapshots"
+                     / f"{stage_id}.json",
+        }
+        for char_id in target_characters:
+            char_canon = work_dir / "characters" / char_id / "canon"
+            lane_paths[f"snapshot:{char_id}"] = (
+                char_canon / "stage_snapshots" / f"{stage_id}.json")
+            lane_paths[f"support:{char_id}"] = (
+                char_canon / "memory_timeline" / f"{stage_id}.json")
+        return lane_paths
 
 
 # ---------------------------------------------------------------------------
