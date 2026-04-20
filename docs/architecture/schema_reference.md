@@ -310,7 +310,7 @@ core_wounds 记录最底层的创伤根源。
 - `state: StageState` — 枚举：PENDING / EXTRACTING / EXTRACTED / POST_PROCESSING / REVIEWING / PASSED / FAILED / ERROR / COMMITTED
 - `committed_sha: str` — git commit SHA（仅 COMMITTED 态非空）
 - `error_message: str` — 最近一次错误摘要（含 `force_reset_to_pending` 的 reason）
-- `fail_source: str` — 失败来源标签（`programmatic` / `semantic`）
+- `fail_source: str` — 失败来源标签（`programmatic` / `semantic` / `external_delete`）。`external_delete` 由 PASSED 态 --resume 时发现 1+2N 产物被擦盘的安全网写入
 - `last_reviewer_feedback: str` — 最近一次 repair agent 报告摘要，commit 成功后清空
 - `last_updated: str` — ISO 时间戳，每次转换后更新
 

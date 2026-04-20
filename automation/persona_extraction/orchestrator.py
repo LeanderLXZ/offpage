@@ -1340,9 +1340,26 @@ class ExtractionOrchestrator:
 
         if stage.state == StageState.PASSED:
             # Interrupted after lanes + gate PASS but before git commit.
-            # Extraction products still exist on disk; drop straight into the
-            # git-commit step at the bottom of this method so the state
-            # converges to COMMITTED (or FAILED if commit can't produce a SHA).
+            # Before jumping to the git-commit step, verify the 1+2N
+            # per-stage products still exist on disk. If any file was
+            # deleted externally between PASSED and COMMITTED, a blind
+            # ``git add -A works/`` would stage the deletions and poison
+            # the extraction branch — escalate to FAILED → ERROR instead
+            # so the operator can restore the files (or decide next step)
+            # before resuming.
+            if not self._extraction_output_exists(
+                    pipeline.target_characters, stage):
+                print("  [RESUME] PASSED stage missing on-disk products; "
+                      "escalating to FAILED (operator must restore files "
+                      "or run --resume after replacing them).")
+                stage.error_message = (
+                    "stage products missing after gate PASS — refusing to "
+                    "commit deletions")
+                stage.fail_source = "external_delete"
+                stage.transition(StageState.FAILED)
+                stage.transition(StageState.ERROR)
+                phase3.save(self.project_root)
+                return
             print("  [RESUME] Interrupted after gate PASS, "
                   "jumping to git commit step.")
 
@@ -1548,14 +1565,14 @@ class ExtractionOrchestrator:
 
         # --- Step 4: Repair agent (check → fix → verify) ---
         if stage.state == StageState.REVIEWING:
-            # Safety check: verify extraction output still exists on disk
+            # Safety check: every 1+2N per-stage product (world snapshot +
+            # each char's stage_snapshot and memory_timeline) must be
+            # present and JSON-parseable. The prior directory-only check
+            # could let a missing current-stage file slip through and
+            # reach repair_agent with an incomplete file list.
             work_dir = self.project_root / "works" / pipeline.work_id
-            has_output = any(
-                (work_dir / "characters" / c / "canon" / "stage_snapshots")
-                .exists()
-                for c in pipeline.target_characters
-            )
-            if not has_output:
+            if not self._extraction_output_exists(
+                    pipeline.target_characters, stage):
                 print("  [RESUME] Extraction output missing for REVIEWING "
                       "stage, clearing lane_states and restarting...")
                 stage.clear_lane_states()
