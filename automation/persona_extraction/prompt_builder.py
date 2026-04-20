@@ -157,11 +157,14 @@ def build_baseline_prompt(
     # Build file read list
     files: list[str] = []
 
-    # Schemas needed
+    # Schemas needed — includes the two stage_catalog schemas the
+    # baseline must produce empty instances of (产出 3 in the prompt).
     for schema in ("identity.schema.json", "character_manifest.schema.json",
                    "voice_rules.schema.json", "behavior_rules.schema.json",
                    "boundaries.schema.json", "failure_modes.schema.json",
-                   "fixed_relationships.schema.json"):
+                   "fixed_relationships.schema.json",
+                   "world_stage_catalog.schema.json",
+                   "stage_catalog.schema.json"):
         files.append(f"- `{project_root / 'schemas' / schema}`")
 
     # Analysis outputs
