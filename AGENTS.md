@@ -1,4 +1,4 @@
-# Persona Engine — Claude Entry Point
+# Persona Engine — Agent Entry Point
 
 This file is auto-loaded at session start. Keep it short — detailed context
 lives in `ai_context/`, not here.
@@ -37,8 +37,8 @@ Reading `ai_context/` is context loading, not a task brief. Only act on
 explicit user requests. If something looks off while reading, note it and
 wait — do not fix proactively.
 
-## Sync with AGENTS.md
+## Sync with CLAUDE.md
 
-This file and `AGENTS.md` are kept **identical** except for the title line
-("Claude Entry Point" vs. "Agent Entry Point"). Any change to one MUST be
+This file and `CLAUDE.md` are kept **identical** except for the title line
+("Agent Entry Point" vs. "Claude Entry Point"). Any change to one MUST be
 mirrored to the other in the same commit.
