@@ -226,13 +226,20 @@ automation/
 - `phase3_stages.json` — Phase 3 各 stage 状态机
 - `phase4_scenes.json` — Phase 4 各章节状态
 
-Phase 3 stage 状态机：
+Phase 3 stage 状态机（详见 `persona_extraction/progress.py` 顶部 docstring）：
 
 ```
-pending → extracting → extracted → post_processing → reviewing → passed → committed
-              │                                          │
-              └→ error                                   └→ failed → retrying → extracting
+pending → extracting → extracted → post_processing → reviewing
+                │                                          │
+                └→ error ← failed                         ├→ passed → committed
+                     │                                     │
+                     └→ pending (--resume)                 └→ failed → error
 ```
+
+无 stage 级重试（不存在 `retrying` 状态）：repair 循环由 `repair_agent`
+内部吸收；`failed` 的唯一出边是 `error`，`error` 的唯一出边是 `pending`
+（通过 `--resume`）。`passed → failed` 由提交顺序契约触发——`git commit`
+未返回 SHA（空 diff 或失败）时撤回提交并回到 `failed`，再落到 `error`。
 
 ## 检测与修复系统（Repair Agent）
 
