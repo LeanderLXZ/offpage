@@ -16,6 +16,7 @@ from .progress import (
     Phase3Progress, PipelineProgress, StageEntry,
     migrate_legacy_progress,
 )
+from .rate_limit import RateLimitHardStop, WEEKLY_EXIT_CODE
 from .scene_archive import run_scene_archive
 
 # Phase 4 does not need git preflight (no commits) and uses its own lock.
@@ -153,12 +154,18 @@ def main(argv: list[str] | None = None) -> None:
             args.backend, project_root,
             max_turns=args.max_turns, model=args.model,
             effort=args.effort)
-        success = run_scene_archive(
-            project_root, args.work_id, backend,
-            concurrency=args.concurrency,
-            end_stage=args.end_stage or 0,
-            resume=args.resume,
-        )
+        try:
+            success = run_scene_archive(
+                project_root, args.work_id, backend,
+                concurrency=args.concurrency,
+                end_stage=args.end_stage or 0,
+                resume=args.resume,
+            )
+        except RateLimitHardStop as exc:
+            print(f"\n[RATE_LIMIT_HARD_STOP] {exc.reason}: {exc.detail}")
+            print("  See works/<work_id>/analysis/progress/"
+                  "rate_limit_exit.log and re-run --resume after reset.")
+            sys.exit(WEEKLY_EXIT_CODE)
         sys.exit(0 if success else 1)
 
     # --- Background mode (Phase 0-3.5) ---
@@ -276,6 +283,16 @@ def main(argv: list[str] | None = None) -> None:
             )
 
         print("\nDone.")
+    except RateLimitHardStop as exc:
+        # Raised from rate_limit.wait_if_paused (weekly / probe
+        # hard-stop). Reach here from either the main-thread pre-launch
+        # gate or from a worker's Future.result() re-raise. Details are
+        # already in rate_limit_exit.log; print a concise operator hint
+        # and exit with the agreed signal.
+        print(f"\n[RATE_LIMIT_HARD_STOP] {exc.reason}: {exc.detail}")
+        print("  See works/<work_id>/analysis/progress/"
+              "rate_limit_exit.log and re-run --resume after reset.")
+        sys.exit(WEEKLY_EXIT_CODE)
     finally:
         orch.release_lock()
 

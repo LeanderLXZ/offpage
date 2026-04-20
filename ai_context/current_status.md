@@ -3,8 +3,9 @@
 ## Project Stage
 
 Architecture scaffold done. One work package under automated extraction
-(Phase 2.5 complete; Phase 3 pending — no stages committed yet;
-Phase 4 scene archive independently done). No runtime code yet.
+(Phase 2.5 complete; Phase 3 in progress — 1/49 stages committed, 1
+ERROR, 47 pending; Phase 4 scene archive independently done). No
+runtime code yet.
 
 ## What Exists
 
@@ -29,8 +30,9 @@ Phase 4 scene archive independently done). No runtime code yet.
 ### First Work Package
 
 - One Chinese web novel (500+ chapters)
-- Phase 0–2.5 complete; 2 target characters confirmed; Phase 3 pending
-  (no stages committed yet); Phase 4 scene archive independently done
+- Phase 0–2.5 complete; 2 target characters confirmed; Phase 3 in
+  progress (1/49 stages committed, 1 ERROR, 47 pending); Phase 4
+  scene archive independently done
 
 ### Automated Extraction Orchestrator
 
@@ -100,12 +102,17 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
   `works/{work_id}/analysis/progress/rate_limit_pause.json`, blocks the
   orchestrator's pre-launch gate plus every in-flight `run_with_retry`
   call until reset, and (once cleared) re-runs the failed prompt without
-  consuming a retry slot. Reset times are timezone-aware (PT/PST/PDT/ET/
-  UTC); unparseable resets fall back to a minimal `claude -p "1"
-  --max-turns 1` probe loop. Weekly limits whose wait would exceed
-  `[rate_limit].weekly_max_wait_h` (default 12h) write `rate_limit_exit
-  .log` and exit 2 — distinct from regular exit 1. Pause time is
-  excluded from `--max-runtime` accounting (§11.13.7).
+  consuming a retry slot. Reset times are timezone-aware; ambiguous
+  codes (PT/MT/CT/ET) are resolved via `zoneinfo` so DST windows round
+  correctly. Unparseable resets fall back to a minimal `claude -p "1"
+  --max-turns 1` probe loop run by a single elected leader lane
+  (`probing_by_pid` + TTL); followers wait silently. Two hard-stops
+  raise `RateLimitHardStop` (CLI maps to exit 2): weekly waits ≥
+  `[rate_limit].weekly_max_wait_h` (default 12h), and probe sessions
+  whose wall-clock wait ≥ `[rate_limit].probe_max_wait_h` (default 6h).
+  Both write `rate_limit_exit.log`. Pause time is excluded from
+  `--max-runtime` accounting, deduped by `resume_at` so N lanes
+  sharing one window count as one (§11.13.7).
 - Single-source TOML config at `automation/config.toml` (loader at
   `automation/persona_extraction/config.py`). Every previously
   hard-coded knob — phase concurrency, lane timeouts, repair-agent

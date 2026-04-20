@@ -62,6 +62,9 @@ works/{work_id}/
       phase3_stages.json
       phase4_scenes.json
       extraction.log
+      rate_limit_pause.json         # §11.13 暂停契约（仅限额激活时存在）
+      rate_limit_exit.log           # 限额硬停退出说明（仅 exit 2 路径写入）
+      failed_lanes/                 # Phase 3 lane 级失败诊断（§11 T-LOG）
     chapter_summaries/
     scene_splits/
     evidence/
@@ -174,7 +177,19 @@ works/{work_id}/
 
 与该作品相关的分析产物与证据：
 
-- `progress/` — 流水线进度文件（pipeline.json, phase0/3/4 进度, extraction.log）
+- `progress/` — 流水线进度文件：
+  - `pipeline.json` / `phase0_summaries.json` / `phase3_stages.json` /
+    `phase4_scenes.json` / `extraction.log` — 各阶段主进度
+  - `rate_limit_pause.json` — 仅 §11.13 token 限额暂停激活期间存在，
+    记录 `resume_at` / `reason` / probe leader claim；暂停解除后由
+    controller 自动删除。**勿手动编辑或删除运行中的暂停文件**
+  - `rate_limit_exit.log` — 限额硬停退出的说明文件（weekly 或 probe
+    session 超 `probe_max_wait_h`）。仅 exit 2 路径写入，重跑
+    `--resume` 前可留作 triage
+  - `failed_lanes/` — Phase 3 lane 级失败诊断目录，文件名格式
+    `{stage_id}__{lane_type}_{lane_id}__{pid}.log`，保留天数由
+    `[logging].failed_lanes_retention_days` 控制（默认 30），到期
+    由下次启动清理——**误删会丢失失败现场**
 - `chapter_summaries/` — Phase 0 章节摘要（每 chunk 一个 JSON）
 - `scene_splits/` — Phase 4 中间产物（每章一个 JSON，.gitignore）
 - `world_overview.json` — Phase 1 世界观概览

@@ -191,20 +191,32 @@ constraints beyond what the architecture docs already say.
 
 45. Single-source TOML config at `automation/config.toml` (loader
     `automation/persona_extraction/config.py`). Override priority:
-    CLI > env > `config.toml` > `config.local.toml`. All previously
-    hard-coded knobs (concurrency, timeouts, repair-agent retries,
-    circuit breaker, fast-fail backoff, rate-limit policy, runtime
-    defaults, git auto-merge) read from typed dataclass sections.
-46. Token-limit auto-pause (subscription model): when `claude -p`
-    returns a rate-limit / usage-limit error, `RateLimitController`
-    parses the timezone-aware reset time, writes a flock-merged
-    `rate_limit_pause.json`, blocks the orchestrator's pre-launch
-    gate plus every concurrent `run_with_retry`, and re-runs the
-    failed prompt after reset *without* consuming a retry slot.
-    Quality is equivalent to a no-limit run (modulo wait time).
-    Weekly limits over 12h trigger exit code 2 + persisted exit log.
-    Pause time excluded from `--max-runtime`. Detection-only — no
-    pre-flight quota query.
+    CLI > `config.local.toml` > `config.toml` > dataclass defaults.
+    All previously hard-coded knobs (concurrency, timeouts,
+    repair-agent retries, circuit breaker, fast-fail backoff,
+    rate-limit policy, runtime defaults, git auto-merge) read from
+    typed dataclass sections.
+46. Token-limit auto-pause (subscription model, §11.13): when
+    `claude -p` returns a rate-limit / usage-limit error,
+    `RateLimitController` parses the timezone-aware reset time
+    (DST-aware via `zoneinfo` for ambiguous codes PT/MT/CT/ET),
+    writes a flock-merged `rate_limit_pause.json`, blocks the
+    orchestrator's pre-launch gate plus every concurrent
+    `run_with_retry`, and re-runs the failed prompt after reset
+    *without* consuming a retry slot. Unparseable reset times fall
+    back to a minimal `claude -p "1" --max-turns 1` probe loop, but
+    only a **single elected leader lane** (flock-CAS on
+    `probing_by_pid` + `probe_claim_ttl_s` TTL) fires the probe;
+    followers sleep silently. Two hard-stop paths raise
+    `RateLimitHardStop` from worker threads; the main-thread
+    `Future.result()` re-raise maps to `sys.exit(2)`: weekly waits
+    ≥ `weekly_max_wait_h` (default 12h), and cumulative probe
+    session ≥ `probe_max_wait_h` (default 6h, anchored on
+    `probe_session_started_at`). Both write `rate_limit_exit.log`.
+    `--max-runtime` accounting dedups `paused_seconds_total` by
+    `resume_at` so N lanes sharing one pause window count as one
+    wall-clock slice (not N). Detection-only — no pre-flight quota
+    query. Quality equivalent to a no-limit run modulo wait time.
 
 ## Repository
 
