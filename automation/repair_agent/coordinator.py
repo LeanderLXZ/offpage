@@ -64,11 +64,16 @@ logger = logging.getLogger(__name__)
 def _build_pipeline(
     llm_call: Callable[..., str] | None = None,
     importance_map: dict[str, str] | None = None,
+    relationship_history_summary_max_chars: int = 300,
 ) -> CheckerPipeline:
     pipeline = CheckerPipeline()
     pipeline.register(JsonSyntaxChecker())
     pipeline.register(SchemaChecker())
-    pipeline.register(StructuralChecker(importance_map=importance_map))
+    pipeline.register(StructuralChecker(
+        importance_map=importance_map,
+        relationship_history_summary_max_chars=(
+            relationship_history_summary_max_chars),
+    ))
     pipeline.register(SemanticChecker(llm_call=llm_call))
     return pipeline
 
@@ -104,10 +109,15 @@ def validate_only(
     llm_call: Callable[..., str] | None = None,
     run_semantic: bool = False,
     importance_map: dict[str, str] | None = None,
+    relationship_history_summary_max_chars: int = 300,
 ) -> list[Issue]:
     """Run all checkers without any repair. Returns issue list."""
-    pipeline = _build_pipeline(llm_call=llm_call,
-                                importance_map=importance_map)
+    pipeline = _build_pipeline(
+        llm_call=llm_call,
+        importance_map=importance_map,
+        relationship_history_summary_max_chars=(
+            relationship_history_summary_max_chars),
+    )
     return pipeline.run(files, run_semantic=run_semantic)
 
 
@@ -117,6 +127,7 @@ def run(
     source_context: SourceContext | None = None,
     llm_call: Callable[..., str] | None = None,
     importance_map: dict[str, str] | None = None,
+    relationship_history_summary_max_chars: int = 300,
 ) -> RepairResult:
     """Three-phase repair: check → fix loop → verify.
 
@@ -124,12 +135,19 @@ def run(
         importance_map: ``{character_id: importance}`` — raises the
             structural min-examples threshold for main / important
             characters (主角 → 5, 重要配角 → 3, others → 1).
+        relationship_history_summary_max_chars: upper bound enforced by
+            the L2 structural checker on each ``relationships[*]
+            .relationship_history_summary`` string.
     """
     if config is None:
         config = RepairConfig()
 
-    pipeline = _build_pipeline(llm_call=llm_call,
-                                importance_map=importance_map)
+    pipeline = _build_pipeline(
+        llm_call=llm_call,
+        importance_map=importance_map,
+        relationship_history_summary_max_chars=(
+            relationship_history_summary_max_chars),
+    )
     retriever = ContextRetriever()
     fixers = _build_fixers(llm_call=llm_call, retriever=retriever)
     tracker = IssueTracker()

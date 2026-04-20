@@ -72,6 +72,7 @@
 - evidence_refs 顶层非空
 - dialogue_examples 至少有 2-3 条（voice_state 和 emotional_voice_map 各自）
 - `stage_events` 每条 50–80 字（schema 硬门控）
+- `relationship_history_summary` 每条 ≤ 300 字（schema 硬门控；超长会被 L1/L2 判错，需要重写压缩至 300 字以内，保留关键行为标记）
 
 ## 质量退化防护
 

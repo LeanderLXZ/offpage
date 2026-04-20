@@ -64,7 +64,9 @@ Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
   runtime.
 - Length rules are hard schema gates: world + character `stage_events`
   50–80 字 per entry; memory_timeline `event_description` 150–200 字,
-  `digest_summary` 30–50 字; `knowledge_scope` items ≤ 50 字 each.
+  `digest_summary` 30–50 字; `knowledge_scope` items ≤ 50 字 each;
+  `relationships[*].relationship_history_summary` ≤ 300 字 (default; tunable
+  via `[repair_agent].relationship_history_summary_max_chars`).
 - Count caps (hard schema gates): `knowledge_scope.knows` ≤ 50,
   `does_not_know` ≤ 30, `uncertain` ≤ 30. Over-limit → trim by dropping
   items least relevant to current-stage decisions / core_wounds /

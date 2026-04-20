@@ -530,7 +530,8 @@
           },
           "relationship_history_summary": {
             "type": "string",
-            "description": "从阶段 1 到当前阶段，这对关系的演变轨迹概述。应包含关键行为标记（称呼变化、态度转折点、知识揭露时点等）。"
+            "maxLength": 300,
+            "description": "从阶段 1 到当前阶段，这对关系的演变轨迹概述。应包含关键行为标记（称呼变化、态度转折点、知识揭露时点等）。上限 300 字（硬 schema 门控，L2 structural 同步校验；缺失/空串由 L2 以 warning 暴露）。"
           }
         }
       }

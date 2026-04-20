@@ -1549,7 +1549,7 @@ L0 json_syntax → L1 schema → L2 structural → L3 semantic
 |------|---------|------|
 | L0 json_syntax | 文件存在、JSON/JSONL 可解析、UTF-8 编码 | 0 token |
 | L1 schema | jsonschema 全字段校验（required / type / enum / additionalProperties / minLength / maxLength）；`jsonschema` 为硬依赖 | 0 token |
-| L2 structural | 业务规则——从规则配置读取，不硬编码。包括：target_voice_map / target_behavior_map 示例数阈值（importance-based，见下）；memory_id / event_id 格式（`M-S###-##` / `E-S###-##`）；`event_description` 150–200 字；`stage_events` 50–80 字；`digest_summary` 30–50 字；`knowledge_scope` 条目上限；stage_id 对齐；catalog / digest 完整性；snapshot 存在性；跨实体引用解析（warn-only） | 0 token |
+| L2 structural | 业务规则——从规则配置读取，不硬编码。包括：target_voice_map / target_behavior_map 示例数阈值（importance-based，见下）；memory_id / event_id 格式（`M-S###-##` / `E-S###-##`）；`event_description` 150–200 字；`stage_events` 50–80 字；`digest_summary` 30–50 字；`relationships[*].relationship_history_summary` ≤ 300 字（error）+ 缺失/空串 warning；`knowledge_scope` 条目上限；stage_id 对齐；catalog / digest 完整性；snapshot 存在性；跨实体引用解析（warn-only） | 0 token |
 | L3 semantic | 内容事实正确性；阶段间连贯性（数值跳变、关系突变）；关系描述与行为描述一致性；stage_delta 与实际变化一致性。输出为结构化 Issue list（JSON array），不是自由文本 | LLM |
 
 **L2 structural 包含原「提交门控」的全部结构性检查**（snapshot 存在 + stage_id
@@ -1567,6 +1567,12 @@ importance 动态决定：
 
 extraction prompt 中注入 importance 和对应最低 examples 数，使 LLM 在生成时
 就知道标准。L2 structural checker 使用相同阈值做事后校验兜底。
+
+**`target_type` 与 `character_id` 的匹配规则**（L2 structural 与 Phase 3.5 consistency 共享）：
+`target_type` 允许带阶段/认知注释（例如 `<character_id>（<阶段修饰>）`）。
+阈值查找按**子串匹配**：遍历 `importance_map`，凡 `character_id in target_type`
+即命中；多命中时取 importance 更高的一档，若仍并列则取更长的 `character_id`。
+没有命中则按"其他（阈值 1）"处理。
 
 #### 11.4.4 四层修复器（Fixer）与逐层升级
 
