@@ -314,7 +314,7 @@ importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。
 Phase 4 与 Phase 3 数据独立——使用独立 PID 锁 `.scene_archive.lock`，
 可与 Phase 3 并行运行（`--start-phase 4`）。Phase 4 自身不做 git 操作；其中间目录
 `works/{work_id}/analysis/scene_splits/` 和 lock 文件均为
-本地忽略产物（**不得被 git track**），Phase 3 的 rollback 不会清掉它们。
+本地忽略产物（**不得被 git track**）。
 每次启动通过 `reconcile_with_disk()` 校验 passed 章节的 split 文件是否
 实际存在，缺失的自动重置为 pending；同时清掉 PENDING/中间态遗留的半成品。
 前置条件仅为 `stage_plan.json`（Phase 1 产物）。

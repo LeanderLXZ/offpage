@@ -72,11 +72,21 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
 - Baseline recovery tracked via `baseline_done`; Phase 2.5 exit
   validation runs on both fresh and `--resume` paths (re-runs Phase 2.5
   if existing baseline fails validation).
-- Smart resume skips extraction only when **all** 1+2N outputs are on
-  disk (world snapshot + each character snapshot + each character
-  memory_timeline); any missing lane re-runs the full extraction.
+- Lane-level resume (Phase 3): `StageEntry.lane_states` tracks per-lane
+  completion, gated on subprocess success + JSON-parseability of the
+  per-stage product file. A failed or SIGKILL-interrupted stage keeps
+  the already-complete lane products on disk and in state; `--resume`
+  only re-runs the missing / corrupt lanes. Before retrying an
+  incomplete `char_support` lane, the five cumulative baseline files
+  (`identity` / `voice_rules` / `behavior_rules` / `boundaries` /
+  `failure_modes`) are scoped-reset via `git checkout HEAD -- …` so a
+  prior partial write cannot bleed into the retry.
+- `phase3_stages.json` is persisted atomically (tempfile + fsync +
+  rename) so a SIGKILL mid-save cannot corrupt the progress record.
 - Disk reconcile self-heal on every startup (Phase 0/3/4); Phase 3
-  verifies `committed_sha` via `git cat-file -e`.
+  verifies `committed_sha` via `git cat-file -e`, and lane-level
+  reconcile re-parses each claimed product file before trusting its
+  lane_states entry.
 - Process guard (PID lock), git preflight, SIGINT/SIGTERM graceful
   shutdown.
 - Background mode (`--background`), runtime limit (`--max-runtime`),

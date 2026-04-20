@@ -282,13 +282,19 @@ or `codex` call, no shared session memory, file-based context.
   `stage_plan.json` (authoritative). Fully regenerated on merge.
   Intermediate `.scene_archive.lock` +
   `works/{work_id}/analysis/scene_splits/` local ignored (must not be
-  git-tracked; preserved from Phase 3 rollback). Resume verifies split
+  git-tracked). Resume verifies split
   files — missing resets to pending. CLI: `--start-phase 4`.
 
 ### Key Design
 
-- Smart resume: PENDING stage with extraction output already on disk
-  skips LLM extraction, jumps to post-processing.
+- Lane-level resume (Phase 3): `StageEntry.lane_states` tracks per-lane
+  completion (subprocess success + JSON-parseable product). A failed
+  or SIGKILL-interrupted stage keeps the already-complete lane
+  products; `--resume` re-runs only missing / corrupt lanes. Stage
+  smart-skip: PENDING with all 1+2N outputs on disk jumps to
+  post-processing; any missing lane triggers partial re-run at lane
+  granularity (not a full-stage rerun). `phase3_stages.json` is
+  persisted atomically (tempfile + fsync + rename).
 - Repair agent: unified check + fix system (`automation/repair_agent/`)
   — the per-stage quality gate in Phase 3. Field-level surgical patches
   via json_path (no whole-file rollback). Phase 4 = programmatic only
