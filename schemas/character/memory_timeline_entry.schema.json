@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/memory_timeline_entry.schema.json",
+  "$id": "persona-engine/character/memory_timeline_entry.schema.json",
   "title": "角色记忆时间线条目",
   "description": "memory_timeline/{stage_id}.json 中数组元素的 schema。记忆按阶段拆分存储，每个阶段一个 JSON 文件（顶层为数组）。每条记忆是角色视角的主观记忆，不是客观剧情摘要。记忆应反映角色知道什么、感受什么、误解什么、隐瞒什么。",
   "type": "object",

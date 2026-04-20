@@ -171,7 +171,7 @@ def validate_baseline(
         else:
             issues.extend(_validate_schema(
                 fr_data,
-                schema_dir / "fixed_relationships.schema.json",
+                schema_dir / "world" / "fixed_relationships.schema.json",
                 str(fixed_rel_path)))
 
     # Per-character baseline checks
@@ -192,7 +192,7 @@ def validate_baseline(
             else:
                 # Schema validation
                 issues.extend(_validate_schema(
-                    identity, schema_dir / "identity.schema.json",
+                    identity, schema_dir / "character" / "identity.schema.json",
                     str(id_path)))
                 # Required field non-null checks
                 if not identity.get("canonical_name"):
@@ -220,15 +220,15 @@ def validate_baseline(
             else:
                 issues.extend(_validate_schema(
                     manifest,
-                    schema_dir / "character_manifest.schema.json",
+                    schema_dir / "character" / "character_manifest.schema.json",
                     str(manifest_path)))
 
         # Skeleton baseline files (warn only — non-critical)
         _baseline_schemas = {
-            "voice_rules.json": "voice_rules.schema.json",
-            "behavior_rules.json": "behavior_rules.schema.json",
-            "boundaries.json": "boundaries.schema.json",
-            "failure_modes.json": "failure_modes.schema.json",
+            "voice_rules.json": "character/voice_rules.schema.json",
+            "behavior_rules.json": "character/behavior_rules.schema.json",
+            "boundaries.json": "character/boundaries.schema.json",
+            "failure_modes.json": "character/failure_modes.schema.json",
         }
         for fname, schema_name in _baseline_schemas.items():
             fpath = char_dir / fname

@@ -247,7 +247,7 @@ users/
 - 只有明确保留、提升或合并的内容，才应进入 `relationship_core/` 或
   `pinned_memories.jsonl`
 - `contexts/{context_id}/` 支持 `ephemeral / persistent / merged / archived`
-  四种生命周期（见 `schemas/context_manifest.schema.json` 的 `lifecycle` 枚举）
+  四种生命周期（见 `schemas/runtime/context_manifest.schema.json` 的 `lifecycle` 枚举）
 - 当用户明确要求，或当前 merge policy 允许且证据足够时，context 中的
   内容可以被部分或整体提升进用户长期状态
 - 对中文作品，文件内容中的 `work_id`、`character_id`、`stage_id` 可以直接

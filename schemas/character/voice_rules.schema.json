@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/voice_rules.schema.json",
+  "$id": "persona-engine/character/voice_rules.schema.json",
   "title": "角色语言风格规则",
   "description": "角色的基线语言模型。定义角色在不同情绪状态和面对不同对象时的说话方式。此文件仅在提取阶段作为参照锚点使用，运行时不加载——stage_snapshot 中的 voice_state 是自包含的当前阶段完整状态。",
   "type": "object",

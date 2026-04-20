@@ -2,21 +2,19 @@
 
 这个目录用于存放持久化文件与运行时请求的第一版 JSON Schema。
 
-当前重点：
+按语义分层组织为子目录：
 
-- 源作品清单
-- 角色清单
-- 世界阶段目录
-- 世界阶段快照
-- 阶段目录与阶段快照
-- 用户画像
-- 用户长期画像
-- 角色绑定
-- 用户关系核心
-- 上下文清单
-- 会话清单
-- 运行时会话请求
-- 记忆摘要索引条目（memory_digest_entry）
+| 子目录 | 作用 | 典型成员 |
+|--------|------|---------|
+| `work/` | 作品级入库与阶段目录 | `work_manifest`、`stage_catalog` |
+| `world/` | 世界层快照、事件、固定关系 | `world_stage_snapshot`、`world_event_digest_entry`、`fixed_relationships`、`world_stage_catalog` |
+| `character/` | 角色 baseline + 阶段快照 + 记忆 | `identity`、`character_manifest`、`voice_rules`、`behavior_rules`、`boundaries`、`failure_modes`、`stage_snapshot`、`memory_timeline_entry`、`memory_digest_entry` |
+| `user/` | 用户根画像、绑定、长期档案、关系核心 | `user_profile`、`role_binding`、`long_term_profile`、`relationship_core` |
+| `runtime/` | Context / Session / 请求载荷 | `context_manifest`、`context_character_state`、`session_manifest`、`runtime_session_request` |
+| `shared/` | 跨域共享（extraction_notes 等） | `source_note` |
+
+各 schema 的 `$id` 统一为 `persona-engine/<subdir>/<name>.schema.json`；功能说明与字段索引见
+[../docs/architecture/schema_reference.md](../docs/architecture/schema_reference.md)。
 
 这些 schema 当前采取保守设计，优先固定结构，再为后续更丰富的抽取细节预留空间。
 

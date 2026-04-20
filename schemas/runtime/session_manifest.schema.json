@@ -1,23 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/context_manifest.schema.json",
-  "title": "上下文清单",
+  "$id": "persona-engine/runtime/session_manifest.schema.json",
+  "title": "会话清单",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
-    "context_id",
+    "session_id",
     "user_id",
     "work_id",
     "character_id",
     "stage_id",
-    "lifecycle"
+    "context_id",
+    "terminal"
   ],
   "properties": {
     "schema_version": {
       "type": "string"
     },
-    "context_id": {
+    "session_id": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9_-]*$"
     },
@@ -27,17 +28,20 @@
     "work_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当前上下文所属的作品命名空间标识。该值必须与当前 `users/{user_id}/` 锁定绑定一致。对于中文作品，这个值可以直接是中文。"
+      "description": "当前会话所属的作品命名空间标识。该值必须与当前 `users/{user_id}/` 锁定绑定一致。对于中文作品，这个值可以直接是中文。"
     },
     "character_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当前上下文加载的基础角色标识。对于中文作品，这个值可以直接是中文。"
+      "description": "当前会话绑定的基础角色标识。对于中文作品，这个值可以直接是中文。"
+    },
+    "context_id": {
+      "type": "string"
     },
     "stage_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当前上下文选定的作品级活动阶段标识。world 与目标角色默认都应围绕该阶段装载。对于中文作品，这个值可以直接是中文。"
+      "description": "当前会话选定的作品级活动阶段标识。对于中文作品，这个值可以直接是中文。"
     },
     "counterpart_mode": {
       "type": "string",
@@ -46,8 +50,7 @@
         "user_persona",
         "canon_character",
         "custom_role"
-      ],
-      "description": "当前上下文中用户侧身份模式。"
+      ]
     },
     "counterpart_persona_id": {
       "type": "string"
@@ -68,57 +71,19 @@
     "counterpart_stage_id": {
       "type": "string",
       "minLength": 1,
-      "description": "当用户侧身份模式为 canon_character 且存在显式跨阶段 branch override 时，该值表示用户侧角色选定的阶段标识。默认运行时不应要求单独设置。"
+      "description": "当用户侧身份模式为 canon_character 且存在显式跨阶段 branch override 时，该值表示用户侧角色选定的阶段标识。"
     },
-    "counterpart_label": {
-      "type": "string"
-    },
-    "counterpart_summary": {
-      "type": "string"
-    },
-    "title": {
-      "type": "string"
-    },
-    "premise_summary": {
-      "type": "string"
-    },
-    "lifecycle": {
+    "terminal": {
       "type": "string",
       "enum": [
-        "ephemeral",
-        "persistent",
-        "merged",
-        "archived"
+        "agent",
+        "app",
+        "mcp",
+        "other"
       ]
     },
-    "origin_type": {
-      "type": "string",
-      "enum": [
-        "new",
-        "branch",
-        "imported",
-        "merged"
-      ]
-    },
-    "origin_context_id": {
+    "persona_id": {
       "type": "string"
-    },
-    "active_session_id": {
-      "type": "string"
-    },
-    "session_ids": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "merge_policy": {
-      "type": "string",
-      "enum": [
-        "manual_only",
-        "allow_memory_pins",
-        "allow_full_merge"
-      ]
     },
     "writeback_policy": {
       "type": "string",
@@ -128,38 +93,18 @@
         "manual_only"
       ]
     },
-    "load_snapshot_refs": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "world_stage_snapshot_path": {
-          "type": "string"
-        },
-        "target_stage_snapshot_path": {
-          "type": "string"
-        },
-        "counterpart_stage_snapshot_path": {
-          "type": "string"
-        }
-      }
-    },
-    "created_at": {
+    "started_at": {
       "type": "string"
     },
-    "updated_at": {
+    "ended_at": {
       "type": "string"
     },
-    "ended_by": {
+    "close_trigger": {
       "type": "string",
-      "enum": [
-        "user",
-        "system",
-        "timeout",
-        "other"
-      ]
+      "description": "结束会话的触发来源，例如 exit keyword、用户显式结束、系统关闭。"
     },
-    "end_reason": {
-      "type": "string"
+    "merge_prompt_shown": {
+      "type": "boolean"
     },
     "merge_decision": {
       "type": "string",
@@ -170,8 +115,13 @@
         "not_offered"
       ]
     },
-    "last_merged_at": {
-      "type": "string"
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "closed",
+        "abandoned"
+      ]
     }
   },
   "allOf": [

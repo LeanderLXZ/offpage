@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/runtime_session_request.schema.json",
+  "$id": "persona-engine/runtime/runtime_session_request.schema.json",
   "title": "运行时会话请求",
   "type": "object",
   "additionalProperties": false,

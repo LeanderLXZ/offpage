@@ -118,7 +118,7 @@ works/{work_id}/
 - `identity.json` — 基础身份信息（不随阶段变化的底层属性：姓名、别名、
   性别、种族、出身、外貌、初始社会地位）；此外还承载 `core_wounds`
   （根源性心理创伤）与 `key_relationships`（跨作品关系弧）。schema:
-  `schemas/identity.schema.json`
+  `schemas/character/identity.schema.json`
 - `memory_timeline/{stage_id}.json` — 角色视角的记忆时间线，按阶段拆分（JSON
   数组，每个元素为一条记忆）。加载阶段 N 时只需读取阶段 1..N 的文件。内容涵盖：
   - 客观事件与角色的主观体验（可能与事实不同）
@@ -127,32 +127,32 @@ works/{work_id}/
   - 角色因该事件而隐瞒的信息（如有）
   - 该事件对角色关系的影响
   - 记忆重要程度（trivial → defining）
-  - schema: `schemas/memory_timeline_entry.schema.json`
+  - schema: `schemas/character/memory_timeline_entry.schema.json`
 - `voice_rules.json` — 语言风格规则（基线），内容涵盖：
   - 基础语气、语言习惯、用词偏好、标志性口头禅
   - 代表性台词示例（含出处和语境）
   - 按情绪状态分类的语言变化（暧昧、愤怒、委屈、嘴硬、关心、吃醋等）
   - 按对象类型分类的说话差异（亲近者、陌生人、敌对者等）
   - 语言禁忌
-  - schema: `schemas/voice_rules.schema.json`
+  - schema: `schemas/character/voice_rules.schema.json`
 - `behavior_rules.json` — 行为规则（基线），内容涵盖：
   - 核心行为驱动力与决策风格
   - 情绪触发点（什么事情引发强烈反应及反应模式）
   - 按情绪状态分类的完整反应模式（内心感受、外在表现、典型动作、恢复方式）
   - 按关系类型分类的行为差异（默认态度、底线、升级/恶化模式）
   - 习惯性行为与压力反应（应对方式、崩溃临界点、危机后行为）
-  - schema: `schemas/behavior_rules.schema.json`
+  - schema: `schemas/character/behavior_rules.schema.json`
 - `boundaries.json` — 人设边界，内容涵盖：
   - 硬边界：任何情况下都不会做的事（含原因）
   - 软边界：强烈抗拒但极端条件下可能打破的事（含例外条件）
   - 常见误解：人们容易搞错的关于角色的认知
-  - schema: `schemas/boundaries.schema.json`
+  - schema: `schemas/character/boundaries.schema.json`
 - `failure_modes.json` — 崩坏预警（给 AI 运行时的防护指南），内容涵盖：
   - 常见扮演错误（错误描述、产生原因、正确行为）
   - 语气陷阱
   - 关系互动陷阱
   - 知识泄漏风险（角色不该知道但 AI 容易泄漏的信息）
-  - schema: `schemas/failure_modes.schema.json`
+  - schema: `schemas/character/failure_modes.schema.json`
 - `stage_catalog.json` — 角色阶段目录，每个阶段包含一句话总结
   （`summary`）供用户选择（仅 bootstrap 阶段选择，运行时不加载）
 - `stage_snapshots/` — 角色在每个阶段的投影快照，内容涵盖：
@@ -171,7 +171,7 @@ works/{work_id}/
   - 阶段间变化 delta：从上一阶段到当前阶段的关键变化摘要
     （触发事件、性格变化、关系变化、状态变化、情绪基调转变、口吻转变）
   - 对其他角色的关系状态与信任度
-  - schema: `schemas/stage_snapshot.schema.json`
+  - schema: `schemas/character/stage_snapshot.schema.json`
 
 ### analysis/
 

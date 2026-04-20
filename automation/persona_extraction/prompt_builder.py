@@ -159,12 +159,15 @@ def build_baseline_prompt(
 
     # Schemas needed — includes the two stage_catalog schemas the
     # baseline must produce empty instances of (产出 3 in the prompt).
-    for schema in ("identity.schema.json", "character_manifest.schema.json",
-                   "voice_rules.schema.json", "behavior_rules.schema.json",
-                   "boundaries.schema.json", "failure_modes.schema.json",
-                   "fixed_relationships.schema.json",
-                   "world_stage_catalog.schema.json",
-                   "stage_catalog.schema.json"):
+    for schema in ("character/identity.schema.json",
+                   "character/character_manifest.schema.json",
+                   "character/voice_rules.schema.json",
+                   "character/behavior_rules.schema.json",
+                   "character/boundaries.schema.json",
+                   "character/failure_modes.schema.json",
+                   "world/fixed_relationships.schema.json",
+                   "world/world_stage_catalog.schema.json",
+                   "work/stage_catalog.schema.json"):
         files.append(f"- `{project_root / 'schemas' / schema}`")
 
     # Analysis outputs
@@ -384,7 +387,7 @@ def _build_world_read_list(
     source_dir = project_root / "sources" / "works" / work_id
 
     # Schemas (world only)
-    files.append("schemas/world_stage_snapshot.schema.json")
+    files.append("schemas/world/world_stage_snapshot.schema.json")
 
     # World foundation (always needed)
     foundation_dir = work_dir / "world" / "foundation"
@@ -428,7 +431,7 @@ def _build_char_snapshot_read_list(
     source_dir = project_root / "sources" / "works" / work_id
     char_dir = work_dir / "characters" / character_id / "canon"
 
-    files.append("schemas/stage_snapshot.schema.json")
+    files.append("schemas/character/stage_snapshot.schema.json")
 
     # Character baseline files (identity.json first for alias cross-ref)
     if char_dir.exists():
@@ -475,7 +478,7 @@ def _build_char_support_read_list(
     source_dir = project_root / "sources" / "works" / work_id
     char_dir = work_dir / "characters" / character_id / "canon"
 
-    files.append("schemas/memory_timeline_entry.schema.json")
+    files.append("schemas/character/memory_timeline_entry.schema.json")
 
     # Character baseline files (identity.json first for alias cross-ref)
     if char_dir.exists():

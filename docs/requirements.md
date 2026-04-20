@@ -727,7 +727,7 @@ Baseline 文件（voice_rules、behavior_rules、boundaries）仍然存在，
 - `source_types`：原始格式标签数组（如 `["epub"]`）
 - `ingestion_status`：入库生命周期状态，枚举 `"planned"` / `"raw_imported"` /
   `"normalized"` / `"chunked"` / `"indexed"` / `"active"`。权威定义见
-  `schemas/work_manifest.schema.json`。
+  `schemas/work/work_manifest.schema.json`。
   - `planned`：仅完成占位，尚未导入原始素材
   - `raw_imported`：原始文件已落盘 `raw/`，尚未规范化
   - `normalized`：已转 UTF-8、去噪、拆章到 `normalized/chapters/`
@@ -1392,8 +1392,8 @@ LLM token：
   FTS5 拉取 timeline 全文）
 - 以 `memory_id` 为主键做 upsert，重跑不重复
 - 长度违规（`digest_summary` < 30 或 > 50 字）直接由
-  `memory_timeline_entry.schema.json` 判失败——后处理不做截断
-- 写入前做 `memory_digest_entry.schema.json` 校验
+  `character/memory_timeline_entry.schema.json` 判失败——后处理不做截断
+- 写入前做 `character/memory_digest_entry.schema.json` 校验
 - 每条 ~30–40 tokens
 
 **world_event_digest.jsonl 生成**
@@ -1822,7 +1822,7 @@ class SourceNote:
 **存储**：`canon/extraction_notes/{stage_id}.jsonl`（每 entity 各自一个目录树）
 - 角色文件的 note → `characters/{char}/canon/extraction_notes/{stage_id}.jsonl`
 - 世界文件的 note → `world/extraction_notes/{stage_id}.jsonl`
-- jsonschema 定义：`schemas/source_note.schema.json`
+- jsonschema 定义：`schemas/shared/source_note.schema.json`
 - note_id：`SN-S{stage:03d}-{seq:02d}`，seq 在同文件、同 stage 内递增
 
 **源章节变更检测**：`chapter_sha256` 提供审计线索——当源章节文件改动后，

@@ -42,7 +42,7 @@
 
 本阶段应产出或更新：
 
-- `world/stage_snapshots/{stage_id}.json` — 当前阶段世界快照（遵循 world_stage_snapshot.schema.json）
+- `world/stage_snapshots/{stage_id}.json` — 当前阶段世界快照（遵循 world/world_stage_snapshot.schema.json）
 - `world/foundation/` — 如有基础设定修正
 
 **注意**：`world/stage_catalog.json` 由编排脚本自动维护，**不要手动写入或修改此文件**。

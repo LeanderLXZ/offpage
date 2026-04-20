@@ -48,7 +48,7 @@
 `subjective_experience`（不限长度）、`emotional_impact`、
 `memory_importance`、`scene_refs` 等字段。
 
-详见 `schemas/memory_timeline_entry.schema.json`。
+详见 `schemas/character/memory_timeline_entry.schema.json`。
 
 ### 专有名词表
 

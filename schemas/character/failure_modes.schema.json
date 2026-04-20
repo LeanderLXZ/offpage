@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/failure_modes.schema.json",
+  "$id": "persona-engine/character/failure_modes.schema.json",
   "title": "角色崩坏预警",
   "description": "AI 在扮演该角色时最容易犯的错误和写崩的点。这份文件是给 AI 运行时的防护指南，帮助 AI 避免偏离角色。",
   "type": "object",

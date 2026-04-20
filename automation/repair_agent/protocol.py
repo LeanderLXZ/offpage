@@ -68,7 +68,7 @@ class RepairConfig:
 
 
 # Allowed values for SourceNote.discrepancy_type. Keep in sync with the
-# jsonschema at schemas/source_note.schema.json.
+# jsonschema at schemas/shared/source_note.schema.json.
 DISCREPANCY_TYPES: tuple[str, ...] = (
     "author_contradiction",
     "typo",
