@@ -1,8 +1,8 @@
-# Operational Conventions — RE-READ WHEN IN DOUBT
+# Operational Conventions
 
 This file lists operational rules that are easy to forget during long
-sessions. **Re-read this file** before writing output files and after
-completing any significant task.
+sessions. Re-read triggers live in `CLAUDE.md` / `AGENTS.md` Dilution
+Self-Check.
 
 ## Logging
 

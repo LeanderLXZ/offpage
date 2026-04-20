@@ -3,6 +3,13 @@
 This file is auto-loaded at session start. Keep it short — detailed context
 lives in `ai_context/`, not here.
 
+## Worker-Mode Short-Circuit
+
+If your system prompt contains `[extraction_worker_mode]` or
+`[simulation_runtime_mode]`, **stop reading this file**. Do not load
+`ai_context/`. Do not self-check. Follow the user prompt verbatim — that
+prompt is self-contained and the only source of truth for this invocation.
+
 ## Session Start: Read ai_context/ Once
 
 At the beginning of **every new session**, read the entire `ai_context/`
@@ -36,6 +43,24 @@ See `ai_context/read_scope.md` for the full rule.
 Reading `ai_context/` is context loading, not a task brief. Only act on
 explicit user requests. If something looks off while reading, note it and
 wait — do not fix proactively.
+
+## Dilution Self-Check
+
+Long sessions cause silent forgetting. Before editing code, schema,
+prompt, or docs — and after any task-type switch — pause and answer:
+
+1. **Scope check**: Am I doing exactly what the user asked, or am I
+   expanding into proactive refactor / "while I'm here" fixes? If
+   expanding → stop and ask first.
+2. **Right layer**: Does the file I'm about to edit sit in the right
+   module / layer for this concern? If unsure → re-read
+   `ai_context/architecture.md`.
+3. **Alignment check**: Before closing a change set, consult the
+   Cross-File Alignment table in `ai_context/conventions.md` — did I
+   update every downstream file?
+
+If any answer is "I don't remember" or "I'm guessing" → re-read the
+relevant `ai_context/` file before proceeding.
 
 ## Sync with AGENTS.md
 
