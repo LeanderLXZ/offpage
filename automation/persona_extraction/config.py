@@ -72,6 +72,10 @@ class RepairAgentConfig:
     total_round_limit: int = 5
     triage_enabled: bool = True
     triage_accept_cap_per_file: int = 3
+    # L2 structural length cap on each relationships[*]
+    # .relationship_history_summary string. Violations are flagged as
+    # structural errors and blocked from COMMITTED.
+    relationship_history_summary_max_chars: int = 300
 
 
 @dataclass(frozen=True)

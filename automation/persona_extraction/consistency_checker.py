@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .json_repair import try_repair_json_file, try_repair_jsonl_file
+from .validator import importance_for_target, importance_min_examples
 
 logger = logging.getLogger(__name__)
 
@@ -401,15 +402,14 @@ def _check_memory_id_correspondence(
 
 def _min_examples_for_target(target: str,
                              importance_map: dict[str, str]) -> int:
-    """主角 → 5, 重要配角 → 3, others → 1. Substring match."""
-    for name, importance in importance_map.items():
-        if name in target:
-            if importance == "主角":
-                return 5
-            if importance == "重要配角":
-                return 3
-            return 1
-    return 1
+    """Shared rule: main → 5, important → 3, others → 1.
+
+    Delegates to :func:`validator.importance_for_target` (substring +
+    most-important tie-break) so the consistency checker and the repair
+    agent's L2 structural checker agree on what each target counts as.
+    """
+    return importance_min_examples(
+        importance_for_target(target, importance_map))
 
 
 def _check_target_map_counts(

@@ -169,7 +169,7 @@ core_wounds 记录最底层的创伤根源。
 | `voice_state` | 语气基调、语言习惯、用词偏好、口头禅、禁忌用语、情绪语气矩阵（emotional_voice_map，≤ 10）、**对象语气矩阵**（target_voice_map，≤ 5，按具体角色区分，每 target 至少 3-5 条对话示例）、典型对话示例（≤ 5） |
 | `behavior_state` | **core_goals**（理性目标）、**obsessions**（执念）、决策风格、情绪触发器、情绪反应矩阵（emotional_reaction_map，≤ 10）、**对象行为矩阵**（target_behavior_map，≤ 5，与 target_voice_map 平行且对齐，按具体角色区分，每 target 至少 3-5 条行为示例）、习惯性行为、压力应对 |
 | `boundary_state` | 当前阶段有效的软边界、容易被误判的点 |
-| `relationships` | 对每个重要角色的完整关系状态（态度、信任、亲密度、语气变化、行为变化、驱动事件、关系演变概述） |
+| `relationships` | 对每个重要角色的完整关系状态（态度、信任、亲密度、语气变化、行为变化、驱动事件；`relationship_history_summary` ≤ 300 字，schema 硬门控 + L2 structural 兜底，缺失/空串由 L2 以 warning 暴露） |
 | `misunderstandings` | 角色持有的误解（主观认知 vs 客观事实） |
 | `concealments` | 角色主动隐瞒的事情 |
 | `stage_delta` | 从上一阶段的变化摘要（信息性） |

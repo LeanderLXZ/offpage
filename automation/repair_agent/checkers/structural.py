@@ -12,6 +12,11 @@ import json
 import re
 from pathlib import Path
 
+from automation.persona_extraction.validator import (
+    importance_for_target,
+    importance_min_examples,
+)
+
 from . import BaseChecker
 from ..protocol import FileEntry, Issue
 
@@ -25,8 +30,13 @@ class StructuralChecker(BaseChecker):
 
     layer = 2
 
-    def __init__(self, importance_map: dict[str, str] | None = None):
+    def __init__(
+        self,
+        importance_map: dict[str, str] | None = None,
+        relationship_history_summary_max_chars: int = 300,
+    ):
         self._importance_map = importance_map or {}
+        self._rel_history_max_chars = relationship_history_summary_max_chars
 
     def check(self, files: list[FileEntry], **kwargs) -> list[Issue]:
         issues: list[Issue] = []
@@ -98,7 +108,7 @@ class StructuralChecker(BaseChecker):
                             context={"current_length": char_len, "max": 80},
                         ))
 
-        # --- relationships driving_events (schema: array of objects) ---
+        # --- relationships: driving_events + relationship_history_summary ---
         if "relationships" in data and isinstance(data["relationships"], list):
             for idx, rel in enumerate(data["relationships"]):
                 if not isinstance(rel, dict):
@@ -114,6 +124,33 @@ class StructuralChecker(BaseChecker):
                         category="structural", severity="warning",
                         rule="driving_events_non_empty",
                         message=f"No driving_events for relationship with {target}",
+                    ))
+                summary = rel.get("relationship_history_summary")
+                if not isinstance(summary, str) or not summary.strip():
+                    issues.append(Issue(
+                        file=path,
+                        json_path=(f"$.relationships[{idx}]"
+                                   f".relationship_history_summary"),
+                        category="structural", severity="warning",
+                        rule="relationship_history_summary_non_empty",
+                        message=(f"Missing/empty relationship_history_summary "
+                                 f"for relationship with {target}"),
+                    ))
+                elif len(summary) > self._rel_history_max_chars:
+                    issues.append(Issue(
+                        file=path,
+                        json_path=(f"$.relationships[{idx}]"
+                                   f".relationship_history_summary"),
+                        category="structural", severity="error",
+                        rule="relationship_history_summary_max_length",
+                        message=(f"relationship_history_summary too long "
+                                 f"for {target}: {len(summary)} chars "
+                                 f"(max {self._rel_history_max_chars})"),
+                        context={
+                            "current_length": len(summary),
+                            "max": self._rel_history_max_chars,
+                            "target": target,
+                        },
                     ))
 
         # --- character_arc required with stage_delta ---
@@ -187,8 +224,9 @@ class StructuralChecker(BaseChecker):
             if not isinstance(examples, list):
                 continue
             count = len(examples)
-            importance = self._importance_map.get(target_name, "其他")
-            threshold = _importance_threshold(importance)
+            importance = importance_for_target(
+                target_name, self._importance_map)
+            threshold = importance_min_examples(importance)
             if count < threshold:
                 issues.append(Issue(
                     file=path,
@@ -204,11 +242,3 @@ class StructuralChecker(BaseChecker):
                     },
                 ))
         return issues
-
-
-def _importance_threshold(importance: str) -> int:
-    if "主角" in importance:
-        return 5
-    if "重要" in importance:
-        return 3
-    return 1
