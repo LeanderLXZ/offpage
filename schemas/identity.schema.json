@@ -103,7 +103,7 @@
         "properties": {
           "wound": {
             "type": "string",
-            "description": "创伤内容。例如：'五岁被亲生父母抛弃于冰宫门前'。"
+            "description": "创伤内容。例如：'幼年被至亲遗弃于某处'。"
           },
           "origin": {
             "type": "string",

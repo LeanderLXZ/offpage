@@ -131,7 +131,7 @@ def commit_stage(project_root: Path, stage_id: str,
     """Commit current changes for a stage. Returns commit SHA or None.
 
     ``stage_id`` is the human-readable stage identifier (e.g.
-    ``阶段01_南林初遇`` or ``baseline`` for pre-Phase-3 commits). When
+    ``阶段XX_<slug>`` or ``baseline`` for pre-Phase-3 commits). When
     ``message`` is omitted, a default template is used for extraction
     commits.
     """
