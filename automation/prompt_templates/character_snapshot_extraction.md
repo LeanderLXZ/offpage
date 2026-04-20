@@ -55,7 +55,7 @@
 ## 角色快照输出
 
 **仅产出一个文件**：
-- `characters/{character_id}/canon/stage_snapshots/{stage_id}.json` — 自包含快照（遵循 stage_snapshot.schema.json）
+- `characters/{character_id}/canon/stage_snapshots/{stage_id}.json` — 自包含快照（遵循 character/stage_snapshot.schema.json）
 
 **不要修改任何其他文件**。baseline 修正和 memory_timeline 由独立调用处理。
 

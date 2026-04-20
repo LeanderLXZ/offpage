@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/work_manifest.schema.json",
+  "$id": "persona-engine/work/work_manifest.schema.json",
   "title": "作品清单",
   "type": "object",
   "additionalProperties": false,

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/stage_snapshot.schema.json",
+  "$id": "persona-engine/character/stage_snapshot.schema.json",
   "title": "阶段快照",
   "description": "自包含的角色阶段快照。每个快照包含该阶段的完整角色状态，运行时直接加载无需与 baseline 合并。baseline 文件（voice_rules、behavior_rules、boundaries）仅在提取阶段作为参照锚点使用。",
   "type": "object",

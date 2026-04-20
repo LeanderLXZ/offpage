@@ -140,7 +140,7 @@ baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
 
 - `characters/{character_id}/canon/memory_digest.jsonl` —
   从 memory_timeline 自动聚合；每条 `summary` 由对应 entry 的
-  `digest_summary` **1:1 复制**（遵循 memory_digest_entry.schema.json）
+  `digest_summary` **1:1 复制**（遵循 character/memory_digest_entry.schema.json）
 - `characters/{character_id}/canon/stage_catalog.json` — 从 snapshot 元数据自动维护
 - `world/stage_catalog.json` — 从世界 snapshot 元数据自动维护（仅 bootstrap 阶段选择，运行时不加载）
 - `world/world_event_digest.jsonl` — 从世界 snapshot `stage_events` 自动累积

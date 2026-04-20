@@ -95,7 +95,7 @@ sources/works/{work_id}/
    - `source_types` — 源格式标签数组（如 `["epub"]`）
    - `ingestion_status` — 取值为 `"planned"`、`"raw_imported"`、`"normalized"`、
      `"chunked"`、`"indexed"` 或 `"active"` 之一（权威定义见
-     `schemas/work_manifest.schema.json` 与 `docs/requirements.md §8.4`）
+     `schemas/work/work_manifest.schema.json` 与 `docs/requirements.md §8.4`）
 
 4. **将文本标准化**至 `normalized/`。
    - 去除格式伪影、修复编码问题，生成适合章节切分的干净纯文本内容。
@@ -337,7 +337,7 @@ users/{user_id}/
 
 `role_binding.json` 的首版专用 schema 已存在于：
 
-- `schemas/role_binding.schema.json`
+- `schemas/user/role_binding.schema.json`
 
 重要边界：
 
@@ -486,7 +486,7 @@ works/{work_id}/indexes/
 
 首版运行时契约由以下文件建模：
 
-- `schemas/runtime_session_request.schema.json`
+- `schemas/runtime/runtime_session_request.schema.json`
 
 该请求模型应支持：
 

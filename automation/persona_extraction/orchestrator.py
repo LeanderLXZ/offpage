@@ -500,14 +500,14 @@ class ExtractionOrchestrator:
 
         # World stage snapshot
         world_ss = work_dir / "world" / "stage_snapshots" / f"{stage_id}.json"
-        e = _entry(world_ss, "world_stage_snapshot.schema.json")
+        e = _entry(world_ss, "world/world_stage_snapshot.schema.json")
         if e:
             files.append(e)
 
         # World event digest (accumulated; filter to this stage)
         world_ed = work_dir / "world" / "world_event_digest.jsonl"
         e = _jsonl_stage_entry(
-            world_ed, "world_event_digest_entry.schema.json",
+            world_ed, "world/world_event_digest_entry.schema.json",
             id_fields=("event_id",))
         if e:
             files.append(e)
@@ -516,7 +516,7 @@ class ExtractionOrchestrator:
         # catalog shape and monotonic ordering across stages)
         e = _entry(
             work_dir / "world" / "stage_catalog.json",
-            "world_stage_catalog.schema.json")
+            "world/world_stage_catalog.schema.json")
         if e:
             files.append(e)
 
@@ -526,7 +526,7 @@ class ExtractionOrchestrator:
             # Character stage snapshot
             e = _entry(
                 char_dir / "stage_snapshots" / f"{stage_id}.json",
-                "stage_snapshot.schema.json")
+                "character/stage_snapshot.schema.json")
             if e:
                 files.append(e)
 
@@ -534,14 +534,14 @@ class ExtractionOrchestrator:
             # iterates lists regardless of suffix)
             e = _entry(
                 char_dir / "memory_timeline" / f"{stage_id}.json",
-                "memory_timeline_entry.schema.json")
+                "character/memory_timeline_entry.schema.json")
             if e:
                 files.append(e)
 
             # Memory digest (accumulated; filter to this stage)
             e = _jsonl_stage_entry(
                 char_dir / "memory_digest.jsonl",
-                "memory_digest_entry.schema.json",
+                "character/memory_digest_entry.schema.json",
                 id_fields=("memory_id",))
             if e:
                 files.append(e)
@@ -549,7 +549,7 @@ class ExtractionOrchestrator:
             # Stage catalog
             e = _entry(
                 char_dir / "stage_catalog.json",
-                "stage_catalog.schema.json")
+                "work/stage_catalog.schema.json")
             if e:
                 files.append(e)
 

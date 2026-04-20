@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/source_note.schema.json",
+  "$id": "persona-engine/shared/source_note.schema.json",
   "title": "源文件自带问题记录（accept_with_notes）",
   "description": "repair agent triage 阶段判定为源文件自带的 L3 语义 issue 的记录。存储在 {entity}/canon/extraction_notes/{stage_id}.jsonl，每行一个对象。stage 视为通过，但保留可审计信息供未来 fixer 使用。",
   "type": "object",

@@ -22,7 +22,7 @@ alignment graph:
 
 | Changed | Also update |
 |---------|-------------|
-| `schemas/*.schema.json` | `docs/architecture/schema_reference.md`, prompt templates, validator.py |
+| `schemas/**/*.schema.json` | `docs/architecture/schema_reference.md`, `schemas/README.md`, prompt templates, validator.py |
 | `docs/requirements.md` | `ai_context/requirements.md`, `ai_context/decisions.md` |
 | Loading strategy | `simulation/retrieval/load_strategy.md`, `simulation/flows/startup_load.md`, `simulation/retrieval/index_and_rag.md`, `docs/architecture/data_model.md`, `ai_context/architecture.md` |
 | Extraction workflow | `docs/architecture/extraction_workflow.md`, `automation/prompt_templates/`, `automation/persona_extraction/`, `ai_context/architecture.md` |

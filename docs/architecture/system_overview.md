@@ -251,7 +251,7 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
 
 该文件的首版专用 schema 现位于：
 
-- `schemas/role_binding.schema.json`
+- `schemas/user/role_binding.schema.json`
 
 `relationship_core` manifest、`context` manifest、`session` manifest 和运行时请求载荷都应显式包含 `work_id`，以使这些对象在其路径上下文之外仍然是自描述的。
 

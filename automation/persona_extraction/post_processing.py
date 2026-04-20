@@ -111,7 +111,7 @@ def generate_memory_digest(
 
     # --- validate against schema ---
     if schema_dir:
-        schema_path = schema_dir / "memory_digest_entry.schema.json"
+        schema_path = schema_dir / "character" / "memory_digest_entry.schema.json"
         if schema_path.exists():
             schema = json.loads(schema_path.read_text(encoding="utf-8"))
             for i, entry in enumerate(new_entries):
@@ -305,7 +305,7 @@ def generate_world_event_digest(
 
     # Validate against schema
     if schema_dir:
-        schema_path = schema_dir / "world_event_digest_entry.schema.json"
+        schema_path = schema_dir / "world" / "world_event_digest_entry.schema.json"
         if schema_path.exists():
             schema = json.loads(schema_path.read_text(encoding="utf-8"))
             for j, entry in enumerate(new_entries):
@@ -448,9 +448,9 @@ def upsert_stage_catalog(
 
     # --- validate against schema ---
     if schema_dir:
-        schema_name = ("world_stage_catalog.schema.json"
+        schema_name = ("world/world_stage_catalog.schema.json"
                        if character_id is None
-                       else "stage_catalog.schema.json")
+                       else "work/stage_catalog.schema.json")
         schema_path = schema_dir / schema_name
         if schema_path.exists():
             schema = json.loads(schema_path.read_text(encoding="utf-8"))
