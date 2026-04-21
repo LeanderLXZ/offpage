@@ -355,7 +355,7 @@ permanence_reason?, pinned_at?
 
 ### shared/source_note.schema.json
 
-**用途**：Repair agent source-discrepancy triage 接受原文级问题（作者矛盾、笔误、代词混淆等）后持久化的 SourceNote 条目；带 chapter + line_range + verbatim quote 证据锚定。
+**用途**：Repair agent accept_with_notes 通道持久化的 SourceNote 条目，两个来源共用：(1) L3 语义 issue 被 LLM triage 判定为源文件自带（作者矛盾、笔误、代词混淆等）；(2) L2 structural `min_examples` 被判定为 `coverage_shortage`（原文素材不足，T2 source_patch 单次尝试后仍不足）。均带 chapter + line_range + verbatim quote 证据锚定；coverage_shortage 的 quote 由程序从阶段首章选取（0 token）。
 **位置**：
 - 角色级：`works/{work_id}/characters/{character_id}/canon/extraction_notes/{stage_id}.jsonl`
 - 世界级：`works/{work_id}/world/extraction_notes/{stage_id}.jsonl`

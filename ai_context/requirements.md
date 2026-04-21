@@ -150,20 +150,34 @@ reuses the last gate result when possible. Semantic LLM cost = 1 call
 per file in Phase A + at most (modified L3 files) × rounds gate calls,
 no extra call at Phase C when the gate ran.
 
-**Source-discrepancy triage** (`triage_enabled=True`): a lightweight LLM
-pass decides, at (a) pre-T3 and (b) post-L3-gate, whether residual L3
-issues are bugs in the source novel itself (author contradictions,
-typos, name/pronoun confusion, etc.) rather than extraction errors.
-Anti-cheat is program-enforced: every accepted verdict must cite
-chapter + line range + verbatim quote; the program verifies the quote
-is a literal chapter substring; a per-file accept cap
-(`accept_cap_per_file=3`) bounds acceptance. T2/T3 fixers can also
-self-report the same evidence in lieu of a fabricated fix, feeding the
-triager as priors. Accepted issues persist to
+**Source-discrepancy triage** (`triage_enabled=True`) covers two accept
+paths sharing one per-file cap (`accept_cap_per_file=5`):
+
+1. **L3 source_inherent (LLM)** — at (a) pre-T3 and (b) post-L3-gate,
+   a lightweight LLM pass decides whether residual L3 issues are bugs
+   in the source novel itself (author contradictions, typos,
+   name/pronoun confusion, etc.) rather than extraction errors.
+   Anti-cheat is program-enforced: every accepted verdict must cite
+   chapter + line range + verbatim quote; the program verifies the
+   quote is a literal chapter substring. T2/T3 fixers can also
+   self-report the same evidence in lieu of a fabricated fix, feeding
+   the triager as priors.
+2. **L2 coverage_shortage (program, 0 token)** — `min_examples` issues
+   are demoted to `severity=warning` + `coverage_shortage=True` flag
+   and routed `START_TIER=T2, MAX_TIER=T2` (skip T0/T1/T3). If one T2
+   source_patch still can't meet `importance_min_examples`, the
+   coordinator synthesises a `SourceNote` with
+   `discrepancy_type=coverage_shortage` — no LLM call, quote is a
+   program-selected chapter substring, cap shared with L3 triage.
+
+Accepted issues (both paths) persist to
 `{entity}/canon/extraction_notes/{stage_id}.jsonl`
 (`world/extraction_notes/` for world-level files); the stage remains
-COMMITTED with sidecar notes. A post-T3 scoped L0–L2 check aborts
-with `T3_CORRUPTED` if T3 broke shape — no triage in that path.
+COMMITTED with sidecar notes. Runtime does **not** consume these notes —
+they are audit-only; Phase 3.5 consistency checker treats a valid
+SourceNote as equivalent to meeting the `min_examples` threshold for
+the referenced `json_path`. A post-T3 scoped L0–L2 check aborts with
+`T3_CORRUPTED` if T3 broke shape — no triage in that path.
 
 Repair fail → stage ERROR; `--resume` resets ERROR → PENDING.
 

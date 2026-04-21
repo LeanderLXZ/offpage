@@ -268,21 +268,37 @@ or `codex` call, no shared session memory, file-based context.
        when the gate ran. Fallback: if Phase A had semantic issues
        but Phase B never modified an L3 file, Phase C runs L3 once.
      - **Source-discrepancy triage** (optional, `triage_enabled=True`):
-       lightweight LLM pass that decides whether residual L3 issues are
-       author bugs in the source novel (contradictions, typos, name
-       mixups, etc.) rather than extraction errors. Runs twice:
-       (1) pre-T3, to skip the expensive T3 regen when all residuals
-       are source-inherent; (2) post-L3-gate and pre-FAIL. Every
-       accepted verdict MUST cite chapter + line range + verbatim
-       quote; the program rejects any verdict whose quote is not a
-       literal substring of the chapter. A per-file accept cap
-       (`accept_cap_per_file=3`) prevents blanket rationalization.
-       T2/T3 fixers also have a self-report channel — they can return
-       the same evidence structure instead of fabricating a fix, which
-       the triager uses as a prior. Accepted issues persist as
-       `SourceNote` entries at `{entity}/canon/extraction_notes/
-       {stage_id}.jsonl` (world artifacts under `world/extraction_notes/`)
-       with SHA-256 anchoring for later staleness detection.
+       two accept_with_notes paths sharing one per-file cap
+       (`accept_cap_per_file=5`).
+       (a) **L3 `source_inherent` (LLM)** — lightweight batched pass
+       that decides whether residual L3 issues are author bugs in the
+       source novel (contradictions, typos, name mixups, etc.) rather
+       than extraction errors. Runs twice: pre-T3, to skip the
+       expensive T3 regen when all residuals are source-inherent; and
+       post-L3-gate pre-FAIL. Every accepted verdict MUST cite chapter
+       + line range + verbatim quote; the program rejects any verdict
+       whose quote is not a literal substring of the chapter. T2/T3
+       fixers also have a self-report channel — they can return the
+       same evidence structure instead of fabricating a fix, which the
+       triager uses as a prior.
+       (b) **L2 `coverage_shortage` (program, 0 token)** —
+       `min_examples` issues (not enough dialogue/action examples to
+       meet `importance_min_examples`: 主角≥5 / 重要配角≥3 / 其他≥1)
+       are demoted to `severity=warning` + `coverage_shortage=True`
+       and routed `START_TIER=T2, MAX_TIER=T2`. After one T2
+       source_patch attempt, any remaining coverage_shortage issues
+       are accepted via a program-synthesised `SourceNote`
+       (`discrepancy_type="coverage_shortage"`) — T0 can't invent
+       examples, T1 has no source, T3 file_regen can't add material
+       the novel lacks. The quote is a program-selected chapter
+       substring (still passes the literal-substring anchor check).
+       Accepted issues (both paths) persist as `SourceNote` entries at
+       `{entity}/canon/extraction_notes/{stage_id}.jsonl` (world
+       artifacts under `world/extraction_notes/`) with SHA-256
+       anchoring for later staleness detection. **Runtime does NOT
+       consume these notes** — they are audit-only; Phase 3.5
+       consistency checker treats a valid coverage_shortage SourceNote
+       as equivalent to meeting the min_examples threshold.
      - **T3 corruption hard-stop**: after any T3 run, a scoped L0–L2
        check on the regenerated files; if any L0–L2 error appears,
        the coordinator aborts Phase B with `T3_CORRUPTED` and does NOT

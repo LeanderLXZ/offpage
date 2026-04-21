@@ -124,27 +124,51 @@ constraints beyond what the architecture docs already say.
     last gate result when possible, so total semantic cost = 1 per file
     in Phase A + at most (modified L3 files) × rounds gate calls.
     Missing catalog / digest routes to PP rerun.
-25a. **Source-discrepancy triage** (`repair_agent` extension): some L3
-    issues are bugs in the source novel (author contradictions, typos,
-    name mixups, pronoun drift, etc.) that the extraction cannot
-    legitimately "fix" without editorializing. When `triage_enabled`,
-    a lightweight LLM pass runs at two points: (a) **pre-T3**, so an
-    author-bug stage can skip the 20-minute T3 regen entirely; (b)
-    **post-L3-gate**, as a final chance to accept residuals before the
-    stage fails. Only L3 `semantic` issues are eligible. Anti-cheat:
-    every accepted verdict MUST cite `chapter_number + line_range +
-    verbatim quote`, and the program rejects any quote that is not a
-    literal substring of the chapter text (SHA-256 anchored for later
-    staleness detection). A per-file accept cap (`accept_cap_per_file=3`)
-    prevents LLM rationalization at scale. T2 and T3 fixers also have
-    a self-report channel — they can return the same evidence structure
-    instead of fabricating a bad fix; the triager uses these as priors.
-    Accepted issues persist to `{entity}/canon/extraction_notes/
-    {stage_id}.jsonl` (`world/extraction_notes/` for world-level files);
-    stage remains `COMMITTED` with the sidecar notes as auditable
-    future-fixer hints. A post-T3 scoped L0–L2 check aborts Phase B
-    with `T3_CORRUPTED` when T3 breaks JSON/schema/structural shape
-    (mechanical corruption cannot be "source's fault" — no triage).
+25a. **Source-discrepancy triage** (`repair_agent` extension) covers
+    two accept paths that share one per-file cap
+    (`accept_cap_per_file=5`):
+
+    **Path A — L3 `source_inherent` (LLM):** some L3 issues are bugs
+    in the source novel (author contradictions, typos, name mixups,
+    pronoun drift, etc.) that the extraction cannot legitimately "fix"
+    without editorializing. When `triage_enabled`, a lightweight LLM
+    pass runs at two points: (a) **pre-T3**, so an author-bug stage
+    can skip the 20-minute T3 regen entirely; (b) **post-L3-gate**, as
+    a final chance to accept residuals before the stage fails.
+    Anti-cheat: every accepted verdict MUST cite `chapter_number +
+    line_range + verbatim quote`, and the program rejects any quote
+    that is not a literal substring of the chapter text (SHA-256
+    anchored for later staleness detection). T2 and T3 fixers also
+    have a self-report channel — they can return the same evidence
+    structure instead of fabricating a bad fix; the triager uses these
+    as priors.
+
+    **Path B — L2 `coverage_shortage` (program, 0 token):**
+    `min_examples` issues (not enough dialogue/action/event examples
+    to meet `importance_min_examples`) are demoted
+    `error → warning + coverage_shortage=True` and routed
+    `START_TIER=T2, MAX_TIER=T2` (skip T0/T1/T3). T0 can't invent
+    examples, T1 has no source access (would fabricate), T3 file-regen
+    doesn't make the novel longer — only T2 source_patch has a
+    legitimate chance. If one T2 try still can't meet the threshold,
+    the coordinator synthesises a `SourceNote` with
+    `discrepancy_type=coverage_shortage` — no LLM call, quote is a
+    program-selected chapter substring (still passes the literal
+    substring check). Solves the T3_CORRUPTED failure mode where the
+    repair agent spent 18 minutes + 16 attempts on an impossible goal
+    (2026-04-21 incident).
+
+    Accepted issues (both paths) persist to
+    `{entity}/canon/extraction_notes/{stage_id}.jsonl`
+    (`world/extraction_notes/` for world-level files); stage remains
+    `COMMITTED` with the sidecar notes as auditable future-fixer
+    hints. **Runtime does NOT consume these notes** — they are
+    audit-only; Phase 3.5 consistency checker treats a valid
+    SourceNote as equivalent to meeting the `min_examples` threshold
+    for the referenced `json_path`. A post-T3 scoped L0–L2 check
+    aborts Phase B with `T3_CORRUPTED` when T3 breaks JSON/schema/
+    structural shape (mechanical corruption cannot be "source's
+    fault" — no triage).
 26. Extraction runs on a dedicated git branch (`extraction/{work_id}`).
     Each passing stage committed. Rollback = `git reset` to last
     committed stage. After all stages complete, squash-merge to
