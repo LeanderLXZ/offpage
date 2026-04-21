@@ -90,6 +90,7 @@
           "typical_expressions": {
             "type": "array",
             "description": "这种情绪下的典型表达方式或句式。",
+            "maxItems": 15,
             "items": {
               "type": "string"
             }
@@ -136,6 +137,7 @@
           "typical_expressions": {
             "type": "array",
             "description": "面对这类对象时的典型表达方式。",
+            "maxItems": 15,
             "items": {
               "type": "string"
             }
