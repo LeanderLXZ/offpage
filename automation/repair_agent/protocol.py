@@ -63,7 +63,9 @@ class RepairConfig:
     run_semantic: bool = True
     l3_gate_enabled: bool = True
     triage_enabled: bool = True          # source-discrepancy triage on L3
-    accept_cap_per_file: int = 3         # max SourceNotes per file
+    accept_cap_per_file: int = 5         # max SourceNotes per file
+                                         # (shared by L3 source_inherent +
+                                         # L2 coverage_shortage)
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
 
 
@@ -81,6 +83,7 @@ DISCREPANCY_TYPES: tuple[str, ...] = (
     "world_rule_conflict",
     "death_state_conflict",
     "logic_jump",
+    "coverage_shortage",
     "other",
 )
 
@@ -108,7 +111,8 @@ class SourceNote:
     file: str                          # path of the extracted product
     json_path: str
     issue_fingerprint: str
-    issue_category: str                # always "semantic"
+    issue_category: str                # "semantic" (L3 source_inherent) or
+                                       # "structural" (L2 coverage_shortage)
     issue_rule: str
     issue_severity: str
     issue_message: str
@@ -171,6 +175,29 @@ START_TIER: dict[str, int] = {
     "structural": 0,
     "semantic": 1,
 }
+
+
+def is_coverage_shortage(issue: "Issue") -> bool:
+    """True when an issue is a `min_examples` shortage routable to the
+    coverage_shortage accept_with_notes fast path.
+
+    Such issues are demoted to `severity=warning` and carry a
+    `context.coverage_shortage=True` flag. They must:
+      * route `START_TIER=2, MAX_TIER=2` (skip T0/T1/T3) — T0 can't
+        invent examples, T1 has no source access, T3 file-regen won't
+        make the novel longer.
+      * after a failed T2 try, trigger a 0-token program-constructed
+        SourceNote (see ``triage.build_coverage_shortage_note``) instead
+        of a blocking error.
+    """
+    ctx = issue.context or {}
+    return bool(ctx.get("coverage_shortage"))
+
+
+# Coverage-shortage issues try T2 exactly once; they never escalate
+# to T3 (file regeneration can't add source material that isn't there).
+COVERAGE_SHORTAGE_START_TIER = 2
+COVERAGE_SHORTAGE_MAX_TIER = 2
 
 
 # ---------------------------------------------------------------------------
