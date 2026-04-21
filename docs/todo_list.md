@@ -63,6 +63,50 @@
 
 ## 下一步
 
+### [T-CODEX-STDIN] CodexBackend prompt 走 stdin 临时文件
+
+**动机**
+
+`ClaudeBackend` 已在
+`automation/persona_extraction/llm_backend.py::ClaudeBackend.run` 把 prompt
+改走唯一临时文件 + stdin，绕过 Linux `MAX_ARG_STRLEN ≈ 128 KiB` 的 argv
+上限。`CodexBackend.run` 仍用 `cmd = ["codex", "--quiet", "--full-auto",
+prompt]`（同文件 L378 附近），大 prompt（尤其 T3 全文件 regen）会在
+切到 `--backend codex` 时复现 `[Errno 7] Argument list too long`。
+
+当前已加注释标注风险，未改代码——本机未安装 codex CLI 无法实测其 stdin
+接口（是否自动读 stdin / 是否要 `-` / 是否要 `--prompt -`）。
+
+**改动清单**
+
+1. 在有 codex CLI 的机器上实跑 `echo 'hi' | codex --quiet --full-auto`、
+   `codex --quiet --full-auto -`、`codex --quiet --full-auto --prompt -`
+   三种形式，确认哪种会从 stdin 读 prompt
+2. `automation/persona_extraction/llm_backend.py::CodexBackend.run`（现
+   L373 起）复用 `_prompt_tempfile` + stdin 文件句柄的写法，移除 cmd
+   中的 positional prompt
+3. 删掉 `CodexBackend.run` 开头那段 "NOTE: codex CLI still receives the
+   prompt via argv ..." 注释
+4. 小 prompt smoke：`create_backend('codex', ...).run('ping')`
+
+**验证方法**
+
+- 构造一个 >150 KiB 的 prompt（拼若干章节原文），调用 `CodexBackend.run`
+  应成功，不出现 `Argument list too long`
+- 并发 5 lane 跑 codex，检查 `/tmp/persona_codex_*` 无残留文件
+
+**预估工作量**：20-30 行改动，半小时；主要耗时在验证 codex CLI 的 stdin
+契约
+
+**依赖**：有 codex CLI 的机器 / 订阅
+
+**完成标准**
+
+- `CodexBackend` 与 `ClaudeBackend` 在 prompt 传递机制上对称
+- `docs/logs/` 追一篇实操记录（哪种 stdin 形式生效）
+
+---
+
 ### [T-SCENE-CAP] Phase 4 单章 scene 数量上限
 
 **动机**
