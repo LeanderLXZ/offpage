@@ -140,6 +140,42 @@ def validate_baseline(
     schema_dir = schema_dir or (project_root / "schemas")
     work_dir = project_root / "works" / work_id
 
+    # Works manifest (written programmatically at end of Phase 2)
+    works_manifest_path = work_dir / "manifest.json"
+    if not works_manifest_path.exists():
+        issues.append(ValidationIssue(
+            "error", str(works_manifest_path),
+            "works manifest missing (should be written at Phase 2 end)"))
+    else:
+        try_repair_json_file(works_manifest_path)
+        wm_data = _load_json(works_manifest_path)
+        if wm_data is None:
+            issues.append(ValidationIssue(
+                "error", str(works_manifest_path), "Invalid JSON"))
+        else:
+            issues.extend(_validate_schema(
+                wm_data,
+                schema_dir / "work" / "works_manifest.schema.json",
+                str(works_manifest_path)))
+
+    # World manifest (written programmatically at end of Phase 2.5)
+    world_manifest_path = work_dir / "world" / "manifest.json"
+    if not world_manifest_path.exists():
+        issues.append(ValidationIssue(
+            "error", str(world_manifest_path),
+            "world manifest missing (should be written at Phase 2.5 end)"))
+    else:
+        try_repair_json_file(world_manifest_path)
+        wom_data = _load_json(world_manifest_path)
+        if wom_data is None:
+            issues.append(ValidationIssue(
+                "error", str(world_manifest_path), "Invalid JSON"))
+        else:
+            issues.extend(_validate_schema(
+                wom_data,
+                schema_dir / "world" / "world_manifest.schema.json",
+                str(world_manifest_path)))
+
     # World foundation
     foundation_path = work_dir / "world" / "foundation" / "foundation.json"
     if not foundation_path.exists():

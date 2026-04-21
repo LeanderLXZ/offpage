@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "work_id": "我和女帝的九世孽缘",
+  "title": "我和女帝的九世孽缘",
+  "language": "zh",
+  "source_types": ["epub"],
+  "ingestion_status": "normalized",
+  "paths": {
+    "raw_root": "raw",
+    "normalized_root": "normalized",
+    "chapter_root": "chapters",
+    "scene_root": "scenes",
+    "chunk_root": "chunks"
+  },
+  "created_at": "2026-04-01T16:14:37.045529-04:00",
+  "updated_at": "2026-04-20T21:31:30-04:00"
+}

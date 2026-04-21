@@ -41,6 +41,7 @@ from .lane_output import (
     expected_lane_names,
     verify_lane_output,
 )
+from .manifests import write_works_manifest, write_world_manifest
 from .llm_backend import LLMBackend, LLMResult, run_with_retry
 from .post_processing import run_stage_post_processing
 from .process_guard import PidLock, fmt_memory, get_rss_mb
@@ -915,6 +916,11 @@ class ExtractionOrchestrator:
             print("  Re-run with --resume to retry baseline production.")
             sys.exit(1)
 
+        # Write world manifest programmatically now that foundation exists.
+        world_manifest_path = write_world_manifest(
+            self.project_root, self.work_id)
+        print(f"  [OK] Wrote world manifest: {world_manifest_path}")
+
         # Phase 2.5 exit validation — catch schema/field errors early
         print("\n--- Phase 2.5 Validation ---")
         baseline_report = validate_baseline(
@@ -1003,6 +1009,11 @@ class ExtractionOrchestrator:
         pipeline.mark_done("phase_1")
         pipeline.mark_done("phase_2")
         pipeline.save(self.project_root)
+
+        # Write works manifest now that characters + stages are confirmed.
+        works_manifest_path = write_works_manifest(
+            self.project_root, self.work_id, selected)
+        print(f"  [OK] Wrote works manifest: {works_manifest_path}")
 
         phase3 = Phase3Progress(
             work_id=self.work_id,

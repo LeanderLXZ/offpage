@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/work/chapter_index.schema.json",
+  "title": "章节索引",
+  "type": "array",
+  "description": "source package 章节清单，按 sequence 升序排列，与 chapters/ 目录下的规范化文件一一对应。",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "sequence",
+      "chapter_id",
+      "title",
+      "normalized_path"
+    ],
+    "properties": {
+      "sequence": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "章节序号，从 1 起递增，全序列严格连续。"
+      },
+      "chapter_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "章节稳定标识，例如 chapter0001。后续 Phase 0/1/3/4 的交叉引用依赖此值。"
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "source_path": {
+        "type": "string",
+        "description": "原始文件相对路径（相对 source package 根）。"
+      },
+      "normalized_path": {
+        "type": "string",
+        "description": "规范化后纯文本章节文件的相对路径，例如 chapters/0001.txt。"
+      },
+      "paragraph_count": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "char_count": {
+        "type": "integer",
+        "minimum": 0
+      }
+    }
+  }
+}

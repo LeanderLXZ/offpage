@@ -26,11 +26,17 @@
 
 - 将原始小说放入 `sources/works/{work_id}/`
 - 归一化章节：`sources/works/{work_id}/normalized/`
-- 创建元数据：`sources/works/{work_id}/metadata/book_metadata.json`
-  和 `chapter_index.json`
-- 创建作品 manifest：`sources/works/{work_id}/manifest.json`
+- 创建元数据（三份均为 schema 硬门控）：
+  - `sources/works/{work_id}/manifest.json`
+    （schema：`schemas/work/work_manifest.schema.json`）
+  - `sources/works/{work_id}/metadata/book_metadata.json`
+    （schema：`schemas/work/book_metadata.schema.json`）
+  - `sources/works/{work_id}/metadata/chapter_index.json`
+    （schema：`schemas/work/chapter_index.schema.json`）
+- 交付前 gate：运行 `python -m automation.ingestion.validator <work_id>`，
+  任一文件不过 schema 必须回修，才可进入 Phase 0。
 
-**对应提示词**：无（手动或脚本）
+**对应提示词**：`prompts/ingestion/原始资料规范化.md`
 
 ### 2. 章节归纳（Phase 0）
 
@@ -67,15 +73,20 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 ### 4. 活跃角色确认（Phase 2）
 
 - **用户参与**：用户从候选中选择要建包的目标角色
-- 确认后进入 baseline 产出和 1+2N 分层提取模式
+- 确认完成后 orchestrator 程序化写出
+  `works/{work_id}/manifest.json`（schema：
+  `schemas/work/works_manifest.schema.json`；写入器：
+  `automation.persona_extraction.manifests.write_works_manifest`）
+- 进入 baseline 产出和 1+2N 分层提取模式
 
 ### 5. Baseline 产出（Phase 2.5）
 
 基于全书摘要上下文和确认的角色，产出：
 
 - `world/foundation/foundation.json` — 世界基础设定初稿
+- `world/foundation/fixed_relationships.json` — 世界级固定关系骨架
 - `characters/{character_id}/canon/identity.json` — 角色身份初稿
-- `characters/{character_id}/manifest.json` — 角色 manifest
+- `characters/{character_id}/manifest.json` — 角色包 manifest
 - `characters/{character_id}/canon/voice_rules.json` — 基线语言风格骨架
 - `characters/{character_id}/canon/behavior_rules.json` — 基线行为模式骨架
 - `characters/{character_id}/canon/boundaries.json` — 角色底线禁忌骨架
@@ -84,8 +95,14 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 这些 baseline 记录**跨阶段稳定的角色基底**，作为后续 stage 的修正与补充
 锚点。阶段性变化由 stage_snapshot 覆盖。
 
+Phase 2.5 baseline 完成后，orchestrator 程序化写出
+`works/{work_id}/world/manifest.json`（schema：
+`schemas/world/world_manifest.schema.json`；写入器：
+`automation.persona_extraction.manifests.write_world_manifest`）。
+
 **出口验证**：Phase 2.5 完成后运行 `validate_baseline()`，校验所有
-baseline 文件的 schema 合规性。identity/manifest/foundation 为必须
+baseline 文件的 schema 合规性。works manifest / world manifest /
+identity / 角色 manifest / foundation / fixed_relationships 为必须
 （error），voice_rules/behavior_rules/boundaries/failure_modes 为建议
 （warning）。验证失败阻断 Phase 3。
 
