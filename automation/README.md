@@ -23,7 +23,7 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 
 每个 stage 的流程：
 
-1. Git preflight check（工作区干净、分支正确）
+1. Git preflight check（工作区干净、分支 = `extraction/{work_id}`）
 2. **智能跳过**：若产物已在磁盘（world + 各角色 snapshot），直接跳到 3
 3. 构建 prompt → 运行 1+2N 提取 agent（1 world + N char_snapshot + N char_support，全并行无先后依赖）
 4. **程序化后处理**：生成 memory_digest + 生成 world_event_digest + 更新 stage_catalog
@@ -170,6 +170,30 @@ works/{work_id}/analysis/.extraction.lock
 - 子进程 PID
 - 子进程和编排器的内存占用（RSS）
 - 分步耗时预估（从第 2 个 stage 开始）
+
+## 分支纪律
+
+代码 / schema / prompt / docs / `ai_context/` 的修改一律在 `master` 提交，
+然后从 extraction 分支 `git merge master` 同步；提取数据（baseline +
+Phase 3+ 产物）只在 `extraction/{work_id}` 上 commit。详见
+`ai_context/architecture.md §Git Branch Model`。
+
+orchestrator 自动落实这条纪律：
+
+- **进入**：`run_extraction_loop` / `run_full` 开头调 `create_extraction_branch`
+  切到（或新建）`extraction/{work_id}`。
+- **退出**：建分支 + baseline rerun + Phase 3 循环整体包在
+  `try / finally: checkout_master(...)` 内，任何退出路径（DONE / BLOCKED /
+  `--end-stage` / Ctrl+C / 异常 / `sys.exit`）工作树都回到 `master`。
+- **Dirty guard**：`checkout_master` 在切换前检查工作树是否 clean；
+  非 clean 时拒绝切换并记 warning，防止未跟踪的半 stage 产物跟到 `master`。
+  用户需手工处理残留后再 `git checkout master`。
+- **异常检测**：SessionStart Claude Code hook
+  （`.claude/hooks/session_branch_check.sh`）在每次新会话启动时检测
+  "非 master 分支 + 无 orchestrator 进程" 的异常组合并提示。
+- **squash-merge**：全部 stage COMMITTED 后，`_offer_squash_merge` 交互式
+  询问是否 squash-merge 到 `master`（`[git].auto_squash_merge=true` 时
+  自动执行）。
 
 ## 目录结构
 
