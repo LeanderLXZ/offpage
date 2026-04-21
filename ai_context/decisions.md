@@ -127,6 +127,19 @@ constraints beyond what the architecture docs already say.
 26. Extraction runs on a dedicated git branch. Each passing stage
     committed. Rollback = `git reset` to last committed stage. After
     all stages complete, squash-merge to main.
+26a. **Branch discipline enforced via orchestrator finally-checkout +
+    SessionStart hook, not PreToolUse commit/push wrapper**:
+    `run_extraction_loop` / `run_full` wrap extraction in
+    `try / finally: checkout_master(...)`, so normal completion,
+    `[BLOCKED]`, `--end-stage` stop, interrupt, and exception all exit
+    to `master`. A SessionStart Claude Code hook
+    (`.claude/hooks/session_branch_check.sh`) catches the remaining
+    case — an orchestrator that died without cleanup — by warning on
+    new sessions when the branch is not `master` yet no orchestrator
+    process exists. No PreToolUse `git commit` wrapper: the two
+    mechanisms above already cover realistic failure modes; per-commit
+    shell overhead and false positives on legitimate mixed edits are
+    not worth their marginal value.
 27. Orchestrator pre-computes the read list per call (world /
     character). Only the most recent snapshot + memory_timeline
     included. Agents do not explore freely.
