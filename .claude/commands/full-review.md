@@ -1,4 +1,4 @@
-# /check — 全仓库对齐审计
+# /full-review — 全仓库对齐审计
 
 对整个 `persona-engine` 仓库做一次"规范对齐 + 实现风险"的全量 review。`$ARGUMENTS` 存在则作为本轮重点或额外关注点。
 
@@ -106,4 +106,4 @@ docs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
 
 ---
 
-**镜像约束**：本文件和 `.agents/skills/check/SKILL.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。`.agents/skills/check/SKILL.md` 额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /check` 起往下）与本文件**逐字一致**。
+**镜像约束**：本文件和 `.agents/skills/full-review/SKILL.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。`.agents/skills/full-review/SKILL.md` 额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /full-review` 起往下）与本文件**逐字一致**。
