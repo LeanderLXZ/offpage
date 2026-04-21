@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/user/pinned_memory_entry.schema.json",
+  "title": "钉选记忆条目",
+  "description": "长期关系层被用户明确保留 / 提升的记忆条目。持久化形式为 append-only JSONL：users/{user_id}/relationship_core/pinned_memories.jsonl。仅在会话关闭并确认合并时追加写入；启动时随 relationship_core/manifest.json 一同加载。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "memory_id",
+    "summary"
+  ],
+  "properties": {
+    "memory_id": {
+      "type": "string",
+      "description": "关联的原始记忆 ID（例：memory_timeline 条目的 M-S###-##，或 context 级 shared memory 标识）。"
+    },
+    "summary": {
+      "type": "string",
+      "description": "钉选时沉淀的精简摘要，供启动层快速感知；不限长度但建议保持一句话级别。"
+    },
+    "source_context_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "被提升出来的源 context 标识列表；用于回溯原始对话分支。"
+    },
+    "importance": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "重要度（1–5）。用于 runtime 选择性加载 / 展示。"
+    },
+    "permanence_reason": {
+      "type": "string",
+      "description": "被钉选为长期记忆的原因（例：承载关系里程碑、引发长期态度变化等）。"
+    },
+    "pinned_at": {
+      "type": "string",
+      "description": "钉选时间（ISO 8601）。"
+    }
+  }
+}

@@ -1262,7 +1262,7 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 │  │  pending → extracting → extracted →               │            │
 │  │              │            │                       │            │
 │  │              └→ error     ├→ post_processing →    │            │
-│  │                           │     repairing         │            │
+│  │                           │     reviewing         │            │
 │  │                           │       │               │            │
 │  │                           │   ┌→ passed → committed          │
 │  │                           │   │                   │            │

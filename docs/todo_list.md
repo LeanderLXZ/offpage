@@ -237,48 +237,6 @@ README.md，零 Python。
 
 ---
 
-### [T-USER-DATA-FORMAT] users/ 数据格式统一（manifest inline vs. sidecar .jsonl）
-
-**上下文**
-
-2026-04-20 codex audit (finding M4) 指出同一份用户数据在三处叙述分裂：
-
-- Schema + 模板（inline manifest 数组派）：
-  [schemas/user/relationship_core.schema.json:66-97](schemas/user/relationship_core.schema.json#L66-L97)、
-  [users/_template/relationship_core/manifest.json](users/_template/relationship_core/manifest.json)
-- 独立 `.jsonl` 派：
-  [users/README.md:46-48](users/README.md#L46-L48)、
-  [simulation/flows/startup_load.md:33-35](simulation/flows/startup_load.md#L33-L35)、
-  [simulation/retrieval/load_strategy.md:86-90](simulation/retrieval/load_strategy.md#L86-L90)
-- 旧 `.json` 派：
-  [docs/architecture/data_model.md:333-336, 373-383, 396-403, 414-421](docs/architecture/data_model.md#L325-L425)
-
-涉及字段：`relationship_core.pinned_memories`、`turn_summaries`、
-`memory_updates`、`transcript`、`archive.../key_moments`。
-
-**待决策项**
-
-1. `relationship_core.pinned_memories`：inline manifest 数组 vs. sidecar
-   `pinned_memories.jsonl`？
-2. `turn_summaries` / `memory_updates` / `transcript` / `key_moments` 统一
-   `.jsonl` 还是沿用 data_model.md 的 `.json`？（倾向 `.jsonl`——append-first
-   + turn journal 语义匹配）
-3. 若选 sidecar：`pinned_memories.jsonl` 需要新建 per-line schema
-   （[schemas/user/](schemas/user/) 下 `relationship_pinned_memory.schema.json`）。
-
-**未落地原因**
-
-- simulation 运行时尚未动工，没有实际消费代码，决策可暂缓
-- 现阶段只有文档分叉，没有生产数据绑定——改早改晚代价相近
-
-**暂不做的事**
-
-- 不改 schema / 模板 / 文档，等 simulation 端设计落定后一次对齐
-
-**依赖**：simulation runtime loader 选型 / 设计定稿
-
----
-
 ### [T-USER-AUX-SCHEMAS] users/ 辅助文件缺 schema
 
 **上下文**
@@ -288,23 +246,22 @@ README.md，零 Python。
 
 - `users/_template/contexts/{context_id}/session_index.json`
 - `users/_template/conversation_library/archive_refs.json`
-- 若 T-USER-DATA-FORMAT 选 sidecar 派，新增的
-  `pinned_memories.jsonl`（per-line）
 
 **待决策项**
 
 1. 每个辅助文件是否都要独立 schema，还是由总目录层级 schema 一并约束？
-2. schema 发布顺序：配合 T-USER-DATA-FORMAT 一起发，还是独立先行？
+2. schema 发布顺序：立即补齐，还是与 simulation runtime loader 设计
+   同步发布？
 
 **未落地原因**
 
-- 阻塞于 T-USER-DATA-FORMAT 的格式决策——先定 `.json` 还是 `.jsonl`
-  才能写 schema，否则可能白写一份又删
+- simulation 运行时尚未动工，实际消费路径未定；现阶段只有模板占位，
+  字段边界可能随 loader 设计调整
 
 **暂不做的事**
 
-- 不提前补 schema，避免与最终格式决策冲突
+- 不提前补 schema，避免与后续 loader 字段收敛方案冲突
 
-**依赖**：T-USER-DATA-FORMAT 定案
+**依赖**：simulation runtime loader 选型 / 设计定稿
 
 ---
