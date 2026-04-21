@@ -419,17 +419,29 @@ orchestrator (Python)
   安全阀：回归保护（introduced ≥ resolved → 停机）、收敛检测（持续集不变 → 升级）、
   **L3 gate 反复**（连续两轮 gate 返回相同 blocking 集合 → 语义层不收敛 → 出 Phase C 报错）、
   总轮次限制（默认 5 轮）
-- **源文件问题 triage**（`triage_enabled`）：某些 L3 残留不是提取错误，而是源小说本身的 bug
-  （作者逻辑矛盾、typo、角色名/代称混用、世界规则冲突等）。在两个点做一次轻量级 LLM 判定：
-  （1）**pre-T3**——若残留全是源文件自带问题，跳过 20 分钟的 T3 全文件重生成；
-  （2）**post-L3-gate**——T3 跑完后的最后一次"接受与否"机会。反作弊完全程序化：
-  每条接受判定必须引用 `chapter_number + line_range + 逐字 quote`，程序用
-  `chapter_text.find(quote) >= 0` 校验；每文件接受上限 `accept_cap_per_file=3`；
-  issue 必须是 L3 `semantic`（L0–L2 机械错误一律拒绝）。T2/T3 修复器自带 "source_inherent"
-  自报通道，可直接把证据交给 triager 做 prior。被接受的 issue 写入
-  `{entity}/canon/extraction_notes/{stage_id}.jsonl`（世界级产物写到 `world/extraction_notes/`），
-  附带 SHA-256 锚定以便将来原章节改动时自动标记 stale。stage 仍标记 COMMITTED，
-  sidecar notes 作为审计痕迹和未来 fixer 的线索。
+- **源文件问题 triage**（`triage_enabled`）：两条 accept_with_notes 通道，
+  共用单文件上限 `accept_cap_per_file=5`。
+  （A）**L3 `source_inherent`（LLM）**——某些 L3 残留不是提取错误，而是源小说
+  本身的 bug（作者逻辑矛盾、typo、角色名/代称混用、世界规则冲突等）。在两个点
+  做一次轻量级 LLM 判定：(1) pre-T3——若残留全是源文件自带问题，跳过 20 分钟
+  的 T3 全文件重生成；(2) post-L3-gate——T3 跑完后的最后一次"接受与否"机会。
+  反作弊完全程序化：每条接受判定必须引用 `chapter_number + line_range + 逐字
+  quote`，程序用 `chapter_text.find(quote) >= 0` 校验；T2/T3 修复器自带
+  "source_inherent" 自报通道，可直接把证据交给 triager 做 prior。
+  （B）**L2 `coverage_shortage`（程序，0 token）**——L2 `min_examples` 规则
+  判定字段条数不足 `importance_min_examples`（主角≥5 / 重要配角≥3 / 其他≥1）
+  时，issue 降级为 `severity=warning + coverage_shortage=True`，路由
+  `START_TIER=T2, MAX_TIER=T2`（跳过 T0/T1/T3）。T2 单次 source_patch 后仍不足
+  → coordinator 程序构造 `SourceNote`（`discrepancy_type="coverage_shortage"`）
+  直接收录，0 LLM 调用。原文素材不够就是不够——T0 无法凭空造例、T1 无原文易
+  胡编、T3 整文件重写也无法让原文变长。quote 由程序选取该阶段首章的一段
+  子串，仍走同一 `chapter_text.find(quote) >= 0` 校验。
+  两条通道被接受的 issue 都写入 `{entity}/canon/extraction_notes/{stage_id}.jsonl`
+  （世界级产物写到 `world/extraction_notes/`），附带 SHA-256 锚定以便将来原
+  章节改动时自动标记 stale。stage 仍标记 COMMITTED，sidecar notes 作为审计
+  痕迹和未来 fixer 的线索；**runtime 不消费这些 notes**（仅审计）。Phase 3.5
+  一致性检查遇到 min_examples 不足时，若有匹配 json_path 的 coverage_shortage
+  SourceNote 则视为已达标、不报 warning。
 - **T3_CORRUPTED 硬停**：T3 跑完后立即对被重写文件做一次 scoped L0–L2 检查；
   一旦发现任何 L0–L2 错误（JSON 语法/schema/结构被破坏），Phase B 直接以
   `T3_CORRUPTED` 中止并 FAIL，**不走 triage**——机械损坏不可能是"源文件的错"。

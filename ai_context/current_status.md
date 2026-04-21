@@ -51,10 +51,14 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
   re-checks modified semantic-flagged files mid-loop (closes the
   window where T3 could claim a false fix). T3 globally capped at 1
   per file (`t3_max_per_file`). Source-discrepancy triage
-  (`triage_enabled`, pre-T3 + post-gate) can accept L3 issues as
-  source-inherent (author bugs) with verbatim-quote evidence,
-  persisting them to `{entity}/canon/extraction_notes/{stage}.jsonl`;
-  per-file accept cap defaults to 3. Post-T3 scoped L0–L2 check aborts
+  (`triage_enabled`) has two accept_with_notes paths sharing one
+  per-file cap (default 5): (a) L3 `source_inherent` (LLM, pre-T3 +
+  post-gate) accepts author-bug residuals with verbatim-quote
+  evidence; (b) L2 `coverage_shortage` (program, 0 token) accepts
+  `min_examples` shortages after one T2 source_patch attempt fails,
+  via a program-synthesised SourceNote. Both persist to
+  `{entity}/canon/extraction_notes/{stage}.jsonl`; runtime does not
+  consume them (audit-only). Post-T3 scoped L0–L2 check aborts
   with `T3_CORRUPTED` if T3 broke the file. Repair fail → stage
   ERROR; `--resume` resets to PENDING.
 - Three-level JSON repair (L1 regex → L2 LLM 600s → L3 full re-run)

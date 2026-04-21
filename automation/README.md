@@ -297,22 +297,34 @@ Phase 3 的文件校验和修复由独立的 `repair_agent` 模块负责。
 （有 gate 复用时）。
 
 **源文件问题 triage**（`triage_enabled=True`，默认开启）：某些 L3 残留其实是
-源小说本身的 bug（作者矛盾、typo、名称/代称混用、世界规则冲突等）。在两个
-触发点做轻量级 LLM 判定：
+源小说本身的 bug（作者矛盾、typo、名称/代称混用、世界规则冲突等），或者
+L2 结构层发现字段条数不足且原文确实素材不够。两条 accept_with_notes 通道共用
+单文件上限 `accept_cap_per_file=5`。
+
+**Path A — L3 `source_inherent`（LLM）触发点**：
 - **pre-T3**：若 `_run_fixer_with_escalation` 即将升级到 T3，先做一次 triage；
   全部接受则跳过 20 分钟的 T3
 - **post-L3-gate**：每轮 L3 gate 出结果后，对 gate_blocking 再过一次 triage
 
-接受的硬条件（程序校验，非 LLM 自述）：(1) issue 必须是 `semantic`；
-(2) 引用 `chapter_number + line_range + 逐字 quote`，程序用
-`chapter_text.find(quote) >= 0` 校验；(3) 每文件接受上限 `accept_cap_per_file=3`；
-(4) `discrepancy_type` 必须是闭集中之一（author_contradiction / typo /
+**Path B — L2 `coverage_shortage`（程序，0 token）触发点**：
+L2 `min_examples` 规则把 issue 降级为 `severity=warning + coverage_shortage=True`
+并路由 `START_TIER=T2, MAX_TIER=T2`（跳过 T0/T1/T3）。T2 一次 source_patch
+不足以补齐 → coordinator 调用 `Triager.build_coverage_shortage_verdict` 以
+程序方式构造 `SourceNote`（`discrepancy_type="coverage_shortage"`），quote
+取自该 stage 首章子串，0 LLM 调用。
+
+接受的硬条件（程序校验，非 LLM 自述）：(1) issue 必须是 `semantic`（Path A）
+或 `structural` + `coverage_shortage` flag（Path B）；(2) 引用 `chapter_number
++ line_range + 逐字 quote`，程序用 `chapter_text.find(quote) >= 0` 校验；
+(3) 每文件接受上限 `accept_cap_per_file=5`（两条通道共用）；(4)
+`discrepancy_type` 必须是闭集中之一（author_contradiction / typo /
 name_mixup / pronoun_confusion / title_drift / time_shift / space_conflict
-/ duplicated_passage / world_rule_conflict / death_state_conflict / logic_jump /
-other）。T2/T3 fixer prompts 带有 `source_inherent` 自报通道，可直接把证据
-交给 triager 做 prior。接受的 issue 以 `SourceNote` 形式原子追加到
-`{entity}/canon/extraction_notes/{stage_id}.jsonl`，note_id 格式
-`SN-S{stage:03d}-{seq:02d}`；stage 保持 COMMITTED，不新增状态。
+/ duplicated_passage / world_rule_conflict / death_state_conflict / logic_jump
+/ coverage_shortage / other）。T2/T3 fixer prompts 带有 `source_inherent`
+自报通道，可直接把证据交给 Path A triager 做 prior。接受的 issue 以
+`SourceNote` 形式原子追加到 `{entity}/canon/extraction_notes/{stage_id}.jsonl`，
+note_id 格式 `SN-S{stage:03d}-{seq:02d}`；stage 保持 COMMITTED，不新增状态。
+**Runtime 不消费 extraction_notes/，仅审计。**
 
 **T3_CORRUPTED 硬停**：T3 跑完后立即对被重写文件做 scoped L0–L2 检查；
 发现任何 L0–L2 错误即中止 Phase B 并 FAIL，**不走 triage**——机械损坏
