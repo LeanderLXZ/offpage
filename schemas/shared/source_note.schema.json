@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/shared/source_note.schema.json",
   "title": "源文件自带问题记录（accept_with_notes）",
-  "description": "repair agent triage 阶段判定为源文件自带的 L3 语义 issue 的记录。存储在 {entity}/canon/extraction_notes/{stage_id}.jsonl，每行一个对象。stage 视为通过，但保留可审计信息供未来 fixer 使用。",
+  "description": "repair agent triage 阶段写出的 accept_with_notes 记录。两个来源：(1) L3 语义 issue 被 LLM triage 判定为源文件自带；(2) L2 structural 下的 min_examples 被判定为 coverage_shortage（原文素材不足以达到 importance_min_examples 下限，T2 单次尝试未能补齐）。存储在 {entity}/canon/extraction_notes/{stage_id}.jsonl，每行一个对象。stage 视为通过，但保留可审计信息供未来 fixer 使用。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -47,8 +47,8 @@
     },
     "issue_category": {
       "type": "string",
-      "enum": ["semantic"],
-      "description": "只有 semantic 类 issue 可以 accept_with_notes；其他层的 issue 不允许走本通道。"
+      "enum": ["semantic", "structural"],
+      "description": "可走 accept_with_notes 的 issue 类别：semantic（L3 源文件自带）或 structural（L2 coverage_shortage，即 min_examples 不足）。其他层不允许走本通道。"
     },
     "issue_rule": {
       "type": "string"
@@ -75,9 +75,10 @@
         "world_rule_conflict",
         "death_state_conflict",
         "logic_jump",
+        "coverage_shortage",
         "other"
       ],
-      "description": "源文件问题的分类。详见 docs/requirements.md §11.4.7。"
+      "description": "源文件问题的分类。coverage_shortage 专用于 L2 min_examples 不足、原文素材真不够的场景（程序化触发，0 token）。其余类型对应 L3 源文件矛盾/错字/逻辑跳跃等，由 LLM triage 判定。详见 docs/requirements.md §11.4.7。"
     },
     "source_evidence": {
       "type": "object",
