@@ -10,7 +10,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 | `schemas/work/` | 作品入库、目录、阶段目录 | 5 |
 | `schemas/world/` | 世界层快照、事件、固定关系、目录页 | 5 |
 | `schemas/character/` | 角色 baseline + 阶段快照 + 记忆 | 9 |
-| `schemas/user/` | 用户根画像、绑定、长期档案、关系核心 | 4 |
+| `schemas/user/` | 用户根画像、绑定、长期档案、关系核心、钉选记忆条目 | 5 |
 | `schemas/runtime/` | Context / Session / 请求载荷 | 4 |
 | `schemas/shared/` | 跨域共享（extraction_notes 等） | 1 |
 
@@ -298,9 +298,25 @@ core_wounds 记录最底层的创伤根源。
 
 ### user/relationship_core.schema.json
 
-**用途**：长期关系核心（钉选记忆、关系状态）。
+**用途**：长期关系核心 manifest（关系状态、关系演变引用、互相约定、
+个性化语气 / 行为迁移等单对象摘要）。钉选记忆作为独立 append-only
+流记录在 sidecar JSONL 中，见下一条 schema。
 **位置**：`users/{user_id}/relationship_core/manifest.json`
 **更新时机**：仅在会话关闭并确认合并后。
+
+---
+
+### user/pinned_memory_entry.schema.json
+
+**用途**：长期关系层被用户明确保留 / 提升的钉选记忆条目。
+**位置**：`users/{user_id}/relationship_core/pinned_memories.jsonl`
+**格式**：JSONL，每行一条钉选记忆；append-only。
+**运行时**：随 `relationship_core/manifest.json` 一同在启动阶段加载
+（按 `simulation/flows/startup_load.md` 与
+`simulation/retrieval/load_strategy.md`）。
+**关键字段**：memory_id, summary, source_context_ids?, importance?,
+permanence_reason?, pinned_at?
+**更新时机**：仅在会话关闭并确认合并后追加写入，不覆盖不删除。
 
 ---
 

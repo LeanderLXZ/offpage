@@ -63,39 +63,6 @@
       },
       "uniqueItems": true
     },
-    "pinned_memories": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "memory_id",
-          "summary"
-        ],
-        "properties": {
-          "memory_id": {
-            "type": "string"
-          },
-          "summary": {
-            "type": "string"
-          },
-          "source_context_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "importance": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 5
-          },
-          "permanence_reason": {
-            "type": "string"
-          }
-        }
-      }
-    },
     "event_refs": {
       "type": "array",
       "description": "被提升为长期关系历史的事件引用。推荐采用只增不删的追加写入策略。",
