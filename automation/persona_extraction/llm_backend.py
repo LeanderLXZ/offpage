@@ -8,12 +8,14 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from .config import get_config
 from .process_guard import fmt_memory, get_rss_mb
@@ -31,6 +33,33 @@ def _fmt_elapsed(seconds: float) -> str:
         return f"{m}m{s:02d}s"
     h, m = divmod(m, 60)
     return f"{h}h{m:02d}m{s:02d}s"
+
+
+@contextmanager
+def _prompt_tempfile(prompt: str, *, backend_tag: str,
+                     lane_name: str | None = None) -> Iterator[Path]:
+    """Write ``prompt`` to a unique tempfile and yield its path.
+
+    Avoids Linux ARG_MAX (~128 KiB per argv entry, MAX_ARG_STRLEN) by
+    routing long prompts via a file handle instead of the command line.
+    ``tempfile.mkstemp`` generates a process- / thread-unique path
+    atomically, so concurrent lanes never collide. The file is deleted
+    in ``finally`` even on timeout / exception.
+    """
+    safe_lane = "".join(c if c.isalnum() or c in "_-" else "_"
+                        for c in (lane_name or "nolane"))[:40]
+    prefix = f"persona_{backend_tag}_{os.getpid()}_{safe_lane}_"
+    fd, path_str = tempfile.mkstemp(prefix=prefix, suffix=".txt")
+    path = Path(path_str)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(prompt)
+        yield path
+    finally:
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
 
 def _find_claude_binary() -> str:
@@ -181,8 +210,11 @@ class ClaudeBackend(LLMBackend):
         tools = allowed_tools or CLAUDE_DEFAULT_TOOLS
         lane_tag = f"[{lane_name}]" if lane_name else "[lane]"
 
+        # Prompt is fed via stdin from a unique tempfile to bypass Linux
+        # ARG_MAX (~128 KiB per argv entry). T3 repair prompts carry full
+        # chapter text and routinely exceed that limit.
         cmd: list[str] = [
-            self._claude_bin, "-p", prompt,
+            self._claude_bin, "-p",
             "--output-format", "json",
             "--max-turns", str(self.max_turns),
             "--dangerously-skip-permissions",
@@ -199,44 +231,50 @@ class ClaudeBackend(LLMBackend):
         logger.debug("Prompt length: %d chars", len(prompt))
 
         start = time.monotonic()
-        proc = subprocess.Popen(
-            cmd, cwd=self.project_root,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-
-        print(f"    PID {proc.pid} started {lane_tag}")
-
-        # Heartbeat thread — prints elapsed + memory every 30s
-        stop_event = threading.Event()
-        orch_pid = os.getpid()
-
-        def heartbeat() -> None:
-            while not stop_event.wait(get_config().runtime.heartbeat_interval_s):
-                elapsed = time.monotonic() - start
-                child_mem = fmt_memory(get_rss_mb(proc.pid))
-                orch_mem = fmt_memory(get_rss_mb(orch_pid))
-                print(f"    ... running [{_fmt_elapsed(elapsed)}]"
-                      f"  PID {proc.pid} {lane_tag}"
-                      f"  Mem: claude={child_mem} orch={orch_mem}")
-
-        hb = threading.Thread(target=heartbeat, daemon=True)
-        hb.start()
-
         stdout = ""
         stderr = ""
         timed_out = False
-        try:
-            stdout, stderr = proc.communicate(timeout=timeout_seconds)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        proc: subprocess.Popen[str] | None = None
+        with _prompt_tempfile(prompt, backend_tag="claude",
+                              lane_name=lane_name) as prompt_path:
+            with open(prompt_path, "r", encoding="utf-8") as prompt_fh:
+                proc = subprocess.Popen(
+                    cmd, cwd=self.project_root,
+                    stdin=prompt_fh,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                )
+
+            print(f"    PID {proc.pid} started {lane_tag}")
+
+            # Heartbeat thread — prints elapsed + memory every 30s
+            stop_event = threading.Event()
+            orch_pid = os.getpid()
+
+            def heartbeat() -> None:
+                while not stop_event.wait(
+                        get_config().runtime.heartbeat_interval_s):
+                    elapsed = time.monotonic() - start
+                    child_mem = fmt_memory(get_rss_mb(proc.pid))
+                    orch_mem = fmt_memory(get_rss_mb(orch_pid))
+                    print(f"    ... running [{_fmt_elapsed(elapsed)}]"
+                          f"  PID {proc.pid} {lane_tag}"
+                          f"  Mem: claude={child_mem} orch={orch_mem}")
+
+            hb = threading.Thread(target=heartbeat, daemon=True)
+            hb.start()
+
             try:
-                stdout, stderr = proc.communicate()
-            except Exception:  # noqa: BLE001
-                stdout, stderr = stdout or "", stderr or ""
-            timed_out = True
-        finally:
-            stop_event.set()
-            hb.join(timeout=2)
+                stdout, stderr = proc.communicate(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                try:
+                    stdout, stderr = proc.communicate()
+                except Exception:  # noqa: BLE001
+                    stdout, stderr = stdout or "", stderr or ""
+                timed_out = True
+            finally:
+                stop_event.set()
+                hb.join(timeout=2)
 
         duration = time.monotonic() - start
         print(f"    PID {proc.pid} finished {lane_tag} "
@@ -335,6 +373,10 @@ class CodexBackend(LLMBackend):
     def run(self, prompt: str, *, allowed_tools: list[str] | None = None,
             timeout_seconds: int = 600,
             lane_name: str | None = None) -> LLMResult:
+        # NOTE: codex CLI still receives the prompt via argv (not stdin).
+        # Large prompts (> ~128 KiB) will fail with ARG_MAX; switch this to
+        # the stdin+tempfile pattern used in ClaudeBackend once the codex
+        # CLI's stdin interface is verified on the target machine.
         cmd: list[str] = ["codex", "--quiet", "--full-auto", prompt]
         if self.model:
             cmd.extend(["--model", self.model])
