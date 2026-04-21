@@ -130,6 +130,16 @@ constraints beyond what the architecture docs already say.
 27. Orchestrator pre-computes the read list per call (world /
     character). Only the most recent snapshot + memory_timeline
     included. Agents do not explore freely.
+27a. Manifests are split by writer: `sources/works/{work_id}/manifest.json`
+    hand-written at ingestion (validator-gated via
+    `python -m automation.ingestion.validator`);
+    `works/{work_id}/manifest.json` programmatically written at Phase 2
+    end (after user confirms characters + stages);
+    `works/{work_id}/world/manifest.json` programmatically written at
+    Phase 2.5 end. Character `manifest.json` is produced by the
+    baseline prompt. No manifest carries `build_status` — live phase
+    state is in `analysis/progress/` only. Baseline validator gates on
+    presence of both programmatic manifests.
 
 ## Memory System
 
