@@ -129,14 +129,26 @@ def checkout_master(project_root: Path) -> bool:
     """Return working tree to ``master``. Idempotent and non-destructive.
 
     Returns ``True`` when the tree is on ``master`` after the call (either
-    already there or switched successfully). Returns ``False`` only when
-    the switch fails — e.g. uncommitted changes that conflict with
-    ``master``. Callers treat this as best-effort cleanup and should not
-    raise on failure.
+    already there or switched successfully). Returns ``False`` when the
+    switch is skipped (dirty tree) or the underlying ``git checkout``
+    fails. Callers treat this as best-effort cleanup and should not raise
+    on failure.
+
+    A dirty working tree is refused: untracked / modified files could
+    leak onto ``master`` when switching from an extraction branch (e.g.
+    SIGINT mid-stage leaves ``works/.../阶段XX_*.json`` untracked). When
+    dirty, we log + stay on the current branch so the user can inspect
+    and clean up manually before re-trying.
     """
     gs = git_status(project_root)
     if gs.branch == "master":
         return True
+    if not gs.clean:
+        logger.warning(
+            "Working tree dirty on '%s' — staying put instead of "
+            "switching to master. Inspect and clean up manually, then "
+            "run 'git checkout master'.", gs.branch)
+        return False
     result = _git(["checkout", "master"], project_root)
     if result.returncode != 0:
         logger.error("Failed to checkout master: %s", result.stderr)

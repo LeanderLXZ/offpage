@@ -61,8 +61,8 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
   in Phase 0 only.
 - Phase 0 parallel summarization + completion gate blocks Phase 1.
 - Git integration: dedicated branch, per-stage commits, auto-rollback,
-  squash-merge to main. Commit-ordering contract prevents fake-committed
-  drift.
+  squash-merge to `master`. Commit-ordering contract prevents
+  fake-committed drift.
 - Phase 3.5 cross-stage consistency checker (8 programmatic checks, 0
   token).
 - Resume auto-reset of blocked stages; progress / end-stage separation

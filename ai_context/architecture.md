@@ -184,17 +184,26 @@ See `docs/requirements.md` §12 and
   `automation/persona_extraction/orchestrator.py` call
   `create_extraction_branch` (in `git_utils.py`); non-existent branch is
   created with `-b`.
-- Exit mechanism: both methods wrap the extraction work in a
+- Exit mechanism: both methods wrap the extraction work (branch
+  creation + baseline rerun + Phase 3 loop) in a
   `try / finally: checkout_master(...)` block, so every exit path —
   normal completion, `[BLOCKED]`, `--end-stage` stop, keyboard
   interrupt, exception, `sys.exit` — returns to `master`.
+- `checkout_master` has a dirty-tree guard: when the working tree has
+  uncommitted / untracked changes, it refuses to switch and stays on
+  the current branch (logged as warning). This prevents a SIGINT
+  mid-stage from dragging untracked `stage_snapshots/阶段XX_*` files
+  onto `master`; the user must clean up first, then `git checkout
+  master` manually.
 - Code / schema / prompt / docs / `ai_context/` changes always commit
   on `master`, then propagate to the extraction branch via
   `git merge master` from the extraction branch.
-- Extraction-data commits (`works/*/analysis/**` under
-  `stage_snapshots/`, `memory_timeline/`, `memory_digest/`,
-  `stage_catalog/`, `world_event_digest/`, `identity/`, `manifest/`)
-  belong only on the extraction branch.
+- Extraction-data commits — baseline (`world/foundation/`,
+  `characters/*/canon/identity.json`,
+  `world/foundation/fixed_relationships.json`) AND Phase 3+ products
+  (`works/*/analysis/**` under `stage_snapshots/`, `memory_timeline/`,
+  `memory_digest/`, `stage_catalog/`, `world_event_digest/`,
+  `identity/`, `manifest/`) — belong only on the extraction branch.
 - After all stages are `COMMITTED`, `_offer_squash_merge` squash-merges
   into `master` (interactive prompt, never automatic).
 - Anomaly signal: a SessionStart Claude Code hook
@@ -327,7 +336,7 @@ or `codex` call, no shared session memory, file-based context.
   via json_path (no whole-file rollback). Phase 4 = programmatic only
   (no repair agent).
 - Dedicated git branch; each passing stage committed; rollback = `git
-  reset`; squash-merge to main on completion.
+  reset`; squash-merge to `master` on completion.
 - Phase 3 and Phase 4 independent PID locks — can run in parallel.
 - Fast empty-failure backoff (sequence from
   `[backoff].fast_empty_failure_backoff_s`); Phase 4 circuit breaker

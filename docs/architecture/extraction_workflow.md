@@ -433,8 +433,18 @@ orchestrator (Python)
 - **T3_CORRUPTED 硬停**：T3 跑完后立即对被重写文件做一次 scoped L0–L2 检查；
   一旦发现任何 L0–L2 错误（JSON 语法/schema/结构被破坏），Phase B 直接以
   `T3_CORRUPTED` 中止并 FAIL，**不走 triage**——机械损坏不可能是"源文件的错"。
-- 提取在独立 git 分支进行，每 stage 单独 commit（精确回滚）；全部完成后
-  squash merge 回 main（干净历史），extraction 分支可删除
+- 提取在独立 git 分支（`extraction/{work_id}`）进行，每 stage 单独 commit
+  （精确回滚）；全部完成后 squash merge 回 `master`（干净历史），extraction
+  分支可删除
+- 分支纪律落实（见 `ai_context/architecture.md` §Git Branch Model）：
+  - `run_extraction_loop` / `run_full` 把 `create_extraction_branch` +
+    baseline rerun + Phase 3 循环整体包进 `try / finally:
+    checkout_master(...)`，任何退出路径（DONE / BLOCKED / `--end-stage` /
+    Ctrl+C / 异常 / `sys.exit`）工作树都回到 `master`
+  - `checkout_master` 内置 dirty guard：工作树非 clean 时拒绝切换，保持
+    原分支并记 warning，防止未跟踪的半 stage 产物跟到 `master`
+  - SessionStart Claude Code hook（`.claude/hooks/session_branch_check.sh`）
+    新会话检测"非 master 分支 + 无 orchestrator 进程"的异常组合并提示
 - 支持 Claude CLI 和 Codex CLI 两种后端
 
 运行保障：
