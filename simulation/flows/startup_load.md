@@ -6,13 +6,18 @@ Compile the minimum useful packet for the first reply.
 
 ## Load Order
 
-1. Read `sources/works/{work_id}/manifest.json` if present.
-2. Read `works/{work_id}/indexes/load_profiles.json` if present.
-3. Read `works/{work_id}/world/manifest.json`.
-4. Read selected `world/stage_snapshots/{stage_id}.json`.
-5. Read `works/{work_id}/world/foundation/foundation.json`.
-5b. Read `works/{work_id}/world/foundation/fixed_relationships.json`.
-6. Read `works/{work_id}/world/world_event_digest.jsonl` filtered to
+1. Read `works/{work_id}/manifest.json` — canon works manifest
+   (schema: `schemas/work/works_manifest.schema.json`). Source of
+   `title` / `language` / `stage_ids` / `character_ids`.
+2. Read `sources/works/{work_id}/manifest.json` if present — source
+   package manifest; only needed if ingestion-status is being checked.
+3. Read `works/{work_id}/indexes/load_profiles.json` if present.
+4. Read `works/{work_id}/world/manifest.json` — world package manifest
+   (schema: `schemas/world/world_manifest.schema.json`).
+5. Read selected `world/stage_snapshots/{stage_id}.json`.
+6. Read `works/{work_id}/world/foundation/foundation.json`.
+6b. Read `works/{work_id}/world/foundation/fixed_relationships.json`.
+7. Read `works/{work_id}/world/world_event_digest.jsonl` filtered to
    stage 1..N (N = user-selected stage).
 8. Read target character baseline.
 9. Read target character selected-stage snapshot.

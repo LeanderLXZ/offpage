@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/work/book_metadata.schema.json",
+  "title": "书籍元数据",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "work_id",
+    "title",
+    "language",
+    "source_format",
+    "chapter_count",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "work_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "作品包命名空间键，必须与 sources/works/ 目录下的根目录名一致。对于中文作品，这个值保持中文。"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "author": {
+      "type": "string",
+      "description": "作者名。如果未知，填 '未知' 或等价占位。"
+    },
+    "language": {
+      "type": "string",
+      "description": "作品主要语言代码，如 zh / en / ja。"
+    },
+    "identifier": {
+      "type": "string",
+      "description": "作品内部唯一标识（例如 EPUB 的 urn:uuid:…）。非必填。"
+    },
+    "source_format": {
+      "type": "string",
+      "enum": [
+        "epub_directory",
+        "epub_file",
+        "txt",
+        "pdf",
+        "html",
+        "web_scrape",
+        "manual_excerpt",
+        "summary"
+      ],
+      "description": "原始资料的物理格式。"
+    },
+    "original_drop_name": {
+      "type": "string",
+      "description": "用户提供时的原始文件名或目录名。非必填。"
+    },
+    "opf_path": {
+      "type": "string",
+      "description": "仅 EPUB 来源使用；指向解压后的 content.opf。"
+    },
+    "cover_path": {
+      "type": "string",
+      "description": "封面图相对路径。非必填。"
+    },
+    "chapter_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "notes": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  }
+}

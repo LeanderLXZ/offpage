@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/work/works_manifest.schema.json",
+  "title": "作品包清单",
+  "description": "works/{work_id}/ 目录下的作品清单。与 sources/ 端的 work_manifest 不同：这个文件是 canon 工作包的目录页，列出 Phase 1 全局分析后已知的世界 / 角色 / 阶段组成。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_id",
+    "title",
+    "language",
+    "source_package_ref",
+    "paths",
+    "chapter_count",
+    "stage_count",
+    "character_count",
+    "stage_ids",
+    "character_ids",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "work_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "作品包命名空间键，与 works/{work_id}/ 的目录名一致。对于中文作品，这个值保持中文。"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "description": "作品主要语言代码，如 zh / en / ja。"
+    },
+    "source_package_ref": {
+      "type": "string",
+      "pattern": "^sources/works/[^/]+$",
+      "description": "指向本作品的 source package 根（相对仓库根），例如 sources/works/{work_id}。"
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "world_root",
+        "characters_root",
+        "analysis_root",
+        "retrieval_root"
+      ],
+      "properties": {
+        "world_root": {
+          "type": "string",
+          "description": "世界包目录相对路径，通常为 world。"
+        },
+        "characters_root": {
+          "type": "string",
+          "description": "角色包根目录相对路径，通常为 characters。"
+        },
+        "analysis_root": {
+          "type": "string",
+          "description": "全局分析 / 证据 / 进度目录相对路径，通常为 analysis。"
+        },
+        "retrieval_root": {
+          "type": "string",
+          "description": "场景归档 / 检索索引目录相对路径，通常为 retrieval。"
+        },
+        "indexes_root": {
+          "type": "string",
+          "description": "加载 profile / FTS5 / embedding 索引目录；当前未启用可省略。"
+        }
+      }
+    },
+    "chapter_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stage_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "character_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stage_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "阶段标识列表，顺序与 analysis/stage_plan.json 保持一致。"
+    },
+    "character_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "作品包内当前建档角色标识列表，默认为 Phase 2 确认后的 candidate_characters 子集。"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  }
+}

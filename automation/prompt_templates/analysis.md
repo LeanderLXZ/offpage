@@ -188,3 +188,10 @@ JSON 结构：
 - **同一角色的不同名称不得作为独立候选条目出现**——必须合并
 - 如果不确定两个名称是否为同一角色，在 description 中标注推测并说明依据
 - 你只负责分析，不要开始提取世界或角色信息
+
+## 不需要你产出的文件
+
+- `works/{work_id}/manifest.json`（作品包清单）——Phase 2 用户确认角色与
+  阶段范围后，由 orchestrator 程序化写出，schema 为
+  `schemas/work/works_manifest.schema.json`；你只需保证 `stage_plan.json`
+  与 `candidate_characters.json` 正确即可，不要手动创建 `manifest.json`。

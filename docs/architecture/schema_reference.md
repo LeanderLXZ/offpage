@@ -7,8 +7,8 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 | 子目录 | 作用 | 文件数 |
 |--------|------|--------|
-| `schemas/work/` | 作品入库与阶段目录 | 2 |
-| `schemas/world/` | 世界层快照、事件、固定关系 | 4 |
+| `schemas/work/` | 作品入库、目录、阶段目录 | 5 |
+| `schemas/world/` | 世界层快照、事件、固定关系、目录页 | 5 |
 | `schemas/character/` | 角色 baseline + 阶段快照 + 记忆 | 9 |
 | `schemas/user/` | 用户根画像、绑定、长期档案、关系核心 | 4 |
 | `schemas/runtime/` | Context / Session / 请求载荷 | 4 |
@@ -18,9 +18,37 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 ### work/work_manifest.schema.json
 
-**用途**：作品入库 manifest。
+**用途**：source package manifest。
 **位置**：`sources/works/{work_id}/manifest.json`
-**关键字段**：work_id, title, language, source_types, ingestion_status
+**关键字段**：work_id, title, language, source_types, ingestion_status, paths
+**生成时机**：`prompts/ingestion/原始资料规范化.md` 执行规范化时产出。
+
+---
+
+### work/works_manifest.schema.json
+
+**用途**：canon 作品包 manifest（作品包目录页）。
+**位置**：`works/{work_id}/manifest.json`
+**关键字段**：work_id, title, language, source_package_ref, paths, chapter_count, stage_count, character_count, stage_ids, character_ids
+**生成时机**：Phase 2 用户确认完成时由 `automation.persona_extraction.manifests.write_works_manifest` 程序化写出；不走 LLM。
+
+---
+
+### work/book_metadata.schema.json
+
+**用途**：书籍元数据（作者、原始格式、封面、identifier 等 EPUB/来源级信息）。
+**位置**：`sources/works/{work_id}/metadata/book_metadata.json`
+**关键字段**：work_id, title, language, source_format, chapter_count
+**生成时机**：规范化阶段产出。
+
+---
+
+### work/chapter_index.schema.json
+
+**用途**：章节索引（顶层 JSON 数组）。
+**位置**：`sources/works/{work_id}/metadata/chapter_index.json`
+**关键字段**：每条含 sequence（严格连续递增）、chapter_id、title、normalized_path
+**生成时机**：规范化阶段产出；后续 Phase 0/1/3/4 的 chapter 引用都以 chapter_id 为锚。
 
 ---
 
@@ -33,6 +61,15 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 ---
 
 ## World 层（`schemas/world/`）
+
+### world/world_manifest.schema.json
+
+**用途**：世界包 manifest（世界包目录页）。
+**位置**：`works/{work_id}/world/manifest.json`
+**关键字段**：work_id, world_id, paths, stage_ids
+**生成时机**：Phase 2.5 baseline 产出后由 `automation.persona_extraction.manifests.write_world_manifest` 程序化写出；不走 LLM。
+
+---
 
 ### world/world_stage_catalog.schema.json
 
@@ -88,8 +125,10 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 ### character/character_manifest.schema.json
 
-**用途**：角色包 manifest。
+**用途**：角色包 manifest（角色包目录页）。
 **位置**：`works/{work_id}/characters/{character_id}/manifest.json`
+**关键字段**：schema_version, character_id, work_id, canonical_name, aliases（扁平字符串数组）, paths, source_scope
+**生成时机**：Phase 2.5 baseline 由 LLM 按 `baseline_production.md` 产出。
 
 ---
 

@@ -3,9 +3,9 @@
 ## Project Stage
 
 Architecture scaffold done. One work package under automated extraction
-(Phase 2.5 complete; Phase 3 in progress — 1/49 stages committed, 1
-ERROR, 47 pending; Phase 4 scene archive independently done). No
-runtime code yet.
+(Phase 0/1/2/2.5/4 complete; Phase 3 reset to fresh start after
+2026-04-20 rollback — all 49 stages pending. Source + works + world
+manifests wired up and schema-gated). No runtime code yet.
 
 ## What Exists
 
@@ -30,9 +30,8 @@ runtime code yet.
 ### First Work Package
 
 - One Chinese web novel (500+ chapters)
-- Phase 0–2.5 complete; 2 target characters confirmed; Phase 3 in
-  progress (1/49 stages committed, 1 ERROR, 47 pending); Phase 4
-  scene archive independently done
+- Phase 0/1/2/2.5/4 complete; 2 target characters confirmed; Phase 3
+  reset to fresh start (49 stages pending) after 2026-04-20 rollback
 
 ### Automated Extraction Orchestrator
 
