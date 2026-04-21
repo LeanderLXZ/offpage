@@ -87,3 +87,62 @@ duration: 2.4 s
 - master：schema + 文档 + llm_backend + gitignore cherry-pick
 - `extraction/<work>`：承接 master 合并；本地 stage02 残留已回滚，
   progress JSON 已 reset 为 pending，准备 resume。
+
+## 6. after-check 跟进改动
+
+`/after-check` 针对前述改动做聚焦复审，共落 4 条后续（M1 / M2 / L3 / L4）；
+用户决策：M1 跳过，M2 / L3 / L4 在本轮补齐；统一追加到本 log 而非新开一篇。
+
+### 6.1 L3 — voice_rules.schema.json 对齐 maxItems=15
+
+- `schemas/character/voice_rules.schema.json`
+  - `emotional_voice_map.items.properties.typical_expressions.maxItems`: 新增 15
+  - `target_voice_map.items.properties.typical_expressions.maxItems`: 新增 15
+
+原 voice_rules schema 无该约束（stage_snapshot 层才有）。对齐后两份 schema
+在该维度完全对称，避免 baseline 校验与 stage 快照校验不一致。
+
+### 6.2 M2 — prompt 模板追加上限 15 条的说明与截断策略
+
+`automation/prompt_templates/character_snapshot_extraction.md`：
+
+- 原单行 "typical_expressions 下限：主角 target 至少 5 条，重要配角至少 3 条"
+  拆为两条：保留下限说明，新增 "上限 15 条（schema 硬门控）" 独立段
+- 明确 "原文有多少就写多少，不必刻意凑满"——避免 LLM 为填满额度敷衍造句
+- 超限时的 **截断策略**：保留最贴合当前 stage 语境（当前情绪/关系阶段、
+  当前对象、当前核心冲突）的表达；丢弃跨 stage 通用或已被
+  `dialogue_examples` 覆盖的条目
+- 同一规则显式覆盖 `emotional_voice_map[*].typical_expressions` 语境维度
+  （当前情绪下的典型短句），避免 LLM 只应用到 target_voice_map 层
+
+### 6.3 L4 — codex stdin ARG_MAX 跟进登记
+
+`docs/todo_list.md` "下一步" 新增 `[T-CODEX-STDIN]` 条目：
+
+- 动机：本轮 stdin 改造只覆盖 ClaudeBackend；CodexBackend argv 传 prompt
+  的路径仍对大 prompt 脆弱
+- 行动项：验证 `codex` CLI 是否支持从 stdin 读取 prompt（`echo 'hi' | codex`
+  或 `codex -` / `codex --prompt -`）；若支持则照搬 ClaudeBackend 写法
+- 验证条件：> 150 KiB prompt + 5 并行 lane 端到端不触发 E2BIG
+- 不在本轮修改，仅登记，避免无 CLI 环境盲改破坏 codex 用户
+
+### 6.4 M1 — 跳过（用户决策）
+
+`ai_context/` 不需要记录 stdin tempfile 机制细节；只需知道 backend 大致职责，
+细节在代码与本 log 中可查。
+
+## 验证（本轮追加）
+
+```
+# 两份 schema 合法性 + maxItems=15 在两处（emotional_voice_map +
+# target_voice_map）
+voice_rules schema: valid
+stage_snapshot schema: valid
+voice_rules typical_expressions maxItems: ['15', '15']
+stage_snapshot typical_expressions maxItems: ['15', '15']
+
+# voice_rules 功能性：15 条接受，16 条 schema 拒绝
+voice_rules 15 items: accepted
+voice_rules 16 items: correctly rejected
+```
+
