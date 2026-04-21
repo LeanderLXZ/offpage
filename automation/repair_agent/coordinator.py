@@ -41,6 +41,8 @@ from .fixers.source_patch import SourcePatchFixer
 from .fixers.file_regen import FileRegenFixer
 from .notes_writer import NotesWriter
 from .protocol import (
+    COVERAGE_SHORTAGE_MAX_TIER,
+    COVERAGE_SHORTAGE_START_TIER,
     FileEntry,
     Issue,
     RepairAttempt,
@@ -50,6 +52,7 @@ from .protocol import (
     SourceNote,
     START_TIER,
     TriageVerdict,
+    is_coverage_shortage,
 )
 from .tracker import IssueTracker
 from .triage import Triager
@@ -358,17 +361,42 @@ def run(
 
 def _filter_blocking(issues: list[Issue],
                      config: RepairConfig) -> list[Issue]:
+    """Issues that must be fixed or accepted before the stage can pass.
+
+    Errors are always blocking. `coverage_shortage` warnings are also
+    blocking: they carry a severity=warning demotion so they can't
+    legitimately FAIL the stage, but they still need to enter the fix
+    pipeline (START_TIER=T2) and then the 0-token triage fast path. If
+    we dropped them here, they'd be silently ignored and leave the
+    stage under the `importance_min_examples` floor.
+    """
     if config.block_on == "all":
         return list(issues)
-    return [i for i in issues if i.severity == "error"]
+    return [i for i in issues
+            if i.severity == "error" or is_coverage_shortage(i)]
 
 
 def _group_by_start_tier(issues: list[Issue]) -> dict[int, list[Issue]]:
     groups: dict[int, list[Issue]] = {}
     for issue in issues:
-        tier = START_TIER.get(issue.category, 0)
+        if is_coverage_shortage(issue):
+            tier = COVERAGE_SHORTAGE_START_TIER
+        else:
+            tier = START_TIER.get(issue.category, 0)
         groups.setdefault(tier, []).append(issue)
     return groups
+
+
+def _issue_max_tier(issue: Issue) -> int:
+    """Highest fixer tier allowed for an issue.
+
+    `coverage_shortage` issues cap at T2 — T3 can't add source material
+    the novel doesn't contain, so escalation is pointless and just
+    burns tokens. Everything else can escalate up to T3.
+    """
+    if is_coverage_shortage(issue):
+        return COVERAGE_SHORTAGE_MAX_TIER
+    return 3
 
 
 def _run_fixer_with_escalation(
@@ -451,6 +479,15 @@ def _run_fixer_with_escalation(
             if not remaining:
                 break
 
+            # coverage_shortage issues only get ONE T2 attempt — the
+            # novel either gains more examples on the first source_patch
+            # or it doesn't. Retrying doesn't add source material.
+            if attempt > 0 and tier == 2:
+                remaining = [i for i in remaining
+                             if not is_coverage_shortage(i)]
+                if not remaining:
+                    break
+
             attempted = list(remaining)
             result = fixer_obj.fix(
                 files=files,
@@ -527,9 +564,43 @@ def _run_fixer_with_escalation(
                     result=status,
                 ))
 
+        # ---- coverage_shortage fast path (0 token, post-T2) ----
+        # After T2 has had its one attempt at adding examples, any
+        # remaining coverage_shortage issues are accepted via
+        # program-constructed SourceNote. T3 would burn tokens rewriting
+        # the whole file without adding source material the novel lacks.
+        if (tier == 2 and triager is not None and notes_writer is not None
+                and source_context is not None):
+            cs_remaining = [i for i in remaining if is_coverage_shortage(i)]
+            if cs_remaining:
+                accepted_cs = _run_coverage_shortage_triage(
+                    triager=triager,
+                    notes_writer=notes_writer,
+                    config=config,
+                    source_ctx=source_context,
+                    issues=cs_remaining,
+                    accepted_notes=accepted_notes,
+                    notes_per_file=notes_per_file,
+                )
+                if accepted_cs:
+                    modified_files.update(i.file for i in accepted_cs)
+                    accepted_fps = {i.fingerprint for i in accepted_cs}
+                    remaining = [i for i in remaining
+                                 if i.fingerprint not in accepted_fps]
+
         if remaining:
-            logger.info("Escalating %d issues from T%d to T%d",
-                        len(remaining), tier, tier + 1)
+            next_tier = tier + 1
+            at_cap = [i for i in remaining
+                      if _issue_max_tier(i) < next_tier]
+            remaining = [i for i in remaining
+                         if i.fingerprint not in {x.fingerprint for x in at_cap}]
+            if at_cap:
+                logger.info(
+                    "Capping %d issue(s) at T%d (max_tier reached)",
+                    len(at_cap), tier)
+            if remaining:
+                logger.info("Escalating %d issues from T%d to T%d",
+                            len(remaining), tier, next_tier)
         tier += 1
 
     return modified_files, t3_corrupted, t3_self_report
@@ -623,6 +694,85 @@ def _run_triage_round(
         i for i in semantic_issues if i.fingerprint not in accepted_fps
     ]
     return non_semantic + remaining_semantic
+
+
+def _run_coverage_shortage_triage(
+    *,
+    triager: Triager,
+    notes_writer: NotesWriter,
+    config: RepairConfig,
+    source_ctx: SourceContext,
+    issues: list[Issue],
+    accepted_notes: list[SourceNote],
+    notes_per_file: dict[str, int],
+) -> list[Issue]:
+    """Accept L2 `min_examples` shortages via program-constructed
+    SourceNotes (0 token). Returns the list of issues actually accepted.
+
+    Shares ``accept_cap_per_file`` with the L3 source_inherent triage —
+    overflow issues stay blocking and surface as warnings on the final
+    report. ``triage_round=1`` (treated as first-pass acceptance) because
+    coverage_shortage runs once per issue per stage.
+    """
+    if not issues:
+        return []
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    accepted_issues: list[Issue] = []
+    round_notes: list[SourceNote] = []
+
+    by_file: dict[str, list[Issue]] = {}
+    for i in issues:
+        by_file.setdefault(i.file, []).append(i)
+
+    for file_path, file_issues in by_file.items():
+        already = notes_per_file.get(file_path, 0)
+        cap_remaining = config.accept_cap_per_file - already
+        if cap_remaining <= 0:
+            logger.info(
+                "coverage_shortage: %s — cap reached, %d issue(s) stay "
+                "blocking", file_path, len(file_issues))
+            continue
+
+        taken = 0
+        for issue in file_issues:
+            if taken >= cap_remaining:
+                logger.info(
+                    "coverage_shortage: %s — per-file cap %d reached, "
+                    "dropping %d remaining issue(s)",
+                    file_path, config.accept_cap_per_file,
+                    len(file_issues) - taken)
+                break
+            verdict = triager.build_coverage_shortage_verdict(
+                issue, source_ctx)
+            if verdict is None:
+                continue
+            note_id = notes_writer.allocate_note_id(
+                file_path, source_ctx.stage_id)
+            note = triager.build_source_note(
+                verdict=verdict,
+                issue=issue,
+                source_ctx=source_ctx,
+                note_id=note_id,
+                accepted_at=now_iso,
+                triage_round=1,
+            )
+            if note is None:
+                continue
+            round_notes.append(note)
+            accepted_notes.append(note)
+            accepted_issues.append(issue)
+            notes_per_file[file_path] = (
+                notes_per_file.get(file_path, 0) + 1)
+            taken += 1
+
+    if round_notes:
+        notes_writer.append(round_notes)
+        logger.info(
+            "coverage_shortage: accepted %d issue(s) as 0-token SourceNote",
+            len(round_notes))
+
+    return accepted_issues
 
 
 def _build_report(issues: list[Issue], tracker: IssueTracker,
