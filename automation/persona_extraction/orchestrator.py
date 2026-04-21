@@ -1085,94 +1085,14 @@ class ExtractionOrchestrator:
             pipeline.set_phase("phase_2_5", PHASE_RUNNING)
             pipeline.save(self.project_root)
 
-        # Check if baseline production was completed — if not, run it now
-        work_dir = self.project_root / "works" / pipeline.work_id
-        fixed_rel = (work_dir / "world" / "foundation"
-                     / "fixed_relationships.json")
-        if not pipeline.is_done("phase_2_5") or (
-                force_baseline and not fixed_rel.exists()):
-            foundation = work_dir / "world" / "foundation" / "foundation.json"
-            identities_ok = all(
-                (work_dir / "characters" / c / "canon" / "identity.json"
-                 ).exists()
-                for c in pipeline.target_characters
-            )
-            if (foundation.exists() and identities_ok
-                    and fixed_rel.exists() and not force_baseline):
-                # Files exist from a prior partial run — still must pass
-                # Phase 2.5 exit validation before marking done. File presence
-                # alone does not guarantee schema / required-field correctness;
-                # external damage or stale baseline formats must be caught
-                # here rather than silently slipping into Phase 3. See
-                # requirements.md §11.7 "Baseline 恢复".
-                print("  [OK] Baseline files already present — validating.")
-                baseline_report = validate_baseline(
-                    self.project_root, self.work_id,
-                    pipeline.target_characters)
-                print(baseline_report.summary())
-                if not baseline_report.passed:
-                    print("  [WARN] Existing baseline failed validation. "
-                          "Re-running Phase 2.5 to repair.")
-                    self.run_baseline_production(pipeline.target_characters)
-                    sha = commit_stage(
-                        self.project_root, "baseline",
-                        message="Phase 2.5 baseline (validation-triggered "
-                                "recovery)")
-                    if sha:
-                        print(f"  [OK] Baseline committed as {sha}")
-                else:
-                    pipeline.mark_done("phase_2_5")
-                    pipeline.save(self.project_root)
-            else:
-                print("  [WARN] Baseline not completed. Running Phase 2.5...")
-                self.run_baseline_production(pipeline.target_characters)
-                # Commit baseline so extraction starts with clean tree
-                sha = commit_stage(self.project_root, "baseline",
-                                   message="Phase 2.5 baseline (recovery)")
-                if sha:
-                    print(f"  [OK] Baseline committed as {sha}")
-
-        # --end-stage 0: baseline only, stop here
-        if max_stages is not None and max_stages == 0:
-            print("\n[STOP] --end-stage 0: baseline only, skipping "
-                  "extraction loop.")
-            return
-
-        # Auto-reset ERROR stages on resume — user chose to retry.
-        # FAILED transitions to ERROR first, then ERROR → PENDING.
-        for b in phase3.stages:
-            if b.state == StageState.FAILED:
-                b.transition(StageState.ERROR)
-            if b.state == StageState.ERROR:
-                print(f"  [RESET] {b.stage_id} was in ERROR state, "
-                      f"resetting to PENDING.")
-                b.transition(StageState.PENDING)
-                b.error_message = ""
-                b.last_reviewer_feedback = ""
-                phase3.save(self.project_root)
-
-        completed_before = phase3.completed_stage_count()
-        tracker = ProgressTracker(len(phase3.stages), completed_before)
-
-        print(f"\n{'=' * 60}")
-        print(f"  Phase 3: Extraction Loop")
-        print(f"{'=' * 60}")
-        print(f"  Work: {pipeline.work_id}")
-        print(f"  Characters: {pipeline.target_characters}")
-        print(f"  Total stages: {tracker.total}")
-        print(f"  Completed: {completed_before}")
-        if max_stages is not None and max_stages > 0:
-            to_run = max(0, max_stages - completed_before)
-            print(f"  Target: {max_stages} (up to {to_run} this run)")
-        else:
-            print(f"  Target: all ({tracker.remaining} remaining)")
-        print(f"{'=' * 60}")
-
-        # Enter the extraction branch and run the loop. ``finally`` below
-        # guarantees the working tree returns to ``master`` on every exit
-        # path — normal completion, BLOCKED, --end-stage stop, keyboard
-        # interrupt, exception, or ``sys.exit`` from branch creation
-        # failure. See ai_context/architecture.md §Git Branch Model.
+        # Enter the extraction branch FIRST, then run baseline rerun +
+        # loop inside ``try`` — ``finally`` below guarantees the working
+        # tree returns to ``master`` on every exit path (normal completion,
+        # BLOCKED, --end-stage stop, keyboard interrupt, exception, or
+        # ``sys.exit`` from branch creation failure). Baseline rerun
+        # commits land on the extraction branch, not master, honoring the
+        # "extraction data only on extraction branch" rule. See
+        # ai_context/architecture.md §Git Branch Model.
         try:
             # Create extraction branch
             if pipeline.extraction_branch:
@@ -1180,6 +1100,91 @@ class ExtractionOrchestrator:
                                                 pipeline.extraction_branch):
                     print("[ERROR] Cannot create extraction branch.")
                     sys.exit(1)
+
+            # Check if baseline production was completed — if not, run it now
+            work_dir = self.project_root / "works" / pipeline.work_id
+            fixed_rel = (work_dir / "world" / "foundation"
+                         / "fixed_relationships.json")
+            if not pipeline.is_done("phase_2_5") or (
+                    force_baseline and not fixed_rel.exists()):
+                foundation = (work_dir / "world" / "foundation"
+                              / "foundation.json")
+                identities_ok = all(
+                    (work_dir / "characters" / c / "canon" / "identity.json"
+                     ).exists()
+                    for c in pipeline.target_characters
+                )
+                if (foundation.exists() and identities_ok
+                        and fixed_rel.exists() and not force_baseline):
+                    # Files exist from a prior partial run — still must pass
+                    # Phase 2.5 exit validation before marking done. File
+                    # presence alone does not guarantee schema / required-
+                    # field correctness; external damage or stale baseline
+                    # formats must be caught here rather than silently
+                    # slipping into Phase 3. See requirements.md §11.7
+                    # "Baseline 恢复".
+                    print("  [OK] Baseline files already present — validating.")
+                    baseline_report = validate_baseline(
+                        self.project_root, self.work_id,
+                        pipeline.target_characters)
+                    print(baseline_report.summary())
+                    if not baseline_report.passed:
+                        print("  [WARN] Existing baseline failed validation. "
+                              "Re-running Phase 2.5 to repair.")
+                        self.run_baseline_production(pipeline.target_characters)
+                        sha = commit_stage(
+                            self.project_root, "baseline",
+                            message="Phase 2.5 baseline (validation-triggered "
+                                    "recovery)")
+                        if sha:
+                            print(f"  [OK] Baseline committed as {sha}")
+                    else:
+                        pipeline.mark_done("phase_2_5")
+                        pipeline.save(self.project_root)
+                else:
+                    print("  [WARN] Baseline not completed. Running Phase 2.5...")
+                    self.run_baseline_production(pipeline.target_characters)
+                    # Commit baseline so extraction starts with clean tree
+                    sha = commit_stage(self.project_root, "baseline",
+                                       message="Phase 2.5 baseline (recovery)")
+                    if sha:
+                        print(f"  [OK] Baseline committed as {sha}")
+
+            # --end-stage 0: baseline only, stop here
+            if max_stages is not None and max_stages == 0:
+                print("\n[STOP] --end-stage 0: baseline only, skipping "
+                      "extraction loop.")
+                return
+
+            # Auto-reset ERROR stages on resume — user chose to retry.
+            # FAILED transitions to ERROR first, then ERROR → PENDING.
+            for b in phase3.stages:
+                if b.state == StageState.FAILED:
+                    b.transition(StageState.ERROR)
+                if b.state == StageState.ERROR:
+                    print(f"  [RESET] {b.stage_id} was in ERROR state, "
+                          f"resetting to PENDING.")
+                    b.transition(StageState.PENDING)
+                    b.error_message = ""
+                    b.last_reviewer_feedback = ""
+                    phase3.save(self.project_root)
+
+            completed_before = phase3.completed_stage_count()
+            tracker = ProgressTracker(len(phase3.stages), completed_before)
+
+            print(f"\n{'=' * 60}")
+            print(f"  Phase 3: Extraction Loop")
+            print(f"{'=' * 60}")
+            print(f"  Work: {pipeline.work_id}")
+            print(f"  Characters: {pipeline.target_characters}")
+            print(f"  Total stages: {tracker.total}")
+            print(f"  Completed: {completed_before}")
+            if max_stages is not None and max_stages > 0:
+                to_run = max(0, max_stages - completed_before)
+                print(f"  Target: {max_stages} (up to {to_run} this run)")
+            else:
+                print(f"  Target: all ({tracker.remaining} remaining)")
+            print(f"{'=' * 60}")
 
             stopped_by_limit = False   # --end-stage 前缀试跑命中
             all_done = False           # 全部 stage 均已 COMMITTED
@@ -1774,14 +1779,14 @@ class ExtractionOrchestrator:
         )
 
     def _offer_squash_merge(self) -> None:
-        """After all stages complete, offer to squash-merge to main."""
+        """After all stages complete, offer to squash-merge to master."""
         assert self.pipeline and self.phase3
         branch = self.pipeline.extraction_branch
         if not branch:
             return
 
         print(f"\n  All stages committed on branch '{branch}'.")
-        print(f"  Squash-merge to main will consolidate all extraction")
+        print(f"  Squash-merge to master will consolidate all extraction")
         print(f"  commits into a single clean commit.")
 
         if get_config().git.auto_squash_merge:
@@ -1789,13 +1794,13 @@ class ExtractionOrchestrator:
             answer = "y"
         else:
             try:
-                answer = input("  Squash-merge to main now? [Y/n]: ").strip()
+                answer = input("  Squash-merge to master now? [Y/n]: ").strip()
             except EOFError:
                 answer = "n"
 
         if answer.lower() == "n":
             print(f"  Skipped. You can manually merge later:\n"
-                  f"    git checkout main && "
+                  f"    git checkout master && "
                   f"git merge --squash {branch} && "
                   f"git commit")
             return
@@ -1807,9 +1812,9 @@ class ExtractionOrchestrator:
                    f"Squash-merged from {branch}.\n"
                    f"Automated extraction via persona-extraction orchestrator.")
 
-        sha = squash_merge_to(self.project_root, "main", branch, message)
+        sha = squash_merge_to(self.project_root, "master", branch, message)
         if sha:
-            print(f"  [OK] Squash-merged to main as {sha}")
+            print(f"  [OK] Squash-merged to master as {sha}")
             print(f"  Extraction branch '{branch}' preserved. "
                   f"Delete with: git branch -d {branch}")
         else:

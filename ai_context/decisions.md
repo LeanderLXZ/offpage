@@ -124,9 +124,10 @@ constraints beyond what the architecture docs already say.
     future-fixer hints. A post-T3 scoped L0–L2 check aborts Phase B
     with `T3_CORRUPTED` when T3 breaks JSON/schema/structural shape
     (mechanical corruption cannot be "source's fault" — no triage).
-26. Extraction runs on a dedicated git branch. Each passing stage
-    committed. Rollback = `git reset` to last committed stage. After
-    all stages complete, squash-merge to main.
+26. Extraction runs on a dedicated git branch (`extraction/{work_id}`).
+    Each passing stage committed. Rollback = `git reset` to last
+    committed stage. After all stages complete, squash-merge to
+    `master`.
 26a. **Branch discipline enforced via orchestrator finally-checkout +
     SessionStart hook, not PreToolUse commit/push wrapper**:
     `run_extraction_loop` / `run_full` wrap extraction in
