@@ -89,6 +89,13 @@ Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
   branch.
 - Extraction branch is for extraction data commits only (stage outputs).
   Squash-merge to `master` when all stages complete.
+- Enforcement: (1) `run_extraction_loop` / `run_full` in
+  `automation/persona_extraction/orchestrator.py` wrap extraction in
+  `try / finally: checkout_master(...)`, so every exit path returns to
+  `master`; (2) a SessionStart Claude Code hook
+  (`.claude/hooks/session_branch_check.sh`) warns on new sessions when
+  the working tree is on a non-master branch with no orchestrator
+  process running. See `architecture.md` §Git Branch Model.
 
 ## Post-Change Checklist
 

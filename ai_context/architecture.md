@@ -176,6 +176,33 @@ fallback). Single SQLite — no separate vector DB.
 See `docs/requirements.md` §12 and
 `simulation/retrieval/index_and_rag.md`.
 
+## Git Branch Model
+
+- Idle state = `master`. When orchestrator runs, it auto-checks out
+  `extraction/{work_id}`.
+- Enter mechanism: `run_extraction_loop` / `run_full` in
+  `automation/persona_extraction/orchestrator.py` call
+  `create_extraction_branch` (in `git_utils.py`); non-existent branch is
+  created with `-b`.
+- Exit mechanism: both methods wrap the extraction work in a
+  `try / finally: checkout_master(...)` block, so every exit path —
+  normal completion, `[BLOCKED]`, `--end-stage` stop, keyboard
+  interrupt, exception, `sys.exit` — returns to `master`.
+- Code / schema / prompt / docs / `ai_context/` changes always commit
+  on `master`, then propagate to the extraction branch via
+  `git merge master` from the extraction branch.
+- Extraction-data commits (`works/*/analysis/**` under
+  `stage_snapshots/`, `memory_timeline/`, `memory_digest/`,
+  `stage_catalog/`, `world_event_digest/`, `identity/`, `manifest/`)
+  belong only on the extraction branch.
+- After all stages are `COMMITTED`, `_offer_squash_merge` squash-merges
+  into `master` (interactive prompt, never automatic).
+- Anomaly signal: a SessionStart Claude Code hook
+  (`.claude/hooks/session_branch_check.sh`) warns on every new session
+  if the working tree is on a non-master branch yet no orchestrator
+  process is running — flagging an abandoned extraction that did not
+  finalise.
+
 ## Automated Extraction Pipeline
 
 Python orchestrator in `automation/`. Each phase step = fresh `claude -p`
