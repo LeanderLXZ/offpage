@@ -48,6 +48,8 @@ __pycache__/
 
 # Claude Code local config (user-specific allowlist / overrides)
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/*.lock
 
 # Local automation config overrides (per-deployment, never committed)
 automation/config.local.toml
