@@ -241,7 +241,7 @@
               "voice_shift": { "type": "string" },
               "typical_expressions": {
                 "type": "array",
-                "maxItems": 5,
+                "maxItems": 15,
                 "items": { "type": "string" }
               },
               "dialogue_examples": {
@@ -280,7 +280,7 @@
               "typical_expressions": {
                 "type": "array",
                 "description": "面对该对象时的典型表达列表。",
-                "maxItems": 5,
+                "maxItems": 15,
                 "items": { "type": "string" }
               },
               "dialogue_examples": {
