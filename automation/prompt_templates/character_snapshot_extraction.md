@@ -132,7 +132,13 @@
 - 使用具体角色名，每个 target 的 dialogue_examples 数量**不少于上表的最低值**，
   覆盖该对象下的多种情绪和场景
 - **voice_shift 要具体**：不要写"语气变温柔"，要写具体描述
-- **typical_expressions 要丰富**：主角 target 至少 5 条，重要配角至少 3 条
+- **typical_expressions 下限**：主角 target 至少 5 条，重要配角至少 3 条
+- **typical_expressions 上限 15 条（schema 硬门控）**：原文有多少就写多少，
+  不必刻意凑满；**超过 15 时保留最贴合当前 stage 语境的表达**（优先当前
+  情绪/关系阶段、当前对象、当前核心冲突下的典型短句；丢弃跨 stage 通用
+  或已被 dialogue_examples 覆盖的条目）
+- **该上限与截断策略同样适用于 `emotional_voice_map[*].typical_expressions`**
+  （每个情绪项下的典型表达）；语境维度变为当前情绪下的典型短句
 
 ### target_behavior_map 要求
 
