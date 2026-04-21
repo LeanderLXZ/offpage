@@ -1004,7 +1004,7 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 | `target_behavior_map` | 5 | 与 target_voice_map 对齐 |
 | 各 `dialogue_examples` | 5 | 每个 target/emotion 内 |
 | 各 `action_examples` | 5 | 每个 target 内 |
-| 各 `typical_expressions` | 5 | 每个 target/emotion 内 |
+| 各 `typical_expressions` | 15 | 每个 target/emotion 内；放宽以覆盖同一情绪/对象下的常见短句模板 |
 | 各 `typical_actions` | 5 | 每个 emotion 内 |
 
 **缺少任何一个维度都会导致扮演缺陷。** 例如：
