@@ -125,6 +125,26 @@ def create_extraction_branch(project_root: Path,
     return True
 
 
+def checkout_master(project_root: Path) -> bool:
+    """Return working tree to ``master``. Idempotent and non-destructive.
+
+    Returns ``True`` when the tree is on ``master`` after the call (either
+    already there or switched successfully). Returns ``False`` only when
+    the switch fails — e.g. uncommitted changes that conflict with
+    ``master``. Callers treat this as best-effort cleanup and should not
+    raise on failure.
+    """
+    gs = git_status(project_root)
+    if gs.branch == "master":
+        return True
+    result = _git(["checkout", "master"], project_root)
+    if result.returncode != 0:
+        logger.error("Failed to checkout master: %s", result.stderr)
+        return False
+    logger.info("Returned to master branch")
+    return True
+
+
 def commit_stage(project_root: Path, stage_id: str,
                  *, message: str | None = None,
                  files: list[str] | None = None) -> str | None:
