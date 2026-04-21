@@ -88,13 +88,15 @@ constraints beyond what the architecture docs already say.
     Append-only jsonl matches decision 20 (merge append-first) and
     supports crash-safe streaming growth; inline manifest arrays would
     force full-file rewrite on every pin and risk silent truncation.
-22b. User-side append-only streams use `.jsonl`, single-object state
-    uses `.json`. `.jsonl` covers: transcript, turn_journal,
-    turn_summaries, memory_updates, key_moments, archive_index,
-    pinned_memories, world/history/timeline. `.json` covers: every
-    `manifest.json`, `profile.json`, `role_binding.json`,
-    `long_term_profile.json`, `character_state.json`,
-    `session_index.json`, `context_summary.json`, `archive_refs.json`.
+22b. Append-only streams system-wide use `.jsonl`; single-object state
+    uses `.json`. Applies to both user-side (`users/{user_id}/...`) and
+    work/world-side (`works/{work_id}/world/...`) persistence. `.jsonl`
+    covers: transcript, turn_journal, turn_summaries, memory_updates,
+    key_moments, archive_index, pinned_memories, world/history/timeline.
+    `.json` covers: every `manifest.json`, `profile.json`,
+    `role_binding.json`, `long_term_profile.json`,
+    `character_state.json`, `session_index.json`,
+    `context_summary.json`, `archive_refs.json`.
     `docs/architecture/data_model.md` is the canonical contract — it
     must list the correct extension for every reference.
 
