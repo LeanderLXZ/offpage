@@ -1,9 +1,9 @@
 ---
-name: check
-description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/样例产物，找跨文件不一致、legacy 残留、文档与实现漂移、状态机/门控缺口、bug 与隐患，输出按严重度排序的 findings 并归档到 docs/review_reports/。用户说"全库 review"、"对齐审计"、"check"、"跑一轮 review" 时触发。只审计，不改代码。
+name: full-review
+description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/样例产物，找跨文件不一致、legacy 残留、文档与实现漂移、状态机/门控缺口、bug 与隐患，输出按严重度排序的 findings 并归档到 docs/review_reports/。用户说"全库 review"、"对齐审计"、"full-review"、"跑一轮 review" 时触发。只审计，不改代码。
 ---
 
-# /check — 全仓库对齐审计
+# /full-review — 全仓库对齐审计
 
 对整个 `persona-engine` 仓库做一次"规范对齐 + 实现风险"的全量 review。`$ARGUMENTS` 存在则作为本轮重点或额外关注点。
 
@@ -111,4 +111,4 @@ docs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
 
 ---
 
-**镜像约束**：本文件和 `.claude/commands/check.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。本文件额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /check` 起往下）与 `.claude/commands/check.md` **逐字一致**。
+**镜像约束**：本文件和 `.claude/commands/full-review.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。本文件额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /full-review` 起往下）与 `.claude/commands/full-review.md` **逐字一致**。

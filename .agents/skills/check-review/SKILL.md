@@ -1,4 +1,9 @@
-# /review-check — 复核 review 报告
+---
+name: check-review
+description: 复核 review 报告 — 读取 docs/review_reports/ 下最近一份报告（可选按模型过滤：claude / codex / 具体 slug；不传参则取全局最新），逐条复核 finding / risk / open question 是否仍真实存在，给出证据（文件+行号）与落地方案草稿，输出不落盘不改代码，等用户确认后再用 /go 执行。用户说"复核 review"、"核一下 codex/claude 的 review"、"check-review" 时触发。
+---
+
+# /check-review — 复核 review 报告
 
 对 `docs/review_reports/` 下指定模型**最近一次** review 报告做"真实性复核 + 方案设计"。**不改代码**，只确认每条 finding / risk / open question 是否真实存在，并给出落地方案草稿；用户确认细节后再用 `/go` 执行。
 
@@ -67,4 +72,4 @@
 
 ---
 
-**镜像约束**：本文件和 `.agents/skills/review-check/SKILL.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。`.agents/skills/review-check/SKILL.md` 额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /review-check` 起往下）与本文件**逐字一致**。
+**镜像约束**：本文件和 `.claude/commands/check-review.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。本文件额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /check-review` 起往下）与 `.claude/commands/check-review.md` **逐字一致**。
