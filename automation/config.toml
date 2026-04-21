@@ -102,9 +102,11 @@ total_round_limit = 5
 # 残留接受为"作者本身的 bug"，所有 L3 issue 必须由 fixer 解决。
 triage_enabled = true
 
-# 单文件 triage 接受 SourceNote 的最大数。防止 LLM 把整个文件的
-# 残留全归因为"源文本问题"。
-triage_accept_cap_per_file = 3
+# 单文件 triage 接受 SourceNote 的最大数。L3 source_inherent（LLM
+# 判定）与 L2 coverage_shortage（min_examples 不足、程序 0 token）
+# 共用同一上限。防止 LLM 把整个文件的残留全归因为"源文本问题"，同时
+# 限制 coverage_shortage 滥用。
+triage_accept_cap_per_file = 5
 
 # L2 结构检查对每条 `relationships[*].relationship_history_summary`
 # 字符串长度的硬上限。超长归为 structural error（阻塞 COMMITTED），

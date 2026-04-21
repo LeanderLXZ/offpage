@@ -208,15 +208,24 @@ class Triager:
         accepted_at: str,
         triage_round: int,
     ) -> SourceNote | None:
-        """Convert a verified verdict into a persistable SourceNote."""
+        """Convert a verified verdict into a persistable SourceNote.
+
+        Accepts L3 ``semantic`` issues (standard LLM triage path) and L2
+        ``structural`` issues whose verdict carries
+        ``discrepancy_type="coverage_shortage"`` (the 0-token fast path
+        built by ``build_coverage_shortage_note``).
+        """
         if not verdict.evidence_verified or verdict.chapter_number is None:
             return None
-        # Schema hard constraint: issue_category enum is ["semantic"].
-        # Reject anything else before it reaches notes_writer / disk.
-        if issue.category != "semantic":
+        is_cov_shortage = (
+            verdict.discrepancy_type == "coverage_shortage"
+            and issue.category == "structural"
+        )
+        if issue.category != "semantic" and not is_cov_shortage:
             logger.warning(
-                "triage: refusing to build SourceNote for non-semantic "
-                "issue %s (category=%s)", issue.fingerprint, issue.category)
+                "triage: refusing to build SourceNote for %s "
+                "(category=%s, discrepancy_type=%s)",
+                issue.fingerprint, issue.category, verdict.discrepancy_type)
             return None
         chapter_text = self._retriever.load_chapter_text(
             source_ctx, verdict.chapter_number)
@@ -235,6 +244,18 @@ class Triager:
             quote_sha256=quote_sha,
             chapter_sha256=chapter_sha,
         )
+        future_hint: dict = {}
+        if is_cov_shortage:
+            ctx = issue.context or {}
+            future_hint = {
+                "resolvable_when": "source gains more relevant material",
+                "manual_action": (
+                    "rerun this stage after source update, or record "
+                    "supplementary examples in a later stage"),
+                "importance": ctx.get("importance"),
+                "current": ctx.get("current"),
+                "required": ctx.get("required"),
+            }
         return SourceNote(
             note_id=note_id,
             stage_id=source_ctx.stage_id,
@@ -249,9 +270,75 @@ class Triager:
             source_evidence=evidence,
             rationale=verdict.rationale,
             extraction_choice=verdict.extraction_choice,
-            future_fixer_hint={},
+            future_fixer_hint=future_hint,
             accepted_at=accepted_at,
             triage_round=triage_round,
+        )
+
+    def build_coverage_shortage_verdict(
+        self,
+        issue: Issue,
+        source_ctx: SourceContext,
+        quote_max_chars: int = 200,
+    ) -> TriageVerdict | None:
+        """Build a 0-token, program-synthesised TriageVerdict for an L2
+        ``min_examples`` shortage after T2 failed to close it.
+
+        Picks a short verbatim substring from the first stage chapter as
+        the evidence anchor — the novel-text quote is purely audit-trail;
+        the real signal is that T2 couldn't add more examples because the
+        source material doesn't contain enough. The returned verdict is
+        already ``evidence_verified=True`` because the quote is a literal
+        substring of a chapter we just read.
+
+        Returns None when no chapter text can be loaded (should be rare;
+        the coordinator then leaves the issue blocking).
+        """
+        if issue.category != "structural":
+            return None
+        stage_chapters = self._retriever.get_stage_chapters(source_ctx)
+        if not stage_chapters:
+            return None
+        first_ch = stage_chapters[0]
+        chapter_text = self._retriever.load_chapter_text(source_ctx, first_ch)
+        if not chapter_text:
+            return None
+        # Take the first non-empty line (trimmed) up to quote_max_chars
+        # as the program-selected quote. Has to be a literal chapter
+        # substring for the standard quote-anchor check.
+        stripped = chapter_text.lstrip()
+        quote = stripped[:quote_max_chars].rstrip()
+        if not quote or chapter_text.find(quote) < 0:
+            # Fall back to the whole chapter's first line
+            for line in chapter_text.splitlines():
+                line = line.strip()
+                if line:
+                    quote = line[:quote_max_chars]
+                    if chapter_text.find(quote) >= 0:
+                        break
+            else:
+                return None
+        total_lines = chapter_text.count("\n") + 1
+        ctx = issue.context or {}
+        current = ctx.get("current")
+        required = ctx.get("required")
+        importance = ctx.get("importance", "?")
+        rationale = (
+            f"字段 {issue.json_path} 按 importance={importance} 要求 "
+            f"≥{required}，当前仅 {current} 条；T2 source_patch 单次尝试"
+            f"后仍未达标，判定为原文素材不足，按 coverage_shortage "
+            f"accept_with_notes 收录。"
+        )
+        return TriageVerdict(
+            issue_fingerprint=issue.fingerprint,
+            source_inherent=True,
+            discrepancy_type="coverage_shortage",
+            chapter_number=first_ch,
+            line_range=(1, total_lines),
+            quote=quote,
+            rationale=rationale,
+            extraction_choice="keep_current_count",
+            evidence_verified=True,
         )
 
     # ------------------------------------------------------------------

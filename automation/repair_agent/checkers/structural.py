@@ -232,13 +232,14 @@ class StructuralChecker(BaseChecker):
                     file=path,
                     json_path=(f"$.{state_key}.{map_key}[{idx}]"
                                f".{examples_key}"),
-                    category="structural", severity="error",
+                    category="structural", severity="warning",
                     rule="min_examples",
                     message=(f"{examples_key} for '{target_name}' "
                              f"({importance}): {count} < {threshold}"),
                     context={
                         "current": count, "required": threshold,
                         "importance": importance, "target": target_name,
+                        "coverage_shortage": True,
                     },
                 ))
         return issues

@@ -189,6 +189,33 @@ def _digest_path(work_dir: Path, char_id: str) -> Path:
     return work_dir / "characters" / char_id / "canon" / "memory_digest.jsonl"
 
 
+def _extraction_notes_path(work_dir: Path, char_id: str, stage_id: str) -> Path:
+    return (work_dir / "characters" / char_id / "canon"
+            / "extraction_notes" / f"{stage_id}.jsonl")
+
+
+def _load_coverage_shortage_paths(
+    work_dir: Path, char_id: str, stage_id: str,
+) -> set[str]:
+    """Return the set of ``json_path`` entries for which a
+    ``coverage_shortage`` SourceNote exists in this stage's notes file.
+
+    Phase 3.5 uses this to suppress min_examples warnings already
+    documented by the repair agent — otherwise every coverage_shortage
+    accept would show up as a consistency warning on every run.
+    """
+    notes_path = _extraction_notes_path(work_dir, char_id, stage_id)
+    if not notes_path.exists():
+        return set()
+    paths: set[str] = set()
+    for note in _load_jsonl(notes_path):
+        if note.get("discrepancy_type") == "coverage_shortage":
+            jp = note.get("json_path")
+            if jp:
+                paths.add(jp)
+    return paths
+
+
 # ---------------------------------------------------------------------------
 # Check implementations
 # ---------------------------------------------------------------------------
@@ -457,31 +484,49 @@ def _check_target_map_counts(
             if snapshot is None:
                 continue
 
+            # coverage_shortage SourceNotes accepted by repair agent —
+            # if an accepted note covers this json_path we treat the
+            # count as satisfied (no warning).
+            accepted_paths = _load_coverage_shortage_paths(
+                work_dir, char_id, stage_id)
+
             # target_voice_map
             voice_state = snapshot.get("voice_state", {})
-            for entry in voice_state.get("target_voice_map", []):
+            for idx, entry in enumerate(
+                    voice_state.get("target_voice_map", [])):
                 target = entry.get("target_type", "?")
                 examples = entry.get("dialogue_examples", [])
                 min_ex = _min_examples_for_target(target, imp)
-                if len(examples) < min_ex:
-                    issues.append(ConsistencyIssue(
-                        "warning", "target_map",
-                        f"{char_id}/{stage_id}/voice/{target}",
-                        f"target_voice_map has {len(examples)} "
-                        f"dialogue_examples (want >={min_ex})"))
+                if len(examples) >= min_ex:
+                    continue
+                json_path = (f"$.voice_state.target_voice_map[{idx}]"
+                             f".dialogue_examples")
+                if json_path in accepted_paths:
+                    continue
+                issues.append(ConsistencyIssue(
+                    "warning", "target_map",
+                    f"{char_id}/{stage_id}/voice/{target}",
+                    f"target_voice_map has {len(examples)} "
+                    f"dialogue_examples (want >={min_ex})"))
 
             # target_behavior_map
             behavior_state = snapshot.get("behavior_state", {})
-            for entry in behavior_state.get("target_behavior_map", []):
+            for idx, entry in enumerate(
+                    behavior_state.get("target_behavior_map", [])):
                 target = entry.get("target_type", "?")
                 examples = entry.get("action_examples", [])
                 min_ex = _min_examples_for_target(target, imp)
-                if len(examples) < min_ex:
-                    issues.append(ConsistencyIssue(
-                        "warning", "target_map",
-                        f"{char_id}/{stage_id}/behavior/{target}",
-                        f"target_behavior_map has {len(examples)} "
-                        f"action_examples (want >={min_ex})"))
+                if len(examples) >= min_ex:
+                    continue
+                json_path = (f"$.behavior_state.target_behavior_map[{idx}]"
+                             f".action_examples")
+                if json_path in accepted_paths:
+                    continue
+                issues.append(ConsistencyIssue(
+                    "warning", "target_map",
+                    f"{char_id}/{stage_id}/behavior/{target}",
+                    f"target_behavior_map has {len(examples)} "
+                    f"action_examples (want >={min_ex})"))
 
     return issues
 
