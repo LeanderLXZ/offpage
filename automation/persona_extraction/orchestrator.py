@@ -29,6 +29,7 @@ from .config import get_config
 from .consistency_checker import run_consistency_check, save_report
 from .failed_lane_log import write_failed_lane_log
 from .git_utils import (
+    checkout_master,
     commit_stage,
     create_extraction_branch,
     preflight_check,
@@ -1167,67 +1168,76 @@ class ExtractionOrchestrator:
             print(f"  Target: all ({tracker.remaining} remaining)")
         print(f"{'=' * 60}")
 
-        # Create extraction branch
-        if pipeline.extraction_branch:
-            if not create_extraction_branch(self.project_root,
-                                            pipeline.extraction_branch):
-                print("[ERROR] Cannot create extraction branch.")
-                sys.exit(1)
+        # Enter the extraction branch and run the loop. ``finally`` below
+        # guarantees the working tree returns to ``master`` on every exit
+        # path — normal completion, BLOCKED, --end-stage stop, keyboard
+        # interrupt, exception, or ``sys.exit`` from branch creation
+        # failure. See ai_context/architecture.md §Git Branch Model.
+        try:
+            # Create extraction branch
+            if pipeline.extraction_branch:
+                if not create_extraction_branch(self.project_root,
+                                                pipeline.extraction_branch):
+                    print("[ERROR] Cannot create extraction branch.")
+                    sys.exit(1)
 
-        stopped_by_limit = False   # --end-stage 前缀试跑命中
-        all_done = False           # 全部 stage 均已 COMMITTED
+            stopped_by_limit = False   # --end-stage 前缀试跑命中
+            all_done = False           # 全部 stage 均已 COMMITTED
 
-        while True:
-            if self._interrupted:
-                break
+            while True:
+                if self._interrupted:
+                    break
 
-            if self._check_runtime_limit():
-                break
+                if self._check_runtime_limit():
+                    break
 
-            if (max_stages is not None and max_stages > 0
-                    and tracker.completed >= max_stages):
-                print(f"\n[STOP] Reached max_stages limit "
-                      f"({tracker.completed}/{max_stages}).")
-                stopped_by_limit = True
-                break
+                if (max_stages is not None and max_stages > 0
+                        and tracker.completed >= max_stages):
+                    print(f"\n[STOP] Reached max_stages limit "
+                          f"({tracker.completed}/{max_stages}).")
+                    stopped_by_limit = True
+                    break
 
-            stage = phase3.next_pending_stage()
-            if stage is None:
-                if phase3.all_committed():
-                    print("\n[DONE] All stages completed!")
-                    all_done = True
+                stage = phase3.next_pending_stage()
+                if stage is None:
+                    if phase3.all_committed():
+                        print("\n[DONE] All stages completed!")
+                        all_done = True
+                    else:
+                        print("\n[BLOCKED] No actionable stages. "
+                              "Check progress for blocked/error stages.")
+                    break
+
+                self._process_stage(phase3, pipeline, stage, tracker)
+
+            # Post-loop: Phase 3.5 / squash-merge / Phase 4 only when all
+            # stages are COMMITTED. A --end-stage prefix run stops short
+            # and skips every finalization step — the user must re-run
+            # without --end-stage. See requirements.md §11.5.
+            if all_done:
+                consistency_ok = self._run_consistency_check()
+                self._offer_squash_merge()
+                if consistency_ok:
+                    self._run_scene_archive(end_stage=0, resume=True)
                 else:
-                    print("\n[BLOCKED] No actionable stages. "
-                          "Check progress for blocked/error stages.")
-                break
+                    print("\n  Phase 4 skipped — fix consistency errors "
+                          "first, then re-run with --resume.")
+            elif stopped_by_limit:
+                remaining = sum(
+                    1 for s in phase3.stages
+                    if s.state != StageState.COMMITTED
+                )
+                print(f"\n  [PREFIX-RUN] Stopped at --end-stage limit with "
+                      f"{remaining} stage(s) remaining.")
+                print("  Phase 3.5 / squash-merge / Phase 4 are skipped "
+                      "until all stages commit.")
+                print("  Re-run without --end-stage (or with a larger "
+                      "value) to finalize.")
 
-            self._process_stage(phase3, pipeline, stage, tracker)
-
-        # Post-loop: Phase 3.5 / squash-merge / Phase 4 only when all stages
-        # are COMMITTED. A --end-stage prefix run stops short and skips every
-        # finalization step — the user must re-run without --end-stage.
-        # See requirements.md §11.5 "--end-stage 语义（严格前缀运行）".
-        if all_done:
-            consistency_ok = self._run_consistency_check()
-            self._offer_squash_merge()
-            if consistency_ok:
-                self._run_scene_archive(end_stage=0, resume=True)
-            else:
-                print("\n  Phase 4 skipped — fix consistency errors first, "
-                      "then re-run with --resume.")
-        elif stopped_by_limit:
-            remaining = sum(
-                1 for s in phase3.stages
-                if s.state != StageState.COMMITTED
-            )
-            print(f"\n  [PREFIX-RUN] Stopped at --end-stage limit with "
-                  f"{remaining} stage(s) remaining.")
-            print("  Phase 3.5 / squash-merge / Phase 4 are skipped until "
-                  "all stages commit.")
-            print("  Re-run without --end-stage (or with a larger value) "
-                  "to finalize.")
-
-        tracker.print_summary()
+            tracker.print_summary()
+        finally:
+            if pipeline.extraction_branch:
+                checkout_master(self.project_root)
 
     def _process_stage(self, phase3: Phase3Progress,
                        pipeline: PipelineProgress,
@@ -1971,21 +1981,28 @@ class ExtractionOrchestrator:
         self.pipeline = pipeline
         self.phase3 = phase3
 
-        # Create extraction branch and commit pre-extraction output
-        if pipeline.extraction_branch:
-            create_extraction_branch(self.project_root,
-                                     pipeline.extraction_branch)
+        # Create extraction branch, run baseline + extraction. ``finally``
+        # returns to ``master`` if anything raises between switching to
+        # the extraction branch and ``run_extraction_loop`` completing
+        # its own cleanup. See ai_context/architecture.md §Git Branch Model.
+        try:
+            if pipeline.extraction_branch:
+                create_extraction_branch(self.project_root,
+                                         pipeline.extraction_branch)
 
-        self.run_baseline_production(pipeline.target_characters)
+            self.run_baseline_production(pipeline.target_characters)
 
-        # Commit baseline output so Phase 3 starts with a clean working tree
-        sha = commit_stage(self.project_root, "baseline",
-                           message="Phase 0-2.5 baseline")
-        if sha:
-            print(f"  [OK] Baseline committed as {sha}")
+            # Commit baseline output so Phase 3 starts with a clean tree
+            sha = commit_stage(self.project_root, "baseline",
+                               message="Phase 0-2.5 baseline")
+            if sha:
+                print(f"  [OK] Baseline committed as {sha}")
 
-        self.run_extraction_loop(pipeline, phase3,
-                                 max_stages=preset_end_stage)
+            self.run_extraction_loop(pipeline, phase3,
+                                     max_stages=preset_end_stage)
+        finally:
+            if pipeline and pipeline.extraction_branch:
+                checkout_master(self.project_root)
 
 
 # ---------------------------------------------------------------------------

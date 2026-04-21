@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "branch=$(git branch --show-current 2>/dev/null); if [ -z \"$branch\" ]; then branch=\"(detached HEAD)\"; fi; if [ \"$branch\" = \"master\" ]; then printf \"[git] branch: %s\\n\" \"$branch\"; else printf \"[git] branch: %s  (default is master — only stay off master while actively running persona-extract)\\n\" \"$branch\"; fi",
+            "command": "bash .claude/hooks/session_branch_check.sh",
             "timeout": 5
           }
         ]
