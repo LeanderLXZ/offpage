@@ -563,7 +563,8 @@
           },
           "resolved_at_stage": {
             "type": "string",
-            "description": "如果已知误解在哪个阶段被解开，填写对应 stage_id。空值表示截至当前阶段仍未解开。"
+            "pattern": "^(S[0-9]{3})?$",
+            "description": "如果已知误解在哪个阶段被解开，填写对应 stage_id（紧凑英文代号 S###）。空值表示截至当前阶段仍未解开。"
           }
         }
       }
@@ -591,7 +592,8 @@
           },
           "revealed_at_stage": {
             "type": "string",
-            "description": "如果已知在哪个阶段被揭露或主动坦白，填写对应 stage_id。空值表示截至当前阶段仍在隐瞒。"
+            "pattern": "^(S[0-9]{3})?$",
+            "description": "如果已知在哪个阶段被揭露或主动坦白，填写对应 stage_id（紧凑英文代号 S###）。空值表示截至当前阶段仍在隐瞒。"
           }
         }
       }
