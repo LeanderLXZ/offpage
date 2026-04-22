@@ -110,8 +110,9 @@ JSON 结构：
 
 - 默认每阶段 10 章，但必须优先贴近自然剧情边界——剧情边界的准确性比章节数量均匀更重要
 - **⚠️ 硬性约束：最小阶段 5 章，最大阶段 15 章。任何超过 15 章的 stage 都是违规的。** 如果一个大故事弧跨度超过 15 章，必须在其中寻找次级剧情节点（如小高潮、场景转换、时间跳跃）将其拆分为多个 stage。绝不允许为了保持剧情完整性而创建超过 15 章的 stage
-- 每个 stage 条目包含：stage_id, stage_id, chapters, chapter_count, boundary_reason, key_events_expected
-- 为 stage_id 取一个有意义的中文名称（如"阶段01_主角初登场"），不要只用编号
+- 每个 stage 条目包含：stage_id, stage_title, chapters, chapter_count, boundary_reason, key_events_expected
+- `stage_id` 使用紧凑英文代号格式 `S###`（三位数字零填充，如 `S001`、`S002`、`S049`），**不使用中文或其他格式**。这是整套 ID 家族（`M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##`）的共同 stage 段。
+- `stage_title` 是不超过 15 字的人类可读中文短标题（如"南林初遇"、"冰宫下山"），作为 bootstrap 阶段选择时展示给用户的阶段名
 - `boundary_reason` 必须说明为什么在此处切分（例如"主角离开某地""重大事件结束""新势力登场"），不能只写"满 10 章"
 - 参考摘要中的 `potential_boundary` 标记，但不要机械地以它为唯一依据——你需要从全局剧情结构出发做最终判断
 - **自检**：完成 stage plan 后，逐一检查每个 stage 的 `chapter_count`。如有任何一个 ≤4 或 ≥16，必须调整切分点直到全部 stage 满足 5-15 章约束
@@ -127,8 +128,8 @@ JSON 结构：
   "total_chapters": {chapter_count},
   "stages": [
     {{
-      "stage_id": "阶段01_示例",
-      "stage_id": "阶段1_...",
+      "stage_id": "S001",
+      "stage_title": "主角初登场",
       "chapters": "0001-0010",
       "chapter_count": 10,
       "boundary_reason": "...",
@@ -183,7 +184,7 @@ JSON 结构：
 
 ## 规则
 
-- 中文作品使用中文标识和中文路径段
+- 中文作品的 work_id、character_id、路径段使用中文；`stage_id` 使用紧凑英文代号 `S###`（如 `S001`），`stage_title` 使用 ≤15 字中文短标题
 - 产出文件都应是格式良好的 JSON
 - **同一角色的不同名称不得作为独立候选条目出现**——必须合并
 - 如果不确定两个名称是否为同一角色，在 description 中标注推测并说明依据

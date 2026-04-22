@@ -66,9 +66,9 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "minLength": 1
+        "pattern": "^S[0-9]{3}$"
       },
-      "description": "阶段标识列表。与 analysis/stage_plan.json 和 works/manifest.json 的 stage_ids 保持一致（冗余存放，方便运行时只加载 world 包即可知晓阶段维度）。"
+      "description": "阶段标识列表，每项紧凑英文代号 S###。与 analysis/stage_plan.json 和 works/manifest.json 的 stage_ids 保持一致（冗余存放，方便运行时只加载 world 包即可知晓阶段维度）。"
     },
     "notes": {
       "type": "string"

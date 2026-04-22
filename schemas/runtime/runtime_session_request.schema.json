@@ -82,8 +82,8 @@
     },
     "counterpart_stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "当 counterpart_stage_mode 为 explicit_override 时，该值表示用户侧角色选定的阶段标识。默认不应要求单独输入。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "当 counterpart_stage_mode 为 explicit_override 时，该值表示用户侧角色选定的阶段标识，紧凑英文代号 S###。默认不应要求单独输入。"
     },
     "counterpart_label": {
       "type": "string",
@@ -95,8 +95,8 @@
     },
     "stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "当前选定的作品级活动阶段标识。world 与角色都应围绕该值装载。对于中文作品，这个值可以直接是中文。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "当前选定的作品级活动阶段标识，紧凑英文代号 S###。world 与角色都应围绕该值装载。"
     },
     "context_id": {
       "type": "string"

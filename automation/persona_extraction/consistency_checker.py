@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class ConsistencyIssue:
     severity: str          # "error" or "warning"
     category: str          # e.g. "alias", "relationship", "evidence_refs"
-    location: str          # e.g. "角色名/阶段03"
+    location: str          # e.g. "角色名/S003"
     message: str
 
     def to_dict(self) -> dict:

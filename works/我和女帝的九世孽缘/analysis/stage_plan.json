@@ -4,7 +4,8 @@
   "total_chapters": 537,
   "stages": [
     {
-      "stage_id": "阶段01_南林初遇",
+      "stage_id": "S001",
+      "stage_title": "南林初遇",
       "chapters": "0001-0010",
       "chapter_count": 10,
       "boundary_reason": "男主第九世复活至柳村救人，与女帝初遇并开始接触。第10章王枫救张四后试探姜寒汐成为'亲人'，开启感情线的第一步。",
@@ -18,7 +19,8 @@
       ]
     },
     {
-      "stage_id": "阶段02_离开南林",
+      "stage_id": "S002",
+      "stage_title": "离开南林",
       "chapters": "0011-0019",
       "chapter_count": 9,
       "boundary_reason": "从柳村到悬崖离开南林。第19章两人各自攀崖离开南林，南林篇章彻底结束，进入外部世界。",
@@ -32,7 +34,8 @@
       ]
     },
     {
-      "stage_id": "阶段03_荒野求生",
+      "stage_id": "S003",
+      "stage_title": "荒野求生",
       "chapters": "0020-0027",
       "chapter_count": 8,
       "boundary_reason": "荒野求生至姜寒汐恢复行动力后分别。第27章姜寒汐恢复行动力王枫逃跑，结束了依赖关系阶段。",
@@ -46,7 +49,8 @@
       ]
     },
     {
-      "stage_id": "阶段04_收徒进城",
+      "stage_id": "S004",
+      "stage_title": "收徒进城",
       "chapters": "0028-0038",
       "chapter_count": 11,
       "boundary_reason": "从流浪到收徒萧浩再到进入皇城区域。第38章结束青玄宗线，开启小剑宗入门比试线，场景从野外转入宗门。",
@@ -60,7 +64,8 @@
       ]
     },
     {
-      "stage_id": "阶段05_小剑宗入门",
+      "stage_id": "S005",
+      "stage_title": "小剑宗入门",
       "chapters": "0039-0050",
       "chapter_count": 12,
       "boundary_reason": "小剑宗入门比试前半段。第50章比试正式开始，新的竞技篇章开启。",
@@ -74,7 +79,8 @@
       ]
     },
     {
-      "stage_id": "阶段06_比试群英",
+      "stage_id": "S006",
+      "stage_title": "比试群英",
       "chapters": "0051-0060",
       "chapter_count": 10,
       "boundary_reason": "比试高潮至结束。第60章比试结束进入领奖拜师阶段，竞技转向人物关系推进。",
@@ -88,7 +94,8 @@
       ]
     },
     {
-      "stage_id": "阶段07_东阳皇宫",
+      "stage_id": "S007",
+      "stage_title": "东阳皇宫",
       "chapters": "0061-0074",
       "chapter_count": 14,
       "boundary_reason": "从拜师到东阳皇宫偷宝再返回。第74章离开皇宫返回小剑宗，皇宫偷盗篇结束。",
@@ -103,7 +110,8 @@
       ]
     },
     {
-      "stage_id": "阶段08_剑宗至冰宫",
+      "stage_id": "S008",
+      "stage_title": "剑宗至冰宫",
       "chapters": "0075-0085",
       "chapter_count": 11,
       "boundary_reason": "从返回小剑宗到传送至冰宫。第85章三太上长老接人离开剑宗，冰宫篇正式开始。",
@@ -117,7 +125,8 @@
       ]
     },
     {
-      "stage_id": "阶段09_冰宫入门",
+      "stage_id": "S009",
+      "stage_title": "冰宫入门",
       "chapters": "0086-0093",
       "chapter_count": 8,
       "boundary_reason": "初入冰宫到身份部分暴露。第93章姜寒汐从寒剑处得知王枫就是被她杀了六世之人，信任危机爆发。",
@@ -131,7 +140,8 @@
       ]
     },
     {
-      "stage_id": "阶段10_冰宫暗涌",
+      "stage_id": "S010",
+      "stage_title": "冰宫暗涌",
       "chapters": "0094-0106",
       "chapter_count": 13,
       "boundary_reason": "身份暴露后的冰宫生活与试探。第106章王枫与冷凝月确认穿越者身份，冰宫内部关系网建立完成。",
@@ -146,7 +156,8 @@
       ]
     },
     {
-      "stage_id": "阶段11_冰宫下山",
+      "stage_id": "S011",
+      "stage_title": "冰宫下山",
       "chapters": "0107-0115",
       "chapter_count": 9,
       "boundary_reason": "从获取资源到离开冰宫。第115章王枫从北境传送至中州，成功甩脱监视，地图完全转换。",
@@ -160,7 +171,8 @@
       ]
     },
     {
-      "stage_id": "阶段12_中州龙蛋",
+      "stage_id": "S012",
+      "stage_title": "中州龙蛋",
       "chapters": "0116-0125",
       "chapter_count": 10,
       "boundary_reason": "中州冒险至女主救男主。第125章王枫放弃伪装直呼'寒汐'，重大关系转折点。",
@@ -176,7 +188,8 @@
       ]
     },
     {
-      "stage_id": "阶段13_密林疗伤",
+      "stage_id": "S013",
+      "stage_title": "密林疗伤",
       "chapters": "0126-0138",
       "chapter_count": 13,
       "boundary_reason": "密林中的疗伤与感情深化。第138章疗伤期结束开始赶路，场景从密林转向外界。",
@@ -192,7 +205,8 @@
       ]
     },
     {
-      "stage_id": "阶段14_成仙坛与初吻",
+      "stage_id": "S014",
+      "stage_title": "成仙坛与初吻",
       "chapters": "0139-0150",
       "chapter_count": 12,
       "boundary_reason": "发现成仙坛到返回冰宫。第150章即将回冰宫主宫，中州之行结束。",
@@ -207,7 +221,8 @@
       ]
     },
     {
-      "stage_id": "阶段15_冰宫风波",
+      "stage_id": "S015",
+      "stage_title": "冰宫风波",
       "chapters": "0151-0160",
       "chapter_count": 10,
       "boundary_reason": "冰宫团聚至再次分别。第160章王枫解封修为离开冰宫，系统发布新任务，开启新阶段。",
@@ -222,7 +237,8 @@
       ]
     },
     {
-      "stage_id": "阶段16_柳魂与惜别",
+      "stage_id": "S016",
+      "stage_title": "柳魂与惜别",
       "chapters": "0161-0168",
       "chapter_count": 8,
       "boundary_reason": "南域柳绫双魂任务到前往剑宗。第168章王枫前往剑宗，姜寒汐回冰宫闭关三年。",
@@ -237,7 +253,8 @@
       ]
     },
     {
-      "stage_id": "阶段17_剑宗三年",
+      "stage_id": "S017",
+      "stage_title": "剑宗三年",
       "chapters": "0169-0179",
       "chapter_count": 11,
       "boundary_reason": "剑宗三年修炼期。第179章三年时间跳跃结束，帝陨秘境即将开启。",
@@ -251,7 +268,8 @@
       ]
     },
     {
-      "stage_id": "阶段18_帝陨秘境初探",
+      "stage_id": "S018",
+      "stage_title": "帝陨秘境初探",
       "chapters": "0180-0192",
       "chapter_count": 13,
       "boundary_reason": "进入帝陨秘境至发现寒泉灵潭。第192章发现灵潭准备双修，场景转入密室修炼。",
@@ -266,7 +284,8 @@
       ]
     },
     {
-      "stage_id": "阶段19_灵泉双修",
+      "stage_id": "S019",
+      "stage_title": "灵泉双修",
       "chapters": "0193-0200",
       "chapter_count": 8,
       "boundary_reason": "灵泉修炼至亲密关系冲突。第200章激烈冲突后进入冷静期，感情转折点。",
@@ -281,7 +300,8 @@
       ]
     },
     {
-      "stage_id": "阶段20_秘境同行",
+      "stage_id": "S020",
+      "stage_title": "秘境同行",
       "chapters": "0201-0213",
       "chapter_count": 13,
       "boundary_reason": "秘境同行至幻天大帝登场。第213章幻天大帝残魂出现，引入新机缘线。",
@@ -296,7 +316,8 @@
       ]
     },
     {
-      "stage_id": "阶段21_幻天传承",
+      "stage_id": "S021",
+      "stage_title": "幻天传承",
       "chapters": "0214-0225",
       "chapter_count": 12,
       "boundary_reason": "幻天大帝传承至醉酒吐真言。第225章王枫醉酒暴露八世仇人秘密，重大信息转折点。",
@@ -310,7 +331,8 @@
       ]
     },
     {
-      "stage_id": "阶段22_九世真相",
+      "stage_id": "S022",
+      "stage_title": "九世真相",
       "chapters": "0226-0235",
       "chapter_count": 10,
       "boundary_reason": "姜寒汐逐步确认王枫淫贼大帝身份。从怀疑到100%确认，身份真相大白。",
@@ -324,7 +346,8 @@
       ]
     },
     {
-      "stage_id": "阶段23_秘境告别",
+      "stage_id": "S023",
+      "stage_title": "秘境告别",
       "chapters": "0236-0243",
       "chapter_count": 8,
       "boundary_reason": "逃出帝陨秘境至男女主分离。第243章王枫用传送符离开冰宫飞舟，开启独自行动阶段。",
@@ -337,7 +360,8 @@
       ]
     },
     {
-      "stage_id": "阶段24_王枫独行",
+      "stage_id": "S024",
+      "stage_title": "王枫独行",
       "chapters": "0244-0257",
       "chapter_count": 14,
       "boundary_reason": "王枫独自冒险——柳村旧地探访、仙庭机缘、小龙传信等支线收束。",
@@ -352,7 +376,8 @@
       ]
     },
     {
-      "stage_id": "阶段25_东荒荒禁",
+      "stage_id": "S025",
+      "stage_title": "东荒荒禁",
       "chapters": "0258-0271",
       "chapter_count": 14,
       "boundary_reason": "从王枫承认淫贼大帝身份到进入荒禁。第271章触发时空回溯即将穿越到太古时代。",
@@ -368,7 +393,8 @@
       ]
     },
     {
-      "stage_id": "阶段26_太古天琼",
+      "stage_id": "S026",
+      "stage_title": "太古天琼",
       "chapters": "0272-0282",
       "chapter_count": 11,
       "boundary_reason": "太古时代天琼大陆冒险前半段。第282章确认王枫身份后各方关系明朗，为气运战界做准备。",
@@ -383,7 +409,8 @@
       ]
     },
     {
-      "stage_id": "阶段27_气运战界",
+      "stage_id": "S027",
+      "stage_title": "气运战界",
       "chapters": "0283-0292",
       "chapter_count": 10,
       "boundary_reason": "气运战界开启至战斗中段。第292章各路天骄交锋渐入高潮。",
@@ -398,7 +425,8 @@
       ]
     },
     {
-      "stage_id": "阶段28_晋升准帝",
+      "stage_id": "S028",
+      "stage_title": "晋升准帝",
       "chapters": "0293-0300",
       "chapter_count": 8,
       "boundary_reason": "气运战界大战至王枫晋升准帝。第300章晋升准帝、太古天道驱逐、时空回溯离开太古时代。",
@@ -414,7 +442,8 @@
       ]
     },
     {
-      "stage_id": "阶段29_荒禁归途",
+      "stage_id": "S029",
+      "stage_title": "荒禁归途",
       "chapters": "0301-0313",
       "chapter_count": 13,
       "boundary_reason": "从太古时代回归到荒禁脱困。第313章四人离开荒禁来到东荒。",
@@ -429,7 +458,8 @@
       ]
     },
     {
-      "stage_id": "阶段30_团聚冰麒麟",
+      "stage_id": "S030",
+      "stage_title": "团聚冰麒麟",
       "chapters": "0314-0325",
       "chapter_count": 12,
       "boundary_reason": "剑宗团聚与冰麒麟契约。第325章冰麒麟融入姜寒汐，北境支线收尾。",
@@ -443,7 +473,8 @@
       ]
     },
     {
-      "stage_id": "阶段31_成仙梯与玄海",
+      "stage_id": "S031",
+      "stage_title": "成仙梯与玄海",
       "chapters": "0326-0335",
       "chapter_count": 10,
       "boundary_reason": "从成仙梯到玄海大陆前期。第335章两人在客栈甜蜜日常，新大陆生活建立。",
@@ -457,7 +488,8 @@
       ]
     },
     {
-      "stage_id": "阶段32_玄海温情",
+      "stage_id": "S032",
+      "stage_title": "玄海温情",
       "chapters": "0336-0342",
       "chapter_count": 7,
       "boundary_reason": "玄海大陆温情日常至回归天苍。第342章从玄海传送回天苍，大地图转换。",
@@ -473,7 +505,8 @@
       ]
     },
     {
-      "stage_id": "阶段33_帝陨再探",
+      "stage_id": "S033",
+      "stage_title": "帝陨再探",
       "chapters": "0343-0355",
       "chapter_count": 13,
       "boundary_reason": "回归天苍到帝陨秘境吸收帝力。第355章离开帝陨秘境，危机解除。",
@@ -489,7 +522,8 @@
       ]
     },
     {
-      "stage_id": "阶段34_复仇备战",
+      "stage_id": "S034",
+      "stage_title": "复仇备战",
       "chapters": "0356-0364",
       "chapter_count": 9,
       "boundary_reason": "报仇与备战。第364章发现太上神宗遗址，开启新的机缘副本。",
@@ -504,7 +538,8 @@
       ]
     },
     {
-      "stage_id": "阶段35_太上神宗",
+      "stage_id": "S035",
+      "stage_title": "太上神宗",
       "chapters": "0365-0377",
       "chapter_count": 13,
       "boundary_reason": "太上神宗探索至天苍大劫爆发前夕。第377章方天成仙坛计划提前启动，天苍大劫降临。",
@@ -520,7 +555,8 @@
       ]
     },
     {
-      "stage_id": "阶段36_天苍大劫",
+      "stage_id": "S036",
+      "stage_title": "天苍大劫",
       "chapters": "0378-0389",
       "chapter_count": 12,
       "boundary_reason": "天苍大劫全程至王枫身死。第389章王枫第九世结束，九世孽缘主线暂告一段落。",
@@ -537,7 +573,8 @@
       ]
     },
     {
-      "stage_id": "阶段37_仙界重逢",
+      "stage_id": "S037",
+      "stage_title": "仙界重逢",
       "chapters": "0390-0400",
       "chapter_count": 11,
       "boundary_reason": "从王枫身死到仙界重逢。第400章留影石触发记忆冲击，剧情从搞笑转入紧张。",
@@ -553,7 +590,8 @@
       ]
     },
     {
-      "stage_id": "阶段38_记忆觉醒",
+      "stage_id": "S038",
+      "stage_title": "记忆觉醒",
       "chapters": "0401-0413",
       "chapter_count": 13,
       "boundary_reason": "记忆解封至系统任务开启。第413章三条系统任务开启新剧情线。",
@@ -569,7 +607,8 @@
       ]
     },
     {
-      "stage_id": "阶段39_镇魔救徒",
+      "stage_id": "S039",
+      "stage_title": "镇魔救徒",
       "chapters": "0414-0425",
       "chapter_count": 12,
       "boundary_reason": "救萧浩完毕回到道天仙府。第425章镇魔城任务完成，进入新剧情阶段。",
@@ -585,7 +624,8 @@
       ]
     },
     {
-      "stage_id": "阶段40_复活跃龙门",
+      "stage_id": "S040",
+      "stage_title": "复活跃龙门",
       "chapters": "0426-0437",
       "chapter_count": 12,
       "boundary_reason": "楚妍儿复活至小龙跃化龙门。第437章小龙获得龙门气运化为少女人形。",
@@ -600,7 +640,8 @@
       ]
     },
     {
-      "stage_id": "阶段41_仙界日常",
+      "stage_id": "S041",
+      "stage_title": "仙界日常",
       "chapters": "0438-0450",
       "chapter_count": 13,
       "boundary_reason": "仙界日常至出发寻人。第450章道天仙府日常结束，正式出发寻哈弟冷凝月。",
@@ -615,7 +656,8 @@
       ]
     },
     {
-      "stage_id": "阶段42_寒州救冷",
+      "stage_id": "S042",
+      "stage_title": "寒州救冷",
       "chapters": "0451-0462",
       "chapter_count": 12,
       "boundary_reason": "寒州救冷凝月到成亲准备。第462章成婚信物打造完成，婚礼即将开始。",
@@ -631,7 +673,8 @@
       ]
     },
     {
-      "stage_id": "阶段43_仙界成亲",
+      "stage_id": "S043",
+      "stage_title": "仙界成亲",
       "chapters": "0463-0475",
       "chapter_count": 13,
       "boundary_reason": "盛大婚礼至无敌突破。第475章前往冰渊找冰仙开启新剧情线。",
@@ -647,7 +690,8 @@
       ]
     },
     {
-      "stage_id": "阶段44_冥界启程",
+      "stage_id": "S044",
+      "stage_title": "冥界启程",
       "chapters": "0476-0482",
       "chapter_count": 7,
       "boundary_reason": "冰仙求助至正式进入冥界。第482章离开仙界进入冥界，场景完全切换。",
@@ -662,7 +706,8 @@
       ]
     },
     {
-      "stage_id": "阶段45_冥界任务",
+      "stage_id": "S045",
+      "stage_title": "冥界任务",
       "chapters": "0483-0492",
       "chapter_count": 10,
       "boundary_reason": "冥界任务完成。第492章获得渊泉诡心并开始查找亡友名单。",
@@ -679,7 +724,8 @@
       ]
     },
     {
-      "stage_id": "阶段46_往生复活",
+      "stage_id": "S046",
+      "stage_title": "往生复活",
       "chapters": "0493-0502",
       "chapter_count": 10,
       "boundary_reason": "复活众人至玄幻主线完结。第502章为玄幻主线正式完结章。",
@@ -695,7 +741,8 @@
       ]
     },
     {
-      "stage_id": "阶段47_蓝星转场",
+      "stage_id": "S047",
+      "stage_title": "蓝星转场",
       "chapters": "0503-0515",
       "chapter_count": 13,
       "boundary_reason": "从仙界到蓝星的过渡。第515章旭辰与寒淼感情推进完成。",
@@ -711,7 +758,8 @@
       ]
     },
     {
-      "stage_id": "阶段48_蓝星约会",
+      "stage_id": "S048",
+      "stage_title": "蓝星约会",
       "chapters": "0516-0525",
       "chapter_count": 10,
       "boundary_reason": "蓝星约会与领证。第525章旭辰与寒淼流星雨约会。",
@@ -729,7 +777,8 @@
       ]
     },
     {
-      "stage_id": "阶段49_蓝星结局",
+      "stage_id": "S049",
+      "stage_title": "蓝星结局",
       "chapters": "0526-0537",
       "chapter_count": 12,
       "boundary_reason": "蓝星日常至全书大结局。第537章双胞胎命名、全员回归蓝星定居。",

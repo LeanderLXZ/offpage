@@ -164,7 +164,7 @@ Examples:
 
 - `0001`
 - `0008-0010`
-- `阶段01_主角初登场`
+- `S001`（阶段标识）；阶段短标题见 `stage_title`
 - `角色A与角色B在某地重逢`
 
 Do not repeat full chapter paths inside every packet unless the path itself is

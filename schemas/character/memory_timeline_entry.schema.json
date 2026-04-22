@@ -20,8 +20,8 @@
     },
     "stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "这条记忆属于哪个剧情阶段（timeline 本文保留，方便目录索引与目视校验；digest 从 memory_id 解析，不再存此字段）。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "这条记忆属于哪个剧情阶段，紧凑英文代号 S###（timeline 本文保留，方便目录索引与目视校验；digest 从 memory_id 解析，不再存此字段）。"
     },
     "time": {
       "type": "string",

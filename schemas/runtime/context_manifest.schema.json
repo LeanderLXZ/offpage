@@ -36,8 +36,8 @@
     },
     "stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "当前上下文选定的作品级活动阶段标识。world 与目标角色默认都应围绕该阶段装载。对于中文作品，这个值可以直接是中文。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "当前上下文选定的作品级活动阶段标识，紧凑英文代号 S###。world 与目标角色默认都应围绕该阶段装载。"
     },
     "counterpart_mode": {
       "type": "string",
@@ -67,8 +67,8 @@
     },
     "counterpart_stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "当用户侧身份模式为 canon_character 且存在显式跨阶段 branch override 时，该值表示用户侧角色选定的阶段标识。默认运行时不应要求单独设置。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "当用户侧身份模式为 canon_character 且存在显式跨阶段 branch override 时，该值表示用户侧角色选定的阶段标识，紧凑英文代号 S###。默认运行时不应要求单独设置。"
     },
     "counterpart_label": {
       "type": "string"

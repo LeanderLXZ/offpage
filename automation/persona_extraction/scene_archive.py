@@ -477,7 +477,7 @@ _STAGE_NUM_RE = re.compile(r"(\d+)")
 
 
 def _stage_number(stage_id: str) -> int:
-    """Extract the leading numeric stage index from ``阶段01_xxx`` style IDs."""
+    """Extract the leading numeric stage index from ``S###`` style IDs."""
     m = _STAGE_NUM_RE.search(stage_id or "")
     return int(m.group(1)) if m else 0
 

@@ -56,7 +56,7 @@
         },
         "stage_snapshot_root": {
           "type": "string",
-          "description": "阶段快照根路径。当 stage_id 为中文时，该根路径下派生出来的路径段也应使用对应中文标识。"
+          "description": "阶段快照根路径。该根路径下每个快照文件名形如 {stage_id}.json，stage_id 使用紧凑英文代号 S###。"
         },
         "evidence_root": {
           "type": "string"

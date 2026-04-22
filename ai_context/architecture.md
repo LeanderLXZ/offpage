@@ -192,7 +192,7 @@ See `docs/requirements.md` §12 and
 - `checkout_master` has a dirty-tree guard: when the working tree has
   uncommitted / untracked changes, it refuses to switch and stays on
   the current branch (logged as warning). This prevents a SIGINT
-  mid-stage from dragging untracked `stage_snapshots/阶段XX_*` files
+  mid-stage from dragging untracked `stage_snapshots/S###.json` files
   onto `master`; the user must clean up first, then `git checkout
   master` manually.
 - Code / schema / prompt / docs / `ai_context/` changes always commit
