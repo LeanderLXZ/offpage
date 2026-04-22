@@ -57,44 +57,7 @@
 
 ## 立即执行
 
-### [T-SCENE-CAP] Phase 4 单章 scene 数量上限
-
-**动机**
-
-Phase 4 LLM 在某些章节下会切出几十个超细粒度 scene（曾观测到 30+），
-后续 retrieval 命中率反而下降，且 review/合并耗时高。需要在
-`automation/config.toml` 加一个可配置的 per-chapter 上限（如
-`[phase4].max_scenes_per_chapter`，默认 ~12-15），LLM 输出超限时强制
-按"合并相邻短 scene"或"标记需手工审校"二选一。
-
-**改动清单**
-
-1. `automation/config.toml` 增加
-   `[phase4].max_scenes_per_chapter`（默认 15）+ 行为开关
-   `[phase4].scene_cap_action = "merge" | "flag"`
-2. `automation/persona_extraction/scene_archive.py::_process_chapter`
-   解析 LLM 输出后：若 `len(scenes) > max_scenes_per_chapter`，按
-   action 处理。`merge` 模式合并最短的相邻 scene 直到合规；`flag`
-   模式将该章节标记 ERROR + 写一条 review note 等待人工
-3. `prompt_builder.build_scene_split_prompt` 在 prompt 中告知上限
-   （让 LLM 自我约束，减少 fallback 触发频率）
-4. 单元测试：构造一个 30-scene 的伪 LLM 输出，验证 merge 后 ≤ 上限
-   且 scene_id / line_range 连续
-
-**验证方法**
-
-- 取曾出现 scene 数过多的章节重跑，确认 ≤ 上限且语义连贯
-- 抽样 10 个正常章节，确认默认值不会误伤
-
-**预估工作量**：100-150 行 Python + prompt 微调，1-2 小时
-
-**依赖**：无
-
-**完成标准**
-
-- 新键在 config.toml 中文档化
-- 任何 chapter 输出的最终 scene 数 ≤ `max_scenes_per_chapter`
-- `flag` 模式可触发 ERROR 并暴露给 review
+（暂无条目）
 
 ---
 
