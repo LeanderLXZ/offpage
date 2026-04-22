@@ -244,6 +244,7 @@ def main(argv: list[str] | None = None) -> None:
                                 stage_id=b["stage_id"],
                                 chapters=b["chapters"],
                                 chapter_count=b.get("chapter_count", 10),
+                                stage_title=b.get("stage_title", ""),
                             )
                             for b in sp.get("stages", [])
                         ],

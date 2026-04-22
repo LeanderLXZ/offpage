@@ -175,7 +175,8 @@ class ProgressTracker:
         avg = self.avg_stage_seconds
 
         print(f"\n{'━' * 60}")
-        print(f"  [{n}/{self.total}] {stage.stage_id} ({stage.stage_id})")
+        title_suffix = f" — {stage.stage_title}" if stage.stage_title else ""
+        print(f"  [{n}/{self.total}] {stage.stage_id}{title_suffix}")
         print(f"  Chapters: {stage.chapters}  |  "
               f"State: {stage.state.value}")
 
@@ -1024,6 +1025,7 @@ class ExtractionOrchestrator:
                     stage_id=b["stage_id"],
                     chapters=b["chapters"],
                     chapter_count=b.get("chapter_count", 10),
+                    stage_title=b.get("stage_title", ""),
                 )
                 for b in stages_data  # full plan, not truncated
             ],
@@ -1928,6 +1930,7 @@ class ExtractionOrchestrator:
                             stage_id=b["stage_id"],
                             chapters=b["chapters"],
                             chapter_count=b.get("chapter_count", 10),
+                            stage_title=b.get("stage_title", ""),
                         )
                         for b in stage_plan_data.get("stages", [])
                     ],

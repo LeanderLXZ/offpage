@@ -13,7 +13,8 @@ Resolve the scoped runtime setup before the first roleplay turn.
 3. If new:
    - choose `work_id`
    - choose target `character_id`
-   - choose active `stage_id`
+   - choose active `stage_id` (user-facing picker shows `stage_title`; the
+     compact `S###` code is the stored value)
    - choose user-side role mode
    - if the user-side role is canon-backed, bind it to the same `stage_id` by
      default

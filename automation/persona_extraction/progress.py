@@ -351,6 +351,7 @@ class StageEntry:
     stage_id: str
     chapters: str               # e.g. "0001-0010"
     chapter_count: int
+    stage_title: str = ""       # human-readable short title (≤15 chars)
     state: StageState = StageState.PENDING
     last_reviewer_feedback: str = ""
     committed_sha: str = ""
@@ -438,6 +439,7 @@ class StageEntry:
             "stage_id": self.stage_id,
             "chapters": self.chapters,
             "chapter_count": self.chapter_count,
+            "stage_title": self.stage_title,
             "state": self.state.value,
             "last_reviewer_feedback": self.last_reviewer_feedback,
             "committed_sha": self.committed_sha,
@@ -454,6 +456,7 @@ class StageEntry:
             stage_id=d["stage_id"],
             chapters=d["chapters"],
             chapter_count=d["chapter_count"],
+            stage_title=d.get("stage_title", ""),
             state=StageState(d.get("state", "pending")),
             last_reviewer_feedback=d.get("last_reviewer_feedback", ""),
             committed_sha=d.get("committed_sha", ""),
@@ -533,6 +536,7 @@ class Phase3Progress:
                     stage_id=b["stage_id"],
                     chapters=b["chapters"],
                     chapter_count=b.get("chapter_count", 0),
+                    stage_title=b.get("stage_title", ""),
                 ))
                 added += 1
         return added
