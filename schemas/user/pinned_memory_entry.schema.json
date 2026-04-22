@@ -6,13 +6,13 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "memory_id",
+    "user_memory_id",
     "summary"
   ],
   "properties": {
-    "memory_id": {
+    "user_memory_id": {
       "type": "string",
-      "description": "关联的原始记忆 ID（例：memory_timeline 条目的 M-S###-##，或 context 级 shared memory 标识）。"
+      "description": "用户命名空间内的钉选记忆 ID，由合并流程生成；与 works/* 正典 memory_timeline（M-S###-##）不是同一命名空间，不跨层引用。"
     },
     "summary": {
       "type": "string",

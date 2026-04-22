@@ -103,8 +103,9 @@
         "additionalProperties": false,
         "required": ["summary"],
         "properties": {
-          "agreement_id": {
-            "type": "string"
+          "user_agreement_id": {
+            "type": "string",
+            "description": "用户命名空间内的约定 ID，context 内实时生成，合并时随 mutual_agreements 写入 relationship_core。"
           },
           "summary": {
             "type": "string",
@@ -155,8 +156,9 @@
         "additionalProperties": false,
         "required": ["summary"],
         "properties": {
-          "event_id": {
-            "type": "string"
+          "user_event_id": {
+            "type": "string",
+            "description": "用户命名空间内的事件 ID，context 内实时生成；与 works/* 正典事件（E-S###-##）不是同一命名空间，不跨层引用。"
           },
           "summary": {
             "type": "string"
@@ -175,8 +177,9 @@
         "additionalProperties": false,
         "required": ["summary"],
         "properties": {
-          "memory_id": {
-            "type": "string"
+          "user_memory_id": {
+            "type": "string",
+            "description": "用户命名空间内的记忆 ID，context 内实时生成；与 works/* 正典 memory_timeline（M-S###-##）不是同一命名空间，不跨层引用。"
           },
           "summary": {
             "type": "string"
