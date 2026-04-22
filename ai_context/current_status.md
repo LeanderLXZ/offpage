@@ -74,7 +74,10 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
 - Phase 4 scene archive: per-chapter parallel, independent PID lock,
   programmatic validation only, circuit breaker
   (`[phase4].circuit_breaker_*` in `automation/config.toml`,
-  default ≥8 failures / 60s → 180s pause).
+  default ≥8 failures / 60s → 180s pause). Per-chapter same-run retry
+  (`[phase4].max_retries_per_chapter`, default 2): FAILED chapters
+  requeue with `prior_error` injected into the prompt; budget exhausted
+  → ERROR; `--resume` clears retry_count for a fresh budget.
 - Baseline recovery tracked via `baseline_done`; Phase 2.5 exit
   validation runs on both fresh and `--resume` paths (re-runs Phase 2.5
   if existing baseline fails validation).

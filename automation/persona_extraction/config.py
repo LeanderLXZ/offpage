@@ -57,6 +57,12 @@ class Phase3Config:
 @dataclass(frozen=True)
 class Phase4Config:
     concurrency: int = 10
+    # Per-chapter retry budget within a single Phase 4 run. A FAILED
+    # chapter (validate_scene_split errors / parse failure / LLM error)
+    # is requeued with the prior error injected into the prompt up to
+    # this many extra times before being marked ERROR. Total attempts
+    # per chapter = 1 + max_retries_per_chapter.
+    max_retries_per_chapter: int = 2
     circuit_breaker_failure_threshold: int = 8
     circuit_breaker_window_s: int = 60
     circuit_breaker_pause_s: int = 180
