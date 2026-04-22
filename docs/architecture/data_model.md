@@ -318,7 +318,7 @@ works/{work_id}/characters/{character_id}/
 - `canon/memory_timeline/{stage_id}.json`
 - `canon/memory_digest.jsonl` — 压缩摘要索引，stage 1..N 过滤加载
 
-对于中文作品，`{stage_id}` 路径片段也应直接使用规范的中文 stage 标识符。
+`{stage_id}` 路径片段统一使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`），与 `M-S###-##` / `E-S###-##` 等 ID 家族共享 stage 段；阶段的人类可读短标题由 `stage_title`（≤15 字）承载，仅出现在 `stage_catalog` / `stage_plan` 等条目内，不进入文件路径。
 
 角色包可比世界观包保存更丰富的事件细节，包括记忆权重、情感解读以及与扮演相关的角色视角。
 

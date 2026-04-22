@@ -30,6 +30,11 @@ Arbitrary characters, stage-based state, long-term memory, multi-terminal.
   speech, attitude, knowledge state), not just event summaries;
   current-stage personality interprets recall.
 - Stage selection: one-line summary per stage, fixed for the context.
+- `stage_id` = compact English code `S###` (three digits, zero-padded,
+  e.g. `S001`), shared with the `M-S###-##` / `E-S###-##` /
+  `SC-S###-##` / `SN-S###-##` ID family; sibling `stage_title` (≤15
+  chars) carries the human-readable short name shown at bootstrap
+  stage selection.
 
 ## §3 Three Deep-Roleplay Goals
 

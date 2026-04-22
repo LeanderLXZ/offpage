@@ -56,7 +56,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 **用途**：角色阶段目录，与世界 stage_catalog 对应。
 **位置**：`characters/{character_id}/canon/stage_catalog.json`
-**关键字段**：stages[].stage_id（必须与世界的 stage_id 一致）
+**关键字段**：stages[].stage_id（`S###`，与世界的 stage_id 一致）、stages[].order、stages[].stage_title（≤15 字）、stages[].summary、stages[].snapshot_path
 
 ---
 
@@ -75,7 +75,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 **用途**：世界阶段目录，列出作品的所有可选阶段。仅用于 bootstrap 阶段选择，运行时不加载。
 **位置**：`works/{work_id}/world/stage_catalog.json`
-**关键字段**：stages[].stage_id, stages[].title, stages[].summary
+**关键字段**：stages[].stage_id（`S###`）, stages[].stage_title（≤15 字）, stages[].summary
 
 ---
 
