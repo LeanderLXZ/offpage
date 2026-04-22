@@ -37,9 +37,9 @@ _ID_STAGE_RE = re.compile(r"^[A-Z]+-S(\d{3})-\d{2}$")
 
 
 def _parse_stage_number(stage_id: str) -> int:
-    """Extract the leading numeric stage index from a stage_id string.
+    """Extract the leading numeric stage index from a ``S###`` stage_id.
 
-    Accepts forms like ``阶段01_xxx``, ``stage_05``, ``S12``, ``5``.
+    Falls back to any digit run in the string for defensive parsing.
     Returns 0 if no digits are found (caller may still reject the stage).
     """
     m = _STAGE_NUM_RE.search(stage_id)
@@ -385,7 +385,7 @@ def upsert_stage_catalog(
         stage_id: The stage identifier
         order: Numeric ordering (stage index)
         snapshot_path_rel: Relative path to the snapshot file
-        snapshot_data: Parsed snapshot JSON (to extract title, summary)
+        snapshot_data: Parsed snapshot JSON (to extract stage_title, summary)
         work_id: Work identifier
         character_id: Character identifier (None for world catalog)
         chapter_scope: {"from": "NNNN", "to": "NNNN"} or None
@@ -399,7 +399,7 @@ def upsert_stage_catalog(
     new_entry: dict[str, Any] = {
         "stage_id": stage_id,
         "order": order,
-        "title": snapshot_data.get("title", stage_id),
+        "stage_title": snapshot_data.get("stage_title", stage_id),
         "summary": snapshot_data.get("snapshot_summary", stage_id),
         "snapshot_path": snapshot_path_rel,
     }

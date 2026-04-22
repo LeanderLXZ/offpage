@@ -33,7 +33,8 @@
     },
     "stage_id": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^S[0-9]{3}$",
+      "description": "当前 context 选定的作品级活动阶段标识，紧凑英文代号 S###。"
     },
     "emotional_state": {
       "type": "object",

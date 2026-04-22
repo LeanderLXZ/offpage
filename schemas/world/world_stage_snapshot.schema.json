@@ -8,7 +8,7 @@
     "schema_version",
     "work_id",
     "stage_id",
-    "title",
+    "stage_title",
     "snapshot_summary"
   ],
   "properties": {
@@ -21,10 +21,14 @@
     },
     "stage_id": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^S[0-9]{3}$",
+      "description": "作品级阶段标识，紧凑英文代号 S###。"
     },
-    "title": {
-      "type": "string"
+    "stage_title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 15,
+      "description": "阶段的人类可读短标题（≤15 字）。"
     },
     "timeline_anchor": {
       "type": "string"

@@ -27,8 +27,8 @@
     },
     "default_stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "默认阶段标识。对于中文作品，这个值可以直接是中文。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "默认阶段标识，紧凑英文代号 S###。"
     },
     "stages": {
       "type": "array",
@@ -39,22 +39,25 @@
         "required": [
           "stage_id",
           "order",
-          "title",
+          "stage_title",
           "summary",
           "snapshot_path"
         ],
         "properties": {
           "stage_id": {
             "type": "string",
-            "minLength": 1,
-            "description": "作品级阶段标识。对于中文作品，优先直接使用原始中文标识，而不是拼音 id。"
+            "pattern": "^S[0-9]{3}$",
+            "description": "作品级阶段标识，紧凑英文代号 S###（如 S001）。"
           },
           "order": {
             "type": "integer",
             "minimum": 0
           },
-          "title": {
-            "type": "string"
+          "stage_title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15,
+            "description": "阶段的人类可读短标题（≤15 字），供 bootstrap 阶段选择展示。"
           },
           "timeline_anchor": {
             "type": "string"
@@ -99,7 +102,7 @@
           },
           "snapshot_path": {
             "type": "string",
-            "description": "该阶段对应的快照路径。如果 stage_id 为中文，则由它派生出来的路径段也应使用中文。"
+            "description": "该阶段对应的快照路径，通常为 canon/stage_snapshots/{stage_id}.json。"
           }
         }
       }

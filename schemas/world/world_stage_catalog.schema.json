@@ -21,7 +21,8 @@
     },
     "default_stage_id": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^S[0-9]{3}$",
+      "description": "默认阶段标识，紧凑英文代号 S###。"
     },
     "stages": {
       "type": "array",
@@ -32,21 +33,25 @@
         "required": [
           "stage_id",
           "order",
-          "title",
+          "stage_title",
           "summary",
           "snapshot_path"
         ],
         "properties": {
           "stage_id": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^S[0-9]{3}$",
+            "description": "作品级阶段标识，紧凑英文代号 S###。"
           },
           "order": {
             "type": "integer",
             "minimum": 0
           },
-          "title": {
-            "type": "string"
+          "stage_title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 15,
+            "description": "阶段的人类可读短标题（≤15 字）。"
           },
           "timeline_anchor": {
             "type": "string"

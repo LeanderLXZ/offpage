@@ -40,8 +40,8 @@
     },
     "stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "当前会话选定的作品级活动阶段标识。对于中文作品，这个值可以直接是中文。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "当前会话选定的作品级活动阶段标识，紧凑英文代号 S###。"
     },
     "counterpart_mode": {
       "type": "string",
@@ -70,8 +70,8 @@
     },
     "counterpart_stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "当用户侧身份模式为 canon_character 且存在显式跨阶段 branch override 时，该值表示用户侧角色选定的阶段标识。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "当用户侧身份模式为 canon_character 且存在显式跨阶段 branch override 时，该值表示用户侧角色选定的阶段标识，紧凑英文代号 S###。"
     },
     "terminal": {
       "type": "string",

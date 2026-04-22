@@ -108,7 +108,7 @@
         "properties": {
           "leak_risk": {
             "type": "string",
-            "description": "泄漏风险描述。例如：角色在阶段3不知道某人的真实身份，但 AI 容易让角色表现出知情。"
+            "description": "泄漏风险描述。例如：角色在 S003 阶段不知道某人的真实身份，但 AI 容易让角色表现出知情。"
           },
           "correct_knowledge_state": {
             "type": "string",

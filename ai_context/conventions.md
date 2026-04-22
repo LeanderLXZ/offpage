@@ -33,8 +33,14 @@ After changes, grep for the old phrasing to catch stale references.
 
 ## Naming and Identifiers
 
-- Chinese works → Chinese `work_id`, `character_id`, `stage_id`, path
-  segments.
+- Chinese works → Chinese `work_id`, `character_id`, and path segments.
+- `stage_id` is always the compact English code `S###` (three digits,
+  zero-padded, e.g. `S001`), regardless of work language. It aligns with
+  the `M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##` family.
+- `stage_title` carries the human-readable short name (≤ 15 chars,
+  Chinese for Chinese works). It lives alongside `stage_id` in
+  `stage_plan.json` and every `stage_catalog.json` entry, and is the
+  label shown at bootstrap stage selection.
 - `ai_context/` remains English.
 - JSON field names may be English; content text follows work language.
 
@@ -49,7 +55,7 @@ work-agnostic:
 - Schema `description` examples stay structural ("例如：某关键他人做出
   自我牺牲行为"), not narrative; or omit the example entirely.
 - Field identifiers in examples use placeholders like
-  `<character_id>` / `<stage_id>` / `阶段XX_<slug>`.
+  `<character_id>` / `<stage_id>` (e.g. `S001`).
 - Do not narrate history ("旧 / legacy / 已废弃 / 原为 / 已移除 /
   renamed from"). History lives in `docs/logs/` + git.
 

@@ -63,7 +63,7 @@ Pipeline checks PID lock and clean git tree before starting. See
 - Don't put specific book names, character names, chapter names, or
   plot details in docs, requirements, README, prompt templates,
   schemas, or `ai_context/` — use generic placeholders ("角色A",
-  "<work_id>", "阶段01_主角初登场"). Only `works/`, `sources/`, and
+  "<work_id>", `S001` for `stage_id`). Only `works/`, `sources/`, and
   `docs/logs/` may contain work-specific references.
 
 ## After Each Milestone

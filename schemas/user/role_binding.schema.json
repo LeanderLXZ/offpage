@@ -32,8 +32,8 @@
     },
     "stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "当前绑定的作品级活动阶段标识。该阶段先作为 work-level timeline checkpoint 选定，再投影到目标角色。对于中文作品，这个值可以直接是中文。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "当前绑定的作品级活动阶段标识，紧凑英文代号 S###。该阶段先作为 work-level timeline checkpoint 选定，再投影到目标角色。"
     },
     "status": {
       "type": "string",
@@ -70,8 +70,8 @@
     },
     "counterpart_stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "当 counterpart_stage_mode 为 explicit_override 时，该值表示用户侧角色显式覆盖后的阶段标识。默认运行时不应要求用户单独选择该值。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "当 counterpart_stage_mode 为 explicit_override 时，该值表示用户侧角色显式覆盖后的阶段标识，紧凑英文代号 S###。默认运行时不应要求用户单独选择该值。"
     },
     "counterpart_label": {
       "type": "string"

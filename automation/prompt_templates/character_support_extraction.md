@@ -29,7 +29,7 @@
 3. **Baseline 修正**：所有 baseline 文件（identity.json、voice_rules.json、behavior_rules.json、boundaries.json、failure_modes.json）已在 Phase 2.5 全书分析阶段产出骨架初稿。任何阶段中如发现原文与初稿不符，应直接修正。注意：这些 baseline 只记录跨阶段稳定的角色基底，阶段性变化写入 stage_snapshot（由独立调用处理）
 4. **角色别名跟踪**：遇到新名称时，先与 `identity.json` 中的 `aliases` 列表比对。发现新别名时更新 `identity.json` 的 `aliases`（追加新条目，含 type、effective_stages、source）
 5. **证据引用**：memory_timeline 每条的引用在条目内部处理
-6. **中文标识**：中文作品的 work_id, character_id, stage_id, 路径段都使用中文
+6. **标识命名**：中文作品的 `work_id`、`character_id` 和路径段使用中文；`stage_id` 使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`）
 7. **时间性**：记忆以事件发生时的视角书写
 
 ## memory_timeline 详细度要求

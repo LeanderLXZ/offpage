@@ -10,7 +10,7 @@
     "work_id",
     "character_id",
     "stage_id",
-    "title",
+    "stage_title",
     "snapshot_summary"
   ],
   "properties": {
@@ -29,11 +29,14 @@
     },
     "stage_id": {
       "type": "string",
-      "minLength": 1,
-      "description": "作品级阶段标识。对于中文作品，这个值可以直接是中文。"
+      "pattern": "^S[0-9]{3}$",
+      "description": "作品级阶段标识，紧凑英文代号格式 S###（三位数字零填充，如 S001），与 M-S###-## / E-S###-## / SC-S###-## / SN-S###-## 家族对齐。阶段名称见 stage_title。"
     },
-    "title": {
-      "type": "string"
+    "stage_title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 15,
+      "description": "阶段的人类可读短标题，供 bootstrap 阶段选择时展示（≤15 字）。"
     },
     "timeline_anchor": {
       "type": "string"
@@ -677,7 +680,8 @@
             "properties": {
               "stage_id": {
                 "type": "string",
-                "description": "对应的阶段 ID。"
+                "pattern": "^S[0-9]{3}$",
+                "description": "对应的阶段 ID，紧凑英文代号 S###。"
               },
               "description": {
                 "type": "string",

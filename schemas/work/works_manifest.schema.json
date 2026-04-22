@@ -91,9 +91,9 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "minLength": 1
+        "pattern": "^S[0-9]{3}$"
       },
-      "description": "阶段标识列表，顺序与 analysis/stage_plan.json 保持一致。"
+      "description": "阶段标识列表，每项紧凑英文代号 S###。顺序与 analysis/stage_plan.json 保持一致。"
     },
     "character_ids": {
       "type": "array",

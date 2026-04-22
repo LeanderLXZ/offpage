@@ -136,7 +136,7 @@ def checkout_master(project_root: Path) -> bool:
 
     A dirty working tree is refused: untracked / modified files could
     leak onto ``master`` when switching from an extraction branch (e.g.
-    SIGINT mid-stage leaves ``works/.../阶段XX_*.json`` untracked). When
+    SIGINT mid-stage leaves ``works/.../S###.json`` untracked). When
     dirty, we log + stay on the current branch so the user can inspect
     and clean up manually before re-trying.
     """
@@ -162,8 +162,8 @@ def commit_stage(project_root: Path, stage_id: str,
                  files: list[str] | None = None) -> str | None:
     """Commit current changes for a stage. Returns commit SHA or None.
 
-    ``stage_id`` is the human-readable stage identifier (e.g.
-    ``阶段XX_<slug>`` or ``baseline`` for pre-Phase-3 commits). When
+    ``stage_id`` is the compact English stage code (``S###``) or
+    ``baseline`` for pre-Phase-3 commits. When
     ``message`` is omitted, a default template is used for extraction
     commits.
     """

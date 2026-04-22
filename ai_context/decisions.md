@@ -51,7 +51,10 @@ constraints beyond what the architecture docs already say.
 
 12. stage (extraction) = stage (runtime), 1:1. Split by natural story
     boundaries (target 10 ch, min 5, max 15). Stage N cumulative
-    through 1..N. `stage_id` is a meaningful Chinese name.
+    through 1..N. `stage_id` is the compact English code `S###` (three
+    digits, zero-padded), aligned with the `M-S###-##` / `E-S###-##` /
+    `SC-S###-##` / `SN-S###-##` family. The human-readable short name
+    (≤ 15 chars) lives in the sibling `stage_title` field.
 13. Phase 2.5 produces world foundation + character baselines (skeleton
     drafts) from full-book context. Phase 3 uses 1+2N split extraction
     per stage (1 world + N char_snapshot + N char_support); any stage
