@@ -213,7 +213,7 @@ class Triager:
         Accepts L3 ``semantic`` issues (standard LLM triage path) and L2
         ``structural`` issues whose verdict carries
         ``discrepancy_type="coverage_shortage"`` (the 0-token fast path
-        built by ``build_coverage_shortage_note``).
+        built by ``build_coverage_shortage_verdict``).
         """
         if not verdict.evidence_verified or verdict.chapter_number is None:
             return None

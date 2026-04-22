@@ -1820,7 +1820,7 @@ class RoundReport:
 **Triage 流程**（不调用 LLM）：
 
 1. Coordinator 在 T2 结束的 scoped recheck 发现该 issue 仍存在
-2. 直接调用 `triage.build_coverage_shortage_note(issue, …)` 构造
+2. 直接调用 `triage.build_coverage_shortage_verdict(issue, …)` 构造
    `SourceNote`，字段：
    - `discrepancy_type = "coverage_shortage"`
    - `issue_category = "structural"`
