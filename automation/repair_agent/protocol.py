@@ -187,8 +187,8 @@ def is_coverage_shortage(issue: "Issue") -> bool:
         invent examples, T1 has no source access, T3 file-regen won't
         make the novel longer.
       * after a failed T2 try, trigger a 0-token program-constructed
-        SourceNote (see ``triage.build_coverage_shortage_note``) instead
-        of a blocking error.
+        SourceNote (see ``Triager.build_coverage_shortage_verdict``)
+        instead of a blocking error.
     """
     ctx = issue.context or {}
     return bool(ctx.get("coverage_shortage"))

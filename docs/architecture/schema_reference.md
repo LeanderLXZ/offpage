@@ -365,11 +365,11 @@ permanence_reason?, pinned_at?
 **关键字段**：
 - `note_id` — 唯一 ID
 - `stage_id` — 归属阶段
-- `file_path` — 触发问题的目标文件相对路径
+- `file` — 触发问题的目标文件相对路径
 - `json_path` — 触发问题的字段 json_path
 - `discrepancy_type` — 枚举（见 `automation/repair_agent/protocol.py DISCREPANCY_TYPES`）
-- `chapter_number`、`line_range`、`verbatim_quote` — 原文证据锚定
-- `quote_sha256` — 内容 hash（用于 staleness 检测）
+- `source_evidence.chapter_number`、`source_evidence.line_range`、`source_evidence.quote` — 原文证据锚定
+- `source_evidence.quote_sha256`、`source_evidence.chapter_sha256` — 内容 hash（用于 staleness 检测）
 
 ---
 
