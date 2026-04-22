@@ -53,12 +53,13 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "event_id",
+          "user_event_id",
           "summary"
         ],
         "properties": {
-          "event_id": {
-            "type": "string"
+          "user_event_id": {
+            "type": "string",
+            "description": "用户命名空间内的事件 ID，由合并流程生成；与 works/* 正典事件（E-S###-##）不是同一命名空间，不跨层引用。"
           },
           "summary": {
             "type": "string"
@@ -79,12 +80,13 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "memory_id",
+          "user_memory_id",
           "summary"
         ],
         "properties": {
-          "memory_id": {
-            "type": "string"
+          "user_memory_id": {
+            "type": "string",
+            "description": "用户命名空间内的记忆 ID，由合并流程生成；与 works/* 正典 memory_timeline（M-S###-##）不是同一命名空间，不跨层引用。"
           },
           "summary": {
             "type": "string"
@@ -104,12 +106,13 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "shift_id",
+          "user_shift_id",
           "summary"
         ],
         "properties": {
-          "shift_id": {
-            "type": "string"
+          "user_shift_id": {
+            "type": "string",
+            "description": "用户命名空间内的画像漂移 ID，由合并流程生成。"
           },
           "summary": {
             "type": "string"
@@ -129,10 +132,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["drift_id", "summary"],
+        "required": ["user_drift_id", "summary"],
         "properties": {
-          "drift_id": {
-            "type": "string"
+          "user_drift_id": {
+            "type": "string",
+            "description": "用户命名空间内的角色漂移 ID，由合并流程生成。"
           },
           "category": {
             "type": "string",

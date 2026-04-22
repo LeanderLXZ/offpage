@@ -70,12 +70,13 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "event_id",
+          "user_event_id",
           "summary"
         ],
         "properties": {
-          "event_id": {
-            "type": "string"
+          "user_event_id": {
+            "type": "string",
+            "description": "用户命名空间内的事件 ID，由合并流程生成；与 works/* 正典事件（E-S###-##）不是同一命名空间，不跨层引用。"
           },
           "summary": {
             "type": "string"
@@ -96,12 +97,13 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "shift_id",
+          "user_shift_id",
           "summary"
         ],
         "properties": {
-          "shift_id": {
-            "type": "string"
+          "user_shift_id": {
+            "type": "string",
+            "description": "用户命名空间内的画像漂移 ID，与 long_term_profile.persona_shift_history[].user_shift_id 保持一致。"
           },
           "summary": {
             "type": "string"
@@ -121,10 +123,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["agreement_id", "summary"],
+        "required": ["user_agreement_id", "summary"],
         "properties": {
-          "agreement_id": {
-            "type": "string"
+          "user_agreement_id": {
+            "type": "string",
+            "description": "用户命名空间内的约定 ID，由合并流程生成。"
           },
           "summary": {
             "type": "string",

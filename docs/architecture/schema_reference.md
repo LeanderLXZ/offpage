@@ -314,7 +314,7 @@ core_wounds 记录最底层的创伤根源。
 **运行时**：随 `relationship_core/manifest.json` 一同在启动阶段加载
 （按 `simulation/flows/startup_load.md` 与
 `simulation/retrieval/load_strategy.md`）。
-**关键字段**：memory_id, summary, source_context_ids?, importance?,
+**关键字段**：user_memory_id, summary, source_context_ids?, importance?,
 permanence_reason?, pinned_at?
 **更新时机**：仅在会话关闭并确认合并后追加写入，不覆盖不删除。
 
