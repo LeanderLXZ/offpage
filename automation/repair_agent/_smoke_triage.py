@@ -12,6 +12,10 @@ Scenarios exercised:
   (a) pre-T3 triage accepts a valid quote → T3 never fires
   (b) bad-quote triage is rejected by program verification
   (c) accept_cap_per_file caps acceptance
+  (d) non-semantic issues cannot reach the LLM-triage path
+  (e) T3-only self-reports are still tracked for post-gate triage
+  (f) coverage_shortage accepted via 0-token verdict;
+      Phase C must not resurface the accepted issue (H1 regression guard)
 
 Run:  python -m automation.repair_agent._smoke_triage
 """
@@ -266,11 +270,17 @@ def scenario_c_cap_enforced() -> None:
 
 
 def scenario_d_non_semantic_rejected() -> None:
-    """Regression: only `semantic` issues may be accepted as source_inherent.
+    """Regression: the LLM-triage path (`_run_triage_round`) only accepts
+    ``semantic`` issues.
 
-    A structural (L2) issue sent through ``_run_triage_round`` — even if a
-    compromised LLM stub returns a valid-looking verdict — must NOT produce
-    a SourceNote: the schema hard-limits ``issue_category`` to `semantic`.
+    Structural ``coverage_shortage`` SourceNotes are built by the 0-token
+    ``Triager.build_coverage_shortage_verdict`` path instead — they never
+    reach ``_run_triage_round``. A structural (L2) issue sent through
+    ``_run_triage_round`` — even if a compromised LLM stub returns a
+    valid-looking verdict — must NOT produce a SourceNote: the category
+    filter at the top of ``_run_triage_round`` drops it before any LLM
+    call (the ``issue_category`` enum itself now admits both ``semantic``
+    and ``structural`` to support the coverage_shortage path).
     """
     tmp = Path(tempfile.mkdtemp(prefix="repair_smoke_triage_d_"))
     target, ctx = _write_work_layout(tmp)
@@ -445,12 +455,135 @@ def scenario_e_t3_self_report_tracked() -> None:
     print("[E] OK — T3 self-report tracked, post-gate triage accepted")
 
 
+def scenario_f_coverage_shortage_accepted() -> None:
+    """Regression guard for the L2 ``coverage_shortage`` fast path (H1).
+
+    Crafts a stage_snapshot whose ``target_voice_map[0].dialogue_examples``
+    holds fewer entries than ``importance_min_examples`` demands for a
+    主角. Drives the coordinator end-to-end with a no-op T2 stub so the
+    shortage survives the single T2 attempt. Expectations:
+
+    * The 0-token ``build_coverage_shortage_verdict`` path produces one
+      ``SourceNote`` (``discrepancy_type="coverage_shortage"``,
+      ``issue_category="structural"``); zero LLM calls on the triage
+      channel.
+    * Phase C final validation reruns structural checks — the shortage
+      is still there because accept_with_notes never edits the JSON —
+      yet ``result.passed`` must be True because the coordinator filters
+      already-accepted fingerprints out of the final blocking set. This
+      is the H1 regression that would otherwise FAIL the stage.
+    """
+    tmp = Path(tempfile.mkdtemp(prefix="repair_smoke_triage_f_"))
+    work = tmp / "works" / "smoke"
+    chars = work / "characters" / "A001" / "canon" / "stage_snapshots"
+    chars.mkdir(parents=True, exist_ok=True)
+
+    target = chars / "S001.json"
+    # 主角 → threshold 5; one example → shortage of 4.
+    target.write_text(json.dumps({
+        "voice_state": {
+            "target_voice_map": [{
+                "target_type": "A001",
+                "dialogue_examples": ["only example"],
+            }],
+        },
+    }, ensure_ascii=False), encoding="utf-8")
+
+    chapters_dir = work / "sources" / "chapters"
+    chapters_dir.mkdir(parents=True, exist_ok=True)
+    (chapters_dir / "0001.txt").write_text(CHAPTER_TEXT, encoding="utf-8")
+
+    summaries_dir = work / "sources" / "summaries"
+    summaries_dir.mkdir(parents=True, exist_ok=True)
+    (summaries_dir / "0001.json").write_text(
+        json.dumps({"summary": "A001 gets two names"}), encoding="utf-8")
+
+    analysis = work / "analysis"
+    analysis.mkdir(parents=True, exist_ok=True)
+    (analysis / "stage_plan.json").write_text(
+        json.dumps({"stages": [{"stage_id": "S001",
+                                "chapters": "0001-0001"}]}),
+        encoding="utf-8",
+    )
+
+    ctx = SourceContext(
+        work_path=str(work),
+        stage_id="S001",
+        chapter_summaries_dir=str(summaries_dir),
+        chapters_dir=str(chapters_dir),
+    )
+
+    # Count any stray triage-prompt calls — they should stay at 0.
+    calls = {"triage": 0, "patch": 0, "regen": 0, "semantic": 0}
+
+    def stub(prompt: str, timeout: int = 600) -> str:
+        if "quality reviewer" in prompt:
+            calls["semantic"] += 1
+            return "[]"
+        if "source-discrepancy triage tool" in prompt:
+            calls["triage"] += 1
+            return json.dumps({"verdicts": []})
+        if "regeneration tool" in prompt:
+            calls["regen"] += 1
+            return json.dumps({})
+        # T2 source_patch prompt — return malformed JSON so the fixer
+        # takes the ``except json.JSONDecodeError`` branch and applies
+        # nothing. Returning "[]" would be parsed as an empty list and
+        # silently overwrite the field with [], pre-empting the
+        # coverage_shortage fast path.
+        calls["patch"] += 1
+        return "not valid json"
+
+    cfg = RepairConfig(
+        max_rounds=2, run_semantic=False, l3_gate_enabled=True,
+        triage_enabled=True, accept_cap_per_file=5,
+        retry_policy=RetryPolicy(
+            t0_max=1, t1_max=1, t2_max=1, t3_max=1, t3_max_per_file=1,
+            max_total_rounds=2),
+    )
+
+    result = run(
+        files=[FileEntry(path=str(target))],
+        config=cfg, source_context=ctx, llm_call=stub,
+        importance_map={"A001": "主角"},
+    )
+
+    notes_path = (Path(ctx.work_path) / "characters" / "A001" / "canon"
+                  / "extraction_notes" / "S001.jsonl")
+
+    print(f"[F] passed={result.passed}  notes={len(result.accepted_notes)}  "
+          f"triage_calls={calls['triage']}  regen_calls={calls['regen']}")
+
+    assert result.passed, (
+        "Phase C must not FAIL after coverage_shortage accept; H1 "
+        "regression suspected (accepted fingerprint resurfaced in "
+        "final validation)")
+    assert len(result.accepted_notes) == 1, (
+        f"expected exactly one coverage_shortage SourceNote, "
+        f"got {len(result.accepted_notes)}")
+    note = result.accepted_notes[0]
+    assert note.discrepancy_type == "coverage_shortage", note.discrepancy_type
+    assert note.issue_category == "structural", note.issue_category
+    assert note.extraction_choice == "keep_current_count", (
+        note.extraction_choice)
+    assert calls["triage"] == 0, (
+        f"coverage_shortage must be 0-token; saw {calls['triage']} "
+        f"triage LLM calls")
+    assert calls["regen"] == 0, (
+        f"coverage_shortage issues must not escalate to T3; saw "
+        f"{calls['regen']} regen calls")
+    assert notes_path.exists(), f"notes file not written: {notes_path}"
+
+    print("[F] OK — coverage_shortage accepted at 0 token, Phase C clean")
+
+
 def main() -> int:
     scenario_a_pre_t3_accept()
     scenario_b_bad_quote_rejected()
     scenario_c_cap_enforced()
     scenario_d_non_semantic_rejected()
     scenario_e_t3_self_report_tracked()
+    scenario_f_coverage_shortage_accepted()
     print("\nAll triage smoke scenarios passed.")
     return 0
 

@@ -235,10 +235,17 @@ def run(
                          round_num + 1)
             break
 
-        # Scoped recheck (L0–L2 only, 0 token)
+        # Scoped recheck (L0–L2 only, 0 token). Already-accepted
+        # coverage_shortage issues resurface here because the note is
+        # sidecar and the underlying JSON wasn't modified — drop them by
+        # fingerprint so the loop doesn't spin.
         recheck_issues = pipeline.run_scoped(
             files, patched_paths=[], max_layer=2)
-        recheck_blocking = _filter_blocking(recheck_issues, config)
+        accepted_fps = {n.issue_fingerprint for n in accepted_notes}
+        recheck_blocking = [
+            i for i in _filter_blocking(recheck_issues, config)
+            if i.fingerprint not in accepted_fps
+        ]
 
         # ---- L3 gate ----
         gate_blocking: list[Issue] = []
@@ -308,6 +315,15 @@ def run(
     # Phase C — Final confirmation
     # =================================================================
     final_issues = pipeline.run(files, max_layer=2, run_semantic=False)
+    # Drop any L0-L2 issue that was already accepted via SourceNote
+    # (coverage_shortage). Structural rerun resurfaces them because the
+    # JSON wasn't modified; leaving them in would FAIL the stage after
+    # a successful accept.
+    accepted_fps = {n.issue_fingerprint for n in accepted_notes}
+    if accepted_fps:
+        final_issues = [
+            i for i in final_issues if i.fingerprint not in accepted_fps
+        ]
 
     if t3_corrupted:
         # Already aborted — surface a synthetic marker so the report
