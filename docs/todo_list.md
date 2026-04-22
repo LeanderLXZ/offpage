@@ -281,6 +281,73 @@ README.md，零 Python。
 
 ---
 
+### [T-USER-ID-RENAME] user 侧 id 字段加 `user_` 前缀消歧
+
+**上下文**
+
+user 侧 schema 里若干 id 字段与 character/world 正典层同名但语义完全不同，
+属不同命名空间、互不引用。现状梳理：
+
+| user 侧字段 | schema | character / world 正典侧同名字段 |
+|---|---|---|
+| `user/long_term_profile.memory_history[].memory_id` | [long_term_profile.schema.json:86](schemas/user/long_term_profile.schema.json#L86) | `memory_timeline_entry.memory_id` (pattern `^M-S[0-9]{3}-[0-9]{2}$`) |
+| `user/pinned_memory_entry.memory_id` | [pinned_memory_entry.schema.json:13](schemas/user/pinned_memory_entry.schema.json#L13) | 同上 |
+| `user/long_term_profile.event_history[].event_id` | [long_term_profile.schema.json:60](schemas/user/long_term_profile.schema.json#L60) | `world_event_digest_entry.event_id` (pattern `^E-S[0-9]{3}-[0-9]{2}$`) |
+| `user/relationship_core.event_refs[].event_id` | [relationship_core.schema.json:77](schemas/user/relationship_core.schema.json#L77) | 同上 |
+| `runtime/context_character_state.*.event_id` | [context_character_state.schema.json:157](schemas/runtime/context_character_state.schema.json#L157) | 同上（context 内指向 user 层 event？待定） |
+| `runtime/context_character_state.*.memory_id` | [context_character_state.schema.json:177](schemas/runtime/context_character_state.schema.json#L177) | 需判定是 user 侧 id 还是引用 character 正典 `M-S###-##` |
+
+以及若干只在 user 侧存在但名字通用、易混淆的 id：
+
+- `agreement_id`（[relationship_core.schema.json:126](schemas/user/relationship_core.schema.json#L126), [context_character_state.schema.json:105](schemas/runtime/context_character_state.schema.json#L105)）
+- `shift_id`（[relationship_core.schema.json:103](schemas/user/relationship_core.schema.json#L103), [long_term_profile.schema.json:111](schemas/user/long_term_profile.schema.json#L111)）
+- `drift_id`（[long_term_profile.schema.json:134](schemas/user/long_term_profile.schema.json#L134)）
+
+隐患：目前没有跨层引用代码（runtime 未实装），是纸面隐患；一旦 merge /
+retrieval 要从 pinned_memory 指向 character 正典 memory_timeline，命名碰撞
+就会变成逻辑漏洞。
+
+**候选方案**
+
+- **A. 全量前缀化**：user 侧所有与正典层会撞名的 id 统一加 `user_` 前缀——
+  `user_memory_id` / `user_event_id` / `user_agreement_id` / `user_shift_id` /
+  `user_drift_id`。字段名直接承担作用域语义，读代码无歧义。
+  - 成本：修改 `schemas/user/*.schema.json` + `schemas/runtime/context_character_state.schema.json`
+    + `schemas/user/pinned_memory_entry.schema.json`；user merge 代码未实装
+    所以无 Python 破坏面。
+  - 用户倾向此方案（2026-04-21 对话明示）。
+- **B. 保留同名 + description 警示**：schema description 里写明"本字段是
+  user 命名空间内的自由 id，与 works/\* 正典不是同一空间，不可交叉引用"，
+  等真要跨层引用时加显式 `references: {space, id}` 结构。
+  - 成本最低，但命名歧义长期存在。
+
+**待决策项**
+
+1. `runtime/context_character_state.*.memory_id` 到底是 user 空间还是
+   指向 character 正典 `M-S###-##`？决定它是改名为 `user_memory_id` 还是
+   保留 `memory_id` 含义为"引用正典记忆"。
+2. `agreement_id` / `shift_id` / `drift_id` 虽不撞名，是否也一并加 `user_`
+   前缀保持家族一致？（候选 yes：家族一致 > 最小改动；候选 no：只改有撞
+   名风险的字段）
+3. runtime/context_character_state 里的字段归属层划分——它既是 user 侧状
+   态又是 runtime 产物，命名前缀取 `user_` 还是 `context_` 需要拍板。
+
+**未落地原因**
+
+- stage_id 英文化改动（/go 中）先行，避免一次 commit 混两个大改动
+- user merge / runtime 代码尚未实装，改 schema 无破坏面但同步改代码的
+  机会要等 simulation runtime 动工
+
+**暂不做的事**
+
+- 不提前改 schema，等 stage_id 改动落盘并 log 后再独立处理本条
+- 不在 description 里加"将来会改名"的叙述（违反 "no 历史定语" 规则）
+
+**依赖**：T-STAGE-ID-ENGLISH 落盘完成；runtime loader 设计对 context_character_state
+字段归属的定稿
+
+---
+
 ### [T-USER-AUX-SCHEMAS] users/ 辅助文件缺 schema
 
 **上下文**
