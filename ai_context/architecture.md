@@ -335,7 +335,11 @@ or `codex` call, no shared session memory, file-based context.
   Intermediate `.scene_archive.lock` +
   `works/{work_id}/analysis/scene_splits/` local ignored (must not be
   git-tracked). Resume verifies split
-  files — missing resets to pending. CLI: `--start-phase 4`.
+  files — missing resets to pending. Per-chapter same-run retry:
+  FAILED chapters requeue with `prior_error` injected; budget is
+  `[phase4].max_retries_per_chapter` (default 2, total attempts =
+  1 + budget). Exhausted → ERROR, recovered on next `--resume`
+  (retry_count cleared). CLI: `--start-phase 4`.
 
 ### Key Design
 

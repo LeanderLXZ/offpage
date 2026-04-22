@@ -250,6 +250,18 @@ constraints beyond what the architecture docs already say.
     `works/{work_id}/analysis/scene_splits/` must not be git-tracked —
     else `git checkout --` during rollback silently destroys them.
     `scene_archive.jsonl` fully regenerated on each merge.
+39a. Phase 4 chapter-level same-run retry: FAILED chapters (validate
+    failure / parse failure / LLM error) requeue inside the same
+    `_run_parallel` pass with `prior_error` injected into the next
+    prompt. Budget = `[phase4].max_retries_per_chapter` (default 2;
+    total attempts = 1 + budget). Exhausted → ERROR, deferred to
+    `--resume`. Rationale: cheaper than rerunning a fresh process for
+    a handful of stragglers, and the prior_error nudge is enough for
+    most validate failures (e.g. LLM omitting the chapter's last
+    line). Circuit breaker only counts terminal-failed chapters, not
+    transient ones — burst recovery doesn't trip it. Resume path
+    `reset_failed()` only resets ERROR; FAILED in-flight is healed by
+    `reconcile_with_disk()` on next start.
 
 ## JSON Repair
 

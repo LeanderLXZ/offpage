@@ -417,6 +417,10 @@ python -m automation.persona_extraction "<work_id>" \
 - 多章并行执行（`--concurrency`，默认 10）
 - 仅程序化校验（行号有效、不重叠、覆盖全章；alias 匹配可选——scene archive
   是 work-level 产物，不限于提取目标角色集）
+- 单次运行内 chapter 级 retry：FAILED 章节回插 retry_queue，下一次
+  调度时携 prior_error 注入 prompt 重新切分。上限
+  `[phase4].max_retries_per_chapter`（默认 2，总尝试数 = 1 + 该值）；
+  超限升级为 ERROR，留待下一次 `--resume` 清零 retry_count 重新计数。
 - 全部完成后合并为 `works/{work_id}/retrieval/scene_archive.jsonl`
 - `scene_id` 格式：`SC-S{stage:03d}-{seq:02d}`（如 `SC-S003-07`）；阶段号从
   `stage_plan.json` 查得（stage_plan 是唯一真源），seq 在每阶段内

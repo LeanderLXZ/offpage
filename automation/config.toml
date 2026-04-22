@@ -71,6 +71,12 @@ max_turns            = 50
 # 并行越高越快但也越容易撞限额。
 concurrency = 10
 
+# 单章节单次运行内的 retry 次数上限。FAILED 章节（validate 失败 / 解析失败 /
+# LLM 错误）会被回插队列并在 prompt 里注入 prior_error 重新切，最多再试这么
+# 多次。总尝试数 = 1 + max_retries_per_chapter。超出仍失败 → ERROR，由
+# `--resume` 下次运行恢复 PENDING 重新计数。
+max_retries_per_chapter = 2
+
 # 短路熔断（防止短时密集失败榨干配额）：
 #   若 circuit_breaker_window_s 秒内累计失败次数 ≥ threshold，
 #   暂停 circuit_breaker_pause_s 秒后再继续。

@@ -17,7 +17,6 @@ Final output:
 
 from __future__ import annotations
 
-import itertools
 import json
 import logging
 import re
@@ -713,10 +712,18 @@ def _run_scene_archive_inner(
             total_chapters=len(chapters_to_process),
         )
 
-    # Ensure all target chapters have entries
+    # Ensure all target chapters have entries; refresh max_retries from
+    # current config so toml bumps take effect on --resume runs.
+    cfg_phase4 = get_config().phase4
     for cid in chapters_to_process:
         if cid not in progress.chapters:
-            progress.chapters[cid] = ChapterEntry(chapter_id=cid)
+            progress.chapters[cid] = ChapterEntry(
+                chapter_id=cid,
+                max_retries=cfg_phase4.max_retries_per_chapter,
+            )
+        else:
+            progress.chapters[cid].max_retries = (
+                cfg_phase4.max_retries_per_chapter)
 
     # Reconcile in-memory state against on-disk artifacts, every run.
     # Drift can come from manual edits, interrupted writes, or git resets.
@@ -847,12 +854,26 @@ def _run_parallel(
     print(f"\n  Processing {total} chapters with {concurrency} workers...\n")
 
     pending_iter = iter(pending)
+    # FAILED chapters (state == FAILED, retry budget remaining) are
+    # appended here and pulled before the main pending_iter so they get
+    # a fresh attempt within the same run, with prior_error injected
+    # into the prompt by _process_chapter.
+    retry_queue: list[str] = []
+    retried = 0
+
+    def _next_chapter() -> str | None:
+        if retry_queue:
+            return retry_queue.pop(0)
+        return next(pending_iter, None)
 
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures: dict = {}
 
         # Seed initial stage
-        for chapter_id in itertools.islice(pending_iter, concurrency):
+        for _ in range(concurrency):
+            chapter_id = _next_chapter()
+            if chapter_id is None:
+                break
             _gate()
             future = executor.submit(
                 _process_chapter,
@@ -881,9 +902,24 @@ def _run_parallel(
                     completed += 1
                     print(f"    [OK] {cid}  ({completed}/{total})")
                 else:
-                    failed += 1
-                    print(f"    [FAIL] {cid}: {error_msg[:100]}")
-                    recent_failures.append(time.monotonic())
+                    entry = progress.chapters[cid]
+                    if (entry.state == ChapterState.FAILED
+                            and entry.retry_count <= entry.max_retries):
+                        attempt = entry.retry_count + 1
+                        max_attempts = entry.max_retries + 1
+                        print(f"    [RETRY] {cid} attempt "
+                              f"{attempt}/{max_attempts}: "
+                              f"{error_msg[:80]}")
+                        # Reset to PENDING so the requeued attempt can
+                        # transition through SPLITTING/VALIDATING again.
+                        entry.state = ChapterState.PENDING
+                        entry.last_updated = _now_iso()
+                        retry_queue.append(cid)
+                        retried += 1
+                    else:
+                        failed += 1
+                        print(f"    [FAIL] {cid}: {error_msg[:100]}")
+                        recent_failures.append(time.monotonic())
 
                 # Periodic save
                 if (completed + failed) % 10 == 0:
@@ -901,9 +937,11 @@ def _run_parallel(
                 recent_failures.clear()
                 print("  [BREAKER] Resuming...")
 
-            # Submit new tasks to fill vacant slots
-            for next_chapter in itertools.islice(
-                    pending_iter, concurrency - len(futures)):
+            # Submit new tasks to fill vacant slots; pulls retry_queue first.
+            while len(futures) < concurrency:
+                next_chapter = _next_chapter()
+                if next_chapter is None:
+                    break
                 _gate()
                 future = executor.submit(
                     _process_chapter,
@@ -918,6 +956,7 @@ def _run_parallel(
     elapsed = time.monotonic() - start_time
     print(f"\n  Completed: {completed}/{total}  "
           f"Failed: {failed}  "
+          f"Retried: {retried}  "
           f"Elapsed: {_fmt_duration(elapsed)}")
     if completed > 0:
         print(f"  Avg: {_fmt_duration(elapsed / completed)}/chapter")
