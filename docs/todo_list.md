@@ -57,7 +57,78 @@
 
 ## 立即执行
 
-（无）当前所有"立即执行"任务已完成。下一项请从下方"下一步"提升。
+### [T-SCENE-ARCHIVE-STAGE-ID] scene_archive.jsonl 的 stage_id 字段对齐新 S### 编码
+
+**动机**
+
+`1573506` stage_id 英文化后，`works/我和女帝的九世孽缘/retrieval/scene_archive.jsonl`
+（1591 条）里每条 `stage_id` 仍是旧中文 `阶段NN_xxx`（`scene_id` 本身已是
+`SC-S###-##`，来自代码按序号算）。原计划 `--start-phase 4` 触发 merge-only
+0 LLM 改写；2026-04-21 夜实操时漏带 `--resume`，`run_scene_archive` 在
+[scene_archive.py:707](automation/persona_extraction/scene_archive.py#L707) 新建空
+progress，把 537 章全部当 pending 重跑 LLM。并发 claude -p 已被手动杀掉，
+但 `scene_splits/` 从 537 → 213、`phase4_scenes.json` 变成
+pending 318 / passed 206 / splitting 9 / failed 4；全部为 gitignore 文件，无 git 回滚源。
+
+`scene_archive.jsonl` 本身未被写入（merged=False），仍是 1591 行完整旧版，
+可直接原地修复。
+
+**改动清单**
+
+1. 写一次性脚本（放 `scripts/` 或就在命令行 `python -c`）：遍历
+   `scene_archive.jsonl`，按每条 `scene_id` 抽 `SC-(S\d{3})-` 覆盖
+   `stage_id` 字段，原子写回
+2. 运行后 grep 验证：`rg '"stage_id": "阶段'` 应 0 命中；`rg '"stage_id": "S0\d{2}"'`
+   命中 1591
+3. 不触碰 `scene_splits/` 和 `phase4_scenes.json` —— 它们的半损坏状态只影响
+   "未来主动重跑整个 Phase 4"；等到那时一起处理
+
+**验证方法**
+
+- `head -1 scene_archive.jsonl | jq '{scene_id, stage_id}'` → `stage_id: "S001"`
+- stage_id 唯一值集合 `jq -r '.stage_id' scene_archive.jsonl | sort -u | wc -l`
+  应 ≤ 49（实际对应曾出现场景的阶段数）
+- 文件行数仍为 1591
+
+**预估工作量**：10 行 Python，5 分钟
+
+**依赖**：无（scene_archive.jsonl 仍在磁盘）
+
+**完成标准**
+
+- `scene_archive.jsonl` 的 `stage_id` 全部是 `S###` 格式
+- 写一篇 `docs/logs/` 记录（本事故复盘 + 修复方案）
+
+---
+
+### [T-PHASE4-RECONCILE] Phase 4 本地 intermediate 文件状态复盘
+
+**动机**
+
+[T-SCENE-ARCHIVE-STAGE-ID] 完成后，`scene_splits/` 仍缺 324 个 per-chapter 文件、
+`phase4_scenes.json` 仍有 pending/splitting/failed 状态。这些不影响 runtime，
+但下一次真的要"重跑整个 Phase 4"时会从 LLM 重做 324 章。需要决定长期策略：
+
+- 选项 A：接受现状，下次谁要重跑 Phase 4 就让他承担成本
+- 选项 B：写工具从 `scene_archive.jsonl.full_text` 反向重建 scene_splits
+  （扫原章 txt 定位 start_line / end_line），把 phase4_scenes 重置为全 passed，
+  恢复到事故前可 merge-only 续跑的状态
+- 选项 C：不修复 intermediate，但在 orchestrator 里补一条硬校验：
+  `--start-phase 4` 如果检测到 `scene_archive.jsonl` 已存在且条目非空，
+  默认要求 `--resume` 才放行（防止同样的误操作）
+
+**改动清单**
+
+待讨论后从讨论中迁出。
+
+**预估工作量**：A=0；B=~1 小时（需测试 line-number 定位边界）；C=~30 分钟
+
+**依赖**：[T-SCENE-ARCHIVE-STAGE-ID] 先完成
+
+**完成标准**
+
+- 选定 A/B/C 后按相应工作量完成
+- `docs/logs/` 记录决策理由
 
 ---
 
