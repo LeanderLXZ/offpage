@@ -9,7 +9,15 @@
     "work_id",
     "stage_id",
     "stage_title",
-    "snapshot_summary"
+    "snapshot_summary",
+    "foundation_corrections",
+    "stage_events",
+    "current_world_state",
+    "relationship_shifts",
+    "character_status_changes",
+    "location_changes",
+    "map_changes",
+    "evidence_refs"
   ],
   "properties": {
     "schema_version": {

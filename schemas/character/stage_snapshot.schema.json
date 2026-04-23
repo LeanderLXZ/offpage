@@ -11,7 +11,18 @@
     "character_id",
     "stage_id",
     "stage_title",
-    "snapshot_summary"
+    "snapshot_summary",
+    "active_aliases",
+    "current_personality",
+    "current_mood",
+    "knowledge_scope",
+    "voice_state",
+    "behavior_state",
+    "boundary_state",
+    "relationships",
+    "stage_events",
+    "character_arc",
+    "evidence_refs"
   ],
   "properties": {
     "schema_version": {
