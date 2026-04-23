@@ -1255,6 +1255,10 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 │  │  │   · 四层检查 (L0→L1→L2→L3)                   │ │            │
 │  │  │   · 四层就地修复 (T0→T1→T2→T3, 逐层升级)    │ │            │
 │  │  │   · 字段级 patch, 不回滚重提取                │ │            │
+│  │  │ ④' post-repair 程序化后处理重跑 (§11.3a):    │ │            │
+│  │  │   若 repair 改写了 digest_summary /          │ │            │
+│  │  │   stage_events，幂等重跑 post-processing     │ │            │
+│  │  │   刷新 memory_digest / world_event_digest    │ │            │
 │  │  │ ⑤ PASS → git commit                         │ │            │
 │  │  │   修复失败 → stage ERROR                      │ │            │
 │  │  └─────────────────────────────────────────────┘ │            │
@@ -1277,7 +1281,7 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 │  └──────────────────────┬──────────────────────────────┘         │
 │                         ▼                                        │
 │  ┌─ Phase 3.5 ─ 跨阶段一致性检查（全部 committed 后）─┐          │
-│  │  8 项程序化检查 (0 token) → 可选 LLM 裁定          │          │
+│  │  10 项程序化检查 (0 token) → 可选 LLM 裁定         │          │
 │  │  error → 阻断, warning → 提示                      │          │
 │  └──────────────────────┬─────────────────────────────┘          │
 │                         ▼                                        │
@@ -1697,6 +1701,22 @@ triage**——判断残留的语义问题是否为源文件自带（作者原作
     → 若 gate 仍返回 blocking issue → ERROR 出报告
   Phase C 不再独立触发 L3 checker
 ```
+
+**累积 JSONL 的切片回写安全约束**：`memory_digest.jsonl` /
+`world_event_digest.jsonl` 按阶段累积；repair 被调度在**当前 stage
+切片**上运行时（FileEntry 通过 `is_jsonl_slice=True` + `jsonl_full_content`
++ `jsonl_key_field` 标注），`write_file_entry` 必须按主键（`memory_id` /
+`event_id`）把修补后的切片合并回完整列表再写盘，避免用切片子集覆盖
+历史阶段条目导致静默丢数。任何 fixer（T0/T1/T2/T3）完成后的写盘都
+必须经此路径，不得直接对切片内容调用 `write_patched_file`。
+
+**repair 完成后的程序化后处理重跑**：每个 stage Phase B 通过、进入
+git commit 之前，编排器无条件再调用一次程序化后处理（§11.3a）。repair
+可能改写了 `digest_summary` / world `stage_events` / character
+`stage_events` 等后处理的源字段；后处理幂等且 0 token，重跑保证
+`memory_digest.jsonl` / `world_event_digest.jsonl` / `stage_catalog.json`
+与 repair 后的源字段保持 1:1 一致。重跑失败按首次失败同样处理：stage
+进入 ERROR，`--resume` 重试。
 
 **L3 gate 触发条件**：一个文件进入 gate 当且仅当以下两点同时满足——
 (1) 它在 Phase A 就有过 L3 issue（即属于 L3_files 集合）；
@@ -2122,9 +2142,11 @@ Phase 3 全部 stage 提交后，运行跨阶段一致性检查。
 | 3 | 关系连续性 | 相邻 stage 间 attitude/trust/intimacy 变化是否有 driving_events 归因 |
 | 4 | evidence_refs 覆盖率 | 快照和记忆条目中 evidence_refs 为空的比例 |
 | 5 | memory_digest 对应 | memory_digest.jsonl 条目是否与 memory_timeline memory_id 一一对应 |
-| 6 | target_map 样本数 | target_voice_map / target_behavior_map 样本数是否满足 importance-based 阈值（§11.4.3） |
-| 7 | stage_id 对齐 | 世界/角色 stage_catalog 和 stage_snapshots 目录是否对齐 |
-| 8 | world_event_digest 对应 | world_event_digest.jsonl 条目数是否与 world stage_snapshot `stage_events` 逐条对应 |
+| 6 | memory_digest 摘要一致 | 每条 memory_digest `summary` 是否与对应 memory_timeline `digest_summary` **文本完全相等**（1:1 拷贝契约，防止 repair 改写源字段后 digest 漂移） |
+| 7 | target_map 样本数 | target_voice_map / target_behavior_map 样本数是否满足 importance-based 阈值（§11.4.3） |
+| 8 | stage_id 对齐 | 世界/角色 stage_catalog 和 stage_snapshots 目录是否对齐 |
+| 9 | world_event_digest 对应 | world_event_digest.jsonl 条目数是否与 world stage_snapshot `stage_events` 逐条对应 |
+| 10 | world_event_digest 摘要一致 | 每条 world_event_digest `summary` 是否与对应 world stage_snapshot `stage_events[i]` **文本完全相等**（1:1 拷贝契约，i 由 `event_id` 的 seq 推得） |
 
 > 长度约束（`stage_events` 50–80 字、`event_description` 150–200 字、
 > `digest_summary` 30–50 字等）由 schema minLength/maxLength 在每阶段

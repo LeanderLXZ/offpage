@@ -489,10 +489,15 @@ class ExtractionOrchestrator:
             path: Path, schema_name: str, id_fields: tuple[str, ...],
         ) -> RepairFileEntry | None:
             """Load accumulated jsonl; keep only entries whose id belongs
-            to the current stage; return FileEntry with pre-filtered list
-            content (preserves accumulated path for reporting)."""
+            to the current stage; return FileEntry with the current-stage
+            slice as ``content`` plus the full accumulated list in
+            ``jsonl_full_content``. ``write_file_entry`` merges the
+            patched slice back into the full list at write time, so
+            prior-stage entries are never truncated by a slice write-back.
+            """
             if not path.exists():
                 return None
+            full: list[dict] = []
             kept: list[dict] = []
             try:
                 text = path.read_text(encoding="utf-8")
@@ -508,6 +513,7 @@ class ExtractionOrchestrator:
                     continue
                 if not isinstance(obj, dict):
                     continue
+                full.append(obj)
                 for f_key in id_fields:
                     val = obj.get(f_key)
                     if isinstance(val, str) and stage_pat.search(val):
@@ -519,6 +525,9 @@ class ExtractionOrchestrator:
                 path=str(path),
                 schema=_load_schema(schema_name),
                 content=kept,
+                is_jsonl_slice=True,
+                jsonl_full_content=full,
+                jsonl_key_field=id_fields[0],
             )
 
         # World stage snapshot
@@ -1781,6 +1790,39 @@ class ExtractionOrchestrator:
 
             stage.transition(StageState.PASSED)
             phase3.save(self.project_root)
+
+            # Repair may have rewritten source fields that post-processing
+            # already consumed (memory_timeline.digest_summary,
+            # world stage_events, character stage_events). Re-run the
+            # programmatic post-processing pass so
+            # memory_digest.jsonl / world_event_digest.jsonl /
+            # stage_catalog.json reflect the repaired source. The pass is
+            # idempotent and 0-token; if repair made no substantive change
+            # the re-run is a no-op. Errors here downgrade the stage to
+            # ERROR so --resume retries (same contract as the first pass).
+            stage_order_pp2 = next(
+                (i for i, b in enumerate(phase3.stages)
+                 if b.stage_id == stage.stage_id), 0)
+            pp2_errors, pp2_warnings = run_stage_post_processing(
+                project_root=self.project_root,
+                work_id=pipeline.work_id,
+                stage_id=stage.stage_id,
+                stage_order=stage_order_pp2,
+                character_ids=pipeline.target_characters,
+                chapter_range=stage.chapters,
+            )
+            for w in pp2_warnings:
+                print(f"    [WARN] post-repair PP: {w}")
+            if pp2_errors:
+                for e in pp2_errors:
+                    print(f"    [ERROR] post-repair PP: {e}")
+                stage.error_message = (
+                    "; ".join(pp2_errors)[:2000]
+                    or "post-repair post-processing failed")
+                stage.transition(StageState.FAILED)
+                stage.transition(StageState.ERROR)
+                phase3.save(self.project_root)
+                return
 
 
         # --- Step 5: Git commit ---

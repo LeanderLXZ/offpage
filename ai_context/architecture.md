@@ -312,12 +312,28 @@ or `codex` call, no shared session memory, file-based context.
        invoke triage (mechanical errors cannot be "source's fault").
      Field-level surgical patching via json_path — no whole-file
      rollback. Checkers and fixers are orthogonal (any L can need any T).
-  4. Git commit — **commit-ordering contract**: git commit first; only
+  4. Post-repair post-processing rerun (0 token, idempotent): after
+     repair PASSES and before git commit, the orchestrator re-runs the
+     same programmatic post-processing pass. Repair may have rewritten
+     `digest_summary` / world `stage_events` / character
+     `stage_events`; the rerun refreshes `memory_digest.jsonl` /
+     `world_event_digest.jsonl` / `stage_catalog.json` so derived
+     digests stay 1:1 with the repaired source. Failure here degrades
+     the stage to ERROR (same contract as the first pass).
+  5. Git commit — **commit-ordering contract**: git commit first; only
      non-empty SHA → `COMMITTED`; empty SHA reverts to `FAILED` so
      resume retries.
 
   Repair agent FAIL (error-level issues unresolved) → stage ERROR.
   `--resume` resets ERROR → PENDING for a fresh attempt.
+
+  Accumulated JSONL repair safety: `memory_digest.jsonl` and
+  `world_event_digest.jsonl` are scheduled into repair as a current-
+  stage slice. `FileEntry` carries `is_jsonl_slice=True` plus the
+  pre-read full list and a per-entry key field; all fixer write paths
+  go through `write_file_entry`, which merges the patched slice back
+  into the full list by key before writing. Prior-stage entries cannot
+  be truncated by a slice write-back.
 
   Every stage may correct any existing baseline (via char_support).
   Character extraction does NOT read world snapshot. Extraction prompts
@@ -325,13 +341,17 @@ or `codex` call, no shared session memory, file-based context.
   `stage_catalog.json` — self-contained snapshot contract embedded in
   prompt.
 
-- **Phase 3.5 — Cross-stage consistency**: after all Phase 3 commits, 8
+- **Phase 3.5 — Cross-stage consistency**: after all Phase 3 commits, 10
   programmatic checks (0 token): alias consistency, field completeness,
   relationship continuity, `evidence_refs` coverage, memory_digest
-  correspondence, target_map counts (main≥5, important≥3, others≥1),
-  stage_id alignment, world_event_digest correspondence. Optional LLM
-  adjudication only for flagged items. Errors block Phase 4. Report:
-  `consistency_report.json`.
+  correspondence, **memory_digest summary 1:1 equality**, target_map
+  counts (main≥5, important≥3, others≥1), stage_id alignment,
+  world_event_digest correspondence, **world_event_digest summary 1:1
+  equality**. The two equality gates guard against repair rewriting
+  source fields (`digest_summary`, world `stage_events`) without a
+  post-processing re-run — which would otherwise leave derived digests
+  stale. Optional LLM adjudication only for flagged items. Errors block
+  Phase 4. Report: `consistency_report.json`.
 - **Phase 4 — Scene archive**: independent from Phase 3 (only needs
   `stage_plan.json`). Per-chapter LLM calls mark scene boundaries +
   metadata; program extracts `full_text` by line number. Parallel

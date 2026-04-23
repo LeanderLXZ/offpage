@@ -54,6 +54,64 @@ def write_patched_file(path: str, patched: dict | list) -> None:
         )
 
 
+def _merge_jsonl_slice(
+    full: list[dict], patched_slice: list[dict], key_field: str,
+) -> list[dict]:
+    """Merge a patched current-stage slice back into the full accumulated list.
+
+    Replace-by-key: entries in *full* whose ``key_field`` value matches
+    an entry in *patched_slice* are swapped for the slice version;
+    slice entries with a key not present in *full* are appended at the
+    end, preserving full-list ordering otherwise. Entries in *full* not
+    referenced by *patched_slice* are passed through unchanged.
+    """
+    slice_by_key = {
+        e.get(key_field): e
+        for e in patched_slice
+        if isinstance(e, dict) and e.get(key_field)
+    }
+    seen: set = set()
+    merged: list[dict] = []
+    for entry in full:
+        k = entry.get(key_field) if isinstance(entry, dict) else None
+        if k and k in slice_by_key:
+            merged.append(slice_by_key[k])
+            seen.add(k)
+        else:
+            merged.append(entry)
+    for k, entry in slice_by_key.items():
+        if k not in seen:
+            merged.append(entry)
+    return merged
+
+
+def write_file_entry(entry) -> None:
+    """Write ``entry.content`` back to ``entry.path``, slice-aware.
+
+    For a regular FileEntry this is equivalent to
+    ``write_patched_file(entry.path, entry.content)``.
+
+    For a JSONL slice (``entry.is_jsonl_slice``), the patched slice in
+    ``entry.content`` is merged back into ``entry.jsonl_full_content``
+    by ``entry.jsonl_key_field`` before writing, so prior-stage entries
+    in the accumulated file are preserved. The in-memory full content
+    is updated so subsequent patches within the same repair round see
+    the new state.
+    """
+    if (
+        getattr(entry, "is_jsonl_slice", False)
+        and isinstance(entry.content, list)
+        and entry.jsonl_full_content is not None
+        and entry.jsonl_key_field
+    ):
+        merged = _merge_jsonl_slice(
+            entry.jsonl_full_content, entry.content, entry.jsonl_key_field)
+        write_patched_file(entry.path, merged)
+        entry.jsonl_full_content = merged
+        return
+    write_patched_file(entry.path, entry.content)
+
+
 # ---------------------------------------------------------------------------
 # Path parsing helpers
 # ---------------------------------------------------------------------------

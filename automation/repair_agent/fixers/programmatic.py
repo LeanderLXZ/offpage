@@ -17,7 +17,7 @@ from typing import Any
 
 from . import BaseFixer
 from ..protocol import FileEntry, FixResult, Issue, SourceContext
-from ..field_patch import apply_field_patch, write_patched_file
+from ..field_patch import apply_field_patch, write_file_entry
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ class ProgrammaticFixer(BaseFixer):
 
             if modified:
                 f.content = content
-                write_patched_file(file_path, content)
+                write_file_entry(f)
 
         return FixResult(patched_paths=patched, resolved_fingerprints=resolved)
 

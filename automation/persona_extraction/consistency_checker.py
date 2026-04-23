@@ -113,10 +113,14 @@ def run_consistency_check(
     issues.extend(_check_relationship_continuity(work_dir, character_ids, stage_ids))
     issues.extend(_check_evidence_refs_coverage(work_dir, character_ids, stage_ids))
     issues.extend(_check_memory_id_correspondence(work_dir, character_ids, stage_ids))
+    issues.extend(_check_memory_digest_summary_equality(
+        work_dir, character_ids, stage_ids))
     issues.extend(_check_target_map_counts(
         work_dir, character_ids, stage_ids, importance_map))
     issues.extend(_check_stage_id_alignment(work_dir, character_ids, stage_ids))
     issues.extend(_check_world_event_digest(work_dir, stage_ids))
+    issues.extend(_check_world_event_digest_summary_equality(
+        work_dir, stage_ids))
 
     error_count = sum(1 for i in issues if i.severity == "error")
     warning_count = sum(1 for i in issues if i.severity == "warning")
@@ -454,6 +458,45 @@ def _check_memory_id_correspondence(
     return issues
 
 
+def _check_memory_digest_summary_equality(
+    work_dir: Path, character_ids: list[str], stage_ids: list[str],
+) -> list[ConsistencyIssue]:
+    """Verify memory_digest.summary == timeline.digest_summary (1:1 text).
+
+    Decisions §33 requires memory_digest entries to be a literal 1:1 copy
+    of the matching memory_timeline ``digest_summary``. Post-processing
+    writes them that way; if repair later rewrites ``digest_summary``
+    but post-processing is not re-run, the two drift. Compare by
+    ``memory_id`` and flag any text mismatch as an error.
+    """
+    issues: list[ConsistencyIssue] = []
+
+    for char_id in character_ids:
+        timeline_by_id: dict[str, str] = {}
+        for stage_id in stage_ids:
+            timeline = _load_json(_timeline_path(work_dir, char_id, stage_id))
+            if isinstance(timeline, list):
+                for entry in timeline:
+                    mid = entry.get("memory_id", "")
+                    digest_summary = entry.get("digest_summary", "")
+                    if mid and isinstance(digest_summary, str):
+                        timeline_by_id[mid] = digest_summary
+
+        for entry in _load_jsonl(_digest_path(work_dir, char_id)):
+            mid = entry.get("memory_id", "")
+            summary = entry.get("summary", "")
+            if not mid or mid not in timeline_by_id:
+                continue
+            if summary != timeline_by_id[mid]:
+                issues.append(ConsistencyIssue(
+                    "error", "memory_digest_summary",
+                    f"{char_id}/memory_digest/{mid}",
+                    "memory_digest.summary != memory_timeline.digest_summary "
+                    "(1:1 copy contract violated; re-run post-processing)"))
+
+    return issues
+
+
 def _min_examples_for_target(target: str,
                              importance_map: dict[str, str]) -> int:
     """Shared rule: main → 5, important → 3, others → 1.
@@ -652,5 +695,60 @@ def _check_world_event_digest(
                 f"world_event_digest has {len(stage_digest)} entries "
                 f"but stage_events has {n_events} items "
                 f"(1:1 mapping required)"))
+
+    return issues
+
+
+def _check_world_event_digest_summary_equality(
+    work_dir: Path, stage_ids: list[str],
+) -> list[ConsistencyIssue]:
+    """Verify world_event_digest.summary == world stage_events[i] (1:1 text).
+
+    Decisions §32 requires each world_event_digest entry's ``summary`` to
+    be a literal 1:1 copy of the corresponding ``stage_events[i]`` in the
+    world stage_snapshot, with ``i = int(event_id seq) - 1``. Post-
+    processing writes them that way; repair rewriting ``stage_events``
+    without a post-processing re-run would desynchronise them. Flag any
+    text mismatch as an error.
+    """
+    import re
+    _event_re = re.compile(r"^E-S(\d{3})-(\d{2})$")
+
+    digest_entries = _load_jsonl(
+        work_dir / "world" / "world_event_digest.jsonl")
+    digest_by_stage_seq: dict[tuple[str, int], str] = {}
+    for entry in digest_entries:
+        eid = entry.get("event_id", "")
+        m = _event_re.match(eid) if isinstance(eid, str) else None
+        if not m:
+            continue
+        stage_key = f"S{m.group(1)}"
+        seq = int(m.group(2))
+        summary = entry.get("summary", "")
+        if isinstance(summary, str):
+            digest_by_stage_seq[(stage_key, seq)] = summary
+
+    issues: list[ConsistencyIssue] = []
+    for stage_id in stage_ids:
+        snap_path = work_dir / "world" / "stage_snapshots" / f"{stage_id}.json"
+        snapshot = _load_json(snap_path)
+        if snapshot is None:
+            continue
+        stage_events = snapshot.get("stage_events", [])
+        if not isinstance(stage_events, list):
+            continue
+        for i, event_text in enumerate(stage_events):
+            if not isinstance(event_text, str) or not event_text.strip():
+                continue
+            expected = event_text.strip()
+            actual = digest_by_stage_seq.get((stage_id, i + 1))
+            if actual is None:
+                continue
+            if actual != expected:
+                issues.append(ConsistencyIssue(
+                    "error", "world_event_digest_summary",
+                    f"world/{stage_id}/E-{stage_id}-{i + 1:02d}",
+                    "world_event_digest.summary != stage_events[i] "
+                    "(1:1 copy contract violated; re-run post-processing)"))
 
     return issues
