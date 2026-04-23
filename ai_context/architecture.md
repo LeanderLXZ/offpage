@@ -350,8 +350,14 @@ or `codex` call, no shared session memory, file-based context.
   equality**. The two equality gates guard against repair rewriting
   source fields (`digest_summary`, world `stage_events`) without a
   post-processing re-run — which would otherwise leave derived digests
-  stale. Optional LLM adjudication only for flagged items. Errors block
-  Phase 4. Report: `consistency_report.json`.
+  stale. The consistency checker reads its inputs **read-only** (no L1
+  JSON repair side-effect writes) and the orchestrator commits
+  `consistency_report.json` on the extraction branch immediately after
+  saving — regardless of pass/fail — so the report is included in the
+  eventual squash-merge and never leaks as uncommitted dirt that would
+  block `checkout_master` on the work scope. Optional LLM adjudication
+  only for flagged items. Errors block Phase 4. Report:
+  `consistency_report.json`.
 - **Phase 4 — Scene archive**: independent from Phase 3 (only needs
   `stage_plan.json`). Per-chapter LLM calls mark scene boundaries +
   metadata; program extracts `full_text` by line number. Parallel

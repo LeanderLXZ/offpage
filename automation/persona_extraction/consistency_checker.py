@@ -15,7 +15,6 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .json_repair import try_repair_json_file, try_repair_jsonl_file
 from .validator import importance_for_target, importance_min_examples
 
 logger = logging.getLogger(__name__)
@@ -155,11 +154,16 @@ def save_report(
 # ---------------------------------------------------------------------------
 
 def _load_json(path: Path) -> dict | list | None:
-    """Load a JSON file, attempting repair if needed."""
+    """Read a JSON file read-only.
+
+    Phase 3.5 must not mutate tracked artifacts as a side effect — any
+    write here would leave uncommitted dirt that blocks ``checkout_master``
+    (see requirements §11.10 "Phase 3.5 产物提交契约"). Parse errors are
+    the repair agent's responsibility; here we just log and return None.
+    """
     if not path.exists():
         return None
     try:
-        try_repair_json_file(path)
         return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning("Failed to load %s: %s", path, exc)
@@ -167,11 +171,10 @@ def _load_json(path: Path) -> dict | list | None:
 
 
 def _load_jsonl(path: Path) -> list[dict]:
-    """Load a JSONL file, attempting repair if needed."""
+    """Read a JSONL file read-only (see _load_json docstring)."""
     if not path.exists():
         return []
     try:
-        try_repair_jsonl_file(path)
         lines = path.read_text(encoding="utf-8").strip().splitlines()
         return [json.loads(line) for line in lines if line.strip()]
     except (json.JSONDecodeError, OSError) as exc:

@@ -1869,6 +1869,12 @@ class ExtractionOrchestrator:
 
         Returns True if no error-level issues found (safe to proceed).
         Returns False if errors exist (should block Phase 4).
+
+        The generated ``consistency_report.json`` is committed to the
+        extraction branch before returning — regardless of pass/fail.
+        Committing on both paths keeps ``checkout_master`` clean (report
+        sits in the work scope) and ensures the squash-merge includes
+        the report as documented in current_status.md.
         """
         assert self.pipeline and self.phase3
         print("\n--- Phase 3.5: Cross-stage consistency check ---")
@@ -1879,8 +1885,12 @@ class ExtractionOrchestrator:
         report = run_consistency_check(
             self.project_root, self.pipeline.work_id, char_ids, stage_ids)
 
-        # Save report
+        # Save + commit the report on the extraction branch. Commit is
+        # best-effort — the report save itself is authoritative, the
+        # commit is so the file doesn't linger as uncommitted dirt when
+        # the orchestrator later attempts checkout_master().
         save_report(report, self.project_root, self.pipeline.work_id)
+        self._commit_consistency_report(stage_ids)
 
         # Print summary
         errors = sum(1 for i in report.issues if i.severity == "error")
@@ -1899,6 +1909,40 @@ class ExtractionOrchestrator:
 
         print("  [OK] No blocking issues found.")
         return True
+
+    def _commit_consistency_report(self, stage_ids: list[str]) -> None:
+        """Commit consistency_report.json on the extraction branch.
+
+        Called right after ``save_report`` in ``_run_consistency_check``.
+        A missing commit here would leave the tracked report as
+        uncommitted dirt, blocking the final ``checkout_master`` under
+        the work scope (see gpt-5 H4).
+        """
+        assert self.pipeline
+        rel = (
+            f"works/{self.pipeline.work_id}/analysis/consistency_report.json")
+        stage_span = (
+            f"{stage_ids[0]}..{stage_ids[-1]}"
+            if stage_ids else "no-stages")
+        message = (
+            f"phase3.5: consistency_report {stage_span}\n\n"
+            f"Cross-stage consistency check output.\n"
+            f"Automated by persona-extraction orchestrator.")
+        try:
+            sha = commit_stage(
+                self.project_root, "phase3.5",
+                message=message, files=[rel])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Consistency report commit raised (non-fatal): %s", exc)
+            return
+        if sha:
+            print(f"  [git] Committed consistency_report as {sha}")
+        else:
+            # commit_stage returns None when the diff is empty — the
+            # report was already committed or the file is unchanged.
+            logger.info(
+                "Consistency report commit no-op (nothing to commit).")
 
     def _run_scene_archive(self, *, end_stage: int = 0,
                            resume: bool = True) -> None:
