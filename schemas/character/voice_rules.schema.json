@@ -25,27 +25,34 @@
     },
     "baseline_tone": {
       "type": "string",
-      "description": "角色最基本的语气基调。例如：冷淡疏离、温柔但带距离感、傲气但不失分寸。"
+      "maxLength": 100,
+      "description": "角色最基本的语气基调。例如：冷淡疏离、温柔但带距离感、傲气但不失分寸。上限 100 字。"
     },
     "speech_patterns": {
       "type": "array",
-      "description": "角色的一般性语言习惯。例如：喜欢用反问句、说话简短有力、习惯在句尾加语气词。",
+      "maxItems": 15,
+      "description": "角色的一般性语言习惯。例如：喜欢用反问句、说话简短有力、习惯在句尾加语气词。最多 15 条，每条 ≤ 50 字。",
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 50
       }
     },
     "vocabulary_preferences": {
       "type": "array",
-      "description": "角色的用词偏好。例如：偏好古风用语、口语化、喜欢用比喻、避免粗俗词汇。",
+      "maxItems": 15,
+      "description": "角色的用词偏好。例如：偏好古风用语、口语化、喜欢用比喻、避免粗俗词汇。最多 15 条，每条 ≤ 50 字。",
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 50
       }
     },
     "signature_phrases": {
       "type": "array",
-      "description": "角色的标志性口头禅或惯用语。例如：'本座'、'有趣'、'哼'。",
+      "maxItems": 30,
+      "description": "角色的标志性口头禅或惯用语。例如：'本座'、'有趣'、'哼'。最多 30 条，每条 ≤ 10 字。",
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 10
       }
     },
     "dialogue_examples": {
@@ -73,7 +80,8 @@
     },
     "emotional_voice_map": {
       "type": "array",
-      "description": "角色在不同情绪状态下的语言变化模式。这是语言模拟的核心差异化来源。",
+      "maxItems": 15,
+      "description": "角色在不同情绪状态下的语言变化模式。这是语言模拟的核心差异化来源。最多 15 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -85,14 +93,16 @@
           },
           "voice_shift": {
             "type": "string",
-            "description": "在这种情绪下语气如何变化。例如：暧昧时语速放慢、声音变轻；愤怒时用词变得尖锐简短。"
+            "maxLength": 50,
+            "description": "在这种情绪下语气如何变化。例如：暧昧时语速放慢、声音变轻；愤怒时用词变得尖锐简短。上限 50 字。"
           },
           "typical_expressions": {
             "type": "array",
-            "description": "这种情绪下的典型表达方式或句式。",
-            "maxItems": 15,
+            "maxItems": 5,
+            "description": "这种情绪下的典型表达方式或句式。最多 5 条，每条 ≤ 15 字。",
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 15
             }
           },
           "dialogue_examples": {
@@ -120,7 +130,8 @@
     },
     "target_voice_map": {
       "type": "array",
-      "description": "角色面对不同类型对象时的说话差异。",
+      "maxItems": 10,
+      "description": "角色面对不同类型对象时的说话差异。最多 10 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -132,14 +143,16 @@
           },
           "voice_shift": {
             "type": "string",
-            "description": "面对这类对象时语气如何变化。"
+            "maxLength": 50,
+            "description": "面对这类对象时语气如何变化。上限 50 字。"
           },
           "typical_expressions": {
             "type": "array",
-            "description": "面对这类对象时的典型表达方式。",
-            "maxItems": 15,
+            "maxItems": 5,
+            "description": "面对这类对象时的典型表达方式。最多 5 条，每条 ≤ 15 字。",
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 15
             }
           },
           "dialogue_examples": {
@@ -167,15 +180,11 @@
     },
     "taboo_patterns": {
       "type": "array",
-      "description": "角色绝对不会说的话或使用的表达方式。例如：不会主动示弱求饶、不会用轻浮的语气。",
+      "maxItems": 15,
+      "description": "角色绝对不会说的话或使用的表达方式。例如：不会主动示弱求饶、不会用轻浮的语气。最多 15 条，每条 ≤ 30 字。",
       "items": {
-        "type": "string"
-      }
-    },
-    "evidence_refs": {
-      "type": "array",
-      "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 30
       }
     }
   }
