@@ -192,8 +192,8 @@ See `docs/requirements.md` §12 and
 - `checkout_master` and `preflight_check` both accept a `scope_paths`
   argument. The orchestrator passes `["works/{work_id}/"]` so dirt /
   uncommitted changes **outside** the extraction's commit scope (e.g.
-  `.claude/settings.json`, editor state) are tolerated; only dirt
-  inside the scope blocks. This keeps the "no untracked
+  editor state, other unrelated local changes) are tolerated; only
+  dirt inside the scope blocks. This keeps the "no untracked
   `stage_snapshots/S###.json` leaks to `master`" invariant while no
   longer failing a stage just because an unrelated file is dirty.
 - Code / schema / prompt / docs / `ai_context/` changes always commit
