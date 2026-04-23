@@ -53,7 +53,8 @@
           },
           "source": {
             "type": "string",
-            "description": "名称的来源或原因。例如：'角色A对角色B的日常称呼'、'在某界的重生身份'。"
+            "maxLength": 100,
+            "description": "名称的来源或原因。例如：'角色A对角色B的日常称呼'、'在某界的重生身份'。上限 100 字。"
           },
           "used_by": {
             "type": "array",
@@ -72,19 +73,23 @@
     },
     "birth_origin": {
       "type": "string",
-      "description": "出生地或出身背景。例如：某小镇、皇族血脉。"
+      "maxLength": 100,
+      "description": "出生地或出身背景。例如：某小镇、皇族血脉。上限 100 字。"
     },
     "appearance_summary": {
       "type": "string",
-      "description": "外貌简要描述。侧重于角色扮演中有辨识度的特征。"
+      "maxLength": 100,
+      "description": "外貌简要描述。侧重于角色扮演中有辨识度的特征。上限 100 字。"
     },
     "background_summary": {
       "type": "string",
-      "description": "角色的基本背景故事概述。不含随阶段变化的部分。"
+      "maxLength": 200,
+      "description": "角色的基本背景故事概述。不含随阶段变化的部分。上限 200 字。"
     },
     "initial_social_position": {
       "type": "string",
-      "description": "角色在故事开始时的社会地位或身份定位。后续阶段的变化记录在 stage_snapshot 中。"
+      "maxLength": 100,
+      "description": "角色在故事开始时的社会地位或身份定位。后续阶段的变化记录在 stage_snapshot 中。上限 100 字。"
     },
     "affiliations": {
       "type": "array",
@@ -95,7 +100,8 @@
     },
     "core_wounds": {
       "type": "array",
-      "description": "角色的核心创伤——跨全故事始终影响角色行为和心理的根源性伤痛。不同于阶段性的 active_wounds（在 stage_snapshot 中随阶段演变），core_wounds 记录的是角色最底层的、贯穿故事的心理创伤根源。例如：被父母抛弃、被至亲背叛、童年虐待。",
+      "maxItems": 15,
+      "description": "角色的核心创伤——跨全故事始终影响角色行为和心理的根源性伤痛。不同于阶段性的 active_wounds（在 stage_snapshot 中随阶段演变），core_wounds 记录的是角色最底层的、贯穿故事的心理创伤根源。例如：被父母抛弃、被至亲背叛、童年虐待。最多 15 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -103,27 +109,26 @@
         "properties": {
           "wound": {
             "type": "string",
-            "description": "创伤内容。例如：'幼年被至亲遗弃于某处'。"
+            "maxLength": 50,
+            "description": "创伤内容。例如：'幼年被至亲遗弃于某处'。上限 50 字。"
           },
           "origin": {
             "type": "string",
-            "description": "创伤的来源/成因。例如：'母亲为逃避追杀将她遗弃'。"
+            "maxLength": 100,
+            "description": "创伤的来源/成因。例如：'母亲为逃避追杀将她遗弃'。上限 100 字。"
           },
           "behavioral_impact": {
             "type": "string",
-            "description": "创伤对角色行为的长期影响。例如：'极度抗拒亲密关系，对被抛弃话题敏感到会改变行为决策'。"
-          },
-          "source_type": {
-            "type": "string",
-            "enum": ["canon", "inference", "ambiguous"],
-            "description": "来源类型。"
+            "maxLength": 100,
+            "description": "创伤对角色行为的长期影响。例如：'极度抗拒亲密关系，对被抛弃话题敏感到会改变行为决策'。上限 100 字。"
           }
         }
       }
     },
     "key_relationships": {
       "type": "array",
-      "description": "角色的核心人物关系——跨全故事的关系概览，包含关系演变弧线。不同于 stage_snapshot 中的 relationships（记录某一阶段的关系状态），key_relationships 记录关系的全局演变轨迹。仅记录对角色有重大影响的关系。",
+      "maxItems": 10,
+      "description": "角色的核心人物关系——跨全故事的关系概览，包含关系演变弧线。不同于 stage_snapshot 中的 relationships（记录某一阶段的关系状态），key_relationships 记录关系的全局演变轨迹。仅记录对角色有重大影响的关系。最多 10 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -135,38 +140,33 @@
           },
           "initial_relationship": {
             "type": "string",
-            "description": "故事开始时的关系状态。例如：'宿敌——被她杀了八次的仇人'。"
+            "maxLength": 50,
+            "description": "故事开始时的关系状态。例如：'宿敌——被她杀了八次的仇人'。上限 50 字。"
           },
           "relationship_arc": {
             "type": "string",
-            "description": "关系的全局演变弧线概述。例如：'仇人→被迫共处→策略性接近→产生真情→彼此信任→结为伴侣'。"
+            "maxLength": 100,
+            "description": "关系的全局演变弧线概述。例如：'仇人→被迫共处→策略性接近→产生真情→彼此信任→结为伴侣'。上限 100 字。"
           },
           "turning_points": {
             "type": "array",
-            "description": "关系的关键转折点。",
+            "maxItems": 15,
+            "description": "关系的关键转折点。最多 15 条，每条 ≤ 50 字。",
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 50
             }
-          },
-          "source_type": {
-            "type": "string",
-            "enum": ["canon", "inference", "ambiguous"],
-            "description": "来源类型。"
           }
         }
       }
     },
     "distinguishing_features": {
       "type": "array",
-      "description": "角色的显著特征——外貌、能力、习惯等方面有辨识度的标志。",
+      "maxItems": 20,
+      "description": "角色的显著特征——外貌、能力、习惯等方面有辨识度的标志。最多 20 条，每条 ≤ 100 字。",
       "items": {
-        "type": "string"
-      }
-    },
-    "evidence_refs": {
-      "type": "array",
-      "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 100
       }
     }
   }

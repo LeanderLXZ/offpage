@@ -172,16 +172,22 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 `character_manifest.json` 的 `aliases` 保持扁平字符串数组用于快速查找。
 
-**核心创伤**：`core_wounds` 字段记录跨全故事始终影响角色行为的根源性心理
-创伤，每条含 `wound`、`origin`（成因）、`behavioral_impact`（行为影响）、
-`source_type`。不同于 stage_snapshot 中的 `active_wounds`（随阶段演变），
-core_wounds 记录最底层的创伤根源。
+**核心创伤**：`core_wounds` 字段（≤ 15 条）记录跨全故事始终影响角色行为
+的根源性心理创伤，每条含 `wound`（≤ 50 字）、`origin`（成因，≤ 100 字）、
+`behavioral_impact`（行为影响，≤ 100 字）。不同于 stage_snapshot 中的
+`active_wounds`（随阶段演变），core_wounds 记录最底层的创伤根源。
 
-**核心人物关系**：`key_relationships` 字段记录对角色有重大影响的跨全故事
-关系概览，每条含 `target`、`initial_relationship`、`relationship_arc`
-（全局演变弧线）、`turning_points`、`source_type`。不同于 stage_snapshot
-中的 `relationships`（记录某一阶段的关系状态），key_relationships 提供
-关系的全局演变轨迹。
+**核心人物关系**：`key_relationships` 字段（≤ 10 条）记录对角色有重大
+影响的跨全故事关系概览，每条含 `target`、`initial_relationship`
+（≤ 50 字）、`relationship_arc`（全局演变弧线，≤ 100 字）、
+`turning_points`（≤ 15 条，每条 ≤ 50 字）。不同于 stage_snapshot 中的
+`relationships`（记录某一阶段的关系状态），key_relationships 提供关系
+的全局演变轨迹。
+
+**字段上下限**：`birth_origin` / `appearance_summary` /
+`initial_social_position` ≤ 100 字；`background_summary` ≤ 200 字；
+`distinguishing_features` ≤ 20 条，每条 ≤ 100 字；`aliases[].source`
+≤ 100 字。所有上下限由 schema 硬门控，不在 TOML 或 prompt 另立副本。
 
 ---
 
@@ -190,6 +196,13 @@ core_wounds 记录最底层的创伤根源。
 **用途**：角色语言风格的提取锚点（baseline）。
 **位置**：`characters/{character_id}/canon/voice_rules.json`
 **运行时**：**不加载**。运行时使用 stage_snapshot 中的 `voice_state`。
+
+**字段上下限**：`baseline_tone` ≤ 100 字；`speech_patterns` /
+`vocabulary_preferences` ≤ 15 条，每条 ≤ 50 字；`signature_phrases`
+≤ 30 条，每条 ≤ 10 字；`emotional_voice_map` ≤ 15 条，
+`voice_shift` ≤ 50 字，`typical_expressions` ≤ 5 条，每条 ≤ 15 字；
+`target_voice_map` ≤ 10 条，结构同 emotional_voice_map；
+`taboo_patterns` ≤ 15 条，每条 ≤ 30 字。
 
 ---
 
@@ -203,6 +216,12 @@ core_wounds 记录最底层的创伤根源。
 `obsessions`（非理性心结，不受权衡控制）是两个独立字段。stage_snapshot
 中的 `behavior_state` 同样维护 `core_goals` / `obsessions`，
 `emotional_baseline` 维护 `active_goals` / `active_obsessions`。
+
+**字段上下限**：`core_goals` / `obsessions` ≤ 10 条，每条 ≤ 50 字；
+`decision_making_style` 50–200 字；`emotional_triggers` ≤ 15 条；
+`emotional_reaction_map` ≤ 15 条；`relationship_behavior_map` ≤ 10 条；
+`habitual_behaviors` ≤ 15 条，每条 ≤ 50 字；子字段字符串 ≤ 50 字
+（少数 ≤ 100 字）。
 
 ---
 

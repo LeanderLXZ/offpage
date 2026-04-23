@@ -18,10 +18,10 @@ Load before the first reply:
   importance, involved_characters?, time?, location?}` — summary is a
   1:1 copy of the world stage_snapshot `stage_events` entry; stage is
   encoded in `event_id` prefix `E-S###`; loader filters via regex
-- target character identity (`identity.json`, loader-level field whitelist
-  filter — loads canonical_name/aliases/background/core_wounds/key_relationships;
-  **strips `evidence_refs` and large nested evidence fields at load time** to
-  cut Tier 0 tokens without schema churn; no Phase 2/2.5 rerun required)
+- target character identity (`identity.json`, loaded fully — field-level
+  caps live in `identity.schema.json` (e.g. `background_summary` ≤ 200 chars,
+  `key_relationships` ≤ 10 entries), so Tier 0 size is bounded at extraction
+  time, no loader-side filtering required)
 - target character failure modes (`failure_modes.json`)
 - target character hard boundaries (`boundaries.json` → `hard_boundaries` only)
 - target character selected-stage snapshot (self-contained: voice, behavior,

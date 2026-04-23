@@ -75,8 +75,8 @@
     },
     "emotional_reaction_map": {
       "type": "array",
-      "maxItems": 10,
-      "description": "角色在不同情绪状态下的完整反应模式。这是行为模拟的核心。最多 10 条。",
+      "maxItems": 15,
+      "description": "角色在不同情绪状态下的完整反应模式。这是行为模拟的核心。最多 15 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
