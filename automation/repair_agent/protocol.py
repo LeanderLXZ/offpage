@@ -13,10 +13,21 @@ from typing import Any, Literal
 
 @dataclass
 class FileEntry:
-    """A file to be checked / repaired."""
+    """A file to be checked / repaired.
+
+    For accumulated JSONL files where the repair stack operates on the
+    current-stage slice only, ``is_jsonl_slice`` flips the write path:
+    ``content`` is the patched slice, ``jsonl_full_content`` is the
+    original full list, and ``jsonl_key_field`` is the per-entry id key
+    used to merge the slice back into the full list at write time. This
+    prevents a filtered subset from overwriting prior-stage entries.
+    """
     path: str
     schema: dict | None = None
     content: dict | list | None = None  # pre-loaded; None = read from path
+    is_jsonl_slice: bool = False
+    jsonl_full_content: list[dict] | None = None
+    jsonl_key_field: str = ""
 
     def load(self) -> dict | list | None:
         """Load content from disk if not already loaded."""

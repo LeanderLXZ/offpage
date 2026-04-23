@@ -70,8 +70,11 @@ Supports Claude CLI and Codex CLI backends. Full pipeline design in
 - Git integration: dedicated branch, per-stage commits, auto-rollback,
   squash-merge to `master`. Commit-ordering contract prevents
   fake-committed drift.
-- Phase 3.5 cross-stage consistency checker (8 programmatic checks, 0
-  token).
+- Phase 3.5 cross-stage consistency checker (10 programmatic checks,
+  0 token). Includes `memory_digest.summary` ↔ timeline
+  `digest_summary` and `world_event_digest.summary` ↔ world
+  `stage_events[i]` 1:1 text-equality gates so repair rewriting source
+  fields cannot desynchronise derived digests.
 - Resume auto-reset of blocked stages; progress / end-stage separation
   with strict prefix semantics for finalization.
 - Phase 4 scene archive: per-chapter parallel, independent PID lock,

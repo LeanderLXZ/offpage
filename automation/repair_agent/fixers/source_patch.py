@@ -17,7 +17,7 @@ from typing import Any, Callable
 
 from . import BaseFixer
 from ..context_retriever import ContextRetriever
-from ..field_patch import apply_field_patch, extract_subtree, write_patched_file
+from ..field_patch import apply_field_patch, extract_subtree, write_file_entry
 from ..protocol import (
     FileEntry, FixResult, Issue, SourceContext, TriageVerdict,
 )
@@ -131,7 +131,7 @@ class SourcePatchFixer(BaseFixer):
                 new_content = apply_field_patch(content, issue.json_path,
                                                 parsed)
                 f.content = new_content
-                write_patched_file(f.path, new_content)
+                write_file_entry(f)
                 patched.append(issue.json_path)
                 resolved.add(issue.fingerprint)
             except (KeyError, IndexError) as exc:

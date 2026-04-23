@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 from . import BaseFixer
 from ..context_retriever import ContextRetriever
-from ..field_patch import write_patched_file
+from ..field_patch import write_file_entry
 from ..protocol import (
     FileEntry, FixResult, Issue, SourceContext, TriageVerdict,
 )
@@ -122,7 +122,7 @@ class FileRegenFixer(BaseFixer):
                 new_content.pop("__source_inherent__", None)
 
             f.content = new_content
-            write_patched_file(file_path, new_content)
+            write_file_entry(f)
             for issue in file_issues:
                 if issue.fingerprint in file_candidates:
                     # Triage owns the decision — don't mark resolved.
