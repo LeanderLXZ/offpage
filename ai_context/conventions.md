@@ -78,13 +78,8 @@ Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
 - User data under `users/`; never write canon from user context.
 - Baseline files = extraction anchors only — not runtime-loaded.
 - Stage snapshots are **self-contained** — never merged with baseline at runtime.
-- Length gates (hard):
-  - World + character `stage_events` — 50–80 CJK chars per entry
-  - `memory_timeline.event_description` — 150–200 CJK chars
-  - `memory_timeline.digest_summary` — 30–50 CJK chars
-  - `knowledge_scope` items — ≤ 50 CJK chars each
-  - `relationships[*].relationship_history_summary` — ≤ 300 CJK chars (tunable via `[repair_agent].relationship_history_summary_max_chars`)
-- Count caps (hard): `knowledge_scope.knows` ≤ 50, `does_not_know` ≤ 30, `uncertain` ≤ 30. Over-limit → trim least relevant (drop commonsense / early untriggered / items already in `memory_timeline`).
+- Length gates (hard): declared in JSON schema only (`schemas/**.schema.json`) — no parallel tunables in `config.toml`. Spot examples: `stage_events` items 50–80 chars, `memory_timeline.event_description` 150–200, `memory_timeline.digest_summary` 30–50, `memory_timeline.subjective_experience` 100–200, `relationship_history_summary` ≤ 300, `knowledge_scope` items ≤ 50, character baseline string fields (`behavior_rules` / `boundaries` / `failure_modes`) typically 50 / 100 / 200.
+- Count caps (hard): schema `maxItems`. Spot examples: `knowledge_scope.knows` ≤ 50, `does_not_know` ≤ 30, `uncertain` ≤ 30, `memory_timeline.knowledge_gained / misunderstanding / concealment` ≤ 5 each, `behavior_rules.core_goals / obsessions` ≤ 10, `boundaries.*` ≤ 15, `failure_modes.*` ≤ 10–15. Over-limit → trim least relevant.
 
 ## Git
 

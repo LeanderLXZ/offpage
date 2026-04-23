@@ -78,10 +78,6 @@ class RepairAgentConfig:
     total_round_limit: int = 5
     triage_enabled: bool = True
     triage_accept_cap_per_file: int = 5
-    # L2 structural length cap on each relationships[*]
-    # .relationship_history_summary string. Violations are flagged as
-    # structural errors and blocked from COMMITTED.
-    relationship_history_summary_max_chars: int = 300
     # Max concurrent per-file repair workers within a single stage. Each
     # worker runs an independent ``coordinator.run(files=[single])``
     # pipeline. Anthropic Opus subscription tolerates ~8-10 concurrent

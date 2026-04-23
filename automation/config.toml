@@ -114,11 +114,6 @@ triage_enabled = true
 # 限制 coverage_shortage 滥用。
 triage_accept_cap_per_file = 5
 
-# L2 结构检查对每条 `relationships[*].relationship_history_summary`
-# 字符串长度的硬上限。超长归为 structural error（阻塞 COMMITTED），
-# 缺失/空串则单独以 warning 暴露出来，不挡提交但进入 review。
-relationship_history_summary_max_chars = 300
-
 # 单 stage 内每文件独立 repair 的并发 worker 数。每个 worker 跑一次
 # `coordinator.run(files=[single])`（Phase A + Phase B + L3 gate +
 # Phase C 全流程）。Anthropic Opus 订阅下 ~8-10 并发能撑住；频繁看到
