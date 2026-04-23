@@ -248,7 +248,13 @@ or `codex` call, no shared session memory, file-based context.
      `stage_events` entry. 5-level importance inferred by keyword. IDs
      use `{TYPE}-S{stage:03d}-{seq:02d}`; stage encoded in ID.
   3. Repair agent (`automation/repair_agent/`): unified check + fix
-     system. Three-phase operation:
+     system, dispatched **per file in parallel** by orchestrator
+     (`ThreadPoolExecutor(max_workers=[repair_agent].repair_concurrency)`,
+     default 10). Each file is an independent repair transaction
+     (`coordinator.run(files=[single])`) with its own `RepairRecorder`
+     JSONL. coordinator itself is unchanged — it's pure per-file logic
+     already; cross-file consistency lives in Phase 3.5, not here.
+     Three-phase operation:
      - Phase A: full validation (L0 json_syntax → L1 schema → L2
        structural → L3 semantic). Checkers are layered — files with
        lower-layer errors skip higher layers.

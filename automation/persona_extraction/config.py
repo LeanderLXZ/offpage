@@ -82,6 +82,12 @@ class RepairAgentConfig:
     # .relationship_history_summary string. Violations are flagged as
     # structural errors and blocked from COMMITTED.
     relationship_history_summary_max_chars: int = 300
+    # Max concurrent per-file repair workers within a single stage. Each
+    # worker runs an independent ``coordinator.run(files=[single])``
+    # pipeline. Anthropic Opus subscription tolerates ~8-10 concurrent
+    # claude -p calls; reduce to 4-5 if frequent rate_limit_pause entries
+    # appear. 1 = legacy single-threaded repair.
+    repair_concurrency: int = 10
 
 
 @dataclass(frozen=True)

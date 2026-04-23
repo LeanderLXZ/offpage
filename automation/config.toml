@@ -119,6 +119,12 @@ triage_accept_cap_per_file = 5
 # 缺失/空串则单独以 warning 暴露出来，不挡提交但进入 review。
 relationship_history_summary_max_chars = 300
 
+# 单 stage 内每文件独立 repair 的并发 worker 数。每个 worker 跑一次
+# `coordinator.run(files=[single])`（Phase A + Phase B + L3 gate +
+# Phase C 全流程）。Anthropic Opus 订阅下 ~8-10 并发能撑住；频繁看到
+# `rate_limit_pause.json` 时降到 4-5。1 = 单线程（旧行为）。
+repair_concurrency = 10
+
 
 # ----------------------------------------------------------------
 # [backoff] 退避策略（非 token-limit）
