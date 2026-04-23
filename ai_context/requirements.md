@@ -1,251 +1,148 @@
-# Requirements (Compressed English Reference)
+<!--
+MAINTENANCE — 更新 ai_context/ 前读：这是 AI 快速 follow 项目的索引，不是详细手册。
+1. 写"是什么 / 在哪找"，指向权威源（代码路径 / docs/*.md / schema / log）
+2. 优先删而不是加；新增前先看能否合并已有条目
+3. 只写当前设计，不写"旧 / legacy / 已废弃 / 原为"
+4. 不出现真实书名 / 角色 / 剧情，用通用占位符（`<work_id>`, `角色A`, `S001`）
+5. 预算：architecture / decisions / requirements 各 ≤ ~150 行；全目录读完 ≤ 几千 token
+-->
 
-Authoritative source: `docs/requirements.md` (Chinese). This file is a
-quick-reference index only.
+# Requirements — Compressed Index
+
+Authoritative source: `docs/requirements.md` (Chinese). Each section
+below summarises in a few lines + points to the corresponding section
+there for full text.
 
 ## §1 Overall Goal
 
-Long-lived novel character roleplay. Deep roleplay, not surface mimicry.
-Arbitrary characters, stage-based state, long-term memory, multi-terminal.
+Long-lived novel character roleplay. Deep behavior / memory /
+relationship consistency, not surface tone mimicry. Arbitrary
+characters, stage-based state, multi-terminal.
 
 ## §2 Stage Model
 
-- Stage splitting is the analysis phase's most critical output — every
-  boundary propagates to all downstream structures (world / character
-  snapshots, memory timelines, runtime stage selection). Story-boundary
-  accuracy matters more than chapter counts. Target 10, min 5, max 15;
-  variable per stage. Stage N cumulative through 1..N.
-- Selected stage = "now"; prior stages = history. Current-stage
-  personality / voice only.
-- World snapshots: foundation (setting, power system, cosmology) + entity
-  tracking (events, locations, factions, cast) + fixed vs dynamic
-  relationships + per-stage snapshots sharing `stage_id` with character
-  snapshots.
-- Character snapshots: events, status, personality / voice shifts, mood,
-  relationships.
-- Inter-character relationships evolve per stage (attitude, trust,
-  intimacy, event-driven transitions, knowledge boundaries, concealment,
-  mutual influence).
-- Cross-stage historical recall uses behavioral details (nicknames,
-  speech, attitude, knowledge state), not just event summaries;
-  current-stage personality interprets recall.
-- Stage selection: one-line summary per stage, fixed for the context.
-- `stage_id` = compact English code `S###` (three digits, zero-padded,
-  e.g. `S001`), shared with the `M-S###-##` / `E-S###-##` /
-  `SC-S###-##` / `SN-S###-##` ID family; sibling `stage_title` (≤15
-  chars) carries the human-readable short name shown at bootstrap
-  stage selection.
+- Natural story-boundary splits (target 10, min 5, max 15). Every
+  boundary propagates to world / character / memory / retrieval.
+- Stage N cumulative through 1..N; latest stage = "now".
+- Shared `stage_id` (`S###`, 3-digit zero-pad) across world / character /
+  memory; paired `stage_title` (≤15 chars, work language) for bootstrap
+  selector.
+- Cross-stage recall uses behavioral details (nicknames, speech,
+  attitude, knowledge state), not just event summaries.
+- → `docs/requirements.md` §2.
 
 ## §3 Three Deep-Roleplay Goals
 
-1. Structured character data (identity with `core_wounds` and
+1. Structured character data (identity with `core_wounds` +
    `key_relationships`, personality, triggers, goals vs obsessions,
-   relationships, memories, language style, boundaries, failure modes,
-   `character_arc`)
-2. Character-perspective memory (subjective, not objective plot summary)
-3. Stable voice + behavior per emotion, per target, per situation
+   relationships, memory, voice, boundaries, failure modes,
+   `character_arc`).
+2. Character-perspective memory (subjective, not plot summary).
+3. Stable voice + behavior per emotion / target / situation.
+- → `docs/requirements.md` §3.
 
 ### §3.1 Identity / Name Tracking
 
-Characters may carry multiple names across disguise / amnesia / aliases,
-unnamed-then-named, dao-name / honorific changes, dual identity, or
-relationship-based nicknames. Requirements: stable `character_id` (never
-changes); aliases list with name, type (本名/化名/代称/称呼/封号/道号),
-stage range, source. Extraction must match new names against existing
-aliases before creating new entities. Runtime loads aliases with the
-stage snapshot.
-
-Analysis-phase **cross-chunk identity merging** is mandatory — chunk
-summarization processes independently, so the global analysis phase must
-unify aliases before emitting candidates.
+Multi-name tracking (alias type 本名/化名/代称/称呼/封号/道号, stage
+range, source) under a stable `character_id`. **Cross-chunk identity
+merging** in the analysis phase is mandatory.
+→ `docs/requirements.md` §3.1 + `schemas/character/identity.schema.json`.
 
 ## §4 Runtime Loading
 
-Six categories: basic identity, personality core, speech style, memory
-library, behavior rules, forbidden deviations. Plus runtime rules for
-cognitive conflict and historical recall processing.
+Six categories: basic identity / personality core / speech style /
+memory / behavior rules / forbidden deviations. Plus cognitive conflict
+and historical recall rules. Full formula → `architecture.md` §Runtime
+Load Formula + `simulation/retrieval/load_strategy.md`.
 
 ## §5 User Flow
 
-- New user: work → character → stage → self-role → user package → context
-- Existing user: load account → select / create context
-- One-time setup lock; changes need new package or explicit migration
-- Close / merge: exit keyword → merge prompt → selective long-term promotion
-- Context tracks real-time state; long-term profile updates only on merge
-- Per-turn journaling for crash recovery; merged contexts = immutable
-  account history
+New: work → character → stage → self-role → user package → context.
+Existing: load account → select / create context. One-time setup lock
+(changes need new package or explicit migration). Close / merge:
+selective long-term promotion. Per-turn journaling for crash recovery;
+merged contexts = immutable account history.
+→ `docs/requirements.md` §5.
 
 ## §6 Data Separation
 
 Objective vs subjective; canon vs inference; character canon vs user
 data; knowledge boundaries; stage boundaries; multi-work namespaces;
-content language consistency (work language → all generated content
-including user data).
+content-language consistency. Hard schema gates in `conventions.md`
+§Data Separation.
 
 ## §7 Information Layering
 
-Five layers:
-
-1. Immutable — identity (incl. `core_wounds` + `key_relationships`),
-   `hard_boundaries`, `failure_modes`
-2. Self-contained stage snapshot — voice / behavior / boundary /
-   relationship + `character_arc`, loaded directly, no baseline merge.
-   `target_voice_map` / `target_behavior_map` filtered by user role at
-   load time. Fallback: if current snapshot lacks a matching target, the
-   engine scans backwards through previous snapshots (pure code I/O).
-3. Historical memories — memory_timeline recent 2 stages full;
-   `memory_digest.jsonl` compressed index for distant; FTS5 on-demand for
-   rest; past snapshots on-demand.
-4. Session-mutable — context state, updated per turn.
-5. Cross-session — `long_term_profile`, `relationship_core`, merge-only.
-
-Baseline files (`voice_rules.json`, `behavior_rules.json`,
-`boundaries.json`) = extraction anchors only, NOT loaded at runtime.
-
-Load tiers: startup core → structured on-demand → transcript recall →
-raw source verification. Per-work config can customize.
+Five layers: immutable (identity + hard_boundaries + failure_modes) /
+self-contained stage snapshot / historical memory (timeline + digests +
+FTS5) / session-mutable (per-turn context state) / cross-session
+(long_term_profile + relationship_core, merge-only). Baseline files =
+extraction anchors, not runtime. Load tiers: startup core → structured
+on-demand → transcript recall → raw source.
+→ `docs/requirements.md` §7 + `architecture.md` §Runtime Load Formula.
 
 ## §8 Source Ingestion
 
-Formats: TXT, EPUB, MOBI, HTML, user excerpts. Pipeline: raw →
-normalize (UTF-8, clean) → chapter split (zero-padded) → metadata. Source
-package = input layer, never modified downstream, excluded from git.
-Chinese works use Chinese `work_id`.
+Formats TXT / EPUB / MOBI / HTML / user excerpts. Pipeline: raw →
+normalize → chapter split (zero-padded) → metadata. Source package =
+input layer, never modified downstream, excluded from git. Chinese
+works → Chinese `work_id`.
+→ `docs/requirements.md` §8 + `automation/ingestion/`.
 
-## §9 Extraction Process
+## §9 Extraction Process — Seven Steps
 
-Seven steps: ingest → chapter summarization (parallel chunks) → global
-analysis (identity merge → world overview → stage plan → candidates →
-baseline production) → active character confirmation → coordinated stage
+ingest → chapter summarization (parallel chunks) → global analysis
+(identity merge → world overview → stage plan → candidates → baseline
+production) → active character confirmation → coordinated stage
 extraction (world + character per stage; may correct baselines) →
-targeted supplement → package validation.
-
-Self-contained snapshots: stage 1 ≈ baseline + stage; stage N =
-complete current state (unchanged fields included); baseline =
-extraction anchor only.
+targeted supplement → package validation. Self-contained snapshots per
+stage (stage N = complete current state, including unchanged fields).
+→ `docs/requirements.md` §9.
 
 ## §10 Output Quality Protection
 
-- **§10.1 Runtime anti-dilution** (long conversations): anchor
-  re-injection, rolling session state, deep calibration checkpoints.
-- **§10.2 Extraction cross-stage quality** (fresh context per stage, no
-  in-session dilution): satisfied by prompt_builder schema injection,
-  validator + semantic review, Phase 3.5 consistency check. No extra
-  dilution code needed.
+- §10.1 Runtime anti-dilution — anchor re-injection, rolling session
+  state, deep calibration checkpoints. Implemented by
+  `simulation/prompt_templates/`.
+- §10.2 Extraction cross-stage quality — fresh context per stage (no
+  in-session dilution); protected by prompt_builder schema injection,
+  validator + semantic review, Phase 3.5 consistency check.
+- → `docs/requirements.md` §10.
 
 ## §11 Automated Extraction Pipeline
 
-Python orchestrator in `automation/`. Phase 0 parallel summarization
-(`--concurrency`, default 10) → Phase 1 analysis → Phase 2 user confirm
-→ Phase 2.5 baseline production → Phase 3 stage loop (1+2N split
-extraction: 1 world + N char_snapshot + N char_support, post-processing,
-repair agent, git commit) → Phase 3.5 cross-stage
-consistency → Phase 4 scene archive (independent).
+Python orchestrator at `automation/persona_extraction/`. Phase 0
+parallel summarization → Phase 1 analysis → Phase 2 user confirm →
+Phase 2.5 baseline → Phase 3 stage loop (1+2N split extraction, PP,
+repair agent, commit) → Phase 3.5 cross-stage consistency → Phase 4
+scene archive (independent). Supports Claude CLI and Codex CLI backends.
 
-**Repair agent** (`automation/repair_agent/`) is the unified per-stage
-quality gate: check → fix → verify in one process. Field-level surgical
-patches via json_path (no whole-file rollback). Four-layer checkers
-(L0–L3) × four-tier fixers (T0–T3), orthogonal. Fixers escalate from the
-lowest available tier per issue category. Phase B embeds an **L3 gate**
-that re-runs semantic checking on files modified during the round, so
-false "fixed" claims from T1/T2/T3 get caught before Phase C. T3
-(file_regen) is globally capped at `t3_max_per_file=1` per file across
-the whole run — a second regen rarely helps and is expensive. Phase C
-reuses the last gate result when possible. Semantic LLM cost = 1 call
-per file in Phase A + at most (modified L3 files) × rounds gate calls,
-no extra call at Phase C when the gate ran.
-
-**Source-discrepancy triage** (`triage_enabled=True`) covers two accept
-paths sharing one per-file cap (`accept_cap_per_file=5`):
-
-1. **L3 source_inherent (LLM)** — at (a) pre-T3 and (b) post-L3-gate,
-   a lightweight LLM pass decides whether residual L3 issues are bugs
-   in the source novel itself (author contradictions, typos,
-   name/pronoun confusion, etc.) rather than extraction errors.
-   Anti-cheat is program-enforced: every accepted verdict must cite
-   chapter + line range + verbatim quote; the program verifies the
-   quote is a literal chapter substring. T2/T3 fixers can also
-   self-report the same evidence in lieu of a fabricated fix, feeding
-   the triager as priors.
-2. **L2 coverage_shortage (program, 0 token)** — `min_examples` issues
-   are demoted to `severity=warning` + `coverage_shortage=True` flag
-   and routed `START_TIER=T2, MAX_TIER=T2` (skip T0/T1/T3). If one T2
-   source_patch still can't meet `importance_min_examples`, the
-   coordinator synthesises a `SourceNote` with
-   `discrepancy_type=coverage_shortage` — no LLM call, quote is a
-   program-selected chapter substring, cap shared with L3 triage.
-
-Accepted issues (both paths) persist to
-`{entity}/canon/extraction_notes/{stage_id}.jsonl`
-(`world/extraction_notes/` for world-level files); the stage remains
-COMMITTED with sidecar notes. Runtime does **not** consume these notes —
-they are audit-only; Phase 3.5 consistency checker treats a valid
-SourceNote as equivalent to meeting the `min_examples` threshold for
-the referenced `json_path`. A post-T3 scoped L0–L2 check aborts with
-`T3_CORRUPTED` if T3 broke shape — no triage in that path.
-
-Repair fail → stage ERROR; `--resume` resets ERROR → PENDING.
-
-Commit-ordering contract: git commit first; only non-empty SHA →
-COMMITTED; empty → FAILED (resume retries). `--end-stage` strict prefix:
-finalization (Phase 3.5, squash-merge, Phase 4) only after all stages
-COMMITTED.
-
-Each call is a fresh agent (claude -p or codex); context is file-based.
-Input trimmed to the most recent snapshot + memory_timeline (not full
-history). `baseline_merge.md`, `memory_digest.jsonl`,
-`world_event_digest.jsonl`, `stage_catalog.json` excluded from extraction
-input — self-contained snapshot contract embedded in the prompt.
-
-Extraction timeout 3600s, review 600s. Stage size max 15. Phase 4 per-chapter
-parallel scene boundary annotation; programmatic validation only; output to
-`works/{work_id}/retrieval/scene_archive.jsonl`. Supports Claude CLI and
-Codex CLI backends.
-
-See `architecture.md` for the full pipeline and `automation/README.md`
-for the CLI.
+- Repair agent (per-stage quality gate) → `automation/repair_agent/` +
+  `docs/requirements.md` §11.4
+- Token-limit auto-pause → `docs/requirements.md` §11.13 +
+  `automation/persona_extraction/rate_limit.py`
+- Full pipeline detail → `architecture.md` §Automated Extraction
+  Pipeline + `automation/README.md` +
+  `docs/architecture/extraction_workflow.md`.
 
 ## §12 Memory System and Retrieval
 
-Three-layer memory:
+Three-layer memory: `stage_snapshot` (aggregated state) /
+`memory_timeline` (subjective process) / `scene_archive` (original text
+split by scene). Two-level retrieval funnel on `scene_archive` +
+`memory_timeline`:
 
-1. `stage_snapshot` — aggregated state, current stage only.
-   `stage_events` holds **only this stage's** events (50–80 字, hard
-   gate; world-public only — personal / internal items belong in
-   character `memory_timeline`).
-2. `memory_timeline` — first-person subjective process per event.
-   `memory_id` (`M-S###-##`), `time`, `location`, `event_description`
-   (150–200 字, hard gate), `digest_summary` (30–50 字, hard gate, 1:1
-   source of `memory_digest`), `subjective_experience` (unbounded),
-   `scene_refs`.
-3. `scene_archive` — original text split by scene. `scene_id`
-   (`SC-S###-##`), `time`, `location`, `characters_present`. Work-level.
+- Level 1 (default, <20ms) — jieba + work-level vocab dict + FTS5 →
+  top-K summaries → LLM judges relevance.
+- Level 2 (fallback, rare) — LLM `search_memory` tool → embedding
+  search on summary vectors.
 
-Two-level retrieval on `scene_archive` + `memory_timeline`:
+Proactive context-state association (location / recent events /
+emotion) for jieba matching each turn. Tech: `jieba` + `sqlite FTS5` +
+optional `bge-large-zh-v1.5`. Single SQLite — no separate vector DB.
+Vocab dict at `works/{work_id}/indexes/vocab_dict.txt` (committed);
+retrieval artifacts under `works/{work_id}/retrieval/` (not committed);
+`scene_archive` produced in Phase 4, fully regenerated on merge.
 
-- **Level 1 (default, <20ms)**: jieba + work-level vocab dict + FTS5 →
-  top-K summaries in prompt. LLM judges relevance. No match = no
-  retrieval.
-- **Level 2 (fallback, rare)**: LLM `search_memory` tool use → embedding
-  search on summary vectors → second LLM call.
-
-Proactive association: engine extracts context-state keywords (location,
-recent events, emotion) for jieba matching each turn.
-
-Startup loads: memory_timeline recent 2 stages (N + N-1) full;
-`memory_digest.jsonl` stage 1..N (~30–40 tokens/entry, summary 1:1 from
-`digest_summary`); `world_event_digest.jsonl` stage 1..N (summary 1:1
-from world `stage_events`); scene_archive `full_text` for the most recent
-`scene_fulltext_window` scenes (default 10, configurable in
-`load_profiles.json`). Scene summaries are **not** in Tier 0 — FTS5
-only. Identity loaded with a field whitelist (strips `evidence_refs` and
-large nested arrays at load time; no schema change). Vocab dict into
-jieba.
-
-Tech: `jieba`, `sqlite FTS5` (primary), `bge-large-zh-v1.5` (optional
-fallback). Single SQLite — no separate vector DB. Artifacts under
-`works/{work_id}/retrieval/` (not committed); vocab dict at
-`works/{work_id}/indexes/vocab_dict.txt` (committed).
-
-scene_archive produced in Phase 4 (independent; only requires Phase 1
-`stage_plan.json`).
+→ `docs/requirements.md` §12 +
+`simulation/retrieval/index_and_rag.md`.

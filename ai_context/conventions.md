@@ -1,138 +1,103 @@
+<!--
+MAINTENANCE — 更新 ai_context/ 前读：这是 AI 快速 follow 项目的索引，不是详细手册。
+1. 写"是什么 / 在哪找"，指向权威源（代码路径 / docs/*.md / schema / log）
+2. 优先删而不是加；新增前先看能否合并已有条目
+3. 只写当前设计，不写"旧 / legacy / 已废弃 / 原为"
+4. 不出现真实书名 / 角色 / 剧情，用通用占位符（`<work_id>`, `角色A`, `S001`）
+5. 预算：architecture / decisions / requirements 各 ≤ ~150 行；全目录读完 ≤ 几千 token
+-->
+
 # Operational Conventions
 
-This file lists operational rules that are easy to forget during long
-sessions. Re-read triggers live in `CLAUDE.md` / `AGENTS.md` Dilution
-Self-Check.
+Rules easy to forget during long sessions. Dilution self-check triggers
+live in `CLAUDE.md` / `AGENTS.md`.
 
 ## Logging
 
-`docs/logs/` 采用 **三时点契约**（PRE / POST / REVIEW）：一份 log 文件贯穿一次 `/go` 从决策到落地到复查的完整生命周期。
+`docs/logs/` uses a three-timepoint contract (PRE / POST / REVIEW) — one
+log file spans one `/go` → `/after-check` lifecycle. Filename:
+`YYYY-MM-DD_HHMMSS_slug.md` (HHMMSS mandatory —
+`TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'`).
 
-- Filename format: `YYYY-MM-DD_HHMMSS_slug.md`
-  - **HHMMSS is mandatory.** Get it with:
-    `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'`
-  - Bad: `2026-04-08_foo.md` — Good: `2026-04-08_012400_foo.md`
+- **PRE** (`/go` Step 1) — 背景 / 结论与决策 / 计划动作清单 / 验证标准
+- **POST** (`/go` Step 7) — 已落地变更 / 与计划差异 / 验证结果 / DONE|BLOCKED
+- **REVIEW** (`/after-check` Step 5) — 双轨复查摘要 + REVIEWED-PASS|PARTIAL|FAIL
 
-### 三时点
+Rules:
 
-1. **PRE（/go Step 1）** — 在任何代码 / schema / prompt / docs / ai_context / skill 改动之前写入：
-   - `背景 / 触发`：会话上下文、用户原始需求
-   - `结论与决策`：已拍板的方案
-   - `计划动作清单`：准备改的文件 + 每份的改动要点
-   - `验证标准`：checkbox 级，完成时要怎么验
-   - `执行偏差`：占位段落，中途偏离计划时追加
-2. **POST（/go Step 7）** — 同一份 log 追加：
-   - `已落地变更`：实际改了什么
-   - `与计划的差异`：新增 / 删除 / 修改
-   - `验证结果`：PRE 验证标准逐项打勾或打叉
-   - `Completed`：`Status: DONE | BLOCKED` + `Finished` 时间戳
-3. **REVIEW（/after-check Step 5）** — 同一份 log 追加双轨复查摘要：
-   - `复查结论` 的轨 1 / 轨 2 计数（完整报告在对话里，log 不贴全文）
-   - `复查时状态`：`REVIEWED-PASS | REVIEWED-PARTIAL | REVIEWED-FAIL`
-   - `Conversation ref`：指向同会话 /after-check 输出
+- No PRE log → `/go` must not modify files.
+- `/after-check` is the only skill allowed to write back to logs.
+- Pre-contract single-timepoint logs stay as-is.
 
-### 契约要点
-
-- `/go` 启动即先落 PRE log → 回显路径给用户（`LOG: docs/logs/...md`）。**没 PRE log 不得改文件**
-- `/after-check` 强制读 PRE 段作为 intent 基线；log 缺失 → 对账轨跳过 + 扩散轨继续
-- `/after-check` 回写 log 是**唯一的写操作例外**，其他仍然只读
-- 历史 log（本契约之前已存在的单时点 log）不动；新契约从本次之后的 /go 起生效
+Full text → `.claude/commands/go.md`, `.claude/commands/after-check.md`.
 
 ## Cross-File Alignment
 
-When you change a concept, update **all** files that reference it. The
-alignment graph:
+When a concept changes, update every file in its row:
 
 | Changed | Also update |
 |---------|-------------|
-| `schemas/**/*.schema.json` | `docs/architecture/schema_reference.md`, `schemas/README.md`, prompt templates, validator.py |
+| `schemas/**/*.schema.json` | `docs/architecture/schema_reference.md`, `schemas/README.md`, prompt templates, `automation/persona_extraction/validator.py` |
 | `docs/requirements.md` | `ai_context/requirements.md`, `ai_context/decisions.md` |
 | Loading strategy | `simulation/retrieval/load_strategy.md`, `simulation/flows/startup_load.md`, `simulation/retrieval/index_and_rag.md`, `docs/architecture/data_model.md`, `ai_context/architecture.md` |
 | Extraction workflow | `docs/architecture/extraction_workflow.md`, `automation/prompt_templates/`, `automation/persona_extraction/`, `ai_context/architecture.md` |
 | Runtime prompts | `simulation/prompt_templates/`, `simulation/` |
 | Any durable decision | `ai_context/decisions.md` |
-| /go or /after-check triggered change | `docs/logs/` 的 PRE / POST / REVIEW 三段按时点写齐（缺 PRE 不得动文件；/after-check 强制回写 REVIEW 摘要） |
+| `/go` or `/after-check` run | `docs/logs/` 三时点齐全 |
 
-After changes, grep for the old phrasing to catch stale references.
+After any change, grep for the old phrasing to catch stale references.
 
 ## Naming and Identifiers
 
-- Chinese works → Chinese `work_id`, `character_id`, and path segments.
-- `stage_id` is always the compact English code `S###` (three digits,
-  zero-padded, e.g. `S001`), regardless of work language. It aligns with
-  the `M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##` family.
-- `stage_title` carries the human-readable short name (≤ 15 chars,
-  Chinese for Chinese works). It lives alongside `stage_id` in
-  `stage_plan.json` and every `stage_catalog.json` entry, and is the
-  label shown at bootstrap stage selection.
-- `ai_context/` remains English.
-- JSON field names may be English; content text follows work language.
+- Chinese works → Chinese `work_id`, `character_id`, path segments.
+- `stage_id` = `S###` (3-digit zero-pad), aligned with the
+  `M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##` ID family.
+- `stage_title` = human-readable short name (≤15 chars, work language);
+  sibling of `stage_id` in `stage_plan.json` and every
+  `stage_catalog.json` entry; label shown at bootstrap stage selection.
+- `ai_context/` stays English. JSON field names may be English;
+  content text follows work language.
 
-## Generic Placeholders in Canonical Docs
+## Generic Placeholders
 
-`schemas/`, `docs/requirements.md`, `docs/architecture/`, `ai_context/`,
-`prompts/`, and `automation/prompt_templates/` describe the current
-design and are read by LLMs at extraction time. They must stay
+Canonical docs (`schemas/`, `docs/requirements.md`, `docs/architecture/`,
+`ai_context/`, `prompts/`, `automation/prompt_templates/`) stay
 work-agnostic:
 
-- No real book titles, character names, place names, plot details.
-- Schema `description` examples stay structural ("例如：某关键他人做出
-  自我牺牲行为"), not narrative; or omit the example entirely.
-- Field identifiers in examples use placeholders like
-  `<character_id>` / `<stage_id>` (e.g. `S001`).
-- Do not narrate history ("旧 / legacy / 已废弃 / 原为 / 已移除 /
-  renamed from"). History lives in `docs/logs/` + git.
+- No real book / character / place / plot names.
+- Examples use structural placeholders (`<character_id>`, `S001`).
+- Schema `description` examples stay structural, not narrative (or omitted).
+- No history narration ("旧", "legacy", "已废弃", "原为", "renamed from").
 
 Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
 `works/*/` sample outputs, git commit messages.
 
-## Data Separation — Hard Rules
+## Data Separation — Hard Schema Gates
 
-- User data under `users/` — never touch `works/` canon from user context.
-- Baseline files = extraction anchors only, **not loaded at runtime**.
-- Stage snapshots are **self-contained** — never merge with baseline at
-  runtime.
-- Length rules are hard schema gates: world + character `stage_events`
-  50–80 字 per entry; memory_timeline `event_description` 150–200 字,
-  `digest_summary` 30–50 字; `knowledge_scope` items ≤ 50 字 each;
-  `relationships[*].relationship_history_summary` ≤ 300 字 (default; tunable
-  via `[repair_agent].relationship_history_summary_max_chars`).
-- Count caps (hard schema gates): `knowledge_scope.knows` ≤ 50,
-  `does_not_know` ≤ 30, `uncertain` ≤ 30. Over-limit → trim by dropping
-  items least relevant to current-stage decisions / core_wounds /
-  active_obsessions / active relationships; prefer dropping daily
-  commonsense, early details without triggers, items already in
-  `memory_timeline`.
+- User data under `users/`; never write canon from user context.
+- Baseline files = extraction anchors only — not runtime-loaded.
+- Stage snapshots are **self-contained** — never merged with baseline at runtime.
+- Length gates (hard):
+  - World + character `stage_events` — 50–80 字 per entry
+  - `memory_timeline.event_description` — 150–200 字
+  - `memory_timeline.digest_summary` — 30–50 字
+  - `knowledge_scope` items — ≤ 50 字 each
+  - `relationships[*].relationship_history_summary` — ≤ 300 字 (tunable via `[repair_agent].relationship_history_summary_max_chars`)
+- Count caps (hard): `knowledge_scope.knows` ≤ 50, `does_not_know` ≤ 30, `uncertain` ≤ 30. Over-limit → trim least relevant (drop commonsense / early untriggered / items already in `memory_timeline`).
 
 ## Git
 
-- Do not commit: novels, databases, embeddings, caches, user packages.
-- Do not amend others' commits.
-- **Default branch is `master`.** Always stay on `master` unless actively
-  running extraction. Checkout extraction branch only when starting or
-  resuming `python -m automation.persona_extraction`. When extraction
-  pauses or finishes, checkout back to `master` immediately.
-- **Code changes go to `master` first.** All modifications to code,
-  schemas, prompts, docs, and `ai_context/` must be committed on
-  `master`, then merged into the extraction branch (`git merge master`
-  from the extraction branch). Never develop directly on the extraction
-  branch.
-- Extraction branch is for extraction data commits only (stage outputs).
-  Squash-merge to `master` when all stages complete.
-- Enforcement: (1) `run_extraction_loop` / `run_full` in
-  `automation/persona_extraction/orchestrator.py` wrap extraction in
-  `try / finally: checkout_master(...)`, so every exit path returns to
-  `master`; (2) a SessionStart Claude Code hook
-  (`.claude/hooks/session_branch_check.sh`) warns on new sessions when
-  the working tree is on a non-master branch with no orchestrator
-  process running. See `architecture.md` §Git Branch Model.
+- Default branch = `master`. Stay on `master` unless actively running extraction.
+- Code / schema / prompt / docs / `ai_context/` commits go to `master` first; extraction branch syncs via `git merge master`.
+- Extraction branch carries stage outputs only. Squash-merge to `master` on completion.
+- Enforcement: orchestrator `try/finally: checkout_master(...)` + `.claude/hooks/session_branch_check.sh`. Detail → `architecture.md` §Git Branch Model.
+- Never commit: novels, databases, embeddings, caches, real user packages.
+- Don't amend others' commits.
 
 ## Post-Change Checklist
 
-After completing a task, run through:
-
-1. Did I update all aligned files? (See table above)
-2. Did I create the PRE log at /go Step 1 and update its POST段 at Step 7 (同一份文件)?
-3. Did I update `ai_context/` if the change is durable?
-4. Did I grep for stale references to the old state?
-5. Did I run the relevant Python imports to verify no breakage?
+1. All aligned files updated? (table above)
+2. PRE log at `/go` Step 1, POST at Step 7 (same file)?
+3. `ai_context/` updated only if durable?
+4. Grepped for stale old references?
+5. Python import smoke test if code / schema changed?
