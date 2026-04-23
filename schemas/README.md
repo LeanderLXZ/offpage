@@ -6,11 +6,11 @@
 
 | 子目录 | 作用 | 典型成员 |
 |--------|------|---------|
-| `work/` | 作品级入库、目录、阶段目录 | `work_manifest`、`works_manifest`、`book_metadata`、`chapter_index`、`stage_catalog` |
-| `world/` | 世界层快照、事件、固定关系、目录页 | `world_manifest`、`world_stage_snapshot`、`world_event_digest_entry`、`fixed_relationships`、`world_stage_catalog` |
+| `work/` | 作品级入库、目录、阶段目录、per-work 加载配置 | `work_manifest`、`works_manifest`、`book_metadata`、`chapter_index`、`stage_catalog`、`load_profiles` |
+| `world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | `world_manifest`、`foundation`、`world_stage_snapshot`、`world_event_digest_entry`、`fixed_relationships`、`world_stage_catalog` |
 | `character/` | 角色 baseline + 阶段快照 + 记忆 | `identity`、`character_manifest`、`voice_rules`、`behavior_rules`、`boundaries`、`failure_modes`、`stage_snapshot`、`memory_timeline_entry`、`memory_digest_entry` |
 | `user/` | 用户根画像、绑定、长期档案、关系核心、钉选记忆条目 | `user_profile`、`role_binding`、`long_term_profile`、`relationship_core`、`pinned_memory_entry` |
-| `runtime/` | Context / Session / 请求载荷 | `context_manifest`、`context_character_state`、`session_manifest`、`runtime_session_request` |
+| `runtime/` | Context / Session / 请求载荷 / 场景归档条目 | `context_manifest`、`context_character_state`、`session_manifest`、`runtime_session_request`、`scene_archive_entry` |
 | `shared/` | 跨域共享（extraction_notes 等） | `source_note` |
 
 各 schema 的 `$id` 统一为 `persona-engine/<subdir>/<name>.schema.json`；功能说明与字段索引见

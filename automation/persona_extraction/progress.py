@@ -391,6 +391,22 @@ class StageEntry:
         self.error_message = reason
         self.last_updated = _now_iso()
 
+    def force_promote_to_committed(self, reason: str) -> None:
+        """Promote this stage directly to COMMITTED.
+
+        Used by reconcile when a crash between ``commit_stage`` and the
+        ``transition(COMMITTED)`` call on the orchestrator side left the
+        stage with ``committed_sha`` present and the sha live in git,
+        but the state still at PASSED (or another non-terminal). The
+        regular transition table forbids arbitrary → COMMITTED edges; this
+        escape hatch records the recovery reason for auditability.
+        """
+        if not reason:
+            raise ValueError("force_promote_to_committed requires a reason")
+        self.state = StageState.COMMITTED
+        self.error_message = reason
+        self.last_updated = _now_iso()
+
     # ---- Lane-level helpers (T-RESUME) ----
 
     def mark_lane_complete(self, lane_name: str) -> None:
@@ -638,6 +654,23 @@ class Phase3Progress:
                     stage.clear_lane_states()
                     stage.force_reset_to_pending(reason)
                     reverted += 1
+                continue
+
+            # Crash-between-commit-and-transition recovery: if the stage is
+            # non-COMMITTED but carries a committed_sha that exists in git
+            # AND every per-stage artifact is on disk, the orchestrator
+            # completed the commit but died before transitioning. Promote
+            # directly to COMMITTED instead of forcing a rerun. See
+            # requirements.md §11.4b "提交顺序契约 — crash window".
+            if (stage.committed_sha
+                    and _git_object_exists(project_root, stage.committed_sha)
+                    and len(existing) == len(all_paths)):
+                stage.fail_source = ""
+                stage.last_reviewer_feedback = ""
+                stage.force_promote_to_committed(
+                    f"reconcile promote from {stage.state.value} "
+                    f"— committed_sha present and live in git")
+                reverted += 1
                 continue
 
             # All non-COMMITTED states share the same lane reconciliation.

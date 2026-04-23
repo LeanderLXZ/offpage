@@ -7,11 +7,11 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 | 子目录 | 作用 | 文件数 |
 |--------|------|--------|
-| `schemas/work/` | 作品入库、目录、阶段目录 | 5 |
-| `schemas/world/` | 世界层快照、事件、固定关系、目录页 | 5 |
+| `schemas/work/` | 作品入库、目录、阶段目录、per-work 加载配置 | 6 |
+| `schemas/world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | 6 |
 | `schemas/character/` | 角色 baseline + 阶段快照 + 记忆 | 9 |
 | `schemas/user/` | 用户根画像、绑定、长期档案、关系核心、钉选记忆条目 | 5 |
-| `schemas/runtime/` | Context / Session / 请求载荷 | 4 |
+| `schemas/runtime/` | Context / Session / 请求载荷 / 场景归档条目 | 5 |
 | `schemas/shared/` | 跨域共享（extraction_notes 等） | 1 |
 
 ## Work 层（`schemas/work/`）
@@ -60,6 +60,15 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 ---
 
+### work/load_profiles.schema.json
+
+**用途**：Per-work 运行时加载配置，作为 sparse override 覆盖 simulation 启动器默认值。文件不存在时 loader 使用内置默认。
+**位置**：`works/{work_id}/indexes/load_profiles.json`
+**关键字段**：`scene_fulltext_window`（默认 10）、`startup_packets[]`、`on_demand_buckets[]`、`retrieval_notes`、`fidelity_escalation{}`。
+**形态**：`additionalProperties: true`，字段集随 simulation 层演进；schema 提供最小契约。
+
+---
+
 ## World 层（`schemas/world/`）
 
 ### world/world_manifest.schema.json
@@ -86,7 +95,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **关键字段**：
 - `snapshot_summary` — 阶段的世界状态概述
 - `foundation_corrections` — 对基础设定的修正
-- `stage_events` — 本阶段事件（**唯一事件清单**，每条 **50–80 字**一句话，schema 硬门控；**仅收录世界公共层事件**，角色私事/内心决定应写入该角色 memory_timeline；既是快照内容又是 `world_event_digest.jsonl` 的直接来源，1:1 复制）
+- `stage_events` — 本阶段事件（**唯一事件清单**，≤ 30 条；每条 **50–80 字**一句话，schema 硬门控；**仅收录世界公共层事件**，角色私事/内心决定应写入该角色 memory_timeline；既是快照内容又是 `world_event_digest.jsonl` 的直接来源，1:1 复制）
 - `current_world_state` — 当前阶段的世界总体状态
 - `relationship_shifts` — 关注的人物关系转变
 - `character_status_changes` — 人物状态变化（生死、等级等）
@@ -101,6 +110,15 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **位置**：`works/{work_id}/world/foundation/fixed_relationships.json`
 **关键字段**：relationships[].relationship_id, relationships[].type, relationships[].parties, relationships[].description
 **生命周期**：Phase 2.5 产出骨架，后续阶段可修正。运行时 Tier 0 加载。
+
+---
+
+### world/foundation.schema.json
+
+**用途**：世界基础设定（genre / tone / world_structure / power_system / core_rules / world_lines / major_factions）。不含 stage-scoped 信息，作为运行时 Tier 0 的静态背景加载。
+**位置**：`works/{work_id}/world/foundation/foundation.json`
+**生命周期**：Phase 2.5 基线产出；后续阶段可通过 world_stage_snapshot.foundation_corrections 增量修正。
+**形态**：`additionalProperties: true`（顶层与子对象），容纳 per-work 扩展字段；`required` 仅 `work_id`。
 
 ---
 
@@ -348,6 +366,15 @@ permanence_reason?, pinned_at?
 
 **用途**：运行时 session 请求载荷。
 **使用者**：终端适配器 → 仿真引擎。
+
+---
+
+### runtime/scene_archive_entry.schema.json
+
+**用途**：`scene_archive.jsonl` 单条记录——Phase 4 `scene_split` 按行号切出的场景。作为 FTS5 检索与 `full_text` 取回的基本单元。
+**位置**：`works/{work_id}/retrieval/scene_archive.jsonl`（本地生成，不入 git）
+**关键字段**：`scene_id`（`SC-S###-##`）/ `stage_id`（`S###`）/ `chapter` / `time` / `location` / `characters_present[]` / `summary` / `full_text`
+**运行时**：最近 `scene_fulltext_window` 条在 Tier 0 直接加载 `full_text`，其余由 FTS5 on-demand 取回；`summary` 不单独进入 Tier 0。
 
 ---
 

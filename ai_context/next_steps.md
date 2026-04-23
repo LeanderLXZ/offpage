@@ -3,14 +3,16 @@
 ## Highest Priority
 
 1. **Continue automated extraction for the onboarded work.**
-   - Phase 0/1/2/2.5/4 complete; Phase 3 reset to fresh start
-     (all 49 stages pending after 2026-04-20 rollback)
-   - Source + works + world manifests now populated and schema-gated
+   - Phase 0/1/2/2.5/4 complete; Phase 3 in progress — S001 committed
+     (sha `3bf25bf`, 2026-04-22), S002 in ERROR awaiting `--resume`,
+     S003–S049 pending
+   - Source + works + world manifests populated and schema-gated
    - Run: `python -m automation.persona_extraction "<work_id>" --resume`
-   - `--resume` picks up the next pending stage; finished stages + lane
-     products are preserved
-   - Note: need clean git working tree before running (stash or commit
-     pending changes first)
+   - `--resume` auto-resets S002 ERROR → PENDING and continues; earlier
+     committed stages + lane products are preserved
+   - Note: preflight tolerates dirt **outside** the work scope
+     (`.claude/settings.json`, editor state). Dirty files inside
+     `works/<work_id>/` still block — stash or commit before running.
 
 2. **Refine schemas into directly writable instance formats.**
    - World package schemas (timeline, events, locations, maps — foundation

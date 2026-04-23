@@ -3,9 +3,10 @@
 ## Project Stage
 
 Architecture scaffold done. One work package under automated extraction
-(Phase 0/1/2/2.5/4 complete; Phase 3 reset to fresh start after
-2026-04-20 rollback — all 49 stages pending. Source + works + world
-manifests wired up and schema-gated). No runtime code yet.
+(Phase 0/1/2/2.5/4 complete; Phase 3 in progress — S001 committed
+(sha `3bf25bf`), S002 in ERROR pending `--resume` reset, S003–S049
+pending. Source + works + world manifests wired up and schema-gated).
+No runtime code yet.
 
 ## What Exists
 
@@ -31,7 +32,9 @@ manifests wired up and schema-gated). No runtime code yet.
 
 - One Chinese web novel (500+ chapters)
 - Phase 0/1/2/2.5/4 complete; 2 target characters confirmed; Phase 3
-  reset to fresh start (49 stages pending) after 2026-04-20 rollback
+  in progress — S001 committed (sha `3bf25bf`, 2026-04-22), S002 in
+  ERROR awaiting `--resume` (preflight false-positive from 2026-04-22
+  working-tree state), S003–S049 pending
 
 ### Automated Extraction Orchestrator
 

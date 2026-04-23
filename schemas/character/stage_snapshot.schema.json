@@ -113,7 +113,7 @@
     "stage_events": {
       "type": "array",
       "description": "仅本阶段发生的关键事件清单（不累积历史），每条为 50–80 字的一句话摘要。历史跨阶段视图由 world_event_digest / memory_timeline 提供。",
-      "maxItems": 10,
+      "maxItems": 15,
       "items": { "type": "string", "minLength": 50, "maxLength": 80 }
     },
     "current_status": {

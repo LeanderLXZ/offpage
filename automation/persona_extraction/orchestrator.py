@@ -1189,6 +1189,7 @@ class ExtractionOrchestrator:
                     b.transition(StageState.PENDING)
                     b.error_message = ""
                     b.last_reviewer_feedback = ""
+                    b.fail_source = ""
                     phase3.save(self.project_root)
 
             completed_before = phase3.completed_stage_count()
@@ -1806,11 +1807,15 @@ class ExtractionOrchestrator:
                 tracker.print_step_done(5, 5, "Git commit", "no-op/failed")
                 return
 
-            # Commit succeeded — now transition state and clear feedback.
+            # Commit succeeded — close the crash window by saving the SHA
+            # before the COMMITTED transition. If we die between the two
+            # saves, reconcile_with_disk() sees state∈terminal ∧ committed_sha
+            # present ∧ sha exists in git → auto-promote to COMMITTED.
             stage.committed_sha = sha
             stage.last_reviewer_feedback = ""
             stage.error_message = ""
             stage.fail_source = ""
+            phase3.save(self.project_root)
             stage.transition(StageState.COMMITTED)
             phase3.save(self.project_root)
 
