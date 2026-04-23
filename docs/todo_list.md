@@ -63,65 +63,158 @@
 
 ## 下一步
 
-### [T-REPAIR-PARALLEL] Repair agent per-file 并行化（Phase A / L3 gate）
+### [T-REPAIR-PARALLEL] Repair agent per-file 并行化（E1 方案）
 
 **上下文**
 
-当前 repair agent 的 SemanticChecker 在
-[automation/repair_agent/checkers/semantic.py::SemanticChecker.check](automation/repair_agent/checkers/semantic.py)
-用纯 `for f in files:` 串行跑 `claude -p` 语义校验，L3 gate
-也逐文件串行复验。实测一个 stage 的 Phase A 11 个文件 串行耗时 34m（见
-`docs/logs/2026-04-22_225700_preflight_scope_repair_recorder_heartbeat_logrotate.md`
-旁路对比）；并行化到 per-file 线程池可压缩到 ~max(per-file)，约 6m。
-每 stage 省 ~28m，49 stage 理论上省 ~23h。
+当前 repair agent 整个 stage 单线程串行跑：`orchestrator` 把 world +
+所有角色的 ~11 个文件合成一个 list 传给 `run_repair(files=[...])`，
+coordinator 内部所有 checker / fixer / L3 gate 都 `for f in files` 逐文件处理。
+S001 实测：extract 22m + repair 47m = 69m/stage。
+
+**架构讨论结论（2026-04-22）**：采用 **E1 方案**（per-file 独立 repair
+pipeline），放弃 B 方案（SemanticChecker 内部并发）。E2 方案（事件驱动
+extract→repair overlap）进"讨论中"暂不做——边际收益 ~4min/stage 不抵
+双池回调 + peak rate limit 管理的复杂度（详见
+`[T-REPAIR-EVENT-DRIVEN]`）。
+
+**E1 要点**
+
+coordinator.run() 已经是**纯 per-file 逻辑**（实测 Phase A L3 prompt
+只喂单文件 content；跨文件语义校验由 Phase 3.5 独立承担）——把
+`run_repair(files=[all])` 一次调用改成对每个文件并发调用
+`run_repair(files=[single])`，coordinator 内部**一行都不改**。
+
+预估耗时：extract 22m + repair ~10m = 32m/stage（concurrency=10 下），
+49 stage 总省 ~30 小时（69m → 32m，约 2.2×）。
 
 **改动清单**
 
-1. [automation/repair_agent/checkers/semantic.py](automation/repair_agent/checkers/semantic.py)
-   `check()` 与 `check_scoped()` 用 `concurrent.futures.ThreadPoolExecutor`
-   提交每文件的 `_review_file`，并发上限读 `[repair_agent].semantic_concurrency`
-   （新增，默认 4，与订阅限额匹配）。保持返回顺序稳定（按 files 入参顺序聚合）
-2. [automation/persona_extraction/config.py::RepairAgentConfig](automation/persona_extraction/config.py)
-   新增 `semantic_concurrency: int = 4`
-3. [automation/config.toml](automation/config.toml) `[repair_agent]` 段加
-   `semantic_concurrency = 4`
-4. coordinator 的 L3 gate 路径 `pipeline.run_layer(..., layer=3)` 同样受益——
-   无需额外改动，走同一个 SemanticChecker
-5. rate-limit 语义：每个 worker 继续用现有 `_llm_call` → `run_with_retry`，
-   `RateLimitController` 是进程级单例，并发 worker 都会 join 同一个 pause，
-   不破坏原契约
-6. RepairRecorder 并发写：`RepairRecorder.write` 当前无锁；并发多 worker 同时
-   emit `issue` 事件会交织。加 `threading.Lock`（或 `self._fh` 改 line-buffered
-   + 单 writer thread 队列），选低复杂度前者
+1. **Manager 层**（~20 行，[automation/persona_extraction/orchestrator.py](automation/persona_extraction/orchestrator.py)
+   的 `[4/5] Repair agent` 步替换单次 `run_repair` 为 ThreadPoolExecutor 分发）:
+   ```python
+   def _repair_one(f):
+       rec_path = progress / f"repair_{stage.stage_id}_{slug(f.path)}.jsonl"
+       with RepairRecorder(rec_path) as rec:
+           return f, run_repair(files=[f], config=RepairConfig(...),
+                                source_context=source_ctx, llm_call=_llm_call,
+                                importance_map=importance_map, recorder=rec)
+
+   with ThreadPoolExecutor(max_workers=ra_cfg.repair_concurrency) as ex:
+       futures = [ex.submit(_repair_one, f) for f in repair_files]
+       results = [fut.result() for fut in as_completed(futures)]
+   all_pass = all(r.passed for _, r in results)
+   ```
+2. **配置项**（[automation/persona_extraction/config.py](automation/persona_extraction/config.py)
+   `RepairAgentConfig` + [automation/config.toml](automation/config.toml)
+   `[repair_agent]`）: 新增 `repair_concurrency: int = 10`。Anthropic
+   Opus 订阅 5h 限额实测 ~8-10 并发能撑住；撞 rate limit →
+   `RateLimitController` 统一 pause 不放大消耗。注释里标注
+   "频繁 `rate_limit_pause` 时降到 4-5"
+3. **RepairRecorder 改 per-file JSONL**
+   （`repair_{stage_id}_{slug(file)}.jsonl` 每文件一份，自然无并发写
+   冲突，无需加 Lock）。同步更新
+   [docs/requirements.md](docs/requirements.md) §11.11 artifacts 列表 +
+   [docs/architecture/extraction_workflow.md](docs/architecture/extraction_workflow.md)
+   repair 章节说明
+4. **lane_states 取值扩展**
+   （[automation/persona_extraction/progress.py](automation/persona_extraction/progress.py)
+   `StageEntry.lane_states`）:
+   - 现状：`{lane_name: "complete"}` 或键缺失
+   - 新增取值：
+     - `"extracting"` — extract 子进程在跑
+     - `"repairing"` — extract 完成、文件落盘、repair 并发中
+     - `"complete"` — 该 lane 全部文件 passed
+   - 新增伪 lane `post_processing`：追踪 digest / catalog 等
+     post-processing 产物的 repair 状态，参与同一套 resume 判定
+5. **Resume 逻辑**（[orchestrator.py](automation/persona_extraction/orchestrator.py)
+   的 `_process_stage`）: 保持 **2-level 状态追踪**（stage + lane_states），
+   **不引入 file-level 状态持久化**
+   - 遍历期望 lane（world + 每角色的 snapshot / support + post_processing）
+   - 非 `complete` 的 lane → `reset_paths(lane's output paths)` → 重跑
+     extract + repair
+   - 已知税：lane 里文件 X passed 但文件 Y 失败中崩溃，resume 时整 lane
+     回滚浪费 X 已修结果（~6min）。接受这个浪费（罕见事件），换正常
+     路径架构简洁
+6. **重试 / 轮次配置保持不变**（`t0_retry=1` / `t1_retry=3` /
+   `t2_retry=3` / `t3_retry=1` / `t3_max_per_file=1` /
+   `total_round_limit=5`）
+   - 语义微妙变化：`total_round_limit=5` 从"stage 全局 5 轮"变成
+     "**单文件** 5 轮"。更宽容，单个顽固文件耗尽轮次不再影响其他文件
+   - 观察几 stage 实测后再考虑是否调
 
 **验证**
 
-- smoke: `from automation.repair_agent.checkers.semantic import SemanticChecker;
-  c = SemanticChecker(llm_call=lambda p, timeout: "[]"); c.check([...3 fake files...])`
-  返回 issue 列表顺序与串行一致
-- 单独对比: 挑一个已 committed 的 stage，用 `validate_only` 跑 Phase A，
-  并发前 vs. 并发后结果集合相等
-- 实测: 下一次 stage 跑 Phase A 时看日志耗时是否按 `max(per-file)` 收敛
+- smoke（单 stage）:
+  - 跑 1 个 stage，看日志同一时刻有多个 `claude -p` 活着
+    （`lane=repair[...]` 标签）
+  - 每个文件生成独立 `repair_{stage_id}_{slug}.jsonl`
+  - 观察并发下 `rate_limit_pause` 次数 ≤ 单线程基线（controller 统一 pause）
+- correctness（回归）: 挑一个已 committed 的 stage，用 `validate_only`
+  per-file 跑 Phase A vs. 当前批量跑，issue 集合应相等（fingerprint 对齐）
+- resume: 手动 kill 一个正在 `repairing` 的 stage，`--resume` 后应看到
+  lane 回滚重 extract + repair，最终 COMMITTED
+- 实测耗时: 期望 extract 22m + repair ~10m = ~32m/stage（基线 69m 的
+  ~2.2×）
 
-**预估工作量**：1–2 小时（改 checker + 加锁 + 配置项 + smoke）
+**预估工作量**：3–5 小时
+（manager 20 行 + config 10 行 + RepairRecorder 路径调整 20 行 +
+lane_states 取值扩展 + resume 判定重写 ~50 行 + docs 对齐 + smoke）
 
-**依赖**：无。本改动向后兼容，`semantic_concurrency=1` 即退化为当前行为
+**依赖**：无。`repair_concurrency=1` 即退化为当前单线程行为
 
 **动机**
 
-- 当前串行是纯 IO-bound（等 `claude -p` 子进程），并发收益近似线性
-- Phase A 占 repair 总耗时 ~75%，是最大瓶颈
-- Phase B 的 fixer 涉及同文件可能被多 issue 修改，并发会有写冲突——**只并行校验（Phase A / L3 gate），不并行 fix**
+- coordinator.run() 本来就是纯 per-file 逻辑（跨文件语义由 Phase 3.5
+  独立承担），per-file 并发化不损失任何现有能力
+- concurrency=10 下 S001 预估 69m → ~32m（~2.2×），49 stage 总省 ~30h
+- 架构清洁：每个文件独立 repair 事务；per-file JSONL 日志；失败隔离；
+  future E2 升级路径天然对齐
+- Phase B 的 fixer 在 E1 下天然 per-file 独立执行（各 worker 各自串行
+  自己文件的 fix loop），不存在同文件 issue 并发写冲突
 
 **完成标准**
 
-- 单 stage Phase A 耗时从 34m 降到 max(per-file) 级别
-- `docs/requirements.md` / `ai_context/architecture.md` 加一句 "Phase A / L3 gate per-file 并行"
+- 单 stage 总耗时从 69m 降到 ~32m 级别
+- `docs/requirements.md` / `ai_context/architecture.md` 加"repair 按文件
+  并发 + lane_states 取值扩展 + 2-level resume"
 - 本 todo 条目删除
 
 ---
 
 ## 讨论中（未定案）
+
+### [T-REPAIR-EVENT-DRIVEN] Repair 事件驱动 · extract→repair overlap（E2）
+
+**上下文**
+
+T-REPAIR-PARALLEL 的 E1 方案把 stage 总耗时从 69m 压到 ~32m（extract
+22m + repair ~10m）。E2 方案进一步把每个 lane 完成后的文件立刻触发
+repair，与后续 lane 的 extract 时间重叠，理论最优解。
+
+**讨论结论（2026-04-22）**: **暂不做**，先做 E1。
+
+**为什么暂不做**
+
+- S001 实测 11 个文件里 **6 个是 post-processing 一次性生成的 digest /
+  catalog**，都卡在 extract 全完（t=22m）之后才能进 repair 池
+- E2 wall-clock 估 28m vs E1 32m，**只省 4min/stage**，49 stage 省 ~3h
+- 代价：双 ThreadPoolExecutor（extract 池 + repair 池）+ 事件回调触发 +
+  peak 并发 9 撞 rate limit 的管理。复杂度跳一档
+- 要真正吃到 E2 红利，post-processing 也要改成 per-lane 触发
+  （每 lane 完成就跑自己的 digest/catalog 更新），这是另一个重构
+- 3h 收益 vs 重构成本，不划算
+
+**何时重启讨论**
+
+- E1 落地后跑若干 stage，观察真实 extract 与 repair 的耗时比
+- 如果发现 extract 瓶颈 lane 远长于 repair（例如 extract 45m + repair 10m），
+  overlap 收益会拉大，值得重评
+- 或者 post-processing 因其他原因要改成 per-lane 触发时，顺带做 E2
+
+**依赖**：T-REPAIR-PARALLEL 先落地
+
+---
 
 ### [T-CODEX-STDIN] CodexBackend prompt 走 stdin 临时文件
 
