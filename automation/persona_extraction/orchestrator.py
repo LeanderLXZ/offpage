@@ -1788,18 +1788,19 @@ class ExtractionOrchestrator:
                 phase3.save(self.project_root)
                 return
 
-            stage.transition(StageState.PASSED)
-            phase3.save(self.project_root)
-
-            # Repair may have rewritten source fields that post-processing
-            # already consumed (memory_timeline.digest_summary,
-            # world stage_events, character stage_events). Re-run the
-            # programmatic post-processing pass so
-            # memory_digest.jsonl / world_event_digest.jsonl /
-            # stage_catalog.json reflect the repaired source. The pass is
-            # idempotent and 0-token; if repair made no substantive change
-            # the re-run is a no-op. Errors here downgrade the stage to
-            # ERROR so --resume retries (same contract as the first pass).
+            # Post-repair post-processing rerun — MUST run before the
+            # PASSED transition. Repair may have rewritten source fields
+            # that post-processing already consumed
+            # (memory_timeline.digest_summary, world stage_events,
+            # character stage_events); re-running the idempotent 0-token
+            # pass refreshes memory_digest.jsonl /
+            # world_event_digest.jsonl / stage_catalog.json so derived
+            # digests stay 1:1 with the repaired source. Placing it
+            # before transition(PASSED) keeps the state invariant tight:
+            # PASSED means "repair passed AND PP is synchronised". A
+            # SIGKILL mid-rerun leaves state=REVIEWING, so --resume
+            # re-enters Step 4 (repair is idempotent) and reruns PP —
+            # the PASSED-resume branch never sees a half-synced state.
             stage_order_pp2 = next(
                 (i for i, b in enumerate(phase3.stages)
                  if b.stage_id == stage.stage_id), 0)
@@ -1817,12 +1818,16 @@ class ExtractionOrchestrator:
                 for e in pp2_errors:
                     print(f"    [ERROR] post-repair PP: {e}")
                 stage.error_message = (
-                    "; ".join(pp2_errors)[:2000]
-                    or "post-repair post-processing failed")
+                    "post-repair PP: " + "; ".join(pp2_errors)[:1980]
+                    if pp2_errors
+                    else "post-repair post-processing failed")
                 stage.transition(StageState.FAILED)
                 stage.transition(StageState.ERROR)
                 phase3.save(self.project_root)
                 return
+
+            stage.transition(StageState.PASSED)
+            phase3.save(self.project_root)
 
 
         # --- Step 5: Git commit ---

@@ -1256,11 +1256,12 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 │  │  │   · 四层就地修复 (T0→T1→T2→T3, 逐层升级)    │ │            │
 │  │  │   · 字段级 patch, 不回滚重提取                │ │            │
 │  │  │ ④' post-repair 程序化后处理重跑 (§11.3a):    │ │            │
-│  │  │   若 repair 改写了 digest_summary /          │ │            │
-│  │  │   stage_events，幂等重跑 post-processing     │ │            │
-│  │  │   刷新 memory_digest / world_event_digest    │ │            │
-│  │  │ ⑤ PASS → git commit                         │ │            │
-│  │  │   修复失败 → stage ERROR                      │ │            │
+│  │  │   无条件幂等重跑 post-processing (0 token)， │ │            │
+│  │  │   在 transition(PASSED) 之前执行，刷新       │ │            │
+│  │  │   memory_digest / world_event_digest /       │ │            │
+│  │  │   stage_catalog 与 repair 后源字段一致      │ │            │
+│  │  │ ⑤ PASSED → git commit                       │ │            │
+│  │  │   修复失败 / PP 重跑失败 → stage ERROR       │ │            │
 │  │  └─────────────────────────────────────────────┘ │            │
 │  │                                                  │            │
 │  │  Stage 状态机:                                    │            │
@@ -1715,8 +1716,16 @@ git commit 之前，编排器无条件再调用一次程序化后处理（§11.3
 可能改写了 `digest_summary` / world `stage_events` / character
 `stage_events` 等后处理的源字段；后处理幂等且 0 token，重跑保证
 `memory_digest.jsonl` / `world_event_digest.jsonl` / `stage_catalog.json`
-与 repair 后的源字段保持 1:1 一致。重跑失败按首次失败同样处理：stage
-进入 ERROR，`--resume` 重试。
+与 repair 后的源字段保持 1:1 一致。
+
+**顺序约束**：PP 重跑**必须在 `transition(PASSED)` 之前**执行，使
+`PASSED` 状态的语义严格强化为 "repair 通过 **且** PP 已同步"。这
+封住了"`transition(PASSED)` 完成但 PP 未跑完"窗口：若 SIGKILL 落在该
+窗口内，state 留在 `REVIEWING`，`--resume` 正常重入 Step 4 重跑
+repair（幂等快速通过）+ PP 重跑；PASSED-resume 分支（直接跳到 Step 5
+commit）就**永远不会看到半同步状态**。重跑失败按首次失败同样处理：
+stage 进入 ERROR（`error_message` 前缀 `post-repair PP:` 以区分
+首次 PP 失败），`--resume` 重试。
 
 **L3 gate 触发条件**：一个文件进入 gate 当且仅当以下两点同时满足——
 (1) 它在 Phase A 就有过 L3 issue（即属于 L3_files 集合）；

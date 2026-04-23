@@ -410,10 +410,11 @@ orchestrator (Python)
     │       │               │       + T3_CORRUPTED 硬停: T3 后 L0–L2 扫描)
     │       │               └── Phase C: 最终确认 (复用最后一次 L3 gate 结果)
     │       ├── 程序化后处理重跑 (digest/catalog, 0 token, idempotent)
-    │       │       └── repair 可能改写 digest_summary / stage_events，
-    │       │           重跑保证 memory_digest / world_event_digest /
-    │       │           stage_catalog 与修复后源字段 1:1 一致
-    │       ├── [全部文件 PASS + PP 重跑成功] → git commit
+    │       │       └── 在 transition(PASSED) 之前无条件重跑
+    │       │           PASSED 语义 = repair 通过 ∧ PP 已同步
+    │       │           SIGKILL 中断 → state 留 REVIEWING, --resume
+    │       │             重入 Step 4 再跑 repair + PP (幂等)
+    │       ├── [全部文件 PASS + PP 重跑成功] → transition(PASSED) → git commit
     │       └── [任一文件 FAIL 或 PP 重跑失败] → stage ERROR (--resume 重置 → PENDING)
     │
     ├── 跨阶段一致性检查 (Phase 3.5):

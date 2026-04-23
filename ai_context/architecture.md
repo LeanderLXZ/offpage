@@ -313,13 +313,20 @@ or `codex` call, no shared session memory, file-based context.
      Field-level surgical patching via json_path — no whole-file
      rollback. Checkers and fixers are orthogonal (any L can need any T).
   4. Post-repair post-processing rerun (0 token, idempotent): after
-     repair PASSES and before git commit, the orchestrator re-runs the
-     same programmatic post-processing pass. Repair may have rewritten
-     `digest_summary` / world `stage_events` / character
-     `stage_events`; the rerun refreshes `memory_digest.jsonl` /
-     `world_event_digest.jsonl` / `stage_catalog.json` so derived
-     digests stay 1:1 with the repaired source. Failure here degrades
-     the stage to ERROR (same contract as the first pass).
+     repair passes and **before the `transition(PASSED)`**, the
+     orchestrator re-runs the same programmatic post-processing pass.
+     Repair may have rewritten `digest_summary` / world `stage_events` /
+     character `stage_events`; the rerun refreshes `memory_digest.jsonl`
+     / `world_event_digest.jsonl` / `stage_catalog.json` so derived
+     digests stay 1:1 with the repaired source. The order matters:
+     `PASSED` is only asserted once PP rerun has completed, so `PASSED`
+     strictly means "repair passed AND PP is synchronised." A SIGKILL
+     mid-rerun leaves state=REVIEWING, and `--resume` re-enters Step 4
+     (repair is idempotent) and reruns PP — the PASSED-resume branch
+     that jumps straight to commit (orchestrator.py around line 1401)
+     never sees a half-synced state. Failure here degrades the stage to
+     ERROR via `REVIEWING → FAILED → ERROR` (`error_message` prefixed
+     with `post-repair PP:` to distinguish from first-PP failure).
   5. Git commit — **commit-ordering contract**: git commit first; only
      non-empty SHA → `COMMITTED`; empty SHA reverts to `FAILED` so
      resume retries.
