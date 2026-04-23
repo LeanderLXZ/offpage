@@ -102,6 +102,13 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 - `location_changes`, `map_changes` — 地理变化
 - `evidence_refs` — 章节号列表
 
+**自包含契约（schema 硬门控）**：`required` 除元信息外还包含
+`foundation_corrections` / `stage_events` / `current_world_state` /
+`relationship_shifts` / `character_status_changes` / `location_changes` /
+`map_changes` / `evidence_refs`。L1 schema 层即强制所有自包含维度存在
+（允许空数组，但不允许缺字段），让 schema gate 承担 self-contained
+契约而非仅依赖 prompt + L2/L3。
+
 ---
 
 ### world/fixed_relationships.schema.json
@@ -245,6 +252,14 @@ core_wounds 记录最底层的创伤根源。
 | `stage_delta` | 从上一阶段的变化摘要（信息性） |
 | `character_arc` | 角色从阶段 1 到当前的整体弧线概览（arc_summary、arc_stages 关键节点、current_position） |
 | `stage_events` | 本阶段发生的事件（每条 50–80 字，schema 硬门控；不累积历史） |
+
+**自包含契约（schema 硬门控）**：`required` 除元信息外还包含
+`active_aliases` / `current_personality` / `current_mood` /
+`knowledge_scope` / `voice_state` / `behavior_state` / `boundary_state` /
+`relationships` / `stage_events` / `character_arc` / `evidence_refs`。
+L1 schema 层即强制所有自包含维度存在（`stage_delta` 可省略，stage 1
+没有上阶段参考）。由 schema gate 承担 self-contained 契约，而非仅靠
+prompt + L2/L3 兜底。
 
 ---
 
