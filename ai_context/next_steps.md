@@ -11,7 +11,7 @@
    - `--resume` auto-resets S002 ERROR → PENDING and continues; earlier
      committed stages + lane products are preserved
    - Note: preflight tolerates dirt **outside** the work scope
-     (`.claude/settings.json`, editor state). Dirty files inside
+     (editor state, other local changes). Dirty files inside
      `works/<work_id>/` still block — stash or commit before running.
 
 2. **Refine schemas into directly writable instance formats.**

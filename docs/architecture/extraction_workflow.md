@@ -495,8 +495,8 @@ orchestrator (Python)
     Ctrl+C / 异常 / `sys.exit`）工作树都回到 `master`
   - `checkout_master` / `preflight_check` 接受 `scope_paths` 参数，
     orchestrator 传入 `["works/{work_id}/"]`——scope 内有脏文件则拒绝
-    切换 / 拒绝启动；scope 外的脏改动（`.claude/settings.json` 等）
-    静默容许，保留"半 stage 产物不跟到 `master`"的不变量
+    切换 / 拒绝启动；scope 外的脏改动（编辑器临时状态等）静默容许，
+    保留"半 stage 产物不跟到 `master`"的不变量
   - SessionStart Claude Code hook（`.claude/hooks/session_branch_check.sh`）
     新会话检测"非 master 分支 + 无 orchestrator 进程"的异常组合并提示
 - 支持 Claude CLI 和 Codex CLI 两种后端
