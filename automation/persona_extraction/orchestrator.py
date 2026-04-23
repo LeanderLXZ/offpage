@@ -82,6 +82,7 @@ from ..repair_agent import (
     run as run_repair,
     validate_only as repair_validate_only,
 )
+from ..repair_agent.recorder import RepairRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -1244,7 +1245,9 @@ class ExtractionOrchestrator:
             tracker.print_summary()
         finally:
             if pipeline.extraction_branch:
-                checkout_master(self.project_root)
+                checkout_master(
+                    self.project_root,
+                    scope_paths=[f"works/{pipeline.work_id}/"])
 
     def _process_stage(self, phase3: Phase3Progress,
                        pipeline: PipelineProgress,
@@ -1421,7 +1424,8 @@ class ExtractionOrchestrator:
                     pipeline.target_characters))
             problems = preflight_check(
                 self.project_root, pipeline.extraction_branch or None,
-                ignore_patterns=ignore_patterns)
+                ignore_patterns=ignore_patterns,
+                scope_paths=[f"works/{pipeline.work_id}/"])
             if problems:
                 for p in problems:
                     print(f"    [PROBLEM] {p}")
@@ -1649,28 +1653,33 @@ class ExtractionOrchestrator:
                 self.project_root, pipeline.work_id)
 
             ra_cfg = get_config().repair_agent
-            repair_result = run_repair(
-                files=repair_files,
-                config=RepairConfig(
-                    max_rounds=ra_cfg.total_round_limit,
-                    run_semantic=True,
-                    triage_enabled=ra_cfg.triage_enabled,
-                    accept_cap_per_file=ra_cfg.triage_accept_cap_per_file,
-                    retry_policy=RetryPolicy(
-                        t0_max=ra_cfg.t0_retry,
-                        t1_max=ra_cfg.t1_retry,
-                        t2_max=ra_cfg.t2_retry,
-                        t3_max=ra_cfg.t3_retry,
-                        t3_max_per_file=ra_cfg.t3_max_per_file,
-                        max_total_rounds=ra_cfg.total_round_limit,
+            repair_record_path = (
+                work_root / "analysis" / "progress"
+                / f"repair_{stage.stage_id}.jsonl")
+            with RepairRecorder(repair_record_path) as recorder:
+                repair_result = run_repair(
+                    files=repair_files,
+                    config=RepairConfig(
+                        max_rounds=ra_cfg.total_round_limit,
+                        run_semantic=True,
+                        triage_enabled=ra_cfg.triage_enabled,
+                        accept_cap_per_file=ra_cfg.triage_accept_cap_per_file,
+                        retry_policy=RetryPolicy(
+                            t0_max=ra_cfg.t0_retry,
+                            t1_max=ra_cfg.t1_retry,
+                            t2_max=ra_cfg.t2_retry,
+                            t3_max=ra_cfg.t3_retry,
+                            t3_max_per_file=ra_cfg.t3_max_per_file,
+                            max_total_rounds=ra_cfg.total_round_limit,
+                        ),
                     ),
-                ),
-                source_context=source_ctx,
-                llm_call=_llm_call,
-                importance_map=importance_map,
-                relationship_history_summary_max_chars=(
-                    ra_cfg.relationship_history_summary_max_chars),
-            )
+                    source_context=source_ctx,
+                    llm_call=_llm_call,
+                    importance_map=importance_map,
+                    relationship_history_summary_max_chars=(
+                        ra_cfg.relationship_history_summary_max_chars),
+                    recorder=recorder,
+                )
 
             tracker.record_step(ProgressTracker.STEP_REVIEW)
 
@@ -2010,7 +2019,9 @@ class ExtractionOrchestrator:
                                      max_stages=preset_end_stage)
         finally:
             if pipeline and pipeline.extraction_branch:
-                checkout_master(self.project_root)
+                checkout_master(
+                    self.project_root,
+                    scope_paths=[f"works/{pipeline.work_id}/"])
 
 
 # ---------------------------------------------------------------------------

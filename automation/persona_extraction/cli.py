@@ -209,10 +209,14 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     # --- Pre-flight: check git working tree ---
+    # Scope the dirty check to the extraction's commit path — unrelated
+    # dirt (IDE config, editor state under .claude/) shouldn't block a run
+    # since the orchestrator only commits under works/{work_id}/.
     problems = preflight_check(
         project_root,
         ignore_patterns=["extraction_progress.json", "__pycache__",
-                         "scene_archive"])
+                         "scene_archive"],
+        scope_paths=[f"works/{args.work_id}/"])
     if problems:
         for p in problems:
             print(f"[PREFLIGHT] {p}")

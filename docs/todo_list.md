@@ -63,7 +63,61 @@
 
 ## 下一步
 
-（暂无条目）
+### [T-REPAIR-PARALLEL] Repair agent per-file 并行化（Phase A / L3 gate）
+
+**上下文**
+
+当前 repair agent 的 SemanticChecker 在
+[automation/repair_agent/checkers/semantic.py::SemanticChecker.check](automation/repair_agent/checkers/semantic.py)
+用纯 `for f in files:` 串行跑 `claude -p` 语义校验，L3 gate
+也逐文件串行复验。实测一个 stage 的 Phase A 11 个文件 串行耗时 34m（见
+`docs/logs/2026-04-22_225700_preflight_scope_repair_recorder_heartbeat_logrotate.md`
+旁路对比）；并行化到 per-file 线程池可压缩到 ~max(per-file)，约 6m。
+每 stage 省 ~28m，49 stage 理论上省 ~23h。
+
+**改动清单**
+
+1. [automation/repair_agent/checkers/semantic.py](automation/repair_agent/checkers/semantic.py)
+   `check()` 与 `check_scoped()` 用 `concurrent.futures.ThreadPoolExecutor`
+   提交每文件的 `_review_file`，并发上限读 `[repair_agent].semantic_concurrency`
+   （新增，默认 4，与订阅限额匹配）。保持返回顺序稳定（按 files 入参顺序聚合）
+2. [automation/persona_extraction/config.py::RepairAgentConfig](automation/persona_extraction/config.py)
+   新增 `semantic_concurrency: int = 4`
+3. [automation/config.toml](automation/config.toml) `[repair_agent]` 段加
+   `semantic_concurrency = 4`
+4. coordinator 的 L3 gate 路径 `pipeline.run_layer(..., layer=3)` 同样受益——
+   无需额外改动，走同一个 SemanticChecker
+5. rate-limit 语义：每个 worker 继续用现有 `_llm_call` → `run_with_retry`，
+   `RateLimitController` 是进程级单例，并发 worker 都会 join 同一个 pause，
+   不破坏原契约
+6. RepairRecorder 并发写：`RepairRecorder.write` 当前无锁；并发多 worker 同时
+   emit `issue` 事件会交织。加 `threading.Lock`（或 `self._fh` 改 line-buffered
+   + 单 writer thread 队列），选低复杂度前者
+
+**验证**
+
+- smoke: `from automation.repair_agent.checkers.semantic import SemanticChecker;
+  c = SemanticChecker(llm_call=lambda p, timeout: "[]"); c.check([...3 fake files...])`
+  返回 issue 列表顺序与串行一致
+- 单独对比: 挑一个已 committed 的 stage，用 `validate_only` 跑 Phase A，
+  并发前 vs. 并发后结果集合相等
+- 实测: 下一次 stage 跑 Phase A 时看日志耗时是否按 `max(per-file)` 收敛
+
+**预估工作量**：1–2 小时（改 checker + 加锁 + 配置项 + smoke）
+
+**依赖**：无。本改动向后兼容，`semantic_concurrency=1` 即退化为当前行为
+
+**动机**
+
+- 当前串行是纯 IO-bound（等 `claude -p` 子进程），并发收益近似线性
+- Phase A 占 repair 总耗时 ~75%，是最大瓶颈
+- Phase B 的 fixer 涉及同文件可能被多 issue 修改，并发会有写冲突——**只并行校验（Phase A / L3 gate），不并行 fix**
+
+**完成标准**
+
+- 单 stage Phase A 耗时从 34m 降到 max(per-file) 级别
+- `docs/requirements.md` / `ai_context/architecture.md` 加一句 "Phase A / L3 gate per-file 并行"
+- 本 todo 条目删除
 
 ---
 

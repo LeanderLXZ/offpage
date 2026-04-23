@@ -57,11 +57,17 @@ def git_status(project_root: Path) -> GitStatus:
 
 def preflight_check(project_root: Path,
                     expected_branch: str | None = None,
-                    ignore_patterns: list[str] | None = None) -> list[str]:
+                    ignore_patterns: list[str] | None = None,
+                    scope_paths: list[str] | None = None) -> list[str]:
     """Run preflight checks before a stage. Returns list of problems.
 
     ``ignore_patterns`` — file path substrings to tolerate in dirty status
     (e.g. ``["extraction_progress.json", "__pycache__"]``).
+
+    ``scope_paths`` — if provided, only flag dirty files whose path starts
+    with one of these prefixes. Dirty files outside the scope are tolerated
+    silently. Use ``["works/<work_id>/"]`` for per-stage preflight so that
+    unrelated dirt (IDE config, editor state) does not block extraction.
     """
     problems: list[str] = []
     gs = git_status(project_root)
@@ -73,6 +79,7 @@ def preflight_check(project_root: Path,
     if not gs.clean:
         # Check if all dirty files match ignore patterns
         ignore = ignore_patterns or []
+        scopes = scope_paths or []
         status_proc = _git(["status", "--porcelain"], project_root)
         dirty_lines = [l for l in status_proc.stdout.strip().splitlines()
                        if l.strip()]
@@ -80,8 +87,11 @@ def preflight_check(project_root: Path,
         for line in dirty_lines:
             # porcelain format: XY filename  (filename starts at col 3)
             fname = line[3:].strip().strip('"')
-            if not any(pat in fname for pat in ignore):
-                significant.append(fname)
+            if any(pat in fname for pat in ignore):
+                continue
+            if scopes and not any(fname.startswith(p) for p in scopes):
+                continue
+            significant.append(fname)
         if significant:
             problems.append("Working tree has uncommitted changes. "
                             "Commit or stash before extraction.")
@@ -125,7 +135,8 @@ def create_extraction_branch(project_root: Path,
     return True
 
 
-def checkout_master(project_root: Path) -> bool:
+def checkout_master(project_root: Path,
+                    scope_paths: list[str] | None = None) -> bool:
     """Return working tree to ``master``. Idempotent and non-destructive.
 
     Returns ``True`` when the tree is on ``master`` after the call (either
@@ -134,16 +145,28 @@ def checkout_master(project_root: Path) -> bool:
     fails. Callers treat this as best-effort cleanup and should not raise
     on failure.
 
-    A dirty working tree is refused: untracked / modified files could
-    leak onto ``master`` when switching from an extraction branch (e.g.
-    SIGINT mid-stage leaves ``works/.../S###.json`` untracked). When
-    dirty, we log + stay on the current branch so the user can inspect
-    and clean up manually before re-trying.
+    A dirty working tree under the extraction scope is refused: untracked
+    / modified files could leak onto ``master`` when switching from an
+    extraction branch (e.g. SIGINT mid-stage leaves
+    ``works/.../S###.json`` untracked). When ``scope_paths`` is provided,
+    dirt outside those prefixes is tolerated; otherwise the whole tree
+    must be clean.
     """
     gs = git_status(project_root)
     if gs.branch == "master":
         return True
+    scoped_dirty: list[str] = []
     if not gs.clean:
+        scopes = scope_paths or []
+        status_proc = _git(["status", "--porcelain"], project_root)
+        for line in status_proc.stdout.strip().splitlines():
+            if not line.strip():
+                continue
+            fname = line[3:].strip().strip('"')
+            if scopes and not any(fname.startswith(p) for p in scopes):
+                continue
+            scoped_dirty.append(fname)
+    if scoped_dirty or (not gs.clean and not scope_paths):
         logger.warning(
             "Working tree dirty on '%s' — staying put instead of "
             "switching to master. Inspect and clean up manually, then "

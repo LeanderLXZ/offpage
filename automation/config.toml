@@ -191,6 +191,10 @@ default_backend = "claude"
 # 清理。
 failed_lanes_retention_days = 30
 
+# extraction.log 的滚动份数。每次启动 orchestrator 时，现有 log 会滚动
+# 到 .1 / .2 / ...，超过此上限的最旧一份被删除。0 = 不滚动（持续 append）。
+extraction_log_backup_count = 3
+
 
 # ----------------------------------------------------------------
 # [git] Git 集成

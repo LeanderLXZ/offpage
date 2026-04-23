@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import collections
 import glob as _glob
 import json
 import logging
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -33,6 +35,33 @@ def _fmt_elapsed(seconds: float) -> str:
         return f"{m}m{s:02d}s"
     h, m = divmod(m, 60)
     return f"{h}h{m:02d}m{s:02d}s"
+
+
+_HB_RING_MAXLEN = 20
+
+
+def _heartbeat_visible() -> bool:
+    """Heartbeats print to the terminal only when stderr is a tty.
+
+    In ``--background`` mode stderr is redirected to ``extraction.log``
+    (``process_guard.launch_background`` merges stderr into the log), so
+    live heartbeats would pollute the log — mute them instead. In the
+    failure path, the in-memory ring buffer is flushed via ``logger``
+    so diagnostics aren't lost.
+    """
+    try:
+        return sys.stderr.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def _flush_heartbeats(ring: "collections.deque[str]", lane_tag: str) -> None:
+    """Dump the last captured heartbeats to the log on failure."""
+    if not ring:
+        return
+    logger.warning(
+        "claude -p failed %s — last %d heartbeat(s):\n%s",
+        lane_tag, len(ring), "\n".join(ring))
 
 
 @contextmanager
@@ -246,9 +275,17 @@ class ClaudeBackend(LLMBackend):
 
             print(f"    PID {proc.pid} started {lane_tag}")
 
-            # Heartbeat thread — prints elapsed + memory every 30s
+            # Heartbeat thread — ring-buffers the last N samples and, when
+            # running in a terminal, also prints them live on stderr. In
+            # ``--background`` mode stderr is merged into extraction.log,
+            # so live prints are muted; the ring buffer still captures
+            # samples and gets flushed on failure so the final log has
+            # the tail of memory/elapsed data needed for diagnosis.
             stop_event = threading.Event()
             orch_pid = os.getpid()
+            hb_ring: collections.deque[str] = collections.deque(
+                maxlen=_HB_RING_MAXLEN)
+            live_hb = _heartbeat_visible()
 
             def heartbeat() -> None:
                 while not stop_event.wait(
@@ -256,9 +293,12 @@ class ClaudeBackend(LLMBackend):
                     elapsed = time.monotonic() - start
                     child_mem = fmt_memory(get_rss_mb(proc.pid))
                     orch_mem = fmt_memory(get_rss_mb(orch_pid))
-                    print(f"    ... running [{_fmt_elapsed(elapsed)}]"
-                          f"  PID {proc.pid} {lane_tag}"
-                          f"  Mem: claude={child_mem} orch={orch_mem}")
+                    line = (f"    ... running [{_fmt_elapsed(elapsed)}]"
+                            f"  PID {proc.pid} {lane_tag}"
+                            f"  Mem: claude={child_mem} orch={orch_mem}")
+                    hb_ring.append(line)
+                    if live_hb:
+                        print(line, file=sys.stderr, flush=True)
 
             hb = threading.Thread(target=heartbeat, daemon=True)
             hb.start()
@@ -279,6 +319,9 @@ class ClaudeBackend(LLMBackend):
         duration = time.monotonic() - start
         print(f"    PID {proc.pid} finished {lane_tag} "
               f"[{_fmt_elapsed(duration)}]")
+
+        if timed_out or proc.returncode != 0:
+            _flush_heartbeats(hb_ring, lane_tag)
 
         parsed = _parse_claude_json(stdout)
         raw_stdout_capped = (stdout or "")[:_RAW_STDOUT_CAP]
@@ -395,15 +438,21 @@ class CodexBackend(LLMBackend):
 
         stop_event = threading.Event()
         orch_pid = os.getpid()
+        hb_ring: collections.deque[str] = collections.deque(
+            maxlen=_HB_RING_MAXLEN)
+        live_hb = _heartbeat_visible()
 
         def heartbeat() -> None:
             while not stop_event.wait(get_config().runtime.heartbeat_interval_s):
                 elapsed = time.monotonic() - start
                 child_mem = fmt_memory(get_rss_mb(proc.pid))
                 orch_mem = fmt_memory(get_rss_mb(orch_pid))
-                print(f"    ... running [{_fmt_elapsed(elapsed)}]"
-                      f"  PID {proc.pid} {lane_tag}"
-                      f"  Mem: codex={child_mem} orch={orch_mem}")
+                line = (f"    ... running [{_fmt_elapsed(elapsed)}]"
+                        f"  PID {proc.pid} {lane_tag}"
+                        f"  Mem: codex={child_mem} orch={orch_mem}")
+                hb_ring.append(line)
+                if live_hb:
+                    print(line, file=sys.stderr, flush=True)
 
         hb = threading.Thread(target=heartbeat, daemon=True)
         hb.start()
@@ -427,6 +476,9 @@ class CodexBackend(LLMBackend):
         duration = time.monotonic() - start
         print(f"    PID {proc.pid} finished {lane_tag} "
               f"[{_fmt_elapsed(duration)}]")
+
+        if timed_out or proc.returncode != 0:
+            _flush_heartbeats(hb_ring, lane_tag)
 
         raw_stdout_capped = (stdout or "")[:_RAW_STDOUT_CAP]
         raw_stderr_capped = (stderr or "")[:_RAW_STDERR_CAP]
