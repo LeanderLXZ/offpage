@@ -63,27 +63,7 @@
 
 ## 下一步
 
-### [T-MERGE-MASTER-TO-EXTRACTION] 把 master `fc1faea` merge 进 extraction 分支
-
-**动机**：master 于 2026-04-23 15:38 落了 `fc1faea` (skill(go+after-check): docs/logs/ 升级为 PRE/POST/REVIEW 三时点契约)，影响 `.claude/commands/{go,after-check}.md`、`.agents/skills/{go,after-check}/SKILL.md`、`ai_context/conventions.md`、`ai_context/instructions.md`。按项目硬规则，extraction 分支需 `git merge master` 把这些变更带进去。
-
-**推迟原因**：本 commit 生成时，`extraction/我和女帝的九世孽缘` 主 working tree 仍有 S003 未提交脏（baseline 6 份 M + 5 份未跟踪 `stage_snapshots/S003.json` / `memory_timeline/S003.json`），是上次 orchestrator checkout_master 失败留下的半成品，需要 `--resume` 继续处理，不能此刻切分支 merge。
-
-**改动清单**：
-- `git checkout extraction/我和女帝的九世孽缘`
-- `git merge master` （本 commit `fc1faea` 不涉及 works/**，与 S003 脏文件无冲突）
-- 冲突预期：无；涉及的 7 份文件在 extraction 分支上自 2026-04-22 之后未被修改
-- merge 后不必 checkout master（让抽取流程自己切）
-
-**验证**：
-- `git log --oneline extraction/我和女帝的九世孽缘 | head -3` 看到 merge commit + `fc1faea`
-- extraction 分支上 `.claude/commands/go.md` 有新 Step 1 / Step 7
-
-**预估工作量**：5 min
-
-**依赖**：S003 恢复到 committed 状态（或用户显式授权在中途 merge）。最早时机：下次 `--resume` 让 S003 进 committed 后；更稳的时机：一批 stage 跑完自然 idle 时
-
-**完成标准**：extraction 分支 HEAD 包含 `fc1faea`，抽取流程 resume 正常继续
+（暂无条目）
 
 ---
 
