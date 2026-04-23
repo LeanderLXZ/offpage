@@ -33,8 +33,11 @@ stage snapshots. Their role:
 | `failure_modes.json` | Tier 0 startup (AI safety rules, stage-independent) |
 | `boundaries.json` → `hard_boundaries` only | Tier 0 startup (immutable hard limits) |
 | `stage_snapshots/{stage_id}.json` | Tier 0 startup (complete stage state) |
-| `memory_timeline/{stage_id}.json` × stages 1..N | Tier 0 startup (historical memories) |
-| Past `stage_snapshots/{past_stage_id}.json` | Tier 1 on-demand (deep historical recall) |
+| `memory_timeline/{stage_id}.json` × recent 2 stages (N + N-1) | Tier 0 startup (recent full-text memories) |
+| `memory_digest.jsonl` (stage 1..N) | Tier 0 startup (compressed index for distant stages; each entry ~30–40 tokens) |
+| `world_event_digest.jsonl` (stage 1..N) | Tier 0 startup (world-event timeline index) |
+| `memory_timeline/{stage_id}.json` × older stages | On-demand via FTS5 / embedding (see `simulation/retrieval/load_strategy.md`) |
+| Past `stage_snapshots/{past_stage_id}.json` | On-demand (deep historical recall) |
 
 ## Extraction Workflow
 
