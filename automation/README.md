@@ -63,7 +63,7 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
 - `[phase1]` stage_plan 出口验证重试上限
 - `[phase3]` 提取 / 审校超时、`max_turns`
 - `[phase4]` 章节并发、短路熔断阈值
-- `[repair_agent]` 各 tier 重试次数、triage 设置
+- `[repair_agent]` 各 tier 重试次数、T3 全局上限、triage 接受上限、总轮数、per-file 并发度（`repair_concurrency`，默认 10）
 - `[backoff]` 快速空失败退避序列
 - `[rate_limit]` Token 限额暂停策略（reset 缓冲、DST 感知时区解析、
   解析失败 fallback、周限额上限/动作、probe leader 选举 TTL、probe

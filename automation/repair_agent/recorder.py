@@ -1,10 +1,15 @@
 """Structured JSONL recorder for repair agent events.
 
-One file per stage at ``works/{work_id}/analysis/progress/repair_{stage_id}.jsonl``.
+One file per repaired target at
+``works/{work_id}/analysis/progress/repair_{stage_id}_{slug(file)}.jsonl``.
 Each line is a self-describing JSON object. The repair coordinator emits
 events at key transitions (phase starts, issue discovery, escalations,
 fixes, triage verdicts, round summaries, completion). Consumers can
 replay the run without re-parsing free-form log lines.
+
+Orchestrator dispatches ``coordinator.run(files=[single])`` per file in
+parallel (see ``[repair_agent].repair_concurrency``); each worker opens
+its own recorder, so writes are naturally lock-free.
 
 Intentionally minimal: open / write / close. No rotation, no query
 helpers — read the JSONL with `jq` or a one-off Python script.
@@ -22,11 +27,13 @@ logger = logging.getLogger(__name__)
 
 
 class RepairRecorder:
-    """Append-only JSONL sink for a single stage's repair run.
+    """Append-only JSONL sink for a single file's repair run.
 
-    Open at the start of a stage's repair, call ``write(event, **fields)``
+    Open at the start of one file's repair, call ``write(event, **fields)``
     at each transition, then ``close()`` (or use as a context manager).
-    Every call flushes so partial state survives a crash.
+    Every call flushes so partial state survives a crash. One recorder
+    instance owns one JSONL file; parallel per-file repair workers each
+    hold their own recorder, so writes are lock-free by construction.
     """
 
     def __init__(self, path: Path):
