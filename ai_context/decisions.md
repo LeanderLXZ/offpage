@@ -126,7 +126,11 @@ constraints beyond what the architecture docs already say.
     is expensive and a second regen rarely helps). Phase C reuses the
     last gate result when possible, so total semantic cost = 1 per file
     in Phase A + at most (modified L3 files) × rounds gate calls.
-    Missing catalog / digest routes to PP rerun.
+    Missing catalog / digest routes to PP rerun. Phase 3 dispatches per
+    file to a `ThreadPoolExecutor(max_workers=[repair_agent].repair_concurrency)`
+    (default 10); coordinator.run is invoked once per file, each file is
+    an independent repair transaction with its own RepairRecorder JSONL.
+    Cross-file consistency lives in Phase 3.5, not in per-stage repair.
 25a. **Source-discrepancy triage** (`repair_agent` extension) covers
     two accept paths that share one per-file cap
     (`accept_cap_per_file=5`):

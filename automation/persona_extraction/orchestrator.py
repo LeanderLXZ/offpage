@@ -102,6 +102,25 @@ def _fmt_duration(seconds: float) -> str:
     return f"{h}h{m:02d}m{s:02d}s"
 
 
+def _repair_slug(file_path: str) -> str:
+    """Compact filesystem-safe slug for a repair target path.
+
+    Used in per-file JSONL filenames under progress/. Shape:
+    ``<sanitized-last-2-segments>_<8-char-hash>``. The hash disambiguates
+    paths whose segments collapse to the same ASCII skeleton (common for
+    Chinese work_id / character_id where every non-ASCII char becomes
+    ``_``); the readable prefix keeps the filename greppable.
+    """
+    import hashlib
+    parts = [p for p in file_path.replace("\\", "/").split("/") if p]
+    tail = "_".join(parts[-2:]) if parts else "file"
+    safe = "".join(
+        c if (c.isalnum() or c in "._-") else "_" for c in tail
+    )[:60] or "file"
+    digest = hashlib.md5(file_path.encode("utf-8")).hexdigest()[:8]
+    return f"{safe}_{digest}"
+
+
 class ProgressTracker:
     """Tracks timing and progress across the extraction loop."""
 
@@ -1653,52 +1672,107 @@ class ExtractionOrchestrator:
                 self.project_root, pipeline.work_id)
 
             ra_cfg = get_config().repair_agent
-            repair_record_path = (
-                work_root / "analysis" / "progress"
-                / f"repair_{stage.stage_id}.jsonl")
-            with RepairRecorder(repair_record_path) as recorder:
-                repair_result = run_repair(
-                    files=repair_files,
-                    config=RepairConfig(
-                        max_rounds=ra_cfg.total_round_limit,
-                        run_semantic=True,
-                        triage_enabled=ra_cfg.triage_enabled,
-                        accept_cap_per_file=ra_cfg.triage_accept_cap_per_file,
-                        retry_policy=RetryPolicy(
-                            t0_max=ra_cfg.t0_retry,
-                            t1_max=ra_cfg.t1_retry,
-                            t2_max=ra_cfg.t2_retry,
-                            t3_max=ra_cfg.t3_retry,
-                            t3_max_per_file=ra_cfg.t3_max_per_file,
-                            max_total_rounds=ra_cfg.total_round_limit,
-                        ),
+
+            # Per-file parallel repair (E1). Each file becomes an
+            # independent repair transaction with its own coordinator.run
+            # invocation, recorder, and tracker. Files are dispatched to a
+            # ThreadPoolExecutor sized by [repair_agent].repair_concurrency.
+            # coordinator.run is untouched — it's already pure per-file
+            # logic; we just call it N times in parallel instead of once
+            # with N files. See docs/architecture/extraction_workflow.md
+            # repair section for the wider picture.
+            progress_dir = work_root / "analysis" / "progress"
+
+            def _repair_cfg() -> RepairConfig:
+                return RepairConfig(
+                    max_rounds=ra_cfg.total_round_limit,
+                    run_semantic=True,
+                    triage_enabled=ra_cfg.triage_enabled,
+                    accept_cap_per_file=ra_cfg.triage_accept_cap_per_file,
+                    retry_policy=RetryPolicy(
+                        t0_max=ra_cfg.t0_retry,
+                        t1_max=ra_cfg.t1_retry,
+                        t2_max=ra_cfg.t2_retry,
+                        t3_max=ra_cfg.t3_retry,
+                        t3_max_per_file=ra_cfg.t3_max_per_file,
+                        max_total_rounds=ra_cfg.total_round_limit,
                     ),
-                    source_context=source_ctx,
-                    llm_call=_llm_call,
-                    importance_map=importance_map,
-                    relationship_history_summary_max_chars=(
-                        ra_cfg.relationship_history_summary_max_chars),
-                    recorder=recorder,
                 )
+
+            def _repair_one(f: RepairFileEntry) -> tuple[
+                    RepairFileEntry, RepairResult]:
+                rec_path = progress_dir / (
+                    f"repair_{stage.stage_id}_"
+                    f"{_repair_slug(f.path)}.jsonl")
+                with RepairRecorder(rec_path) as recorder:
+                    result = run_repair(
+                        files=[f],
+                        config=_repair_cfg(),
+                        source_context=source_ctx,
+                        llm_call=_llm_call,
+                        importance_map=importance_map,
+                        relationship_history_summary_max_chars=(
+                            ra_cfg.relationship_history_summary_max_chars),
+                        recorder=recorder,
+                    )
+                return f, result
+
+            repair_concurrency = max(1, ra_cfg.repair_concurrency)
+            print(f"  [4/5] Repair agent ({len(repair_files)} files, "
+                  f"up to {repair_concurrency} parallel)...")
+            per_file_results: list[tuple[RepairFileEntry, RepairResult]] = []
+            with ThreadPoolExecutor(
+                    max_workers=repair_concurrency) as pool:
+                futures = {
+                    pool.submit(_repair_one, f): f for f in repair_files
+                }
+                for fut in as_completed(futures):
+                    submitted = futures[fut]
+                    try:
+                        per_file_results.append(fut.result())
+                    except Exception as exc:  # noqa: BLE001
+                        # Worker raised (e.g. context_retriever ERR,
+                        # unreadable file). Don't abort the whole pool —
+                        # mark this file failed and let siblings finish.
+                        logger.exception(
+                            "Repair worker raised for %s", submitted.path)
+                        synthetic = RepairResult(
+                            passed=False,
+                            issues=[],
+                            report=f"worker exception: {exc!r}",
+                        )
+                        per_file_results.append((submitted, synthetic))
+
+            all_pass = all(r.passed for _, r in per_file_results)
+            failed_entries = [
+                (f, r) for f, r in per_file_results if not r.passed]
+            merged_issues = [
+                i for _, r in per_file_results for i in r.issues]
 
             tracker.record_step(ProgressTracker.STEP_REVIEW)
 
-            if repair_result.passed:
+            if all_pass:
                 tracker.print_step_done(
                     4, 5, "Repair agent", "PASS")
             else:
                 n_errors = sum(
-                    1 for i in repair_result.issues
-                    if i.severity == "error")
+                    1 for i in merged_issues if i.severity == "error")
                 tracker.print_step_done(
                     4, 5, "Repair agent",
-                    f"FAIL — {n_errors} errors remaining")
-                print(repair_result.report)
+                    f"FAIL — {len(failed_entries)} file(s), "
+                    f"{n_errors} error(s) remaining")
+                for f, r in failed_entries:
+                    print(f"    [FAIL] {f.path}")
+                    if r.report:
+                        print(r.report)
                 # Per requirements §11.5: repair FAIL does NOT roll back
                 # extraction output. Artifacts stay on disk for human
                 # inspection; --resume re-runs the repair loop (smart
                 # skip bypasses extraction if files are already present).
-                stage.error_message = repair_result.report
+                stage.error_message = "; ".join(
+                    f"{f.path}: {(r.report or '').splitlines()[0][:80]}"
+                    for f, r in failed_entries
+                )[:2000]
                 stage.transition(StageState.FAILED)
                 stage.transition(StageState.ERROR)
                 phase3.save(self.project_root)

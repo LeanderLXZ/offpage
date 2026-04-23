@@ -391,15 +391,16 @@ orchestrator (Python)
     │       ├── git preflight
     │       ├── claude -p ×(1+2N) (world + char_snapshot×N + char_support×N, 3600s)
     │       ├── 程序化后处理 (digest/catalog, 0 token, idempotent upsert)
-    │       ├── repair_agent.run() (统一检测+修复):
-    │       │       ├── Phase A: L0–L3 全量检查
-    │       │       ├── Phase B: 修复循环 (T0→T1→T2→T3 逐层升级
-    │       │       │       + 每轮末 L3 gate
-    │       │       │       + 源文件问题 triage: pre-T3 & post-gate
-    │       │       │       + T3_CORRUPTED 硬停: T3 后 L0–L2 扫描)
-    │       │       └── Phase C: 最终确认 (复用最后一次 L3 gate 结果)
-    │       ├── [PASS] → git commit
-    │       └── [FAIL] → stage ERROR (--resume 重置 → PENDING)
+    │       ├── repair_agent per-file 并发 (ThreadPoolExecutor, 默认 10):
+    │       │       └── 对每个待修文件独立跑 coordinator.run(files=[single]):
+    │       │               ├── Phase A: L0–L3 全量检查
+    │       │               ├── Phase B: 修复循环 (T0→T1→T2→T3 逐层升级
+    │       │               │       + 每轮末 L3 gate
+    │       │               │       + 源文件问题 triage: pre-T3 & post-gate
+    │       │               │       + T3_CORRUPTED 硬停: T3 后 L0–L2 扫描)
+    │       │               └── Phase C: 最终确认 (复用最后一次 L3 gate 结果)
+    │       ├── [全部文件 PASS] → git commit
+    │       └── [任一文件 FAIL] → stage ERROR (--resume 重置 → PENDING)
     │
     ├── 跨阶段一致性检查 (Phase 3.5):
     │       ├── 程序化检查 (Python, 0 token)
@@ -414,14 +415,23 @@ orchestrator (Python)
 - 每个 stage 拆分为 1+2N 次独立 `claude -p` 调用（1 world + N char_snapshot + N char_support），**同一 stage 内全并行**，不共享 session 内存
 - 阶段间上下文通过文件系统传递；char_snapshot 只传最近一个 snapshot；char_support 只传最近一个 memory_timeline（不传全部历史）
 - 每个 stage 都可修正和补充 baseline（通过 char_support 提取）
-- **Repair Agent 结构化事件日志**：`orchestrator` 在每个 stage 的
-  Repair 步骤前打开一个 `RepairRecorder`，写入
-  `works/{work_id}/analysis/progress/repair_{stage_id}.jsonl`。
-  coordinator 在每个 phase 起止、每条 blocking issue、每轮 fix、
-  L3 gate 结果、T3_CORRUPTED、最终结论处 append 一条 JSON 事件
+- **Repair 按文件并发**：`orchestrator` 在每个 stage 的 Repair 步骤
+  用 `ThreadPoolExecutor(max_workers=[repair_agent].repair_concurrency)`
+  （默认 10）对每个待修文件独立调用 `coordinator.run(files=[single])`。
+  coordinator 本就是纯 per-file 逻辑（跨文件一致性由 Phase 3.5 独立
+  承担），per-file 并发是调用方式的改变，不动 coordinator 内部实现。
+  Extract 池（1+2N）与 Repair 池**串联不共存**，峰值并发 = max(5, 10)。
+  订阅 rate_limit 由 `RateLimitController` 进程单例统一管理。
+- **Repair Agent 结构化事件日志**：每个待修文件独立打开一个
+  `RepairRecorder`，写到
+  `works/{work_id}/analysis/progress/repair_{stage_id}_{slug(file)}.jsonl`。
+  `slug(file)` = 路径末两段 + 8 位 md5 摘要，避免中文路径 ASCII 折叠后
+  冲突。coordinator 在每个 phase 起止、每条 blocking issue、每轮
+  fix、L3 gate 结果、T3_CORRUPTED、最终结论处 append 一条 JSON 事件
   （含 fingerprint / file / json_path / rule / severity / message /
   start_tier 等字段）。文件随 `progress/` 一并 `.gitignore`；事后可
-  用 `jq` 或脚本复盘"S001 的第 3 个 issue 是什么 / 在哪个 tier 被修"。
+  用 `jq` 或脚本复盘"S001 里某个文件的第 3 个 issue 是什么 / 在哪个
+  tier 被修"。
 - **Repair Agent（统一检测+修复）**：独立模块 `automation/repair_agent/`，
   各 phase 通过统一接口调用。四层检查器（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
   与四层修复器（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成）**正交**——
