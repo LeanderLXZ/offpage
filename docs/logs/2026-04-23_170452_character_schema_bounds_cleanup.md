@@ -252,3 +252,32 @@ fixed_relationships（这两份 schema 不动），所以保持原状。
 
 - **Status**: DONE
 - **Finished**: 2026-04-23 17:20:00 EDT
+
+<!-- /after-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：17/17 项计划 + 5/6 项验证（第 6 项"全库 grep"部分——漏查
+  `docs/architecture/extraction_workflow.md`，需后续补改）
+- Missed updates: 2 条（extraction_workflow.md 第 269 行 Phase 3.5 #4
+  描述、第 361 行验证清单中 evidence_refs 项，详见对话）
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=1 / Low=1
+  - [M] extraction_workflow.md:269 Phase 3.5 #4 描述与
+    requirements.md:2152 的新脚注不对齐
+  - [L] extraction_workflow.md:361 验证清单 "evidence_refs 是否有效引用"
+    未界定层级，读者可能误以为覆盖 memory_timeline
+- Open Questions: 2 条（详见对话）
+  1. extraction 分支 S001/S002 老数据对照新 schema 迁移策略
+  2. structural.py 里 stage_events 50–80 等硬编码是否属于下一轮改动
+
+## 复查时状态
+
+- **Reviewed**: 2026-04-23 17:30:00 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 核心计划项 17/17 全部落实，但第 6 条验证标准"全库 grep"
+    漏过 extraction_workflow.md，属于小范围遗漏；轨 2 无 High，仅 1 条
+    Medium（同根 extraction_workflow.md）
+- **Conversation ref**: 同会话内 /after-check 输出

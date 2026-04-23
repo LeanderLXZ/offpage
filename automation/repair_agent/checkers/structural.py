@@ -86,28 +86,6 @@ class StructuralChecker(BaseChecker):
                 "action_examples",
             ))
 
-        # --- stage_events length ---
-        if "stage_events" in data and isinstance(data["stage_events"], list):
-            for idx, event in enumerate(data["stage_events"]):
-                if isinstance(event, str):
-                    char_len = len(event)
-                    if char_len < 50:
-                        issues.append(Issue(
-                            file=path, json_path=f"$.stage_events[{idx}]",
-                            category="structural", severity="error",
-                            rule="stage_events_min_length",
-                            message=f"stage_events entry too short: {char_len} chars (min 50)",
-                            context={"current_length": char_len, "min": 50},
-                        ))
-                    elif char_len > 80:
-                        issues.append(Issue(
-                            file=path, json_path=f"$.stage_events[{idx}]",
-                            category="structural", severity="error",
-                            rule="stage_events_max_length",
-                            message=f"stage_events entry too long: {char_len} chars (max 80)",
-                            context={"current_length": char_len, "max": 80},
-                        ))
-
         # --- relationships: driving_events + relationship_history_summary ---
         if "relationships" in data and isinstance(data["relationships"], list):
             for idx, rel in enumerate(data["relationships"]):
