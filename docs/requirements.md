@@ -2166,6 +2166,21 @@ Phase 3 全部 stage 提交后，运行跨阶段一致性检查。
 - 控制台打印摘要（error/warning/info 计数）
 - 有 error 级别问题时阻断 Phase 4（需人工处理后继续）
 
+#### Phase 3.5 产物提交契约
+
+Phase 3.5 的产物（`consistency_report.json`）是 tracked 文件；编排器在
+保存报告后立即在 extraction 分支上 commit（`phase3.5: consistency_report
+{S###..S###}`），与 pass/fail 无关。两条理由：
+1. 未提交的报告会以 dirty 状态留在工作区，阻塞 `checkout_master` 在 work
+   scope 下清场。
+2. 接受 squash-merge 时，报告必须是 extraction 分支的已提交对象才能进入
+   最终 master commit。
+
+同理，Phase 3.5 的一致性检查器只能以**只读**方式加载 JSON / JSONL 源文件——
+不得顺带触发 L1 JSON 修复写盘。原始文件的完整性是 repair_agent 的职责，
+Phase 3.5 若遇到解析失败应报 `warning/error` 并返回，而不是静默改写
+已 COMMITTED 的产物造成"Phase 3.5 运行完工作区变脏"的路径依赖。
+
 ### 11.11 场景切分（Phase 4）
 
 Phase 4 与 Phase 3 **数据独立**——它只读原文章节文件和 `stage_plan.json`
