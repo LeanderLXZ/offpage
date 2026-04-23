@@ -1554,8 +1554,8 @@ L0 json_syntax → L1 schema → L2 structural → L3 semantic
 | 层级 | 检查内容 | 成本 |
 |------|---------|------|
 | L0 json_syntax | 文件存在、JSON/JSONL 可解析、UTF-8 编码 | 0 token |
-| L1 schema | jsonschema 全字段校验（required / type / enum / additionalProperties / minLength / maxLength）；`jsonschema` 为硬依赖 | 0 token |
-| L2 structural | 业务规则——从规则配置读取，不硬编码。包括：target_voice_map / target_behavior_map 示例数阈值（importance-based，见下）；memory_id / event_id 格式（`M-S###-##` / `E-S###-##`）；`event_description` 150–200 字；`stage_events` 50–80 字；`digest_summary` 30–50 字；`relationships[*].relationship_history_summary` ≤ 300 字（error）+ 缺失/空串 warning；`knowledge_scope` 条目上限；stage_id 对齐；catalog / digest 完整性；snapshot 存在性；跨实体引用解析（warn-only） | 0 token |
+| L1 schema | jsonschema 全字段校验（required / type / enum / additionalProperties / minLength / maxLength / maxItems）；`jsonschema` 为硬依赖。**所有字段级长度 / 条数上下限一律由 L1 承担**——L2 不再镜像长度门控 | 0 token |
+| L2 structural | schema 表达不了的业务规则：target_voice_map / target_behavior_map 示例数阈值（importance-based，见下）；memory_id / event_id 格式（`M-S###-##` / `E-S###-##`）；`driving_events` / `relationships[*].relationship_history_summary` 缺失/空串 warning；stage_id 对齐；catalog / digest 完整性；snapshot 存在性；跨实体引用解析（warn-only）。内部仍保留 `relationship_history_summary` 超长 error 作为 schema 失效时的最后一道保险，值与 schema 保持一致（300） | 0 token |
 | L3 semantic | 内容事实正确性；阶段间连贯性（数值跳变、关系突变）；关系描述与行为描述一致性；stage_delta 与实际变化一致性。输出为结构化 Issue list（JSON array），不是自由文本 | LLM |
 
 **L2 structural 包含原「提交门控」的全部结构性检查**（snapshot 存在 + stage_id
