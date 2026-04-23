@@ -1,10 +1,11 @@
 <!--
-MAINTENANCE — 更新 ai_context/ 前读：这是 AI 快速 follow 项目的索引，不是详细手册。
-1. 写"是什么 / 在哪找"，指向权威源（代码路径 / docs/*.md / schema / log）
-2. 优先删而不是加；新增前先看能否合并已有条目
-3. 只写当前设计，不写"旧 / legacy / 已废弃 / 原为"
-4. 不出现真实书名 / 角色 / 剧情，用通用占位符（`<work_id>`, `角色A`, `S001`）
-5. 预算：architecture / decisions / requirements 各 ≤ ~150 行；全目录读完 ≤ 几千 token
+MAINTENANCE — read before editing this file.
+This file is an index for fast project follow-up, not a detailed manual.
+1. Write "what / where to find"; link to authoritative sources (code paths, docs/*.md, schemas, logs).
+2. Prefer deletion over addition; check if a new item merges into an existing one before adding.
+3. Describe the current design only — no "legacy / deprecated / formerly / renamed from".
+4. No real book / character / plot names — use placeholders (`<work_id>`, `角色A`, `S001`).
+Shorter is better than longer; push detail into the linked source rather than growing this file.
 -->
 
 # Project Background
