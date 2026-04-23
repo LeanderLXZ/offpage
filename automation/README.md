@@ -383,10 +383,13 @@ Phase 0（章节归纳）仍使用 `persona_extraction/json_repair.py` 的三级
 
 ## Phase 3.5：跨阶段一致性检查
 
-Phase 3 全部 stage 提交后自动运行。包含 8 项程序化检查（零 token），
-可选 LLM 裁定标记项。产出 `consistency_report.json`。有 error 级别问题时
-阻断 Phase 4，需人工处理后继续。target_map 样本数检查使用
-importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。
+Phase 3 全部 stage 提交后自动运行。包含 10 项程序化检查（零 token，含
+`memory_digest.summary` ↔ timeline `digest_summary` 以及
+`world_event_digest.summary` ↔ world `stage_events[i]` 两条 1:1 文本
+等值 gate），可选 LLM 裁定标记项。产出 `consistency_report.json`，并在
+extraction 分支上立即 commit（`phase3.5: consistency_report S###..S###`）。
+有 error 级别问题时阻断 Phase 4，需人工处理后继续。target_map 样本数
+检查使用 importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。
 
 代码：`persona_extraction/consistency_checker.py`
 
