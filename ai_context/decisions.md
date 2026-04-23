@@ -1,10 +1,11 @@
 <!--
-MAINTENANCE — 更新 ai_context/ 前读：这是 AI 快速 follow 项目的索引，不是详细手册。
-1. 写"是什么 / 在哪找"，指向权威源（代码路径 / docs/*.md / schema / log）
-2. 优先删而不是加；新增前先看能否合并已有条目
-3. 只写当前设计，不写"旧 / legacy / 已废弃 / 原为"
-4. 不出现真实书名 / 角色 / 剧情，用通用占位符（`<work_id>`, `角色A`, `S001`）
-5. 预算：architecture / decisions / requirements 各 ≤ ~150 行；全目录读完 ≤ 几千 token
+MAINTENANCE — read before editing this file.
+This file is an index for fast project follow-up, not a detailed manual.
+1. Write "what / where to find"; link to authoritative sources (code paths, docs/*.md, schemas, logs).
+2. Prefer deletion over addition; check if a new item merges into an existing one before adding.
+3. Describe the current design only — no "legacy / deprecated / formerly / renamed from".
+4. No real book / character / plot names — use placeholders (`<work_id>`, `角色A`, `S001`).
+Shorter is better than longer; push detail into the linked source rather than growing this file.
 -->
 
 # Key Decisions — Compressed ADRs
@@ -87,10 +88,10 @@ source. Long discussion chains live in `docs/logs/`.
 28. Three-layer memory (`stage_snapshot` / `memory_timeline` / `scene_archive`). No separate dialogue corpus.
 29. ID convention `{TYPE}-S{stage:03d}-{seq:02d}` for `M-` / `E-` / `SC-`. 3-digit stage ≤999, 2-digit seq ≤99 per stage. Stage encoded in ID; digest / archive entries carry no separate `stage_id` field. Story-time field = `time` across all three.
 30. Simulating character A loads only scenes where A is in `characters_present` and A's own `memory_timeline`.
-31. `stage_events` is world-public only (50–80 字, hard gate). Personal / internal items belong in character `memory_timeline`, never in world.
+31. `stage_events` is world-public only (50–80 CJK chars, hard gate). Personal / internal items belong in character `memory_timeline`, never in world.
 32. `world_event_digest.summary` = 1:1 copy of source `stage_events` (enforced at write time by prompt + repair agent). 5-level importance inferred by keyword; default significant.
-33. `memory_digest.summary` = 1:1 copy of `digest_summary` (30–50 字, hard gate).
-34. Character `stage_snapshot.stage_events` = this stage only (50–80 字, hard gate), not accumulated. Cross-stage history lives in `memory_timeline` + `memory_digest` + `world_event_digest`.
+33. `memory_digest.summary` = 1:1 copy of `digest_summary` (30–50 CJK chars, hard gate).
+34. Character `stage_snapshot.stage_events` = this stage only (50–80 CJK chars, hard gate), not accumulated. Cross-stage history lives in `memory_timeline` + `memory_digest` + `world_event_digest`.
 35. `fixed_relationships.json` (blood / lineage / faction) not stage-dependent. Phase 2.5 skeleton; later stages may correct. Runtime Tier 0.
 
 ## Retrieval
