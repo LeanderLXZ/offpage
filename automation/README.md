@@ -185,9 +185,12 @@ orchestrator 自动落实这条纪律：
 - **退出**：建分支 + baseline rerun + Phase 3 循环整体包在
   `try / finally: checkout_master(...)` 内，任何退出路径（DONE / BLOCKED /
   `--end-stage` / Ctrl+C / 异常 / `sys.exit`）工作树都回到 `master`。
-- **Dirty guard**：`checkout_master` 在切换前检查工作树是否 clean；
-  非 clean 时拒绝切换并记 warning，防止未跟踪的半 stage 产物跟到 `master`。
-  用户需手工处理残留后再 `git checkout master`。
+- **Dirty guard**：`checkout_master` / `preflight_check` 都接受可选
+  `scope_paths` 参数，orchestrator 传入 `["works/{work_id}/"]`——
+  只有 scope 内（即 extraction commit 路径内）的脏文件才阻断切换 /
+  拒绝启动；scope 外的脏改动（`.claude/settings.json`、IDE 临时文件
+  等）被静默容许。无 scope 时退化为整树 clean 检查。保留"半 stage
+  产物不跟到 `master`"的不变量，避免被无关脏文件拦停。
 - **异常检测**：SessionStart Claude Code hook
   （`.claude/hooks/session_branch_check.sh`）在每次新会话启动时检测
   "非 master 分支 + 无 orchestrator 进程" 的异常组合并提示。

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Any, Callable
 
 from .checkers import CheckerPipeline
 from .checkers.json_syntax import JsonSyntaxChecker
@@ -40,6 +40,7 @@ from .fixers.local_patch import LocalPatchFixer
 from .fixers.source_patch import SourcePatchFixer
 from .fixers.file_regen import FileRegenFixer
 from .notes_writer import NotesWriter
+from .recorder import RepairRecorder
 from .protocol import (
     COVERAGE_SHORTAGE_MAX_TIER,
     COVERAGE_SHORTAGE_START_TIER,
@@ -131,6 +132,7 @@ def run(
     llm_call: Callable[..., str] | None = None,
     importance_map: dict[str, str] | None = None,
     relationship_history_summary_max_chars: int = 300,
+    recorder: RepairRecorder | None = None,
 ) -> RepairResult:
     """Three-phase repair: check → fix loop → verify.
 
@@ -141,7 +143,13 @@ def run(
         relationship_history_summary_max_chars: upper bound enforced by
             the L2 structural checker on each ``relationships[*]
             .relationship_history_summary`` string.
+        recorder: optional ``RepairRecorder`` that receives a structured
+            JSONL event at each phase / round / issue / fix / triage /
+            completion transition. ``None`` disables structured logging.
     """
+    def _emit(event: str, **fields: Any) -> None:
+        if recorder is not None:
+            recorder.write(event, **fields)
     if config is None:
         config = RepairConfig()
 
@@ -168,16 +176,35 @@ def run(
     # Phase A — Full check (L0–L3)
     # =================================================================
     logger.info("Phase A: full validation")
+    _emit("phase_start", phase="A",
+          file_count=len(files), run_semantic=config.run_semantic)
     all_issues = pipeline.run(
         files, run_semantic=config.run_semantic)
 
     blocking = _filter_blocking(all_issues, config)
     if not blocking:
         logger.info("Phase A: no blocking issues — pass")
+        _emit("phase_a_result", blocking=0, total=len(all_issues))
+        _emit("complete", status="PASS",
+              resolved=0, persisting=0, issues_remaining=0)
         return RepairResult(passed=True, issues=all_issues,
                             report="No blocking issues found.")
 
     logger.info("Phase A: %d blocking issues found", len(blocking))
+    _emit("phase_a_result", blocking=len(blocking), total=len(all_issues))
+    for i in blocking:
+        start_tier = (COVERAGE_SHORTAGE_START_TIER
+                      if is_coverage_shortage(i)
+                      else START_TIER.get(i.category, 0))
+        _emit("issue",
+              fingerprint=i.fingerprint,
+              file=i.file,
+              json_path=i.json_path,
+              category=i.category,
+              rule=i.rule,
+              severity=i.severity,
+              message=i.message,
+              start_tier=start_tier)
     had_semantic = any(i.category == "semantic" for i in all_issues)
     l3_file_set: set[str] = {
         i.file for i in all_issues if i.category == "semantic"
@@ -187,6 +214,7 @@ def run(
     # Phase B — Fix loop (with embedded L3 gate + triage hooks)
     # =================================================================
     logger.info("Phase B: entering fix loop")
+    _emit("phase_start", phase="B")
     prev_report = None
     current_issues = list(blocking)
     last_gate_issues: list[Issue] | None = None
@@ -196,6 +224,8 @@ def run(
     for round_num in range(config.max_rounds):
         logger.info("Fix round %d — %d issues remaining",
                      round_num + 1, len(current_issues))
+        _emit("round_start",
+              round=round_num + 1, issues_remaining=len(current_issues))
 
         tier_groups = _group_by_start_tier(current_issues)
 
@@ -228,12 +258,17 @@ def run(
         if t3_corrupted:
             logger.error(
                 "T3_CORRUPTED — aborting Phase B without triage")
+            _emit("t3_corrupted", round=round_num + 1)
             break
 
         if not modified_files:
             logger.info("No patches applied in round %d — stopping",
                          round_num + 1)
+            _emit("no_patches", round=round_num + 1)
             break
+        _emit("round_patched",
+              round=round_num + 1,
+              modified_files=sorted(modified_files))
 
         # Scoped recheck (L0–L2 only, 0 token). Already-accepted
         # coverage_shortage issues resurface here because the note is
@@ -280,6 +315,10 @@ def run(
             logger.info(
                 "L3 gate result: %d blocking semantic issue(s) remain",
                 len(gate_blocking))
+            _emit("l3_gate_result",
+                  round=round_num + 1,
+                  targets=sorted(gate_targets),
+                  blocking=len(gate_blocking))
 
         combined_blocking = recheck_blocking + gate_blocking
         report = tracker.diff(current_issues, combined_blocking)
@@ -288,6 +327,11 @@ def run(
             round_num + 1, len(report.resolved),
             len(report.persisting), len(report.introduced),
         )
+        _emit("round_result",
+              round=round_num + 1,
+              resolved=len(report.resolved),
+              persisting=len(report.persisting),
+              introduced=len(report.introduced))
 
         # Safety valves
         if tracker.is_regression(report):
@@ -332,6 +376,9 @@ def run(
         report_text = _build_report(
             final_issues, tracker, passed, t3_corrupted=True,
             accepted_notes=accepted_notes)
+        _emit("complete", status="FAIL_T3_CORRUPTED",
+              issues_remaining=len(_filter_blocking(final_issues, config)),
+              accepted_notes=len(accepted_notes))
         return RepairResult(
             passed=passed,
             issues=final_issues,
@@ -345,10 +392,13 @@ def run(
             logger.info(
                 "Phase C: reusing last L3 gate result (%d issue(s))",
                 len(last_gate_issues or []))
+            _emit("phase_c", mode="gate_reuse",
+                  carried=len(last_gate_issues or []))
             final_issues.extend(last_gate_issues or [])
         else:
             logger.info(
                 "Phase C: fallback semantic verification (gate never ran)")
+            _emit("phase_c", mode="fallback_l3")
             l3_fallback = pipeline.run_layer(files, layer=3)
             final_issues.extend(l3_fallback)
 
@@ -361,6 +411,10 @@ def run(
     logger.info("Repair complete: %s (%d issues remaining, %d note(s))",
                 "PASS" if passed else "FAIL", len(final_blocking),
                 len(accepted_notes))
+    _emit("complete",
+          status="PASS" if passed else "FAIL",
+          issues_remaining=len(final_blocking),
+          accepted_notes=len(accepted_notes))
 
     return RepairResult(
         passed=passed,

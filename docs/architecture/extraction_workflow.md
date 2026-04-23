@@ -202,6 +202,13 @@ PID 打印 / heartbeat 行统一带 `[{lane_name}]` 标签
 （`[world]` / `[char_snapshot:<id>]` / `[char_support:<id>]`），
 日志 tail 时不需反推 PID 与 lane 的对应关系。
 
+**Heartbeat 输出策略**：`claude -p` / `codex` 子进程的 30s 心跳行只在
+`sys.stderr.isatty()` 时打到终端 stderr，避免 `--background` 模式下
+持续污染 `extraction.log`。同时保留最后 20 条心跳样本到内存环形
+buffer；子进程 timeout / 非零退出时 `logger.warning` 一次性 flush 到
+log，失败诊断所需的内存 / elapsed 曲线不丢失。间隔仍由
+`[runtime].heartbeat_interval_s` 控制（默认 30s）。
+
 #### 6.5 Lane 级 resume
 
 `StageEntry.lane_states: dict[str, str]` 追踪每个 lane 的完成状态：
@@ -407,6 +414,14 @@ orchestrator (Python)
 - 每个 stage 拆分为 1+2N 次独立 `claude -p` 调用（1 world + N char_snapshot + N char_support），**同一 stage 内全并行**，不共享 session 内存
 - 阶段间上下文通过文件系统传递；char_snapshot 只传最近一个 snapshot；char_support 只传最近一个 memory_timeline（不传全部历史）
 - 每个 stage 都可修正和补充 baseline（通过 char_support 提取）
+- **Repair Agent 结构化事件日志**：`orchestrator` 在每个 stage 的
+  Repair 步骤前打开一个 `RepairRecorder`，写入
+  `works/{work_id}/analysis/progress/repair_{stage_id}.jsonl`。
+  coordinator 在每个 phase 起止、每条 blocking issue、每轮 fix、
+  L3 gate 结果、T3_CORRUPTED、最终结论处 append 一条 JSON 事件
+  （含 fingerprint / file / json_path / rule / severity / message /
+  start_tier 等字段）。文件随 `progress/` 一并 `.gitignore`；事后可
+  用 `jq` 或脚本复盘"S001 的第 3 个 issue 是什么 / 在哪个 tier 被修"。
 - **Repair Agent（统一检测+修复）**：独立模块 `automation/repair_agent/`，
   各 phase 通过统一接口调用。四层检查器（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
   与四层修复器（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成）**正交**——
@@ -453,8 +468,10 @@ orchestrator (Python)
     baseline rerun + Phase 3 循环整体包进 `try / finally:
     checkout_master(...)`，任何退出路径（DONE / BLOCKED / `--end-stage` /
     Ctrl+C / 异常 / `sys.exit`）工作树都回到 `master`
-  - `checkout_master` 内置 dirty guard：工作树非 clean 时拒绝切换，保持
-    原分支并记 warning，防止未跟踪的半 stage 产物跟到 `master`
+  - `checkout_master` / `preflight_check` 接受 `scope_paths` 参数，
+    orchestrator 传入 `["works/{work_id}/"]`——scope 内有脏文件则拒绝
+    切换 / 拒绝启动；scope 外的脏改动（`.claude/settings.json` 等）
+    静默容许，保留"半 stage 产物不跟到 `master`"的不变量
   - SessionStart Claude Code hook（`.claude/hooks/session_branch_check.sh`）
     新会话检测"非 master 分支 + 无 orchestrator 进程"的异常组合并提示
 - 支持 Claude CLI 和 Codex CLI 两种后端
@@ -463,6 +480,9 @@ orchestrator (Python)
 
 - PID 锁防止重复运行，启动时检查工作区干净
 - `--background` 模式：后台运行，SSH 断开后存活，日志写入 `extraction.log`
+- 启动时滚动 `extraction.log`：现有日志重命名为 `.1`，旧的 `.N` 依次后移，
+  超过 `[logging].extraction_log_backup_count`（默认 3）的最旧一份被删除。
+  保证每次启动都是干净日志，磁盘占用有上限。设为 0 关闭滚动
 - `--max-runtime` 总时间限制，到期后在 stage 间优雅停止
 - 子进程硬超时（提取 3600s、repair agent LLM 调用 600s；阈值由
   `automation/config.toml` 的 `[phase3]` 段控制）

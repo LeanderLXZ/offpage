@@ -124,6 +124,42 @@ class PidLock:
 # Background launcher
 # ---------------------------------------------------------------------------
 
+def rotate_extraction_log(log_path: Path, backup_count: int) -> None:
+    """Rotate ``extraction.log`` before the orchestrator appends to it.
+
+    Classic size-agnostic rotation: the live file becomes ``.1``, existing
+    ``.N`` shifts to ``.N+1``, and any file beyond ``backup_count`` is
+    removed. Called once per orchestrator startup so each run begins with
+    a fresh log and bounded history on disk. ``backup_count == 0`` leaves
+    the log untouched (append forever).
+    """
+    if backup_count <= 0 or not log_path.exists():
+        return
+    # Remove the oldest backup beyond retention.
+    oldest = log_path.with_name(f"{log_path.name}.{backup_count}")
+    try:
+        oldest.unlink(missing_ok=True)
+    except OSError as exc:
+        logger.warning("Could not remove old log %s: %s", oldest, exc)
+    # Shift .N → .N+1 from the tail to avoid clobbering.
+    for i in range(backup_count - 1, 0, -1):
+        src = log_path.with_name(f"{log_path.name}.{i}")
+        dst = log_path.with_name(f"{log_path.name}.{i + 1}")
+        if src.exists():
+            try:
+                src.rename(dst)
+            except OSError as exc:
+                logger.warning("Log rotation rename %s → %s failed: %s",
+                               src, dst, exc)
+    # Current → .1
+    rotated = log_path.with_name(f"{log_path.name}.1")
+    try:
+        log_path.rename(rotated)
+    except OSError as exc:
+        logger.warning("Log rotation rename %s → %s failed: %s",
+                       log_path, rotated, exc)
+
+
 def launch_background(
     work_id: str,
     project_root: Path,
@@ -136,6 +172,15 @@ def launch_background(
     log_path = (project_root / "works" / work_id
                 / "analysis" / "progress" / "extraction.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Rotate the old log so each run gets a fresh file (and a bounded
+    # number of prior runs remain on disk for diagnostics).
+    try:
+        from .config import get_config
+        backup_count = get_config().logging.extraction_log_backup_count
+    except Exception:  # noqa: BLE001
+        backup_count = 3
+    rotate_extraction_log(log_path, backup_count)
 
     # Build command: same as current invocation but without --background
     cmd = [sys.executable, "-u", "-m", "automation.persona_extraction"] + extra_argv

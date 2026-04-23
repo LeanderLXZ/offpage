@@ -189,12 +189,13 @@ See `docs/requirements.md` §12 and
   `try / finally: checkout_master(...)` block, so every exit path —
   normal completion, `[BLOCKED]`, `--end-stage` stop, keyboard
   interrupt, exception, `sys.exit` — returns to `master`.
-- `checkout_master` has a dirty-tree guard: when the working tree has
-  uncommitted / untracked changes, it refuses to switch and stays on
-  the current branch (logged as warning). This prevents a SIGINT
-  mid-stage from dragging untracked `stage_snapshots/S###.json` files
-  onto `master`; the user must clean up first, then `git checkout
-  master` manually.
+- `checkout_master` and `preflight_check` both accept a `scope_paths`
+  argument. The orchestrator passes `["works/{work_id}/"]` so dirt /
+  uncommitted changes **outside** the extraction's commit scope (e.g.
+  `.claude/settings.json`, editor state) are tolerated; only dirt
+  inside the scope blocks. This keeps the "no untracked
+  `stage_snapshots/S###.json` leaks to `master`" invariant while no
+  longer failing a stage just because an unrelated file is dirty.
 - Code / schema / prompt / docs / `ai_context/` changes always commit
   on `master`, then propagate to the extraction branch via
   `git merge master` from the extraction branch.

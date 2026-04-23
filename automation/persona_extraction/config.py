@@ -121,6 +121,11 @@ class RuntimeConfig:
 @dataclass(frozen=True)
 class LoggingConfig:
     failed_lanes_retention_days: int = 30
+    # ``extraction.log`` is rotated at orchestrator startup. The current
+    # log is renamed to ``extraction.log.1`` (existing ``.1`` shifts to
+    # ``.2``, etc.), and any rotated file beyond ``extraction_log_backup_count``
+    # is deleted. Set to 0 to disable rotation (append forever).
+    extraction_log_backup_count: int = 3
 
 
 @dataclass(frozen=True)
