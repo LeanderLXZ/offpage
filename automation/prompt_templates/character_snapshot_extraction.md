@@ -41,7 +41,7 @@
    - `knowledge_scope`：知道什么、不知道什么、不确定什么。**条数上限** `knows` ≤ 50、`does_not_know` ≤ 30、`uncertain` ≤ 30；**每条 ≤ 50 字**（schema 硬门控，超限直接 FAIL）。**裁剪策略**（超限时）：优先保留 ① 影响当前阶段决策或扮演的条目、② 与 `core_wounds` / `active_obsessions` / 活跃 `relationships` 相关的条目；优先丢弃 ① 日常常识类条目、② 早期阶段已无触发点的细节、③ 已在 `memory_timeline` 中完整承载的条目。**禁止敷衍填充**（贴近 50 字上限但语义稀薄、堆砌形容词）
    - `misunderstandings`（≤ 20 条，已 resolved 的移除）、`concealments`（≤ 20 条，已 revealed 的移除）
    - `emotional_baseline`（含 **active_goals** 理性目标、**active_obsessions** 执念、active_fears、active_wounds）、`current_personality`（≤ 10 条）、`current_mood`（≤ 10 条）、`current_status`（≤ 10 条）
-   - `stage_events`（≤ 10 条，**仅本阶段**发生的关键事件清单，每条 **50–80 字** 的一句话摘要；schema 两端硬门控，过短/过长都会直接判失败；不累积历史，历史由 memory_timeline 和 world_event_digest 承载）。如果本阶段内有该角色亲历或深度影响其处境的世界事件（对照世界 stage_snapshot.stage_events），必须以角色视角写入此清单，不可遗漏
+   - `stage_events`（≤ 15 条，**仅本阶段**发生的关键事件清单，每条 **50–80 字** 的一句话摘要；schema 两端硬门控，过短/过长都会直接判失败；不累积历史，历史由 memory_timeline 和 world_event_digest 承载）。如果本阶段内有该角色亲历或深度影响其处境的世界事件（对照世界 stage_snapshot.stage_events），必须以角色视角写入此清单，不可遗漏
    - `stage_delta`：从上一阶段的变化
    - `character_arc`：角色从阶段 1 到当前阶段的 **整体弧线概览**——`arc_summary`（一句话弧线摘要）、`arc_stages`（关键节点列表，每个含 stage_id 和描述）、`current_position`（当前在弧线中的位置和趋势）。第一个阶段可省略或仅写起点状态
    
@@ -102,7 +102,7 @@
 
 | 文件 | 错误字段名 | 正确字段名（schema 权威） |
 |------|-----------|------------------------|
-| stage_snapshot | 缺 `stage_events` | 必须有，≤ 10 条 50–80 字 |
+| stage_snapshot | 缺 `stage_events` | 必须有，≤ 15 条 50–80 字 |
 | stage_snapshot | 缺 `character_arc` | 非首阶段必须有弧线概览 |
 | stage_snapshot.behavior_state | `relationship_behavior_map` | stage 快照层用 `target_behavior_map`；`relationship_behavior_map` 仅在 baseline `behavior_rules.json` 使用 |
 

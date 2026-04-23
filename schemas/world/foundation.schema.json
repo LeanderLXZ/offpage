@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/world/foundation.schema.json",
+  "title": "WorldFoundation",
+  "description": "Phase 2.5 产出的世界基础设定，作为运行时 Tier 0 的静态背景加载。不含任何 stage-scoped 信息（阶段化内容归 world_stage_snapshot）。顶层 additionalProperties=true 以兼容 per-work 扩展字段，子对象按需收紧。",
+  "type": "object",
+  "required": ["work_id"],
+  "additionalProperties": true,
+  "properties": {
+    "work_id": {
+      "type": "string",
+      "description": "作品唯一标识；必须与所在 works/{work_id}/ 路径段一致。"
+    },
+    "genre": {
+      "type": "string",
+      "description": "题材短标签（例如：玄幻修仙 / 都市悬疑 / 武侠）。"
+    },
+    "tone": {
+      "type": "string",
+      "description": "整体基调描述（一到两句话概括，供运行时加载时做氛围提示）。"
+    },
+    "world_structure": {
+      "type": "object",
+      "description": "世界宏观结构：整体概览 + 关键地域清单。",
+      "additionalProperties": true,
+      "properties": {
+        "summary": { "type": "string" },
+        "major_regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": true,
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "power_system": {
+      "type": "object",
+      "description": "力量/修炼/科技体系说明；levels 列出可枚举的层级序列。",
+      "additionalProperties": true,
+      "properties": {
+        "summary": { "type": "string" },
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": true,
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "core_rules": {
+      "type": "array",
+      "description": "世界运行的核心规则/机制清单。每条规则应说明规则本身 + 对剧情/角色的影响。",
+      "items": {
+        "type": "object",
+        "required": ["rule"],
+        "additionalProperties": true,
+        "properties": {
+          "rule": { "type": "string" },
+          "description": { "type": "string" },
+          "impact": { "type": "string" }
+        }
+      }
+    },
+    "world_lines": {
+      "type": "array",
+      "description": "作品的世界线/篇章线划分（粗粒度，与 stage_plan 区分：stage 是提取颗粒度，world_line 是叙事弧度）。",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": true,
+        "properties": {
+          "name": { "type": "string" },
+          "chapter_range": { "type": "string" },
+          "core_conflict": { "type": "string" },
+          "setting_features": { "type": "string" }
+        }
+      }
+    },
+    "major_factions": {
+      "type": "array",
+      "description": "主要势力/组织清单（首次出场至作品结束均需收录）。key_figures 使用 character_id 字符串。",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": true,
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "key_figures": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -58,6 +58,7 @@
     "stage_events": {
       "type": "array",
       "description": "本阶段发生的**世界级事件**（仅本阶段，不累积历史），每条为 50–80 字的一句话摘要。既作为快照中的事件清单，也是 world_event_digest.jsonl 程序化累积的直接来源；1:1 展开，连续编号。仅记录世界公共层事件（势力变迁、地形/资源变化、规则揭示、跨角色公共事件），角色个人剧情事件归入对应角色的 stage_events / memory_timeline。不需要逐条标注章节引用。",
+      "maxItems": 30,
       "items": {
         "type": "string",
         "minLength": 50,

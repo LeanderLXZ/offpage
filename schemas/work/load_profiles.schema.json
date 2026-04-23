@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "persona-engine/work/load_profiles.schema.json",
+  "title": "WorkLoadProfile",
+  "description": "Per-work 运行时加载配置。位于 works/{work_id}/indexes/load_profiles.json，作为 sparse override 覆盖 simulation 启动器的默认值——缺省时 loader 使用内置默认，不强制要求此文件存在。字段集随 simulation 层实现演进，暂以 additionalProperties=true 保留扩展空间。",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "scene_fulltext_window": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50,
+      "description": "启动时直接加载的 scene_archive full_text 条数窗口（从最新向前取）。默认 10；本字段允许 per-work 覆盖。设为 0 表示不在 Tier 0 载入 full_text，仅保留 FTS5 on-demand 取回。"
+    },
+    "startup_packets": {
+      "type": "array",
+      "description": "启动时必须加载的数据包/文件路径列表（相对 works/{work_id}/，或 users/{user_id}/ 下固定键）。供 per-work 追加 on top of 内置 Tier 0 列表。",
+      "items": { "type": "string" }
+    },
+    "on_demand_buckets": {
+      "type": "array",
+      "description": "标记为 on-demand 的资源类别（例如 'factions' / 'history' / 'archive_index'）；runtime 仅在被 tool-use 触发时取回。",
+      "items": { "type": "string" }
+    },
+    "retrieval_notes": {
+      "type": "string",
+      "description": "本作品检索调优说明（例如：诗词/术语较多→降低 FTS5 min token；人名别名密集→扩大 jieba vocab）。自由文本。"
+    },
+    "fidelity_escalation": {
+      "type": "object",
+      "description": "检索保真度升级规则：当 Level 1 无命中时，是否直接走 Level 2（embedding）而非返回空。",
+      "additionalProperties": true,
+      "properties": {
+        "level1_empty_triggers_level2": { "type": "boolean" },
+        "level2_top_k": { "type": "integer", "minimum": 1, "maximum": 50 }
+      }
+    }
+  }
+}

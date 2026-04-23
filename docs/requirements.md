@@ -77,7 +77,7 @@
 每个世界阶段快照应包含：
 
 - 对基础设定的修正与补充
-- 本阶段事件（`stage_events`，≤ 10 条，仅本阶段发生的**世界级事件**，
+- 本阶段事件（`stage_events`，≤ 30 条，仅本阶段发生的**世界级事件**，
   每条 50–80 字的一句话简述；供 `world_event_digest.jsonl` 程序化累积）。
   **仅记录世界
   公共层事件**（如势力变迁、地形/资源变化、规则揭示），角色个人剧情事件由
@@ -988,7 +988,8 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 
 | 字段 | maxItems | 裁剪策略 |
 |------|----------|----------|
-| `stage_events` | 10 | 保留最核心的事件 |
+| `stage_events`（character） | 15 | 保留最核心的事件 |
+| `stage_events`（world） | 30 | 世界公共层事件可枚举更密，按势力/地形/规则分事件保留 |
 | `current_status` | 10 | 保留当前阶段最重要的状态 |
 | `current_personality` | 10 | 保留已稳定显现的核心倾向 |
 | `current_mood` | 10 | 保留当前最显著的情绪背景 |
