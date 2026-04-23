@@ -1,321 +1,127 @@
-# Key Decisions
+<!--
+MAINTENANCE — 更新 ai_context/ 前读：这是 AI 快速 follow 项目的索引，不是详细手册。
+1. 写"是什么 / 在哪找"，指向权威源（代码路径 / docs/*.md / schema / log）
+2. 优先删而不是加；新增前先看能否合并已有条目
+3. 只写当前设计，不写"旧 / legacy / 已废弃 / 原为"
+4. 不出现真实书名 / 角色 / 剧情，用通用占位符（`<work_id>`, `角色A`, `S001`）
+5. 预算：architecture / decisions / requirements 各 ≤ ~150 行；全目录读完 ≤ 几千 token
+-->
 
-Decisions already embodied in `docs/architecture/` or `simulation/` are
-not repeated here. This file records only the non-obvious rules and
-constraints beyond what the architecture docs already say.
+# Key Decisions — Compressed ADRs
+
+One line decision + one line rationale + pointer to authoritative
+source. Long discussion chains live in `docs/logs/`.
 
 ## Roleplay Philosophy
 
-1. Priority is deep behavioral / decision consistency, not surface voice
-   imitation. Chain: memory / relationship → psychological reaction →
-   behavior decision → language realization.
-2. Objective fact and subjective character cognition must be separated.
-   Characters may misunderstand, conceal, or distort.
-3. Stage differences must be preserved. No flattening into a timeless
-   static profile.
+1. Priority = deep behavior / decision consistency, not tone mimicry.
+   Chain: memory + relationship → psych reaction → behavior → language.
+2. Objective fact vs subjective cognition must be separated — characters may misunderstand, conceal, distort.
+3. Stage differences preserved; no flattening into a timeless static profile.
+   → `project_background.md`, `simulation/prompt_templates/`.
 
 ## Data Separation
 
-4. User data stored separately from canonical character data. User drift
-   never pollutes canon.
-5. World data is a first-class layer, not hidden inside character notes.
-6. World materials are living canon — only source-text evidence may
-   revise them. User conversations must not.
-7. Conflicts, revisions, contradictions recorded explicitly, not
-   silently overwritten.
+4. User data separate from canonical character data. No user drift into canon.
+5. World is a first-class layer, not inside character notes.
+6. World canon revised only by source-text evidence — never by user conversation.
+7. Conflicts / revisions recorded explicitly, not silently overwritten.
+   → `conventions.md` §Data Separation + `docs/architecture/data_model.md`.
 
 ## Work Scope
 
-8. Each novel = independent namespace (`work_id`). User flow chooses
-   work before character.
-9. Chinese works: `work_id`, entity names, identifier values, and
-   generated path segments default to Chinese.
-10. `ai_context/` remains English. JSON field names may remain English.
+8. Each novel = independent namespace (`work_id`). User flow picks work before character.
+9. Chinese works: Chinese `work_id`, entity names, identifier values, path segments.
+10. `ai_context/` stays English. JSON field names may be English.
+    → `conventions.md` §Naming.
 
-## Character Depth Dimensions
+## Character Depth
 
-11a. `identity.json` carries two cross-story fields beyond static bio:
-    `core_wounds` (root traumas with origin and behavioral impact) and
-    `key_relationships` (relationship arcs with initial state,
-    evolution, turning points). Loaded at runtime with the stage
-    snapshot.
-11b. `behavior_state` separates `core_goals` (rational,
-    re-prioritizable) from `obsessions` (irrational, trauma / emotion-
-    tied, not subject to cost-benefit). `emotional_baseline` mirrors
-    with `active_goals` + `active_obsessions`.
-11c. `character_arc` in stage_snapshot = bird's-eye view stage 1 →
-    current (arc_summary, arc_stages key nodes, current_position).
-    Complements `stage_delta` (last step only).
+11a. `identity.json` carries `core_wounds` (root traumas + behavioral impact) + `key_relationships` (relationship arcs with initial state / evolution / turning points). Loaded with the stage snapshot.
+11b. `behavior_state` separates `core_goals` (rational, re-prioritizable) from `obsessions` (irrational, trauma- / emotion-tied, not cost-benefit). `emotional_baseline` mirrors with `active_goals` + `active_obsessions`.
+11c. `character_arc` in `stage_snapshot` = bird's-eye stage 1 → current. Complements `stage_delta` (last step only).
+     → `schemas/character/` + `docs/architecture/schema_reference.md`.
 
-## Extraction
+## Extraction Model
 
-12. stage (extraction) = stage (runtime), 1:1. Split by natural story
-    boundaries (target 10 ch, min 5, max 15). Stage N cumulative
-    through 1..N. `stage_id` is the compact English code `S###` (three
-    digits, zero-padded), aligned with the `M-S###-##` / `E-S###-##` /
-    `SC-S###-##` / `SN-S###-##` family. The human-readable short name
-    (≤ 15 chars) lives in the sibling `stage_title` field.
-13. Phase 2.5 produces world foundation + character baselines (skeleton
-    drafts) from full-book context. Phase 3 uses 1+2N split extraction
-    per stage (1 world + N char_snapshot + N char_support); any stage
-    may correct any existing baseline (via char_support process) or
-    already-written asset across the whole work package.
-14. No per-stage report files; update progress in-place.
-15. `target_voice_map` / `target_behavior_map` use specific character
-    names for main / important characters (≥3–5 examples each); generic
-    types brief or omitted. Runtime loads only entries matching user's
-    role. Fallback = backward scan through previous snapshots (pure
-    code I/O, no extra LLM call).
+12. stage (extraction) = stage (runtime), 1:1. Natural story boundaries
+    (target 10, min 5, max 15). Cumulative 1..N. `stage_id` = `S###`;
+    sibling `stage_title` ≤15 chars.
+13. Phase 2.5 produces world foundation + character baseline drafts
+    from full-book context. Phase 3 does 1+2N split extraction per stage
+    (1 world + N char_snapshot + N char_support); any stage may correct
+    any existing baseline (via char_support) or asset across the work package.
+14. No per-stage report files; progress in-place.
+15. `target_voice_map` / `target_behavior_map` use specific names for
+    main / important chars (≥3–5 examples); generic types brief or
+    omitted. Runtime loads only entries matching user role; fallback =
+    backward scan previous snapshots (pure code I/O).
+    → `architecture.md` §Automated Extraction Pipeline + `automation/README.md`.
 
 ## User Model
 
-16. One `user_id` = one locked work-target-counterpart binding. Setup
-    locks after creation; changes require new package or explicit
-    migration.
-17. Canon-backed user-side roles inherit target stage by default.
-18. Session / context state updates continuously. Long-term profile and
-    relationship core update only after explicit merge confirmation.
-19. Context-level `character_state.json` tracks real-time mood,
-    personality, voice, agreements, relationship delta, events,
-    memories — promoted to long-term layers only at merge.
+16. One `user_id` = one locked work-target-counterpart binding. Setup locks; changes need new package or explicit migration.
+17. Canon-backed user roles inherit target stage by default.
+18. Session / context state updates continuously. Long-term profile + relationship core update only after explicit merge confirmation.
+19. Per-context `character_state.json` tracks real-time mood, personality, voice, agreements, relationship delta, events, memories — promoted to long-term only at merge.
 20. Merge is append-first. Events / memories added, never overwritten.
-21. Session close is explicit. System asks about merge.
+21. Session close explicit. System asks about merge.
 22. Full transcripts stay local; startup loads summary layer only.
-22a. `relationship_core/` canonical storage split into two files:
-    `manifest.json` carries single-object state (relation summary,
-    levels, event_refs, mutual_agreements, shift maps);
-    `pinned_memories.jsonl` is an append-only stream of pinned
-    memories, schema-gated by
-    `schemas/user/pinned_memory_entry.schema.json`. Merge-time writes
-    only append to the JSONL — they never rewrite existing entries.
-    Append-only jsonl matches decision 20 (merge append-first) and
-    supports crash-safe streaming growth; inline manifest arrays would
-    force full-file rewrite on every pin and risk silent truncation.
-22b. Append-only streams system-wide use `.jsonl`; single-object state
-    uses `.json`. Applies to both user-side (`users/{user_id}/...`) and
-    work/world-side (`works/{work_id}/world/...`) persistence. `.jsonl`
-    covers: transcript, turn_journal, turn_summaries, memory_updates,
-    key_moments, archive_index, pinned_memories, world/history/timeline.
-    `.json` covers: every `manifest.json`, `profile.json`,
-    `role_binding.json`, `long_term_profile.json`,
-    `character_state.json`, `session_index.json`,
-    `context_summary.json`, `archive_refs.json`.
-    `docs/architecture/data_model.md` is the canonical contract — it
-    must list the correct extension for every reference.
+22a. `relationship_core/` split — `manifest.json` (single-object state) + `pinned_memories.jsonl` (append-only). Merge writes only append. Schema: `schemas/user/pinned_memory_entry.schema.json`.
+22b. Append-only streams use `.jsonl`; single-object state uses `.json`. Authoritative extension list → `docs/architecture/data_model.md`.
 
-## Automated Extraction (non-obvious only)
+## Automated Extraction (non-obvious)
 
-23. Each phase step is a fresh `claude -p` / `codex` call with no shared
-    session memory. Context between steps is entirely file-based.
-24. Extraction prompts do NOT read
-    `simulation/contracts/baseline_merge.md`, `memory_digest.jsonl`,
-    `world_event_digest.jsonl`, or `stage_catalog.json`. The
-    self-contained snapshot contract is embedded directly in the
-    prompt; digests / catalog are programmatically maintained by
-    `post_processing.py` (0 token, idempotent).
-25. Quality check per stage via `repair_agent`: four-layer checkers
-    (L0 json_syntax → L1 schema → L2 structural → L3 semantic) ×
-    four-tier fixers (T0 programmatic → T1 local_patch → T2
-    source_patch → T3 file_regen), orthogonal. Field-level surgical
-    patches via json_path. Phase B embeds an **L3 gate** — after the
-    L0–L2 scoped recheck, files modified this round that had Phase A
-    semantic issues get a fresh L3 call whose findings feed the next
-    round's issue queue; this closes the window where T3 could falsely
-    claim to fix a semantic error. T3 is **globally capped** at
-    `t3_max_per_file=1` per file across the whole run (full-file regen
-    is expensive and a second regen rarely helps). Phase C reuses the
-    last gate result when possible, so total semantic cost = 1 per file
-    in Phase A + at most (modified L3 files) × rounds gate calls.
-    Missing catalog / digest routes to PP rerun. Phase 3 dispatches per
-    file to a `ThreadPoolExecutor(max_workers=[repair_agent].repair_concurrency)`
-    (default 10); coordinator.run is invoked once per file, each file is
-    an independent repair transaction with its own RepairRecorder JSONL.
-    Cross-file consistency lives in Phase 3.5, not in per-stage repair.
-25a. **Source-discrepancy triage** (`repair_agent` extension) covers
-    two accept paths that share one per-file cap
-    (`accept_cap_per_file=5`):
-
-    **Path A — L3 `source_inherent` (LLM):** some L3 issues are bugs
-    in the source novel (author contradictions, typos, name mixups,
-    pronoun drift, etc.) that the extraction cannot legitimately "fix"
-    without editorializing. When `triage_enabled`, a lightweight LLM
-    pass runs at two points: (a) **pre-T3**, so an author-bug stage
-    can skip the 20-minute T3 regen entirely; (b) **post-L3-gate**, as
-    a final chance to accept residuals before the stage fails.
-    Anti-cheat: every accepted verdict MUST cite `chapter_number +
-    line_range + verbatim quote`, and the program rejects any quote
-    that is not a literal substring of the chapter text (SHA-256
-    anchored for later staleness detection). T2 and T3 fixers also
-    have a self-report channel — they can return the same evidence
-    structure instead of fabricating a bad fix; the triager uses these
-    as priors.
-
-    **Path B — L2 `coverage_shortage` (program, 0 token):**
-    `min_examples` issues (not enough dialogue/action/event examples
-    to meet `importance_min_examples`) are demoted
-    `error → warning + coverage_shortage=True` and routed
-    `START_TIER=T2, MAX_TIER=T2` (skip T0/T1/T3). T0 can't invent
-    examples, T1 has no source access (would fabricate), T3 file-regen
-    doesn't make the novel longer — only T2 source_patch has a
-    legitimate chance. If one T2 try still can't meet the threshold,
-    the coordinator synthesises a `SourceNote` with
-    `discrepancy_type=coverage_shortage` — no LLM call, quote is a
-    program-selected chapter substring (still passes the literal
-    substring check). Solves the T3_CORRUPTED failure mode where the
-    repair agent spent 18 minutes + 16 attempts on an impossible goal
-    (2026-04-21 incident).
-
-    Accepted issues (both paths) persist to
-    `{entity}/canon/extraction_notes/{stage_id}.jsonl`
-    (`world/extraction_notes/` for world-level files); stage remains
-    `COMMITTED` with the sidecar notes as auditable future-fixer
-    hints. **Runtime does NOT consume these notes** — they are
-    audit-only; Phase 3.5 consistency checker treats a valid
-    SourceNote as equivalent to meeting the `min_examples` threshold
-    for the referenced `json_path`. A post-T3 scoped L0–L2 check
-    aborts Phase B with `T3_CORRUPTED` when T3 breaks JSON/schema/
-    structural shape (mechanical corruption cannot be "source's
-    fault" — no triage).
-26. Extraction runs on a dedicated git branch (`extraction/{work_id}`).
-    Each passing stage committed. Rollback = `git reset` to last
-    committed stage. After all stages complete, squash-merge to
-    `master`.
-26a. **Branch discipline enforced via orchestrator finally-checkout +
-    SessionStart hook, not PreToolUse commit/push wrapper**:
-    `run_extraction_loop` / `run_full` wrap extraction in
-    `try / finally: checkout_master(...)`, so normal completion,
-    `[BLOCKED]`, `--end-stage` stop, interrupt, and exception all exit
-    to `master`. A SessionStart Claude Code hook
-    (`.claude/hooks/session_branch_check.sh`) catches the remaining
-    case — an orchestrator that died without cleanup — by warning on
-    new sessions when the branch is not `master` yet no orchestrator
-    process exists. No PreToolUse `git commit` wrapper: the two
-    mechanisms above already cover realistic failure modes; per-commit
-    shell overhead and false positives on legitimate mixed edits are
-    not worth their marginal value.
-27. Orchestrator pre-computes the read list per call (world /
-    character). Only the most recent snapshot + memory_timeline
-    included. Agents do not explore freely.
-27a. Manifests are split by writer: `sources/works/{work_id}/manifest.json`
-    hand-written at ingestion (validator-gated via
-    `python -m automation.ingestion.validator`);
-    `works/{work_id}/manifest.json` programmatically written at Phase 2
-    end (after user confirms characters + stages);
-    `works/{work_id}/world/manifest.json` programmatically written at
-    Phase 2.5 end. Character `manifest.json` is produced by the
-    baseline prompt. No manifest carries `build_status` — live phase
-    state is in `analysis/progress/` only. Baseline validator gates on
-    presence of both programmatic manifests.
+23. Each phase call is a fresh `claude -p` / `codex` — no shared session
+    memory. Context between steps is file-based.
+24. Extraction prompts do NOT read `simulation/contracts/baseline_merge.md`, `memory_digest.jsonl`, `world_event_digest.jsonl`, or `stage_catalog.json`. Self-contained snapshot contract embedded in prompt; digests / catalog are programmatically maintained by `post_processing.py` (0 token, idempotent).
+25. Per-stage quality gate = `repair_agent` (unified check + fix + verify). Checkers L0–L3 × fixers T0–T3, orthogonal; field-level json_path patches. Phase B L3 gate catches false "fixed" claims. T3 globally capped `t3_max_per_file=1`. Phase 3 dispatches per file in parallel (default concurrency 10); cross-file consistency lives in Phase 3.5. → `automation/repair_agent/` + `docs/requirements.md` §11.4.
+25a. Source-discrepancy triage (`triage_enabled=True`) — two accept paths share `accept_cap_per_file=5`: (A) L3 `source_inherent` (LLM) accepts author-bug residuals with verbatim-quote evidence (literal substring + SHA-256 anchored); (B) L2 `coverage_shortage` (0 token) accepts `min_examples` shortages after one T2 attempt via program-chosen SourceNote. Both persist to `{entity}/canon/extraction_notes/{stage_id}.jsonl` (or `world/extraction_notes/`). Runtime does NOT consume (audit-only). Phase 3.5 treats valid SourceNote as equivalent to meeting `min_examples`. Post-T3 scoped L0–L2 check aborts with `T3_CORRUPTED` (no triage). → `automation/repair_agent/` + `docs/requirements.md` §11.4.
+26. Extraction runs on `extraction/{work_id}` branch. Each passing stage committed. Rollback = `git reset`. Squash-merge to `master` on completion.
+26a. Branch discipline enforced via orchestrator `try/finally: checkout_master(...)` + SessionStart hook (`.claude/hooks/session_branch_check.sh`). No PreToolUse commit wrapper. → `architecture.md` §Git Branch Model.
+27. Orchestrator pre-computes read list per call. Only most recent snapshot + memory_timeline included. Agents don't explore freely.
+27a. Manifest split by writer — `sources/works/{work_id}/manifest.json` hand-written at ingestion (validator-gated); both `works/{work_id}/manifest.json` + `works/{work_id}/world/manifest.json` programmatic at Phase 2 / 2.5 end. No `build_status` in manifests — live phase state in `analysis/progress/` only.
 
 ## Memory System
 
-28. Three-layer memory (`stage_snapshot` / `memory_timeline` /
-    `scene_archive`). No separate dialogue corpus.
-29. ID convention: `{TYPE}-S{stage:03d}-{seq:02d}` for `memory_digest`
-    (`M-`), `world_event_digest` (`E-`), `scene_archive` (`SC-`).
-    3-digit stage ≤999, 2-digit seq ≤99 per stage. Stage encoded in ID;
-    digest / archive entries carry no separate `stage_id` field —
-    runtime loader filters via regex `S(\d{3})`. Story-time field =
-    `time` across all three.
-30. When simulating character A, only load scenes where A is in
-    `characters_present` and A's own memory_timeline. Do not load
-    others'.
-31. `stage_events` is world-public only (each 50–80 字, hard gate).
-    Personal / internal items belong in character `memory_timeline`,
-    never in world `stage_events`.
-32. `world_event_digest.summary` = 1:1 copy of the source
-    `stage_events` entry (boundary enforced at write time in prompt +
-    repair agent). 5-level importance inferred by keyword
-    (trivial / minor / significant / critical / defining), default
-    significant.
-33. `memory_digest.summary` = 1:1 copy of the memory_timeline
-    `digest_summary` (30–50 字, hard gate).
-34. Character `stage_snapshot.stage_events` holds only this stage's
-    events, not accumulated history (each 50–80 字, hard gate).
-    Cross-stage history = `memory_timeline` + `memory_digest` +
-    `world_event_digest`.
-35. `fixed_relationships.json` (structural bonds: blood, lineage,
-    faction) is not stage-dependent. Phase 2.5 produces skeleton;
-    subsequent stages may correct. Loaded at runtime as Tier 0.
+28. Three-layer memory (`stage_snapshot` / `memory_timeline` / `scene_archive`). No separate dialogue corpus.
+29. ID convention `{TYPE}-S{stage:03d}-{seq:02d}` for `M-` / `E-` / `SC-`. 3-digit stage ≤999, 2-digit seq ≤99 per stage. Stage encoded in ID; digest / archive entries carry no separate `stage_id` field. Story-time field = `time` across all three.
+30. Simulating character A loads only scenes where A is in `characters_present` and A's own `memory_timeline`.
+31. `stage_events` is world-public only (50–80 字, hard gate). Personal / internal items belong in character `memory_timeline`, never in world.
+32. `world_event_digest.summary` = 1:1 copy of source `stage_events` (enforced at write time by prompt + repair agent). 5-level importance inferred by keyword; default significant.
+33. `memory_digest.summary` = 1:1 copy of `digest_summary` (30–50 字, hard gate).
+34. Character `stage_snapshot.stage_events` = this stage only (50–80 字, hard gate), not accumulated. Cross-stage history lives in `memory_timeline` + `memory_digest` + `world_event_digest`.
+35. `fixed_relationships.json` (blood / lineage / faction) not stage-dependent. Phase 2.5 skeleton; later stages may correct. Runtime Tier 0.
 
 ## Retrieval
 
-36. Two-level retrieval funnel: Level 1 = jieba + vocab dict + FTS5
-    (<20ms, default); Level 2 = embedding via LLM tool use (rare). No
-    separate vector DB — single SQLite with optional embedding BLOB.
-37. Proactive context-state association: engine extracts current
-    location, recent events, emotion, conversation partner for jieba
-    matching each turn — not just user input.
-38. Vocab dict (work-level, jieba custom-dict format) auto-generated
-    from extraction output. At `works/{work_id}/indexes/vocab_dict.txt`,
-    committed to git.
-39. Retrieval artifacts under `works/{work_id}/retrieval/` (not
-    committed). Intermediate Phase 4 splits under
-    `works/{work_id}/analysis/scene_splits/` must not be git-tracked —
-    else `git checkout --` during rollback silently destroys them.
-    `scene_archive.jsonl` fully regenerated on each merge.
-39a. Phase 4 chapter-level same-run retry: FAILED chapters (validate
-    failure / parse failure / LLM error) requeue inside the same
-    `_run_parallel` pass with `prior_error` injected into the next
-    prompt. Budget = `[phase4].max_retries_per_chapter` (default 2;
-    total attempts = 1 + budget). Exhausted → ERROR, deferred to
-    `--resume`. Rationale: cheaper than rerunning a fresh process for
-    a handful of stragglers, and the prior_error nudge is enough for
-    most validate failures (e.g. LLM omitting the chapter's last
-    line). Circuit breaker only counts terminal-failed chapters, not
-    transient ones — burst recovery doesn't trip it. Resume path
-    `reset_failed()` only resets ERROR; FAILED in-flight is healed by
-    `reconcile_with_disk()` on next start.
+36. Two-level funnel: Level 1 jieba + vocab dict + FTS5 (<20ms, default); Level 2 embedding via LLM tool use (rare). Single SQLite — no separate vector DB.
+37. Proactive context-state association: engine extracts location / recent events / emotion / conversation partner for jieba matching each turn — not just user input.
+38. Vocab dict (work-level, jieba custom format) auto-generated from extraction output. `works/{work_id}/indexes/vocab_dict.txt` (committed).
+39. Retrieval artifacts under `works/{work_id}/retrieval/` (not committed). Phase 4 intermediate `works/{work_id}/analysis/scene_splits/` must not be git-tracked (otherwise rollback `git checkout --` silently destroys them). `scene_archive.jsonl` fully regenerated on merge.
+39a. Phase 4 chapter-level same-run retry — FAILED chapters requeue inside the same pass with `prior_error` injected. Budget `[phase4].max_retries_per_chapter` (default 2; total attempts = 1 + budget). Exhausted → ERROR, deferred to `--resume`. Circuit breaker only counts terminal-failed chapters.
+     → `architecture.md` §Automated Extraction Pipeline → Phase 4.
 
 ## JSON Repair
 
 40. LLM-produced JSON often has format errors (unescaped quotes,
     trailing commas, truncation) while content is intact. Three-level
-    repair: L1 regex (0 token) → L2 LLM on broken JSON only (minimal) →
-    L3 full re-run (last resort). See
-    `automation/persona_extraction/json_repair.py`.
+    repair in Phase 0: L1 regex (0 token) → L2 LLM on broken JSON only
+    (minimal) → L3 full re-run (last resort).
+    → `automation/persona_extraction/json_repair.py`.
 
 ## Configuration & Runtime Resilience
 
 45. Single-source TOML config at `automation/config.toml` (loader
     `automation/persona_extraction/config.py`). Override priority:
     CLI > `config.local.toml` > `config.toml` > dataclass defaults.
-    All previously hard-coded knobs (concurrency, timeouts,
-    repair-agent retries, circuit breaker, fast-fail backoff,
-    rate-limit policy, runtime defaults, git auto-merge) read from
-    typed dataclass sections.
-46. Token-limit auto-pause (subscription model, §11.13): when
-    `claude -p` returns a rate-limit / usage-limit error,
-    `RateLimitController` parses the timezone-aware reset time
-    (DST-aware via `zoneinfo` for ambiguous codes PT/MT/CT/ET),
-    writes a flock-merged `rate_limit_pause.json`, blocks the
-    orchestrator's pre-launch gate plus every concurrent
-    `run_with_retry`, and re-runs the failed prompt after reset
-    *without* consuming a retry slot. Unparseable reset times fall
-    back to a minimal `claude -p "1" --max-turns 1` probe loop, but
-    only a **single elected leader lane** (flock-CAS on
-    `probing_by_pid` + `probe_claim_ttl_s` TTL) fires the probe;
-    followers sleep silently. Two hard-stop paths raise
-    `RateLimitHardStop` from worker threads; the main-thread
-    `Future.result()` re-raise maps to `sys.exit(2)`: weekly waits
-    ≥ `weekly_max_wait_h` (default 12h), and cumulative probe
-    session ≥ `probe_max_wait_h` (default 6h, anchored on
-    `probe_session_started_at`). Both write `rate_limit_exit.log`.
-    `--max-runtime` accounting dedups `paused_seconds_total` by
-    `resume_at` so N lanes sharing one pause window count as one
-    wall-clock slice (not N). Detection-only — no pre-flight quota
-    query. Quality equivalent to a no-limit run modulo wait time.
+    Sections: `stage / phase0 / phase1 / phase3 / phase4 / repair_agent
+    / backoff / rate_limit / runtime / logging / git`.
+46. Token-limit auto-pause (subscription model, §11.13) — `RateLimitController` parses DST-aware reset, writes flock-merged `rate_limit_pause.json`, blocks pre-launch + every `run_with_retry`, re-runs failed prompt after reset without consuming a retry slot. Unparseable resets → probe loop (single elected leader). Hard-stops (weekly ≥ `weekly_max_wait_h` default 12h; probe ≥ `probe_max_wait_h` default 6h) → exit 2 + `rate_limit_exit.log`. Pause excluded from `--max-runtime` (deduped by `resume_at`). → `docs/requirements.md` §11.13 + `automation/persona_extraction/rate_limit.py`.
 
 ## Repository
 
-41. No novels, databases, indexes, large artifacts, or real user
-    packages in git.
-42. `works/*/analysis/` and `works/*/indexes/` tracked as canonical
-    assets; `works/*/retrieval/` local-only.
-43. `docs/logs/` is write-mostly historical — do not proactively read.
-    `docs/review_reports/` follows the same rule (model-stamped audit
-    snapshots, not current truth).
-44. `prompts/` = manual scenarios only (ingest, review, supplement,
-    cold start). Extraction prompts in `automation/prompt_templates/`;
-    runtime rules in `simulation/prompt_templates/`. Each module
-    self-contained.
+41. No novels / databases / indexes / large artifacts / real user packages in git.
+42. `works/*/analysis/` + `works/*/indexes/` tracked as canonical; `works/*/retrieval/` local-only.
+43. `docs/logs/` + `docs/review_reports/` write-mostly — do not proactively read.
+44. `prompts/` = manual scenarios only (ingest / review / supplement / cold start). Extraction prompts in `automation/prompt_templates/`; runtime rules in `simulation/prompt_templates/`. Self-contained modules.
