@@ -100,10 +100,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--concurrency",
         type=int,
-        default=cfg.phase0.concurrency,
-        help=f"Max parallel workers for Phase 0 / Phase 4 "
-             f"(default: {cfg.phase0.concurrency}, "
-             f"from [phase0].concurrency / [phase4].concurrency)",
+        default=None,
+        help=f"Max parallel workers. If omitted, defaults to "
+             f"[phase0].concurrency ({cfg.phase0.concurrency}) for the full "
+             f"pipeline / auto path, and [phase4].concurrency "
+             f"({cfg.phase4.concurrency}) for --start-phase 4 standalone "
+             f"runs. Pass an explicit value to override both.",
     )
     parser.add_argument(
         "--resume", action="store_true",
@@ -143,6 +145,16 @@ def main(argv: list[str] | None = None) -> None:
         print(f"[ERROR] {project_root} does not look like a persona-engine "
               f"project root (no schemas/ directory).")
         sys.exit(1)
+
+    # Resolve --concurrency default by start phase: [phase4].concurrency
+    # for the standalone Phase 4 entry point, [phase0].concurrency for
+    # the full pipeline / auto path. Explicit --concurrency wins over
+    # either default.
+    if args.concurrency is None:
+        args.concurrency = (
+            cfg.phase4.concurrency
+            if args.start_phase == "4"
+            else cfg.phase0.concurrency)
 
     # --- Phase 4 standalone path (independent lock, no git operations) ---
     if args.start_phase == "4":

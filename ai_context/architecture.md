@@ -415,9 +415,10 @@ or `codex` call, no shared session memory, file-based context.
   again); rate-limit errors are out-of-band-paused, not retried.
 - Tunable knobs live in one TOML file (`automation/config.toml`,
   loader `automation/persona_extraction/config.py`). Override priority:
-  CLI flag > env > `config.toml` > `config.local.toml` (git-ignored).
-  Sections: stage / phase0 / phase1 / phase3 / phase4 / repair_agent /
-  backoff / rate_limit / runtime / logging / git.
+  CLI flag > `config.local.toml` (git-ignored) > `config.toml` >
+  dataclass defaults. Sections: stage / phase0 / phase1 / phase3 /
+  phase4 / repair_agent / backoff / rate_limit / runtime / logging /
+  git.
 
 See `automation/README.md` and `docs/requirements.md` §9–§12.
 See `docs/architecture/schema_reference.md` for schema documentation.
