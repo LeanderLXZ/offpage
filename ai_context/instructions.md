@@ -40,9 +40,16 @@ timestamped entry under `docs/logs/`.
 
 ## Logging (critical)
 
-Every meaningful change outside `ai_context/` → write a log at
-`docs/logs/{YYYY-MM-DD_HHMMSS}_{slug}.md`. HHMMSS is mandatory. See
-`conventions.md` for the full checklist and alignment table.
+Every meaningful change outside `ai_context/` → one log file at
+`docs/logs/{YYYY-MM-DD_HHMMSS}_{slug}.md`, written **across three
+timepoints** (PRE / POST / REVIEW) by `/go` and `/after-check`:
+
+- **PRE** (created at /go Step 1, before any file change): 背景 / 结论与决策 / 计划动作清单 / 验证标准
+- **POST** (appended at /go Step 7, before commit): 已落地变更 / 与计划差异 / 验证结果 / 状态 DONE|BLOCKED
+- **REVIEW** (appended at /after-check Step 5): 双轨复查摘要 + 状态 REVIEWED-PASS|PARTIAL|FAIL
+
+HHMMSS is mandatory. See `conventions.md` §Logging for the full
+contract and Cross-File Alignment table.
 
 Layer summary:
 - `ai_context/` — compressed current truth

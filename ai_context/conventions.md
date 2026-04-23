@@ -6,14 +6,37 @@ Self-Check.
 
 ## Logging
 
-- **Every meaningful change** → write a log to `docs/logs/`.
+`docs/logs/` 采用 **三时点契约**（PRE / POST / REVIEW）：一份 log 文件贯穿一次 `/go` 从决策到落地到复查的完整生命周期。
+
 - Filename format: `YYYY-MM-DD_HHMMSS_slug.md`
   - **HHMMSS is mandatory.** Get it with:
     `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'`
   - Bad: `2026-04-08_foo.md` — Good: `2026-04-08_012400_foo.md`
-- Content: what changed, which files, why.
-- If you completed a task without writing a log → write it now before
-  moving on.
+
+### 三时点
+
+1. **PRE（/go Step 1）** — 在任何代码 / schema / prompt / docs / ai_context / skill 改动之前写入：
+   - `背景 / 触发`：会话上下文、用户原始需求
+   - `结论与决策`：已拍板的方案
+   - `计划动作清单`：准备改的文件 + 每份的改动要点
+   - `验证标准`：checkbox 级，完成时要怎么验
+   - `执行偏差`：占位段落，中途偏离计划时追加
+2. **POST（/go Step 7）** — 同一份 log 追加：
+   - `已落地变更`：实际改了什么
+   - `与计划的差异`：新增 / 删除 / 修改
+   - `验证结果`：PRE 验证标准逐项打勾或打叉
+   - `Completed`：`Status: DONE | BLOCKED` + `Finished` 时间戳
+3. **REVIEW（/after-check Step 5）** — 同一份 log 追加双轨复查摘要：
+   - `复查结论` 的轨 1 / 轨 2 计数（完整报告在对话里，log 不贴全文）
+   - `复查时状态`：`REVIEWED-PASS | REVIEWED-PARTIAL | REVIEWED-FAIL`
+   - `Conversation ref`：指向同会话 /after-check 输出
+
+### 契约要点
+
+- `/go` 启动即先落 PRE log → 回显路径给用户（`LOG: docs/logs/...md`）。**没 PRE log 不得改文件**
+- `/after-check` 强制读 PRE 段作为 intent 基线；log 缺失 → 对账轨跳过 + 扩散轨继续
+- `/after-check` 回写 log 是**唯一的写操作例外**，其他仍然只读
+- 历史 log（本契约之前已存在的单时点 log）不动；新契约从本次之后的 /go 起生效
 
 ## Cross-File Alignment
 
@@ -28,6 +51,7 @@ alignment graph:
 | Extraction workflow | `docs/architecture/extraction_workflow.md`, `automation/prompt_templates/`, `automation/persona_extraction/`, `ai_context/architecture.md` |
 | Runtime prompts | `simulation/prompt_templates/`, `simulation/` |
 | Any durable decision | `ai_context/decisions.md` |
+| /go or /after-check triggered change | `docs/logs/` 的 PRE / POST / REVIEW 三段按时点写齐（缺 PRE 不得动文件；/after-check 强制回写 REVIEW 摘要） |
 
 After changes, grep for the old phrasing to catch stale references.
 
@@ -108,7 +132,7 @@ Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
 After completing a task, run through:
 
 1. Did I update all aligned files? (See table above)
-2. Did I write a log with HHMMSS timestamp?
+2. Did I create the PRE log at /go Step 1 and update its POST段 at Step 7 (同一份文件)?
 3. Did I update `ai_context/` if the change is durable?
 4. Did I grep for stale references to the old state?
 5. Did I run the relevant Python imports to verify no breakage?
