@@ -1721,8 +1721,6 @@ class ExtractionOrchestrator:
                         source_context=source_ctx,
                         llm_call=_llm_call,
                         importance_map=importance_map,
-                        relationship_history_summary_max_chars=(
-                            ra_cfg.relationship_history_summary_max_chars),
                         recorder=recorder,
                     )
                 return f, result

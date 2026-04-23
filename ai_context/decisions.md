@@ -82,6 +82,7 @@ source. Long discussion chains live in `docs/logs/`.
 26a. Branch discipline enforced via orchestrator `try/finally: checkout_master(...)` + SessionStart hook (`.claude/hooks/session_branch_check.sh`). No PreToolUse commit wrapper. → `architecture.md` §Git Branch Model.
 27. Orchestrator pre-computes read list per call. Only most recent snapshot + memory_timeline included. Agents don't explore freely.
 27a. Manifest split by writer — `sources/works/{work_id}/manifest.json` hand-written at ingestion (validator-gated); both `works/{work_id}/manifest.json` + `works/{work_id}/world/manifest.json` programmatic at Phase 2 / 2.5 end. No `build_status` in manifests — live phase state in `analysis/progress/` only.
+27b. Field-level bounds (maxLength / minLength / maxItems) live in JSON schema only — no parallel tunables in `config.toml`. Rationale: two-location drift caused silent divergence; schema is the single source of truth for structural limits. L2 structural checker keeps defaults aligned with schema (e.g. `relationship_history_summary` 300). → `schemas/character/*.schema.json`, `automation/repair_agent/checkers/structural.py`.
 
 ## Memory System
 

@@ -25,7 +25,8 @@
     },
     "hard_boundaries": {
       "type": "array",
-      "description": "硬边界：角色在任何情况下都绝对不会做的事。例如：不会背叛某人、不会求饶、不会对弱者下手。",
+      "maxItems": 15,
+      "description": "硬边界：角色在任何情况下都绝对不会做的事。例如：不会背叛某人、不会求饶、不会对弱者下手。最多 15 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -33,21 +34,21 @@
         "properties": {
           "rule": {
             "type": "string",
-            "description": "边界规则描述。"
+            "maxLength": 50,
+            "description": "边界规则描述。上限 50 字。"
           },
           "reason": {
             "type": "string",
-            "description": "为什么这是硬边界。例如：源于角色的核心价值观、源于角色的创伤经历。"
-          },
-          "evidence_ref": {
-            "type": "string"
+            "maxLength": 50,
+            "description": "为什么这是硬边界。例如：源于角色的核心价值观、源于角色的创伤经历。上限 50 字。"
           }
         }
       }
     },
     "soft_boundaries": {
       "type": "array",
-      "description": "软边界：角色强烈抗拒但在极端情况下可能被迫打破的行为。需要标注什么条件可能导致打破。",
+      "maxItems": 15,
+      "description": "软边界：角色强烈抗拒但在极端情况下可能被迫打破的行为。需要标注什么条件可能导致打破。最多 15 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -55,21 +56,21 @@
         "properties": {
           "rule": {
             "type": "string",
-            "description": "边界规则描述。"
+            "maxLength": 50,
+            "description": "边界规则描述。上限 50 字。"
           },
           "exception_condition": {
             "type": "string",
-            "description": "什么极端条件可能导致打破这条边界。例如：在意的人生命受到威胁时。"
-          },
-          "evidence_ref": {
-            "type": "string"
+            "maxLength": 50,
+            "description": "什么极端条件可能导致打破这条边界。例如：在意的人生命受到威胁时。上限 50 字。"
           }
         }
       }
     },
     "common_misconceptions": {
       "type": "array",
-      "description": "对这个角色的常见误解。标注人们容易搞错的地方。例如：虽然表面冷漠但并不是无情、虽然强势但不是不讲理。",
+      "maxItems": 15,
+      "description": "对这个角色的常见误解。标注人们容易搞错的地方。例如：虽然表面冷漠但并不是无情、虽然强势但不是不讲理。最多 15 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -77,19 +78,15 @@
         "properties": {
           "misconception": {
             "type": "string",
-            "description": "常见的错误认知。"
+            "maxLength": 50,
+            "description": "常见的错误认知。上限 50 字。"
           },
           "reality": {
             "type": "string",
-            "description": "实际情况是什么。"
+            "maxLength": 100,
+            "description": "实际情况是什么。上限 100 字。"
           }
         }
-      }
-    },
-    "evidence_refs": {
-      "type": "array",
-      "items": {
-        "type": "string"
       }
     }
   }

@@ -277,15 +277,17 @@ prompt + L2/L3 兜底。
 - `location` — 事件发生地点
 - `event_description` — 客观事件描述（**150–200 字**，schema 硬门控）
 - `digest_summary` — 用于 memory_digest 的精简摘要（**30–50 字**，schema 硬门控；独立撰写，聚焦可检索关键词，**不是** `event_description` 的机械截断）
-- `subjective_experience` — 角色对事件的主观体验（第一人称视角，核心字段，不限长度）
-- `emotional_impact` — 情感影响
-- `misunderstanding` — 是否产生了误解
-- `concealment` — 是否选择隐瞒
+- `subjective_experience` — 角色对事件的主观体验（第一人称视角，核心字段，**100–200 字**）
+- `emotional_impact` — 情感影响（≤ 50 字）
+- `knowledge_gained` — 本事件带来的新认知（最多 5 条）
+- `misunderstanding` — 是否产生了误解（数组，最多 5 条；`content` / `truth` 各 ≤ 50 字）
+- `concealment` — 是否选择隐瞒（数组，最多 5 条；`content` / `reason` 各 ≤ 50 字）
+- `relationship_impact` — 关系影响（数组，`change` ≤ 100 字）
 - `memory_importance` — 重要程度（trivial ~ defining）
 - `scene_refs` — 关联的 scene_archive scene_id（追溯到原文）
 
 **归纳要求**：角色第一人称主观视角，是归纳不是原文复制。必须包含心理活动
-和态度变化的因果。篇幅由事件复杂度决定，不设硬性字数限制。
+和态度变化的因果。全条目长度约束由 schema minLength/maxLength 硬门控。
 
 ---
 

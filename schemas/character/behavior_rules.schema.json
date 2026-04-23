@@ -24,25 +24,32 @@
     },
     "core_goals": {
       "type": "array",
-      "description": "角色的理性目标——角色有意识追求的、可以权衡利弊调整优先级的目标。例如：'恢复修为至大帝境'、'提升修为'、'保护弱者'。",
+      "maxItems": 10,
+      "description": "角色的理性目标——角色有意识追求的、可以权衡利弊调整优先级的目标。例如：'恢复修为至大帝境'、'提升修为'、'保护弱者'。最多 10 条，每条 ≤ 50 字。",
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 50
       }
     },
     "obsessions": {
       "type": "array",
-      "description": "角色的执念——非理性的、难以放下的心结或驱动力，通常与核心创伤或强烈情感相关，即使不利于自身也会坚持。例如：'追杀仇人——维护被践踏的尊严'、'被宿敌多次击杀的仇恨与恐惧交织'。区别于 core_goals：执念不受理性权衡控制。",
+      "maxItems": 10,
+      "description": "角色的执念——非理性的、难以放下的心结或驱动力，通常与核心创伤或强烈情感相关，即使不利于自身也会坚持。例如：'追杀仇人——维护被践踏的尊严'、'被宿敌多次击杀的仇恨与恐惧交织'。区别于 core_goals：执念不受理性权衡控制。最多 10 条，每条 ≤ 50 字。",
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 50
       }
     },
     "decision_making_style": {
       "type": "string",
-      "description": "角色做决定的方式。例如：理性权衡利弊、凭直觉和情感、先行动后思考、犹豫不决直到被逼。"
+      "minLength": 50,
+      "maxLength": 200,
+      "description": "角色做决定的方式。例如：理性权衡利弊、凭直觉和情感、先行动后思考、犹豫不决直到被逼。50–200 字。"
     },
     "emotional_triggers": {
       "type": "array",
-      "description": "角色的情绪触发点——什么事情会引发角色的强烈情绪反应。",
+      "maxItems": 15,
+      "description": "角色的情绪触发点——什么事情会引发角色的强烈情绪反应。最多 15 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -50,11 +57,13 @@
         "properties": {
           "trigger": {
             "type": "string",
-            "description": "触发条件。例如：被质疑能力、有人伤害在意的人、被背叛、被忽视。"
+            "maxLength": 50,
+            "description": "触发条件。例如：被质疑能力、有人伤害在意的人、被背叛、被忽视。上限 50 字。"
           },
           "reaction": {
             "type": "string",
-            "description": "触发后的典型反应。例如：暴怒但克制在表面、表面冷漠但内心受伤、立刻反击。"
+            "maxLength": 100,
+            "description": "触发后的典型反应。例如：暴怒但克制在表面、表面冷漠但内心受伤、立刻反击。上限 100 字。"
           },
           "intensity": {
             "type": "string",
@@ -66,7 +75,8 @@
     },
     "emotional_reaction_map": {
       "type": "array",
-      "description": "角色在不同情绪状态下的完整反应模式。这是行为模拟的核心。",
+      "maxItems": 10,
+      "description": "角色在不同情绪状态下的完整反应模式。这是行为模拟的核心。最多 10 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -78,29 +88,34 @@
           },
           "internal_response": {
             "type": "string",
-            "description": "内心真实感受。角色心里在想什么、感受什么。"
+            "maxLength": 50,
+            "description": "内心真实感受。角色心里在想什么、感受什么。上限 50 字。"
           },
           "external_behavior": {
             "type": "string",
-            "description": "外在表现。角色对外展现出什么样的行为——可能与内心不一致。"
+            "maxLength": 50,
+            "description": "外在表现。角色对外展现出什么样的行为——可能与内心不一致。上限 50 字。"
           },
           "typical_actions": {
             "type": "array",
             "description": "这种情绪下的典型行为动作。例如：吃醋时会找借口离开、生气时会摔东西、害羞时会转移话题。",
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 50
             }
           },
           "recovery_pattern": {
             "type": "string",
-            "description": "角色从这种情绪中恢复的方式。例如：需要独处冷静、需要对方主动哄、自己硬扛过去。"
+            "maxLength": 50,
+            "description": "角色从这种情绪中恢复的方式。例如：需要独处冷静、需要对方主动哄、自己硬扛过去。上限 50 字。"
           }
         }
       }
     },
     "relationship_behavior_map": {
       "type": "array",
-      "description": "角色面对不同关系类型的人时的行为模式。",
+      "maxItems": 10,
+      "description": "角色面对不同关系类型的人时的行为模式。最多 10 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -112,24 +127,29 @@
           },
           "default_stance": {
             "type": "string",
-            "description": "默认态度。例如：面对陌生人保持警惕和距离感、面对亲近者会偶尔露出柔软的一面。"
+            "maxLength": 50,
+            "description": "默认态度。例如：面对陌生人保持警惕和距离感、面对亲近者会偶尔露出柔软的一面。上限 50 字。"
           },
           "boundaries": {
             "type": "string",
-            "description": "面对这类人时的行为底线。例如：即使面对敌人也不会使用下三滥手段。"
+            "maxLength": 50,
+            "description": "面对这类人时的行为底线。例如：即使面对敌人也不会使用下三滥手段。上限 50 字。"
           },
           "escalation_pattern": {
             "type": "string",
-            "description": "关系升级或恶化时行为如何变化。例如：信任建立后会逐渐降低戒心、被背叛后会彻底关闭情感。"
+            "maxLength": 50,
+            "description": "关系升级或恶化时行为如何变化。例如：信任建立后会逐渐降低戒心、被背叛后会彻底关闭情感。上限 50 字。"
           }
         }
       }
     },
     "habitual_behaviors": {
       "type": "array",
-      "description": "角色的习惯性行为。例如：紧张时会抿嘴唇、思考时会看向远处、开心时嘴角会不自觉上扬。",
+      "maxItems": 15,
+      "description": "角色的习惯性行为。例如：紧张时会抿嘴唇、思考时会看向远处、开心时嘴角会不自觉上扬。最多 15 条，每条 ≤ 50 字。",
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 50
       }
     },
     "stress_response": {
@@ -139,22 +159,19 @@
       "properties": {
         "coping_style": {
           "type": "string",
-          "description": "应对方式。例如：强撑冷静、爆发后迅速收敛、逃避、寻求帮助。"
+          "maxLength": 50,
+          "description": "应对方式。例如：强撑冷静、爆发后迅速收敛、逃避、寻求帮助。上限 50 字。"
         },
         "breaking_point": {
           "type": "string",
-          "description": "什么情况会让角色彻底崩溃或失控。"
+          "maxLength": 50,
+          "description": "什么情况会让角色彻底崩溃或失控。上限 50 字。"
         },
         "post_crisis_behavior": {
           "type": "string",
-          "description": "危机过后的行为模式。例如：假装什么都没发生、变得更加封闭、反思后变得更强。"
+          "maxLength": 50,
+          "description": "危机过后的行为模式。例如：假装什么都没发生、变得更加封闭、反思后变得更强。上限 50 字。"
         }
-      }
-    },
-    "evidence_refs": {
-      "type": "array",
-      "items": {
-        "type": "string"
       }
     }
   }

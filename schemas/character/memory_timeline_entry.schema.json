@@ -45,50 +45,66 @@
     },
     "subjective_experience": {
       "type": "string",
-      "description": "角色对这件事的主观体验和理解。用角色视角描述——角色认为发生了什么，角色如何理解这件事。这可能与客观事实不同。"
+      "minLength": 100,
+      "maxLength": 200,
+      "description": "角色对这件事的主观体验和理解。用角色视角描述——角色认为发生了什么，角色如何理解这件事。这可能与客观事实不同。100–200 字。"
     },
     "emotional_impact": {
       "type": "string",
-      "description": "这件事对角色的情感影响。例如：深受打击、如释重负、心生愧疚、动摇了信念。"
+      "maxLength": 50,
+      "description": "这件事对角色的情感影响。例如：深受打击、如释重负、心生愧疚、动摇了信念。上限 50 字。"
     },
     "knowledge_gained": {
       "type": "array",
-      "description": "角色通过这件事获得了哪些新的认知或信息。",
+      "maxItems": 5,
+      "description": "角色通过这件事获得了哪些新的认知或信息。最多 5 条。",
       "items": {
         "type": "string"
       }
     },
     "misunderstanding": {
-      "type": "object",
-      "description": "如果角色在这件事中产生了误解，记录在此。",
-      "additionalProperties": false,
-      "properties": {
-        "content": {
-          "type": "string",
-          "description": "角色误以为的内容。"
-        },
-        "truth": {
-          "type": "string",
-          "description": "实际真相。"
+      "type": "array",
+      "maxItems": 5,
+      "description": "如果角色在这件事中产生了误解，记录在此。最多 5 条。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "角色误以为的内容。上限 50 字。"
+          },
+          "truth": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "实际真相。上限 50 字。"
+          }
         }
       }
     },
     "concealment": {
-      "type": "object",
-      "description": "如果角色因为这件事而选择隐瞒某些信息，记录在此。",
-      "additionalProperties": false,
-      "properties": {
-        "content": {
-          "type": "string",
-          "description": "角色隐瞒的内容。"
-        },
-        "target": {
-          "type": "string",
-          "description": "对谁隐瞒。"
-        },
-        "reason": {
-          "type": "string",
-          "description": "隐瞒的原因。"
+      "type": "array",
+      "maxItems": 5,
+      "description": "如果角色因为这件事而选择隐瞒某些信息，记录在此。最多 5 条。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "角色隐瞒的内容。上限 50 字。"
+          },
+          "target": {
+            "type": "string",
+            "description": "对谁隐瞒。"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "隐瞒的原因。上限 50 字。"
+          }
         }
       }
     },
@@ -106,7 +122,8 @@
           },
           "change": {
             "type": "string",
-            "description": "关系变化描述。例如：开始信任、产生敌意、关系破裂、暗生情愫。"
+            "maxLength": 100,
+            "description": "关系变化描述。例如：开始信任、产生敌意、关系破裂、暗生情愫。上限 100 字。"
           }
         }
       }
@@ -119,12 +136,6 @@
     "scene_refs": {
       "type": "array",
       "description": "关联的 scene_archive scene_id，形成从主观记忆到原文的追溯链。非必填——有些记忆可能跨多个场景或无法精确对应。",
-      "items": {
-        "type": "string"
-      }
-    },
-    "evidence_refs": {
-      "type": "array",
       "items": {
         "type": "string"
       }
