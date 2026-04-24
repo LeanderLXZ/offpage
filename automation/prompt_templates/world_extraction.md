@@ -22,11 +22,11 @@
 
 1. **仅产出世界层**：本次调用只负责世界信息，角色信息由后续独立调用处理
 2. **世界层边界**：`stage_events` 只记录**世界公共层事件**——对世界背景有持续影响或涉及多角色公共参与的事件。角色之间的私人互动、个人经济活动、内心决定等，归对应角色的 `memory_timeline` / `stage_events`，**不写入世界**
-3. **证据引用**：`evidence_refs` 字段为本阶段涉及的章节号列表（如 `["0001", "0002"]`）。正文字段（stage_events、current_world_state 等）**不需要**逐条标注 `[NNNN]`
+3. **正文不带章节标注**：`stage_events`、`current_world_state` 等正文字段**不需要**逐条标注章节号，章节回溯由章节范围与上下文承担
 4. **标识命名**：中文作品的 `work_id` 和路径段使用中文；`stage_id` 使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`），与 `M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##` 家族对齐
 5. **时间性**：当前阶段写清"现在"，不要混成扁平总结
-6. **阶段级锚点**：`timeline_anchor` 和 `location_anchor` 各为 **≤15 字**的短语（schema 硬门控 required）。前者是本阶段的故事内时间锚（如"开篇前夕"、"三年后"），后者是本阶段的主要发生地（如"某宗门"、"某城外"）。post_processing 将这两个值复制到本阶段每条 world_event_digest 的 `time` / `location` 字段
-7. **仅本阶段事件**：`stage_events` 只记录本 stage 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 50–80 字的一句话摘要**（schema 两端硬门控；过短会直接判失败），既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。digest 是 1:1 机械展开，**你在此处写几条就是几条**——所以边界判定必须在你落笔时完成。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）
+6. **阶段级锚点**：`timeline_anchor` 为本阶段的故事内时间锚（≤50 字短语，如"开篇前夕"、"三年后"），`location_anchor` 为本阶段的主要发生地（≤15 字短语，如"某宗门"、"某城外"），两者均 schema 硬门控 required。post_processing 将这两个值派生到本阶段每条 world_event_digest 的 `time` / `location` 字段（digest 那侧仍是 ≤15 字的短锚，过长由 post_processing 压缩）
+7. **仅本阶段事件**：`stage_events` 只记录本 stage 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 50–100 字的一句话摘要**（schema 两端硬门控；过短会直接判失败），既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。digest 是 1:1 机械展开，**你在此处写几条就是几条**——所以边界判定必须在你落笔时完成。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）
 
 ### 世界层 vs 角色层（判定示例）
 
@@ -54,9 +54,8 @@
 
 如果存在前一阶段的输出，请先读取它，并确保本阶段产出在以下维度与之保持一致：
 
-- `stage_events` 条目的粒度（50–80 字的一句话摘要）
+- `stage_events` 条目的粒度（50–100 字的一句话摘要）
 - `current_world_state` 的描述风格
-- evidence_refs 的填写密度
 
 ## 质量退化防护
 
@@ -66,8 +65,8 @@
    如果没有，**现在重读**。不要凭记忆填字段——schema 是权威。
 2. **前阶段对照**：本 stage 的输出在字段详细度、术语、`stage_events`
    粒度上是否与前一 stage 一致？
-3. **长度合规**：每条 `stage_events` 是否在 50–80 字区间？过短（< 50）
-   或过长（> 80）都会被 schema 判失败。
+3. **长度合规**：每条 `stage_events` 是否在 50–100 字区间？过短（< 50）
+   或过长（> 100）都会被 schema 判失败。
 
 ### 边界禁令
 
@@ -82,6 +81,5 @@
 1. 世界快照 `world/stage_snapshots/{stage_id}.json`
 2. 基础设定修正（如有）
 3. 所有文件都通过 schema 校验
-4. evidence_refs 为章节号列表（如 `["0001", "0002"]`），非空
-5. `stage_events` 仅包含本阶段世界级事件，每条 50–80 字（digest 1:1 复用）
+4. `stage_events` 仅包含本阶段世界级事件，每条 50–100 字（digest 1:1 复用）
 {retry_note}

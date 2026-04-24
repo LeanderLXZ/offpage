@@ -59,7 +59,8 @@ Files likely broken by newer schema gates (exact bounds → each schema
 file):
 
 - `world/stage_snapshots/{stage_id}.json` — new required anchors
-  (`timeline_anchor` + `location_anchor`).
+  (`timeline_anchor` + `location_anchor`); `character_status_changes` +
+  `evidence_refs` removed; per-field `maxItems` / `maxLength` tightened.
 - `world/stage_catalog.json` + `characters/*/canon/stage_catalog.json`
   — `order` field removed.
 - `world/foundation/fixed_relationships.json` — `source_type` +

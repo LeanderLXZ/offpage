@@ -83,18 +83,19 @@ source. Long discussion chains live in `docs/logs/`.
 27. Orchestrator pre-computes per-call read list (latest snapshot + memory_timeline only). Agents don't explore freely.
 27a. Manifests split by writer: `sources/*/manifest.json` hand-written (validator-gated); `works/*/manifest.json` + `works/*/world/manifest.json` programmatic. Live phase state in `analysis/progress/`, not manifests.
 27b. **Bounds-only-in-schema.** All `maxLength` / `minLength` / `maxItems` live in `schemas/**.schema.json` exclusively — no duplicates in `config.toml`, L2, docs, ai_context, or prompts. L2 keeps only checks schema can't express. Single program fallback (`StructuralChecker.relationship_history_summary_max_chars`) must track `stage_snapshot.schema.json`.
-27c. Character baselines + `memory_timeline` carry no `evidence_refs` / `source_type`. Chapter anchors live only on `world_stage_snapshot.evidence_refs`. Character `stage_snapshot` uses `timeline_anchor` + `memory_timeline` as anchors.
+27c. No schema (world / character baselines / `stage_snapshot` / `memory_timeline`) carries `evidence_refs` / `source_type` / `scene_refs`. Chapter回溯 lives outside the schemas; runtime anchoring uses `timeline_anchor` (+ `location_anchor` on world) and `memory_timeline`.
 27d. Digest + memory time-location: required short anchors copied from world snapshot's `timeline_anchor` / `location_anchor`. `memory_timeline.scene_refs` removed (FTS5 on `scene_archive`).
 27e. `foundation` / `fixed_relationships` / `stage_catalog` bound-collapsed. `fixed_relationships.{source_type,evidence_refs}` removed; `stage_catalog.order` removed (lex sort by `stage_id`); character catalog at `schemas/character/stage_catalog.schema.json`; placeholder `*_summary` fields deleted.
 27f. Character `stage_snapshot` full-body bound-collapsed: required `timeline_anchor` + `snapshot_summary` added; `boundary_state.hard_boundaries` added (peer of baseline).
 27g. `stage_snapshot` structural prunes: `character_arc` is a short string (was object); top-level `memory_refs` / `evidence_refs` removed; per-item `evidence_ref` removed from every `dialogue_examples` / `action_examples`. `behavior_rules.relationship_behavior_map` / `relationship_type` renamed to `target_behavior_map` / `target_type` — baseline ↔ stage unified.
+27h. `world_stage_snapshot` structural prunes: `character_status_changes` removed (角色个人状态变化由 character `stage_snapshot` / `memory_timeline` 承载，世界快照只保留世界公共层）；`evidence_refs` removed (no schema keeps chapter anchors). Field-level `maxItems` / `maxLength` tightened in schema; `stage_events` widened from 50–80 to 50–100 CJK chars; `timeline_anchor` widened from ≤15 to ≤50.
 
 ## Memory System
 
 28. Three-layer memory (`stage_snapshot` / `memory_timeline` / `scene_archive`). No separate dialogue corpus.
 29. ID convention `{TYPE}-S{stage:03d}-{seq:02d}` for `M-` / `E-` / `SC-`. 3-digit stage ≤999, 2-digit seq ≤99 per stage. Stage encoded in ID; digest / archive entries carry no separate `stage_id` field. Story-time field = `time` across all three.
 30. Simulating character A loads only scenes where A is in `characters_present` and A's own `memory_timeline`.
-31. `stage_events` is world-public only (50–80 CJK chars, hard gate). Personal / internal items belong in character `memory_timeline`, never in world.
+31. `stage_events` is world-public only (50–100 CJK chars, hard gate). Personal / internal items belong in character `memory_timeline`, never in world.
 32. `world_event_digest.summary` = 1:1 copy of source `stage_events` (enforced at write time by prompt + repair agent). 5-level importance inferred by keyword; default significant.
 33. `memory_digest.summary` = 1:1 copy of `digest_summary` (30–50 CJK chars, hard gate).
 34. Character `stage_snapshot.stage_events` = this stage only (50–80 CJK chars, hard gate), not accumulated. Cross-stage history lives in `memory_timeline` + `memory_digest` + `world_event_digest`.

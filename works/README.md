@@ -89,13 +89,12 @@ works/{work_id}/
 - `world_event_digest.jsonl` — 世界事件压缩摘要时间线（程序化维护）
 - `stage_snapshots/` — 每个阶段的世界状态快照，内容涵盖：
   - 对基础设定的修正与补充
-  - 仅本阶段发生的事件 `stage_events`（每条 50–80 字，schema 硬门控；
+  - 仅本阶段发生的事件 `stage_events`（每条 50–100 字，schema 硬门控；
     仅收录世界公共层事件，角色私事/内心决定应写入该角色 memory_timeline。
     作为 `world_event_digest.jsonl` 的直接来源，1:1 复制；跨阶段时间线由
     digest 聚合，不在快照里累积）
   - 当前世界状态
   - 人物关系转变
-  - 人物状态变化（生死、恋爱、等级等随时间变化的状态）
   - 地理与地图变化
   - 悬而未决的谜题
 - `foundation/` — 稳定的世界规则（设定、宇宙观、力量体系）及固定关系网络
@@ -247,9 +246,3 @@ works/{work_id}/
 - work-local 进度推进默认不需要同步改 `ai_context/` 或 `docs/logs/`，除非
   连带改变了仓库级规则或架构
 
-## 证据引用建议
-
-- work-scoped JSON 中的 `evidence_refs` 默认使用紧凑章节引用：
-  - `0001`、`0004`、`0011-0013`
-- 不要默认把完整章节路径重复写进每个 JSON
-- 只有当证据指向作品外文件或非章节文件时，才写完整路径
