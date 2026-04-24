@@ -185,16 +185,9 @@ def _timeline_to_digest(entry: dict, stage_id: str) -> dict | None:
         "memory_id": memory_id,
         "summary": entry.get("digest_summary", ""),
         "importance": entry.get("memory_importance", "minor"),
+        "time": entry.get("time", ""),
+        "location": entry.get("location", ""),
     }
-
-    time_val = entry.get("time")
-    if time_val:
-        digest["time"] = time_val
-
-    location = entry.get("location")
-    if location:
-        digest["location"] = location
-
     return digest
 
 
