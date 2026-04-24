@@ -48,6 +48,28 @@ Full CLI + background semantics → `automation/README.md`.
 
 Manual repair scenarios → `prompts/review/*.md`.
 
+### Extraction-branch artifact drift (resume gate)
+
+Before `--resume` on an existing `extraction/<work_id>` branch, check
+the already-produced stage products against the **current** schemas —
+schema tightening over the 2026-04 cleanup series invalidates earlier
+products. Known break points on surviving branches:
+
+- `world/stage_snapshots/{stage_id}.json` — now requires
+  `timeline_anchor` + `location_anchor` (both ≤15 chars). Snapshots
+  written before the tightening will fail L1 schema gate.
+- `world/stage_catalog.json` + `characters/*/canon/stage_catalog.json`
+  — `order` field no longer allowed (`additionalProperties: false`).
+- `world/foundation/fixed_relationships.json` — `source_type` +
+  `evidence_refs` removed.
+- `memory_timeline/{stage_id}.json` — `scene_refs` removed; `time` /
+  `location` required ≤15 chars.
+
+Remediation options: rerun affected stages, write a one-off patch
+script, or carry forward only from the next stage (older stages will
+stay INVALID until rerun). Decide before `--resume` — repair agent's
+L1 gate will trip on every existing file otherwise.
+
 ## What The User Cares About
 
 - Deep roleplay, not shallow mimicry or generic AI tone
