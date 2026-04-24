@@ -241,3 +241,24 @@ schema_reference,system_overview}.md`、`automation/README.md`、
 
 - **Status**: DONE
 - **Finished**: 2026-04-24 17:18:21 EDT
+
+<!-- /after-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+
+- 落实率：14/14 代码计划项 + 8/8 验证标准 = **100%**
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+
+- Findings: High=0 / Medium=0 / Low=0
+- Open Questions: 0 条（H1/H2 是上一轮 /check-review 的 open question，不属本次新增）
+
+## 复查时状态
+
+- **Reviewed**: 2026-04-24 17:46:17 EDT
+- **Status**: REVIEWED-PASS
+  - 轨 1 全落实（计划项 + 验证标准）；轨 2 无 H/M/L finding
+- **Conversation ref**: 同会话内 /after-check 输出（含轨 1 计划项对账表 + 轨 2 三层对齐确认 + Residual Risks 三条）
