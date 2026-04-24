@@ -83,17 +83,16 @@
   对应角色的 `stage_events` 与 `memory_timeline` 承载，不进入此处
 - 当前世界状态
 - 关注的人物关系的转变
-- 人物的状态（生死、恋爱、等级等可能随时间变化的状态）
 - 地点的变化
 - 地图的变化（势力范围、领土变动等）
-- 引用的章节号列表（`evidence_refs`）
 
 注意：世界快照只记录**本阶段**的事件，不累积历史。跨阶段的世界事件
 时间线由 `world/world_event_digest.jsonl` 程序化累积维护（见 §11.3a）。
 `stage_events` 每条为一句话（长度由 schema 硬门控），是快照中的事件
 清单，也是 digest 条目的直接来源（唯一事件清单）。
-快照正文字段（stage_events、current_world_state 等）不需要逐条标注
-章节引用 `[NNNN]`，底部 `evidence_refs` 字段提供本阶段引用章节汇总
+快照正文字段（`stage_events`、`current_world_state` 等）不需要逐条
+标注章节引用 `[NNNN]`，章节回溯由阶段范围与上下文承担，schema 不再
+保留独立的 `evidence_refs` 字段。
 
 世界阶段快照与角色阶段快照使用相同的 `stage_id`，确保世界状态与角色状态
 在同一时间线上对齐。运行时加载某个阶段时，同时加载该阶段的世界快照和角色
@@ -2135,13 +2134,12 @@ Phase 3 全部 stage 提交后，运行跨阶段一致性检查。
 | 1 | alias 一致性 | stage_snapshot 的 active_aliases 是否在 identity.json aliases 中有定义 |
 | 2 | 快照字段完整性 | 每个 stage_snapshot 是否包含全部 13 个必填维度（personality, mood, voice_state, behavior_state, boundary_state, relationships, knowledge_scope, stage_delta 等） |
 | 3 | 关系连续性 | 相邻 stage 间 attitude/trust/intimacy 变化是否有 driving_events 归因 |
-| 4 | evidence_refs 覆盖率 | 世界 stage_snapshot 中 evidence_refs 为空的比例（角色 stage_snapshot 与 memory_timeline 均不持有 evidence_refs，仅世界层保留章节锚点） |
-| 5 | memory_digest 对应 | memory_digest.jsonl 条目是否与 memory_timeline memory_id 一一对应 |
-| 6 | memory_digest 摘要一致 | 每条 memory_digest `summary` 是否与对应 memory_timeline `digest_summary` **文本完全相等**（1:1 拷贝契约，防止 repair 改写源字段后 digest 漂移） |
-| 7 | target_map 样本数 | target_voice_map / target_behavior_map 样本数是否满足 importance-based 阈值（§11.4.3） |
-| 8 | stage_id 对齐 | 世界/角色 stage_catalog 和 stage_snapshots 目录是否对齐 |
-| 9 | world_event_digest 对应 | world_event_digest.jsonl 条目数是否与 world stage_snapshot `stage_events` 逐条对应 |
-| 10 | world_event_digest 摘要一致 | 每条 world_event_digest `summary` 是否与对应 world stage_snapshot `stage_events[i]` **文本完全相等**（1:1 拷贝契约，i 由 `event_id` 的 seq 推得） |
+| 4 | memory_digest 对应 | memory_digest.jsonl 条目是否与 memory_timeline memory_id 一一对应 |
+| 5 | memory_digest 摘要一致 | 每条 memory_digest `summary` 是否与对应 memory_timeline `digest_summary` **文本完全相等**（1:1 拷贝契约，防止 repair 改写源字段后 digest 漂移） |
+| 6 | target_map 样本数 | target_voice_map / target_behavior_map 样本数是否满足 importance-based 阈值（§11.4.3） |
+| 7 | stage_id 对齐 | 世界/角色 stage_catalog 和 stage_snapshots 目录是否对齐 |
+| 8 | world_event_digest 对应 | world_event_digest.jsonl 条目数是否与 world stage_snapshot `stage_events` 逐条对应 |
+| 9 | world_event_digest 摘要一致 | 每条 world_event_digest `summary` 是否与对应 world stage_snapshot `stage_events[i]` **文本完全相等**（1:1 拷贝契约，i 由 `event_id` 的 seq 推得） |
 
 > 所有字段级长度 / 条数约束由 schema `minLength` / `maxLength` /
 > `maxItems` 在每阶段程序化校验时硬阻断，无需 Phase 3.5 再重复聚合

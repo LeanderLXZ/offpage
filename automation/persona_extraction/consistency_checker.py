@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ConsistencyIssue:
     severity: str          # "error" or "warning"
-    category: str          # e.g. "alias", "relationship", "evidence_refs"
+    category: str          # e.g. "alias", "relationship", "memory_id"
     location: str          # e.g. "角色名/S003"
     message: str
 
@@ -110,7 +110,6 @@ def run_consistency_check(
     issues.extend(_check_alias_consistency(work_dir, character_ids, stage_ids))
     issues.extend(_check_field_completeness(work_dir, character_ids, stage_ids))
     issues.extend(_check_relationship_continuity(work_dir, character_ids, stage_ids))
-    issues.extend(_check_evidence_refs_coverage(work_dir, character_ids, stage_ids))
     issues.extend(_check_memory_id_correspondence(work_dir, character_ids, stage_ids))
     issues.extend(_check_memory_digest_summary_equality(
         work_dir, character_ids, stage_ids))
@@ -356,27 +355,6 @@ def _check_relationship_continuity(
                                         f"'{new_val}' without driving_events"))
 
             prev_rels = curr_rels
-
-    return issues
-
-
-def _check_evidence_refs_coverage(
-    work_dir: Path, character_ids: list[str], stage_ids: list[str],
-) -> list[ConsistencyIssue]:
-    """Flag world_stage_snapshot entries with empty ``evidence_refs``.
-
-    Chapter anchors live only on world_stage_snapshot now; character
-    stage_snapshot no longer carries ``evidence_refs``.
-    """
-    issues: list[ConsistencyIssue] = []
-
-    for stage_id in stage_ids:
-        world_snap = _load_json(
-            work_dir / "world" / "stage_snapshots" / f"{stage_id}.json")
-        if world_snap is not None and not world_snap.get("evidence_refs"):
-            issues.append(ConsistencyIssue(
-                "warning", "evidence_refs", f"world/{stage_id}",
-                "world stage_snapshot has empty evidence_refs"))
 
     return issues
 

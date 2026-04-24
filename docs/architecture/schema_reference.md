@@ -88,23 +88,22 @@
 **用途**：世界阶段快照，描述某个阶段下的世界状态。
 **位置**：`works/{work_id}/world/stage_snapshots/{stage_id}.json`
 **关键字段**：
-- `timeline_anchor` / `location_anchor` — 阶段级时间 / 地点锚点，required；post_processing 复制到 `world_event_digest.time` / `location`
+- `timeline_anchor` — 阶段级故事内时间锚点，required；post_processing 派生到 `world_event_digest.time`（digest 侧仍是短锚，过长由 post_processing 压缩）
+- `location_anchor` — 阶段级主要发生地锚点，required；post_processing 复制到 `world_event_digest.location`
 - `snapshot_summary` — 阶段的世界状态概述
 - `foundation_corrections` — 对基础设定的修正
 - `stage_events` — 本阶段事件（**唯一事件清单**，每条一句话；**仅收录世界公共层事件**，角色私事/内心决定应写入该角色 memory_timeline；既是快照内容又是 `world_event_digest.jsonl` 的直接来源，1:1 复制）
 - `current_world_state` — 当前阶段的世界总体状态
 - `relationship_shifts` — 关注的人物关系转变
-- `character_status_changes` — 人物状态变化（生死、等级等）
 - `location_changes`, `map_changes` — 地理变化
-- `evidence_refs` — 章节号列表
+- `unresolved_questions` — 本阶段遗留的开放问题（可选）
 
 **自包含契约（schema 硬门控）**：`required` 除元信息外还包含
-`timeline_anchor` / `location_anchor` / `foundation_corrections` /
-`stage_events` / `current_world_state` / `relationship_shifts` /
-`character_status_changes` / `location_changes` / `map_changes` /
-`evidence_refs`。L1 schema 层即强制所有自包含维度存在（允许空数组，但
-不允许缺字段），让 schema gate 承担 self-contained 契约而非仅依赖
-prompt + L2/L3。
+`timeline_anchor` / `location_anchor` / `snapshot_summary` /
+`foundation_corrections` / `stage_events` / `current_world_state` /
+`relationship_shifts` / `location_changes` / `map_changes`。L1 schema
+层即强制所有自包含维度存在（允许空数组，但不允许缺字段），让 schema
+gate 承担 self-contained 契约而非仅依赖 prompt + L2/L3。
 
 ---
 
@@ -269,9 +268,9 @@ key_relationships 提供关系的全局演变轨迹。
 `stage_events` / `character_arc`。L1 schema 层即强制所有自包含维度存在
 （`stage_delta` 可省略，stage 1 没有上阶段参考）。由 schema gate
 承担 self-contained 契约，而非仅靠 prompt + L2/L3 兜底。角色阶段快照
-**不再携带** `memory_refs` / `evidence_refs` 两个字段——章节锚点仅在
-`world_stage_snapshot.evidence_refs` 留存；角色层通过 `timeline_anchor`
-+ `memory_timeline` 自身锚点定位。
+**不携带** 章节级回溯字段（`memory_refs` / `evidence_refs` /
+`source_type` / `scene_refs` 全部不挂在快照层）；定位通过
+`timeline_anchor` + `memory_timeline` 自身锚点完成。
 
 ---
 

@@ -79,7 +79,7 @@ Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
 - Baseline files = extraction anchors only — not runtime-loaded.
 - Stage snapshots are **self-contained** — never merged with baseline at runtime.
 - **Bounds only in schema.** All `maxLength` / `minLength` / `maxItems` / `required` live in `schemas/**.schema.json`; no duplicates anywhere else. Exact values → schema file. Index → `docs/architecture/schema_reference.md`.
-- **Chapter anchors only on `world_stage_snapshot.evidence_refs`.** Character baselines + `stage_snapshot` + `memory_timeline` carry no `evidence_refs` / `source_type` / `scene_refs`; no per-item `evidence_ref` in `dialogue_examples` / `action_examples`. Character anchors use `timeline_anchor` + `memory_timeline`.
+- **No chapter anchors on snapshots.** No schema (world / character baselines / `stage_snapshot` / `memory_timeline`) carries `evidence_refs` / `source_type` / `scene_refs`; no per-item `evidence_ref` in `dialogue_examples` / `action_examples`. Anchoring uses `timeline_anchor` (+ `location_anchor` for world) and `memory_timeline`.
 - **Unified vocabulary**: `behavior_rules` uses `target_behavior_map` / `target_type` (same as stage `behavior_state`).
 - **`stage_catalog`** at `schemas/{world,character}/stage_catalog.schema.json`; bootstrap-only, not runtime-loaded; sort by `stage_id` lex (no `order` field).
 
