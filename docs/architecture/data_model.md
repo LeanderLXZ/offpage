@@ -315,7 +315,7 @@ works/{work_id}/characters/{character_id}/
 - `canon/behavior_rules.json` — 提取锚点，不在运行时加载；包含 `core_goals` 与 `obsessions` 两个字段
 - `canon/boundaries.json` — 提取锚点（hard_boundaries 运行时加载）
 - `canon/failure_modes.json`
-- `canon/stage_catalog.json`
+- `canon/stage_catalog.json` — `schemas/character/stage_catalog.schema.json`
 - `canon/stage_snapshots/{stage_id}.json` — **自包含**，运行时核心；
   `stage_events` **仅记录该阶段发生的事件**（每条 50–80 字，schema 硬门控），
   不累积历史。跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +

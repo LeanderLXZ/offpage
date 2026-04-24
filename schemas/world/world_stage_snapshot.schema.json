@@ -9,6 +9,8 @@
     "work_id",
     "stage_id",
     "stage_title",
+    "timeline_anchor",
+    "location_anchor",
     "snapshot_summary",
     "foundation_corrections",
     "stage_events",
@@ -39,7 +41,14 @@
       "description": "阶段的人类可读短标题（≤15 字）。"
     },
     "timeline_anchor": {
-      "type": "string"
+      "type": "string",
+      "maxLength": 15,
+      "description": "本阶段的时间锚点（≤15 字短语，如：开篇前夕、三年后、大婚当日）。post_processing 将其作为 world_event_digest 每条条目的 time 字段。"
+    },
+    "location_anchor": {
+      "type": "string",
+      "maxLength": 15,
+      "description": "本阶段的主要发生地锚点（≤15 字短语，如：某宗门、某城外）。post_processing 将其作为 world_event_digest 每条条目的 location 字段。"
     },
     "snapshot_summary": {
       "type": "string"

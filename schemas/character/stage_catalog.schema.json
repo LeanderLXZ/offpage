@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/work/stage_catalog.schema.json",
+  "$id": "persona-engine/character/stage_catalog.schema.json",
   "title": "角色阶段目录",
   "description": "角色阶段索引，仅用于 bootstrap 阶段选择，运行时不加载。",
   "type": "object",
@@ -38,7 +38,6 @@
         "additionalProperties": false,
         "required": [
           "stage_id",
-          "order",
           "stage_title",
           "summary",
           "snapshot_path"
@@ -47,11 +46,7 @@
           "stage_id": {
             "type": "string",
             "pattern": "^S[0-9]{3}$",
-            "description": "作品级阶段标识，紧凑英文代号 S###（如 S001）。"
-          },
-          "order": {
-            "type": "integer",
-            "minimum": 0
+            "description": "作品级阶段标识，紧凑英文代号 S###（如 S001）；条目排序直接按此字段字典序。"
           },
           "stage_title": {
             "type": "string",
@@ -66,27 +61,6 @@
             "type": "string",
             "minLength": 1,
             "description": "供 bootstrap 阶段选择时展示的摘要。"
-          },
-          "experience_summary": {
-            "type": "string"
-          },
-          "relationship_summary": {
-            "type": "string"
-          },
-          "personality_summary": {
-            "type": "string"
-          },
-          "current_status_summary": {
-            "type": "string"
-          },
-          "current_mood_summary": {
-            "type": "string"
-          },
-          "voice_shift_summary": {
-            "type": "string"
-          },
-          "knowledge_boundary_summary": {
-            "type": "string"
           },
           "chapter_scope": {
             "type": "object",

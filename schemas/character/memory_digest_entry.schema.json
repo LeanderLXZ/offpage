@@ -8,7 +8,9 @@
   "required": [
     "memory_id",
     "summary",
-    "importance"
+    "importance",
+    "time",
+    "location"
   ],
   "properties": {
     "memory_id": {
@@ -18,11 +20,13 @@
     },
     "time": {
       "type": "string",
-      "description": "故事内时间。"
+      "maxLength": 15,
+      "description": "故事内时间（≤15 字短语，来自 memory_timeline 同名字段）。"
     },
     "location": {
       "type": "string",
-      "description": "事件发生地点。"
+      "maxLength": 15,
+      "description": "事件发生地点（≤15 字短语）。"
     },
     "summary": {
       "type": "string",

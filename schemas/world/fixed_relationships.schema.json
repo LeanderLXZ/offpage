@@ -44,20 +44,8 @@
           },
           "description": {
             "type": "string",
-            "description": "关系的具体描述"
-          },
-          "source_type": {
-            "type": "string",
-            "enum": ["canon", "inference", "ambiguous"],
-            "description": "来源类型"
-          },
-          "evidence_refs": {
-            "type": "array",
-            "description": "引用的章节号列表",
-            "items": {
-              "type": "string",
-              "pattern": "^[0-9]{4}$"
-            }
+            "maxLength": 100,
+            "description": "关系的具体描述，≤100 字。"
           }
         }
       }
