@@ -91,6 +91,7 @@ Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
 - Enforcement: orchestrator `try/finally: checkout_master(...)` + `.claude/hooks/session_branch_check.sh`. Detail → `architecture.md` §Git Branch Model.
 - Never commit: novels, databases, embeddings, caches, real user packages.
 - Don't amend others' commits.
+- `/go` git contract: when not already on master-clean, `/go` automatically opens `../<repo>-master` as a `git worktree`, does all edits + commit there, then `git worktree remove --force` after commit. Main checkout is never moved off its branch during Steps 1–8, so in-flight extraction / dirty work continues undisturbed. Step 9 fast-forwards master into each non-master branch and asks **exactly once at the very end** whether to `git checkout master` — no inline prompts between steps or between branches.
 
 ## Post-Change Checklist
 
