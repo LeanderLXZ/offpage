@@ -56,7 +56,7 @@ stage snapshots. Their role:
 - `stage_delta` records what changed from the previous stage, for human and
   AI understanding of the arc. This is informational, not a merge instruction.
 - `character_arc` provides a bird's-eye view from stage 1 to the current
-  stage (arc_summary, key nodes, current_position). Complements stage_delta.
+  stage as a single string (≤ 200 chars). Complements stage_delta.
 
 ## Why Self-Contained
 

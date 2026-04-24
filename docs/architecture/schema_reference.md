@@ -203,8 +203,10 @@ prompt + L2/L3。
 **字段上下限**：`baseline_tone` ≤ 100 字；`speech_patterns` /
 `vocabulary_preferences` ≤ 15 条，每条 ≤ 50 字；`signature_phrases`
 ≤ 30 条，每条 ≤ 10 字；`emotional_voice_map` ≤ 15 条，
-`voice_shift` ≤ 50 字，`typical_expressions` ≤ 5 条，每条 ≤ 15 字；
+`voice_shift` ≤ 50 字，`typical_expressions` ≤ 10 条，每条 ≤ 15 字；
 `target_voice_map` ≤ 10 条，结构同 emotional_voice_map；
+`dialogue_examples`（顶层 / 情绪矩阵 / 对象矩阵三处统一）≤ 10 条，
+item `quote` ≤ 30 字、`context` ≤ 50 字，不再带 `evidence_ref`；
 `taboo_patterns` ≤ 15 条，每条 ≤ 30 字。
 
 ---
@@ -222,9 +224,10 @@ prompt + L2/L3。
 
 **字段上下限**：`core_goals` / `obsessions` ≤ 10 条，每条 ≤ 50 字；
 `decision_making_style` 50–200 字；`emotional_triggers` ≤ 15 条；
-`emotional_reaction_map` ≤ 15 条；`relationship_behavior_map` ≤ 10 条；
-`habitual_behaviors` ≤ 15 条，每条 ≤ 50 字；子字段字符串 ≤ 50 字
-（少数 ≤ 100 字）。
+`emotional_reaction_map` ≤ 15 条，item `emotion` ≤ 10 字，
+`typical_actions` ≤ 5 条、每条 ≤ 50 字；`target_behavior_map` ≤ 10 条，
+item `target_type` ≤ 15 字；`habitual_behaviors` ≤ 15 条，每条 ≤ 50 字；
+子字段字符串 ≤ 50 字（少数 ≤ 100 字）。
 
 ---
 
@@ -264,24 +267,29 @@ prompt + L2/L3。
 
 | Section | 说明 |
 |---------|------|
-| `active_aliases` | 本阶段活跃名称（primary_name、active_names、hidden_identities、known_as 称呼映射） |
-| `voice_state` | 语气基调、语言习惯、用词偏好、口头禅、禁忌用语、情绪语气矩阵（emotional_voice_map，≤ 10）、**对象语气矩阵**（target_voice_map，≤ 5，按具体角色区分，每 target 至少 3-5 条对话示例）、典型对话示例（≤ 5） |
-| `behavior_state` | **core_goals**（理性目标）、**obsessions**（执念）、决策风格、情绪触发器、情绪反应矩阵（emotional_reaction_map，≤ 10）、**对象行为矩阵**（target_behavior_map，≤ 5，与 target_voice_map 平行且对齐，按具体角色区分，每 target 至少 3-5 条行为示例）、习惯性行为、压力应对 |
-| `boundary_state` | 当前阶段有效的软边界、容易被误判的点 |
-| `relationships` | 对每个重要角色的完整关系状态（态度、信任、亲密度、语气变化、行为变化、驱动事件；`relationship_history_summary` ≤ 300 字，schema 硬门控 + L2 structural 兜底，缺失/空串由 L2 以 warning 暴露） |
-| `misunderstandings` | 角色持有的误解（主观认知 vs 客观事实） |
-| `concealments` | 角色主动隐瞒的事情 |
+| `timeline_anchor` | 本阶段时间锚点短描述（≤ 50 字，required） |
+| `snapshot_summary` | 阶段一段式摘要（100–200 字，required） |
+| `active_aliases` | 本阶段活跃名称（primary_name、active_names ≤ 5、hidden_identities ≤ 5、known_as 称呼映射 ≤ 10 个角色） |
+| `voice_state` | 语气基调、语言习惯、用词偏好、口头禅、禁忌用语、情绪语气矩阵（emotional_voice_map，≤ 15）、**对象语气矩阵**（target_voice_map，≤ 10，按具体角色区分，每 target 至少 3-5 条对话示例）、典型对话示例（≤ 10；dialogue_examples item `quote` ≤ 30 字、`context` ≤ 50 字，无 evidence_ref） |
+| `behavior_state` | **core_goals**（理性目标）、**obsessions**（执念）、决策风格、情绪触发器、情绪反应矩阵（emotional_reaction_map，≤ 15；emotion ≤ 10 字，typical_actions ≤ 5 条）、**对象行为矩阵**（target_behavior_map，≤ 10，与 target_voice_map 平行且对齐，按具体角色区分，每 target 至少 3-5 条行为示例；action_examples item `action` ≤ 50 字、`context` ≤ 100 字，无 evidence_ref）、习惯性行为、压力应对 |
+| `boundary_state` | `hard_boundaries`（≤ 15，rule ≤ 50 字 + reason ≤ 50 字）、`soft_boundaries`（≤ 15）、`common_misconceptions`（≤ 15） |
+| `relationships` | 对每个重要角色的完整关系状态（态度、信任、亲密度、语气变化、行为变化、驱动事件；`relationship_history_summary` ≤ 100 字） |
+| `misunderstandings` | 角色持有的误解（≤ 15 条；content / truth / cause 各 ≤ 50 字） |
+| `concealments` | 角色主动隐瞒的事情（≤ 15 条；content / reason 各 ≤ 50 字） |
 | `stage_delta` | 从上一阶段的变化摘要（信息性） |
-| `character_arc` | 角色从阶段 1 到当前的整体弧线概览（arc_summary、arc_stages 关键节点、current_position） |
+| `character_arc` | 角色从阶段 1 到当前的整体弧线概述（单一字符串，≤ 200 字） |
 | `stage_events` | 本阶段发生的事件（每条 50–80 字，schema 硬门控；不累积历史） |
 
 **自包含契约（schema 硬门控）**：`required` 除元信息外还包含
-`active_aliases` / `current_personality` / `current_mood` /
-`knowledge_scope` / `voice_state` / `behavior_state` / `boundary_state` /
-`relationships` / `stage_events` / `character_arc` / `evidence_refs`。
-L1 schema 层即强制所有自包含维度存在（`stage_delta` 可省略，stage 1
-没有上阶段参考）。由 schema gate 承担 self-contained 契约，而非仅靠
-prompt + L2/L3 兜底。
+`timeline_anchor` / `snapshot_summary` / `active_aliases` /
+`current_personality` / `current_mood` / `knowledge_scope` /
+`voice_state` / `behavior_state` / `boundary_state` / `relationships` /
+`stage_events` / `character_arc`。L1 schema 层即强制所有自包含维度存在
+（`stage_delta` 可省略，stage 1 没有上阶段参考）。由 schema gate
+承担 self-contained 契约，而非仅靠 prompt + L2/L3 兜底。角色阶段快照
+**不再携带** `memory_refs` / `evidence_refs` 两个字段——章节锚点仅在
+`world_stage_snapshot.evidence_refs` 留存；角色层通过 `timeline_anchor`
++ `memory_timeline` 自身锚点定位。
 
 ---
 

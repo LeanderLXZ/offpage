@@ -11,6 +11,7 @@
     "character_id",
     "stage_id",
     "stage_title",
+    "timeline_anchor",
     "snapshot_summary",
     "active_aliases",
     "current_personality",
@@ -21,8 +22,7 @@
     "boundary_state",
     "relationships",
     "stage_events",
-    "character_arc",
-    "evidence_refs"
+    "character_arc"
   ],
   "properties": {
     "schema_version": {
@@ -50,10 +50,15 @@
       "description": "阶段的人类可读短标题，供 bootstrap 阶段选择时展示（≤15 字）。"
     },
     "timeline_anchor": {
-      "type": "string"
+      "type": "string",
+      "maxLength": 50,
+      "description": "阶段时间锚点的短描述。上限 50 字。"
     },
     "snapshot_summary": {
-      "type": "string"
+      "type": "string",
+      "minLength": 100,
+      "maxLength": 200,
+      "description": "当前阶段快照的一段式摘要。100–200 字。"
     },
     "active_aliases": {
       "type": "object",
@@ -66,7 +71,8 @@
         },
         "active_names": {
           "type": "array",
-          "description": "本阶段角色正在使用的所有名称（包括 primary_name）。可以是简单字符串，也可以是带语境的对象。",
+          "maxItems": 5,
+          "description": "本阶段角色正在使用的所有名称（包括 primary_name）。可以是简单字符串，也可以是带语境的对象。最多 5 条。",
           "items": {
             "oneOf": [
               { "type": "string" },
@@ -78,7 +84,8 @@
                   "name": { "type": "string" },
                   "context": {
                     "type": "string",
-                    "description": "使用该名称的语境。例如：'战斗时'、'日常交流'、'正式场合'。"
+                    "maxLength": 50,
+                    "description": "使用该名称的语境。例如：'战斗时'、'日常交流'、'正式场合'。上限 50 字。"
                   }
                 }
               }
@@ -87,7 +94,8 @@
         },
         "hidden_identities": {
           "type": "array",
-          "description": "本阶段角色刻意隐藏的身份/名称。例如：角色化名活动时，其真实身份属于隐藏身份。",
+          "maxItems": 5,
+          "description": "本阶段角色刻意隐藏的身份/名称。例如：角色化名活动时，其真实身份属于隐藏身份。最多 5 条。",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -98,13 +106,18 @@
                 "type": "string",
                 "description": "对谁隐藏。可以是角色 ID、'所有人'等。"
               },
-              "reason": { "type": "string" }
+              "reason": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "隐藏原因。上限 50 字。"
+              }
             }
           }
         },
         "known_as": {
           "type": "object",
-          "description": "不同角色对本角色的称呼映射。键为 character_id，值为该角色对本角色使用的称呼列表。",
+          "maxProperties": 10,
+          "description": "不同角色对本角色的称呼映射。键为 character_id，值为该角色对本角色使用的称呼列表。最多 10 个映射。",
           "additionalProperties": {
             "type": "array",
             "items": { "type": "string" }
@@ -129,21 +142,21 @@
     },
     "current_status": {
       "type": "array",
-      "description": "当前阶段角色的状态信息，例如生死、关系、等级、位置等。保留最核心重要的条目。",
+      "description": "当前阶段角色的状态信息，例如生死、关系、等级、位置等。保留最核心重要的条目。最多 10 条，每条 ≤ 50 字。",
       "maxItems": 10,
-      "items": { "type": "string" }
+      "items": { "type": "string", "maxLength": 50 }
     },
     "current_personality": {
       "type": "array",
-      "description": "当前阶段下已经稳定显现的人格与处事倾向。保留核心倾向。",
+      "description": "当前阶段下已经稳定显现的人格与处事倾向。保留核心倾向。最多 10 条，每条 ≤ 50 字。",
       "maxItems": 10,
-      "items": { "type": "string" }
+      "items": { "type": "string", "maxLength": 50 }
     },
     "current_mood": {
       "type": "array",
-      "description": "当前阶段下更接近现在进行时的情绪背景。",
+      "description": "当前阶段下更接近现在进行时的情绪背景。最多 10 条，每条 ≤ 50 字。",
       "maxItems": 10,
-      "items": { "type": "string" }
+      "items": { "type": "string", "maxLength": 50 }
     },
     "knowledge_scope": {
       "type": "object",
@@ -173,25 +186,33 @@
       "properties": {
         "dominant_traits": {
           "type": "array",
-          "items": { "type": "string" }
+          "maxItems": 10,
+          "description": "当前阶段的主导性格特质。最多 10 条，每条 ≤ 15 字。",
+          "items": { "type": "string", "maxLength": 15 }
         },
         "active_goals": {
           "type": "array",
-          "description": "当前阶段活跃的理性目标。",
-          "items": { "type": "string" }
+          "maxItems": 10,
+          "description": "当前阶段活跃的理性目标。最多 10 条，每条 ≤ 50 字。",
+          "items": { "type": "string", "maxLength": 50 }
         },
         "active_obsessions": {
           "type": "array",
-          "description": "当前阶段活跃的执念——非理性的、无法放下的心结。",
-          "items": { "type": "string" }
+          "maxItems": 10,
+          "description": "当前阶段活跃的执念——非理性的、无法放下的心结。最多 10 条，每条 ≤ 50 字。",
+          "items": { "type": "string", "maxLength": 50 }
         },
         "active_fears": {
           "type": "array",
-          "items": { "type": "string" }
+          "maxItems": 10,
+          "description": "当前阶段活跃的恐惧。最多 10 条，每条 ≤ 50 字。",
+          "items": { "type": "string", "maxLength": 50 }
         },
         "active_wounds": {
           "type": "array",
-          "items": { "type": "string" }
+          "maxItems": 10,
+          "description": "当前阶段活跃的创伤。最多 10 条，每条 ≤ 50 字。",
+          "items": { "type": "string", "maxLength": 50 }
         }
       }
     },
@@ -203,46 +224,51 @@
       "properties": {
         "tone_summary": {
           "type": "string",
-          "description": "当前阶段的整体语气基调。"
+          "maxLength": 100,
+          "description": "当前阶段的整体语气基调。上限 100 字。"
         },
         "speech_patterns": {
           "type": "array",
-          "description": "当前阶段的语言习惯。",
-          "items": { "type": "string" }
+          "maxItems": 15,
+          "description": "当前阶段的语言习惯。最多 15 条，每条 ≤ 50 字。",
+          "items": { "type": "string", "maxLength": 50 }
         },
         "vocabulary_preferences": {
           "type": "array",
-          "description": "当前阶段的用词偏好。",
-          "items": { "type": "string" }
+          "maxItems": 15,
+          "description": "当前阶段的用词偏好。最多 15 条，每条 ≤ 50 字。",
+          "items": { "type": "string", "maxLength": 50 }
         },
         "signature_phrases": {
           "type": "array",
-          "description": "当前阶段的口头禅和标志性表达。",
-          "items": { "type": "string" }
+          "maxItems": 30,
+          "description": "当前阶段的口头禅和标志性表达。最多 30 条，每条 ≤ 10 字。",
+          "items": { "type": "string", "maxLength": 10 }
         },
         "taboo_patterns": {
           "type": "array",
-          "description": "当前阶段绝不会说的话。",
-          "items": { "type": "string" }
+          "maxItems": 15,
+          "description": "当前阶段绝不会说的话。最多 15 条，每条 ≤ 30 字。",
+          "items": { "type": "string", "maxLength": 30 }
         },
         "dialogue_examples": {
           "type": "array",
-          "description": "当前阶段的典型对话示例。",
-          "maxItems": 5,
+          "description": "当前阶段的典型对话示例。最多 10 条。",
+          "maxItems": 10,
           "items": {
             "type": "object",
             "additionalProperties": false,
+            "required": ["quote", "context"],
             "properties": {
-              "quote": { "type": "string" },
-              "context": { "type": "string" },
-              "evidence_ref": { "type": "string" }
+              "quote": { "type": "string", "maxLength": 30 },
+              "context": { "type": "string", "maxLength": 50 }
             }
           }
         },
         "emotional_voice_map": {
           "type": "array",
-          "description": "当前阶段下不同情绪的语气变化。保留最重要、最常见的情绪。",
-          "maxItems": 10,
+          "description": "当前阶段下不同情绪的语气变化。保留最重要、最常见的情绪。最多 15 条。",
+          "maxItems": 15,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -250,24 +276,31 @@
             "properties": {
               "emotion": {
                 "type": "string",
-                "description": "情绪标签。例如：暧昧、愤怒、委屈、嘴硬、关心、吃醋。"
+                "maxLength": 10,
+                "description": "情绪标签。例如：暧昧、愤怒、委屈、嘴硬、关心、吃醋。上限 10 字。"
               },
-              "voice_shift": { "type": "string" },
+              "voice_shift": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "该情绪下语气的整体变化描述。上限 50 字。"
+              },
               "typical_expressions": {
                 "type": "array",
-                "maxItems": 15,
-                "items": { "type": "string" }
+                "maxItems": 10,
+                "description": "这种情绪下的典型表达方式或句式。最多 10 条，每条 ≤ 15 字。",
+                "items": { "type": "string", "maxLength": 15 }
               },
               "dialogue_examples": {
                 "type": "array",
-                "maxItems": 5,
+                "maxItems": 10,
+                "description": "这种情绪下的代表性对话示例。最多 10 条。",
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
+                  "required": ["quote", "context"],
                   "properties": {
-                    "quote": { "type": "string" },
-                    "context": { "type": "string" },
-                    "evidence_ref": { "type": "string" }
+                    "quote": { "type": "string", "maxLength": 30 },
+                    "context": { "type": "string", "maxLength": 50 }
                   }
                 }
               }
@@ -276,8 +309,8 @@
         },
         "target_voice_map": {
           "type": "array",
-          "description": "当前阶段下面对不同对象的语气变化。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条对话示例），泛化类型（陌生人、路人等）简要描述即可。",
-          "maxItems": 5,
+          "description": "当前阶段下面对不同对象的语气变化。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条对话示例），泛化类型（陌生人、路人等）简要描述即可。最多 10 条。",
+          "maxItems": 10,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -285,29 +318,31 @@
             "properties": {
               "target_type": {
                 "type": "string",
-                "description": "对象类型或具体角色。例如：角色A（真面目）、角色B、系统、村民、小孩。对重要角色使用具体名称而非泛化类型。"
+                "maxLength": 15,
+                "description": "对象类型或具体角色。例如：角色A（真面目）、角色B、系统、村民、小孩。对重要角色使用具体名称而非泛化类型。上限 15 字。"
               },
               "voice_shift": {
                 "type": "string",
-                "description": "面对该对象时语气的整体变化描述。"
+                "maxLength": 50,
+                "description": "面对该对象时语气的整体变化描述。上限 50 字。"
               },
               "typical_expressions": {
                 "type": "array",
-                "description": "面对该对象时的典型表达列表。",
-                "maxItems": 15,
-                "items": { "type": "string" }
+                "maxItems": 10,
+                "description": "面对该对象时的典型表达列表。最多 10 条，每条 ≤ 15 字。",
+                "items": { "type": "string", "maxLength": 15 }
               },
               "dialogue_examples": {
                 "type": "array",
-                "description": "原文中面对该对象的对话示例。主要角色和重要配角要求至少 3-5 条，覆盖多种情绪和场景；泛化类型可简要。",
-                "maxItems": 5,
+                "description": "原文中面对该对象的对话示例。最多 10 条。",
+                "maxItems": 10,
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
+                  "required": ["quote", "context"],
                   "properties": {
-                    "quote": { "type": "string" },
-                    "context": { "type": "string" },
-                    "evidence_ref": { "type": "string" }
+                    "quote": { "type": "string", "maxLength": 30 },
+                    "context": { "type": "string", "maxLength": 50 }
                   }
                 }
               }
@@ -324,28 +359,33 @@
       "properties": {
         "core_goals": {
           "type": "array",
-          "description": "当前阶段的理性目标——角色有意识追求的、可权衡调整的目标。",
-          "items": { "type": "string" }
+          "maxItems": 10,
+          "description": "当前阶段的理性目标——角色有意识追求的、可权衡调整的目标。最多 10 条，每条 ≤ 50 字。",
+          "items": { "type": "string", "maxLength": 50 }
         },
         "obsessions": {
           "type": "array",
-          "description": "当前阶段的执念——非理性的心结或驱动力，与核心创伤或强烈情感相关，不受理性权衡控制。",
-          "items": { "type": "string" }
+          "maxItems": 10,
+          "description": "当前阶段的执念——非理性的心结或驱动力，与核心创伤或强烈情感相关，不受理性权衡控制。最多 10 条，每条 ≤ 50 字。",
+          "items": { "type": "string", "maxLength": 50 }
         },
         "decision_making_style": {
           "type": "string",
-          "description": "当前阶段的决策风格。"
+          "minLength": 50,
+          "maxLength": 200,
+          "description": "当前阶段的决策风格。50–200 字。"
         },
         "emotional_triggers": {
           "type": "array",
-          "description": "当前阶段的情绪触发器。",
+          "maxItems": 15,
+          "description": "当前阶段的情绪触发器。最多 15 条。",
           "items": {
             "type": "object",
             "additionalProperties": false,
             "required": ["trigger"],
             "properties": {
-              "trigger": { "type": "string" },
-              "reaction": { "type": "string" },
+              "trigger": { "type": "string", "maxLength": 50 },
+              "reaction": { "type": "string", "maxLength": 100 },
               "intensity": {
                 "type": "string",
                 "enum": ["mild", "moderate", "strong", "extreme"]
@@ -355,29 +395,46 @@
         },
         "emotional_reaction_map": {
           "type": "array",
-          "description": "当前阶段下不同情绪的行为反应模式。保留最重要、最常见的情绪。",
-          "maxItems": 10,
+          "description": "当前阶段下不同情绪的行为反应模式。保留最重要、最常见的情绪。最多 15 条。",
+          "maxItems": 15,
           "items": {
             "type": "object",
             "additionalProperties": false,
             "required": ["emotion"],
             "properties": {
-              "emotion": { "type": "string" },
-              "internal_response": { "type": "string" },
-              "external_behavior": { "type": "string" },
+              "emotion": {
+                "type": "string",
+                "maxLength": 10,
+                "description": "情绪标签。上限 10 字。"
+              },
+              "internal_response": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "内心感受。上限 50 字。"
+              },
+              "external_behavior": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "外在表现。上限 50 字。"
+              },
               "typical_actions": {
                 "type": "array",
                 "maxItems": 5,
-                "items": { "type": "string" }
+                "description": "这种情绪下的典型行为动作。最多 5 条，每条 ≤ 50 字。",
+                "items": { "type": "string", "maxLength": 50 }
               },
-              "recovery_pattern": { "type": "string" }
+              "recovery_pattern": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "恢复方式。上限 50 字。"
+              }
             }
           }
         },
         "target_behavior_map": {
           "type": "array",
-          "description": "当前阶段下面对不同对象的具体行为模式。与 voice_state.target_voice_map 平行且对齐，侧重肢体反应、距离感、习惯性动作、回避模式等行为差异。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条行为示例），泛化类型简要描述即可。",
-          "maxItems": 5,
+          "description": "当前阶段下面对不同对象的具体行为模式。与 voice_state.target_voice_map 平行且对齐，侧重肢体反应、距离感、习惯性动作、回避模式等行为差异。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条行为示例），泛化类型简要描述即可。最多 10 条。",
+          "maxItems": 10,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -385,35 +442,39 @@
             "properties": {
               "target_type": {
                 "type": "string",
-                "description": "对象类型或具体角色。例如：角色A（真面目）、角色B、系统、村民。"
+                "maxLength": 15,
+                "description": "对象类型或具体角色。例如：角色A（真面目）、角色B、系统、村民。上限 15 字。"
               },
               "behavior_shift": {
                 "type": "string",
-                "description": "面对该对象时行为模式的整体变化描述。"
+                "maxLength": 100,
+                "description": "面对该对象时行为模式的整体变化描述。上限 100 字。"
               },
               "typical_actions": {
                 "type": "array",
-                "description": "面对该对象时的典型行为列表。",
                 "maxItems": 5,
-                "items": { "type": "string" }
+                "description": "面对该对象时的典型行为列表。最多 5 条，每条 ≤ 50 字。",
+                "items": { "type": "string", "maxLength": 50 }
               },
               "action_examples": {
                 "type": "array",
-                "description": "原文中面对该对象的具体行为示例。主要角色和重要配角要求至少 3-5 条、场景多样；泛化类型可简要。",
+                "description": "原文中面对该对象的具体行为示例。最多 5 条。",
                 "maxItems": 5,
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
+                  "required": ["action", "context"],
                   "properties": {
                     "action": {
                       "type": "string",
-                      "description": "角色的具体行为描述。"
+                      "maxLength": 50,
+                      "description": "角色的具体行为描述。上限 50 字。"
                     },
                     "context": {
                       "type": "string",
-                      "description": "行为发生的场景和原因。"
-                    },
-                    "evidence_ref": { "type": "string" }
+                      "maxLength": 100,
+                      "description": "行为发生的场景和原因。上限 100 字。"
+                    }
                   }
                 }
               }
@@ -422,17 +483,18 @@
         },
         "habitual_behaviors": {
           "type": "array",
-          "description": "当前阶段的习惯性行为。",
-          "items": { "type": "string" }
+          "maxItems": 15,
+          "description": "当前阶段的习惯性行为。最多 15 条，每条 ≤ 50 字。",
+          "items": { "type": "string", "maxLength": 50 }
         },
         "stress_response": {
           "type": "object",
           "description": "当前阶段的压力应对方式。",
           "additionalProperties": false,
           "properties": {
-            "coping_style": { "type": "string" },
-            "breaking_point": { "type": "string" },
-            "post_crisis_behavior": { "type": "string" }
+            "coping_style": { "type": "string", "maxLength": 50 },
+            "breaking_point": { "type": "string", "maxLength": 50 },
+            "post_crisis_behavior": { "type": "string", "maxLength": 50 }
           }
         }
       }
@@ -440,36 +502,61 @@
 
     "boundary_state": {
       "type": "object",
-      "description": "当前阶段的完整边界状态。hard_boundaries 从 baseline boundaries.json 继承不变，soft_boundaries 为当前阶段的有效状态。",
+      "description": "当前阶段的完整边界状态。hard_boundaries 对应 baseline boundaries.json 的硬约束（阶段内通常不变）；soft_boundaries 为当前阶段的有效状态。",
       "additionalProperties": false,
       "properties": {
-        "soft_boundaries": {
+        "hard_boundaries": {
           "type": "array",
-          "description": "当前阶段有效的软边界。",
+          "maxItems": 15,
+          "description": "硬边界：角色在任何情况下都绝对不会做的事。例如：不会背叛某人、不会求饶、不会对弱者下手。最多 15 条。",
           "items": {
             "type": "object",
             "additionalProperties": false,
             "required": ["rule"],
             "properties": {
-              "rule": { "type": "string" },
-              "exception_condition": { "type": "string" },
+              "rule": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "边界规则描述。上限 50 字。"
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "为什么这是硬边界。例如：源于角色的核心价值观、源于角色的创伤经历。上限 50 字。"
+              }
+            }
+          }
+        },
+        "soft_boundaries": {
+          "type": "array",
+          "maxItems": 15,
+          "description": "当前阶段有效的软边界。最多 15 条。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["rule"],
+            "properties": {
+              "rule": { "type": "string", "maxLength": 50 },
+              "exception_condition": { "type": "string", "maxLength": 50 },
               "stage_note": {
                 "type": "string",
-                "description": "如果此边界相比初始状态有变化，说明原因。"
+                "maxLength": 50,
+                "description": "如果此边界相比初始状态有变化，说明原因。上限 50 字。"
               }
             }
           }
         },
         "common_misconceptions": {
           "type": "array",
-          "description": "当前阶段容易被误判的点。",
+          "maxItems": 15,
+          "description": "当前阶段容易被误判的点。最多 15 条。",
           "items": {
             "type": "object",
             "additionalProperties": false,
             "required": ["misconception"],
             "properties": {
-              "misconception": { "type": "string" },
-              "reality": { "type": "string" }
+              "misconception": { "type": "string", "maxLength": 50 },
+              "reality": { "type": "string", "maxLength": 100 }
             }
           }
         }
@@ -477,11 +564,13 @@
     },
 
     "relationship_state_summary": {
-      "type": "string"
+      "type": "string",
+      "maxLength": 100,
+      "description": "当前阶段关系状态的总体摘要。上限 100 字。"
     },
     "relationships": {
       "type": "array",
-      "description": "当前阶段角色对每个重要角色的完整关系状态。不包含边缘的不重要角色。",
+      "description": "当前阶段角色对每个重要角色的完整关系状态。不包含边缘的不重要角色。最多 10 条。",
       "maxItems": 10,
       "items": {
         "type": "object",
@@ -499,15 +588,18 @@
           },
           "target_label": {
             "type": "string",
-            "description": "当前阶段的关系标签。例如：仇人、挚爱、师父、盟友。"
+            "maxLength": 30,
+            "description": "当前阶段的关系标签。例如：仇人、挚爱、师父、盟友。上限 30 字。"
           },
           "summary": {
             "type": "string",
-            "description": "当前阶段关系的简要描述。"
+            "maxLength": 50,
+            "description": "当前阶段关系的简要描述。上限 50 字。"
           },
           "attitude": {
             "type": "string",
-            "description": "当前阶段对该角色的态度。例如：深爱且极度担忧、敌意但有所动摇、悲痛欲绝。"
+            "maxLength": 50,
+            "description": "当前阶段对该角色的态度。上限 50 字。"
           },
           "trust": {
             "type": "integer",
@@ -527,25 +619,29 @@
           },
           "voice_shift": {
             "type": "string",
-            "description": "面对该角色时的语气变化。例如：语气变得温柔，偶尔撒娇；或：冷淡疏离，以敬语保持距离。"
+            "maxLength": 50,
+            "description": "面对该角色时的语气变化。上限 50 字。"
           },
           "behavior_shift": {
             "type": "string",
-            "description": "面对该角色时的行为模式变化。例如：愿意主动示弱，会流泪；或：绝不露出破绽，保持高压。"
+            "maxLength": 50,
+            "description": "面对该角色时的行为模式变化。上限 50 字。"
           },
           "driving_events": {
             "type": "array",
-            "description": "驱动当前关系状态的关键事件。",
-            "items": { "type": "string" }
+            "maxItems": 10,
+            "description": "驱动当前关系状态的关键事件。最多 10 条，每条 ≤ 50 字。",
+            "items": { "type": "string", "maxLength": 50 }
           },
           "target_known_status": {
             "type": "string",
-            "description": "角色认为该对象的当前状态。例如：alive、dead、missing、unknown。注意这是角色的认知，不一定是客观事实。"
+            "maxLength": 50,
+            "description": "角色认为该对象的当前状态。例如：alive、dead、missing、unknown。注意这是角色的认知，不一定是客观事实。上限 50 字。"
           },
           "relationship_history_summary": {
             "type": "string",
-            "maxLength": 300,
-            "description": "从阶段 1 到当前阶段，这对关系的演变轨迹概述。应包含关键行为标记（称呼变化、态度转折点、知识揭露时点等）。上限 300 字（硬 schema 门控，L2 structural 同步校验；缺失/空串由 L2 以 warning 暴露）。"
+            "maxLength": 100,
+            "description": "从阶段 1 到当前阶段，这对关系的演变轨迹概述。应包含关键行为标记（称呼变化、态度转折点、知识揭露时点等）。上限 100 字。"
           }
         }
       }
@@ -553,8 +649,8 @@
 
     "misunderstandings": {
       "type": "array",
-      "description": "角色在当前阶段持有的误解。角色主观认为是对的，但客观上是错误的认知。已 resolved 的误解（resolved_at_stage 非空且 ≤ 当前阶段）应移除。",
-      "maxItems": 20,
+      "description": "角色在当前阶段持有的误解。角色主观认为是对的，但客观上是错误的认知。已 resolved 的误解（resolved_at_stage 非空且 ≤ 当前阶段）应移除。最多 15 条。",
+      "maxItems": 15,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -562,15 +658,18 @@
         "properties": {
           "content": {
             "type": "string",
-            "description": "误解的内容，用角色的主观视角描述。例如：认为某人已死、认为某人背叛了自己。"
+            "maxLength": 50,
+            "description": "误解的内容，用角色的主观视角描述。上限 50 字。"
           },
           "truth": {
             "type": "string",
-            "description": "客观事实是什么。"
+            "maxLength": 50,
+            "description": "客观事实是什么。上限 50 字。"
           },
           "cause": {
             "type": "string",
-            "description": "产生误解的原因。例如：被人欺骗、信息不全、亲眼所见但被误导。"
+            "maxLength": 50,
+            "description": "产生误解的原因。上限 50 字。"
           },
           "resolved_at_stage": {
             "type": "string",
@@ -582,8 +681,8 @@
     },
     "concealments": {
       "type": "array",
-      "description": "角色在当前阶段主动隐瞒的事情。角色知道真相但选择不说。已 revealed 的隐瞒（revealed_at_stage 非空且 ≤ 当前阶段）应移除。",
-      "maxItems": 20,
+      "description": "角色在当前阶段主动隐瞒的事情。角色知道真相但选择不说。已 revealed 的隐瞒（revealed_at_stage 非空且 ≤ 当前阶段）应移除。最多 15 条。",
+      "maxItems": 15,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -591,7 +690,8 @@
         "properties": {
           "content": {
             "type": "string",
-            "description": "隐瞒的内容。例如：隐瞒自己的真实身份、隐瞒对某人的感情。"
+            "maxLength": 50,
+            "description": "隐瞒的内容。上限 50 字。"
           },
           "target": {
             "type": "string",
@@ -599,7 +699,8 @@
           },
           "reason": {
             "type": "string",
-            "description": "隐瞒的原因。例如：保护对方、自我保护、羞耻、还没准备好。"
+            "maxLength": 50,
+            "description": "隐瞒的原因。上限 50 字。"
           },
           "revealed_at_stage": {
             "type": "string",
@@ -617,12 +718,14 @@
       "properties": {
         "trigger_events": {
           "type": "array",
-          "description": "驱动本阶段变化的关键事件。",
-          "items": { "type": "string" }
+          "maxItems": 10,
+          "description": "驱动本阶段变化的关键事件。最多 10 条，每条 ≤ 50 字。",
+          "items": { "type": "string", "maxLength": 50 }
         },
         "personality_changes": {
           "type": "array",
-          "description": "性格上的变化（相比上一阶段）。每条应标注影响来源。",
+          "maxItems": 10,
+          "description": "性格上的变化（相比上一阶段）。最多 10 条。",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -630,18 +733,21 @@
             "properties": {
               "change": {
                 "type": "string",
-                "description": "性格变化描述。例如：开始相信人间有真情，不再认为所有人都会背叛。"
+                "maxLength": 50,
+                "description": "性格变化描述。上限 50 字。"
               },
               "influenced_by": {
                 "type": "string",
-                "description": "导致此变化的角色或事件。例如：受某关键他人的自我牺牲行为影响。"
+                "maxLength": 30,
+                "description": "导致此变化的角色或事件。上限 30 字。"
               }
             }
           }
         },
         "relationship_changes": {
           "type": "array",
-          "description": "关系上的变化（相比上一阶段）。每条应标注驱动事件。",
+          "maxItems": 10,
+          "description": "关系上的变化（相比上一阶段）。最多 10 条。",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -649,11 +755,13 @@
             "properties": {
               "change": {
                 "type": "string",
-                "description": "关系变化描述。例如：对某重要他人从戒备转为信任。"
+                "maxLength": 50,
+                "description": "关系变化描述。上限 50 字。"
               },
               "driving_event": {
                 "type": "string",
-                "description": "驱动此关系变化的事件。例如：关键他人做出重大自我牺牲的行为。"
+                "maxLength": 50,
+                "description": "驱动此关系变化的事件。上限 50 字。"
               }
             }
           }
@@ -665,58 +773,21 @@
         },
         "mood_shift": {
           "type": "string",
-          "description": "情绪基调的变化。例如：从迷茫转为坚定、从信任转为戒备。"
+          "maxLength": 100,
+          "description": "情绪基调的变化。上限 100 字。"
         },
         "voice_shift": {
           "type": "string",
-          "description": "口吻的变化。例如：变得更冷漠、开始用敬语、不再掩饰情绪。"
+          "maxLength": 100,
+          "description": "口吻的变化。上限 100 字。"
         }
       }
     },
 
     "character_arc": {
-      "type": "object",
-      "description": "角色从阶段 1 到当前阶段的整体弧线概览。第一个阶段可省略或仅写起点状态。与 stage_delta（记录单阶段变化）互补：character_arc 提供全局俯瞰视角。",
-      "additionalProperties": false,
-      "properties": {
-        "arc_summary": {
-          "type": "string",
-          "description": "一句话概括角色从起点到当前的核心变化轨迹。例如：'从初始封闭/戒备状态，经关键他人持续的善意接触，逐步转向选择性信任与依赖'。"
-        },
-        "arc_stages": {
-          "type": "array",
-          "description": "弧线的关键节点列表（按时间顺序），每个节点描述一个弧线阶段。",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["stage_id", "description"],
-            "properties": {
-              "stage_id": {
-                "type": "string",
-                "pattern": "^S[0-9]{3}$",
-                "description": "对应的阶段 ID，紧凑英文代号 S###。"
-              },
-              "description": {
-                "type": "string",
-                "description": "该阶段在弧线中的角色状态和变化。例如：'冰冷疏离→首次接受善意→主动疗伤'。"
-              }
-            }
-          }
-        },
-        "current_position": {
-          "type": "string",
-          "description": "角色当前在弧线中的位置和趋势。例如：'冰层下的情感开始自发泄漏，但离主动承认还很远'。"
-        }
-      }
-    },
-
-    "memory_refs": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "evidence_refs": {
-      "type": "array",
-      "items": { "type": "string" }
+      "type": "string",
+      "maxLength": 200,
+      "description": "角色从阶段 1 到当前阶段的整体弧线概述。一句到一段话概括核心变化轨迹。上限 200 字。"
     }
   }
 }

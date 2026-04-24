@@ -33,7 +33,7 @@ class StructuralChecker(BaseChecker):
     def __init__(
         self,
         importance_map: dict[str, str] | None = None,
-        relationship_history_summary_max_chars: int = 300,
+        relationship_history_summary_max_chars: int = 100,
     ):
         self._importance_map = importance_map or {}
         self._rel_history_max_chars = relationship_history_summary_max_chars
