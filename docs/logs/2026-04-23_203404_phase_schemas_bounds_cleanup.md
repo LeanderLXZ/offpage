@@ -274,3 +274,28 @@ stage-level location 字段），会导致每次 digest 生成时验证失败。
 
 - **Status**: DONE
 - **Finished**: 2026-04-23 21:15:00 EDT
+
+<!-- /after-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：16/16 项计划 + 5/5 项可执行验证（CLAUDE/AGENTS 镜像 N/A）
+- Missed updates: 1 条 —— `schemas/README.md:9,11` 未同步到 stage_catalog 从 work/ 迁到 character/
+
+### 轨 2 — 影响扩散
+- Findings: High = 1 / Medium = 1 / Low = 1
+  - [H] schemas/README.md 目录表未同步
+  - [M] ai_context/handoff.md 未提示 world_stage_snapshot 两个新 required 字段导致现有产物失效
+  - [L] post_processing._timeline_to_digest 条件守卫 vs generate_world_event_digest 无条件写入，两处风格不一致
+- Open Questions: 2 条
+  1. 现有 extraction 分支 S001/S002 产物迁移策略（重跑 / 脚本 patch / 前向生效）
+  2. memory_timeline time/location 是否补 minLength:1（堵"空串合法但 digest 拒绝"漏洞）
+
+## 复查时状态
+
+- **Reviewed**: 2026-04-23 21:35:00 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 大体全落实，仅 1 条 Cross-File Alignment 表里的 README 遗漏
+  - 轨 2 1 High（README 同上）+ 1 Medium（handoff 提示缺失）+ 1 Low（技术债）
+- **Conversation ref**: 同会话内 /after-check 输出
