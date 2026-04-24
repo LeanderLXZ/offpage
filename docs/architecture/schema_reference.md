@@ -1,7 +1,10 @@
 # Schema 参考文档
 
 本文档是 `schemas/` 目录下所有 JSON Schema 的功能说明与用途索引。
-Schema 文件本身是权威定义，本文档仅提供快速导航。
+**Schema 文件本身是权威定义**——所有 `maxLength` / `minLength` /
+`maxItems` / `required` 等字段级数值以 `schemas/<path>/<name>.schema.json`
+为准，本文档不再复述具体数字，仅提供字段用途 / 运行时契约 / 跨字段
+不变量的描述。如需具体上下限，直接打开对应 schema 文件。
 
 `schemas/` 按语义分层组织为子目录：
 
@@ -76,7 +79,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 **用途**：世界阶段目录，列出作品的所有可选阶段。仅用于 bootstrap 阶段选择，运行时不加载。
 **位置**：`works/{work_id}/world/stage_catalog.json`
-**关键字段**：stages[].stage_id（`S###`，既是主键也是排序键）, stages[].stage_title（≤15 字）, stages[].summary, stages[].snapshot_path
+**关键字段**：stages[].stage_id（`S###`，既是主键也是排序键）, stages[].stage_title, stages[].summary, stages[].snapshot_path
 
 ---
 
@@ -85,11 +88,10 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **用途**：世界阶段快照，描述某个阶段下的世界状态。
 **位置**：`works/{work_id}/world/stage_snapshots/{stage_id}.json`
 **关键字段**：
-- `timeline_anchor` — 本阶段时间锚点（≤15 字，required，post_processing 复制到 world_event_digest.time）
-- `location_anchor` — 本阶段主要发生地锚点（≤15 字，required，post_processing 复制到 world_event_digest.location）
+- `timeline_anchor` / `location_anchor` — 阶段级时间 / 地点锚点，required；post_processing 复制到 `world_event_digest.time` / `location`
 - `snapshot_summary` — 阶段的世界状态概述
 - `foundation_corrections` — 对基础设定的修正
-- `stage_events` — 本阶段事件（**唯一事件清单**，≤ 30 条；每条 **50–80 字**一句话，schema 硬门控；**仅收录世界公共层事件**，角色私事/内心决定应写入该角色 memory_timeline；既是快照内容又是 `world_event_digest.jsonl` 的直接来源，1:1 复制）
+- `stage_events` — 本阶段事件（**唯一事件清单**，每条一句话；**仅收录世界公共层事件**，角色私事/内心决定应写入该角色 memory_timeline；既是快照内容又是 `world_event_digest.jsonl` 的直接来源，1:1 复制）
 - `current_world_state` — 当前阶段的世界总体状态
 - `relationship_shifts` — 关注的人物关系转变
 - `character_status_changes` — 人物状态变化（生死、等级等）
@@ -110,7 +112,7 @@ prompt + L2/L3。
 
 **用途**：世界级固定关系网络（血缘、宗族、师徒、势力从属等不随阶段变化的结构性关系）。
 **位置**：`works/{work_id}/world/foundation/fixed_relationships.json`
-**关键字段**：relationships[].relationship_id, relationships[].type, relationships[].parties, relationships[].description（≤100 字）
+**关键字段**：relationships[].relationship_id, relationships[].type, relationships[].parties, relationships[].description
 **生命周期**：Phase 2.5 产出骨架，后续阶段可修正。运行时 Tier 0 加载。
 
 ---
@@ -120,15 +122,7 @@ prompt + L2/L3。
 **用途**：世界基础设定（genre / tone / world_structure / power_system / core_rules / world_lines / major_factions）。不含 stage-scoped 信息，作为运行时 Tier 0 的静态背景加载。
 **位置**：`works/{work_id}/world/foundation/foundation.json`
 **生命周期**：Phase 2.5 基线产出；后续阶段可通过 world_stage_snapshot.foundation_corrections 增量修正。
-**形态**：`additionalProperties: true`（顶层与子对象），容纳 per-work 扩展字段；`required` 仅 `work_id`。
-
-**字段级上下限**：
-- `tone` ≤100 字
-- `world_structure.summary` ≤200 字；`major_regions` ≤20 条，item `description` ≤50 字
-- `power_system.summary` ≤200 字；`levels` ≤15 条，item `description` ≤50 字
-- `core_rules` ≤20 条，item `description` / `impact` 各 ≤50 字
-- `world_lines` ≤20 条，item `core_conflict` / `setting_features` 各 ≤50 字
-- `major_factions` ≤20 条，item `description` ≤50 字，`key_figures` ≤10 条
+**形态**：`additionalProperties: true`（顶层与子对象），容纳 per-work 扩展字段；`required` 仅 `work_id`。字段级上下限以 schema 为准。
 
 ---
 
@@ -141,10 +135,10 @@ prompt + L2/L3。
 
 **关键字段**：
 - `event_id` — 格式 `E-S{stage:03d}-{seq:02d}`（例：`E-S003-02`）；阶段号编码在 ID 中
-- `summary` — 事件精简摘要（**50–80 字**，1:1 复制自世界快照 `stage_events`）
+- `summary` — 事件精简摘要（1:1 复制自世界快照 `stage_events`）
 - `importance` — 5 级重要度（`trivial` / `minor` / `significant` / `critical` / `defining`）
-- `time` — 故事内时间（≤15 字，required，来自 snapshot `timeline_anchor`）
-- `location` — 事件地点（≤15 字，required）
+- `time` — 故事内时间（required，来自 snapshot `timeline_anchor`）
+- `location` — 事件地点（required，来自 snapshot `location_anchor`）
 - `involved_characters` — 涉及的角色（可选）
 
 ---
@@ -175,22 +169,16 @@ prompt + L2/L3。
 
 `character_manifest.json` 的 `aliases` 保持扁平字符串数组用于快速查找。
 
-**核心创伤**：`core_wounds` 字段（≤ 15 条）记录跨全故事始终影响角色行为
-的根源性心理创伤，每条含 `wound`（≤ 50 字）、`origin`（成因，≤ 100 字）、
-`behavioral_impact`（行为影响，≤ 100 字）。不同于 stage_snapshot 中的
-`active_wounds`（随阶段演变），core_wounds 记录最底层的创伤根源。
+**核心创伤**：`core_wounds` 字段记录跨全故事始终影响角色行为的根源性
+心理创伤，每条含 `wound` / `origin`（成因）/ `behavioral_impact`（行为
+影响）。不同于 stage_snapshot 中的 `active_wounds`（随阶段演变），
+core_wounds 记录最底层的创伤根源。
 
-**核心人物关系**：`key_relationships` 字段（≤ 10 条）记录对角色有重大
-影响的跨全故事关系概览，每条含 `target`、`initial_relationship`
-（≤ 50 字）、`relationship_arc`（全局演变弧线，≤ 100 字）、
-`turning_points`（≤ 15 条，每条 ≤ 50 字）。不同于 stage_snapshot 中的
-`relationships`（记录某一阶段的关系状态），key_relationships 提供关系
-的全局演变轨迹。
-
-**字段上下限**：`birth_origin` / `appearance_summary` /
-`initial_social_position` ≤ 100 字；`background_summary` ≤ 200 字；
-`distinguishing_features` ≤ 20 条，每条 ≤ 100 字；`aliases[].source`
-≤ 100 字。所有上下限由 schema 硬门控，不在 TOML 或 prompt 另立副本。
+**核心人物关系**：`key_relationships` 字段记录对角色有重大影响的跨全
+故事关系概览，每条含 `target` / `initial_relationship` /
+`relationship_arc`（全局演变弧线）/ `turning_points`。不同于
+stage_snapshot 中的 `relationships`（记录某一阶段的关系状态），
+key_relationships 提供关系的全局演变轨迹。
 
 ---
 
@@ -200,14 +188,11 @@ prompt + L2/L3。
 **位置**：`characters/{character_id}/canon/voice_rules.json`
 **运行时**：**不加载**。运行时使用 stage_snapshot 中的 `voice_state`。
 
-**字段上下限**：`baseline_tone` ≤ 100 字；`speech_patterns` /
-`vocabulary_preferences` ≤ 15 条，每条 ≤ 50 字；`signature_phrases`
-≤ 30 条，每条 ≤ 10 字；`emotional_voice_map` ≤ 15 条，
-`voice_shift` ≤ 50 字，`typical_expressions` ≤ 10 条，每条 ≤ 15 字；
-`target_voice_map` ≤ 10 条，结构同 emotional_voice_map；
-`dialogue_examples`（顶层 / 情绪矩阵 / 对象矩阵三处统一）≤ 10 条，
-item `quote` ≤ 30 字、`context` ≤ 50 字，不再带 `evidence_ref`；
-`taboo_patterns` ≤ 15 条，每条 ≤ 30 字。
+**关键字段**：`baseline_tone` / `speech_patterns` /
+`vocabulary_preferences` / `signature_phrases` / `taboo_patterns` /
+`emotional_voice_map` / `target_voice_map` / `dialogue_examples`（顶层
++ `emotional_voice_map` + `target_voice_map` 三处对齐结构，均无
+`evidence_ref`）。
 
 ---
 
@@ -222,12 +207,9 @@ item `quote` ≤ 30 字、`context` ≤ 50 字，不再带 `evidence_ref`；
 中的 `behavior_state` 同样维护 `core_goals` / `obsessions`，
 `emotional_baseline` 维护 `active_goals` / `active_obsessions`。
 
-**字段上下限**：`core_goals` / `obsessions` ≤ 10 条，每条 ≤ 50 字；
-`decision_making_style` 50–200 字；`emotional_triggers` ≤ 15 条；
-`emotional_reaction_map` ≤ 15 条，item `emotion` ≤ 10 字，
-`typical_actions` ≤ 5 条、每条 ≤ 50 字；`target_behavior_map` ≤ 10 条，
-item `target_type` ≤ 15 字；`habitual_behaviors` ≤ 15 条，每条 ≤ 50 字；
-子字段字符串 ≤ 50 字（少数 ≤ 100 字）。
+**关键字段**：`core_goals` / `obsessions` / `decision_making_style` /
+`emotional_triggers` / `emotional_reaction_map` / `target_behavior_map`
+（与 stage 侧同名）/ `habitual_behaviors` / `stress_response`。
 
 ---
 
@@ -267,18 +249,18 @@ item `target_type` ≤ 15 字；`habitual_behaviors` ≤ 15 条，每条 ≤ 50 
 
 | Section | 说明 |
 |---------|------|
-| `timeline_anchor` | 本阶段时间锚点短描述（≤ 50 字，required） |
-| `snapshot_summary` | 阶段一段式摘要（100–200 字，required） |
-| `active_aliases` | 本阶段活跃名称（primary_name、active_names ≤ 5、hidden_identities ≤ 5；每个 name ≤ 10 字；known_as 称呼映射 ≤ 10 个角色） |
-| `voice_state` | 语气基调、语言习惯、用词偏好、口头禅、禁忌用语、情绪语气矩阵（emotional_voice_map，≤ 15）、**对象语气矩阵**（target_voice_map，≤ 10，按具体角色区分，每 target 至少 3-5 条对话示例）、典型对话示例（≤ 10；dialogue_examples item `quote` ≤ 30 字、`context` ≤ 50 字，无 evidence_ref） |
-| `behavior_state` | **core_goals**（理性目标）、**obsessions**（执念）、决策风格、情绪触发器、情绪反应矩阵（emotional_reaction_map，≤ 15；emotion ≤ 10 字，typical_actions ≤ 5 条）、**对象行为矩阵**（target_behavior_map，≤ 10，与 target_voice_map 平行且对齐，按具体角色区分，每 target 至少 3-5 条行为示例；action_examples item `action` ≤ 50 字、`context` ≤ 100 字，无 evidence_ref）、习惯性行为、压力应对 |
-| `boundary_state` | `hard_boundaries`（≤ 15，rule ≤ 50 字 + reason ≤ 50 字）、`soft_boundaries`（≤ 15）、`common_misconceptions`（≤ 15） |
-| `relationships` | 对每个重要角色的完整关系状态（态度、信任、亲密度、语气变化、行为变化、驱动事件；`relationship_history_summary` ≤ 100 字） |
-| `misunderstandings` | 角色持有的误解（≤ 15 条；content / truth / cause 各 ≤ 50 字） |
-| `concealments` | 角色主动隐瞒的事情（≤ 15 条；content / reason 各 ≤ 50 字） |
+| `timeline_anchor` | 本阶段时间锚点短描述（required） |
+| `snapshot_summary` | 阶段一段式摘要（required） |
+| `active_aliases` | 本阶段活跃名称（primary_name / active_names / hidden_identities / known_as 称呼映射） |
+| `voice_state` | 语气基调、语言习惯、用词偏好、口头禅、禁忌用语、情绪语气矩阵（emotional_voice_map）、对象语气矩阵（target_voice_map，按具体角色区分，每 target 至少 3-5 条对话示例）、典型对话示例（dialogue_examples 无 evidence_ref） |
+| `behavior_state` | **core_goals**（理性目标）、**obsessions**（执念）、决策风格、情绪触发器、情绪反应矩阵（emotional_reaction_map）、对象行为矩阵（target_behavior_map，与 target_voice_map 平行对齐，每 target 至少 3-5 条行为示例；action_examples 无 evidence_ref）、习惯性行为、压力应对 |
+| `boundary_state` | `hard_boundaries` / `soft_boundaries` / `common_misconceptions` |
+| `relationships` | 对每个重要角色的完整关系状态（态度、信任、亲密度、语气变化、行为变化、驱动事件、`relationship_history_summary`） |
+| `misunderstandings` | 角色持有的误解（content / truth / cause） |
+| `concealments` | 角色主动隐瞒的事情（content / reason） |
 | `stage_delta` | 从上一阶段的变化摘要（信息性） |
-| `character_arc` | 角色从阶段 1 到当前的整体弧线概述（单一字符串，≤ 200 字） |
-| `stage_events` | 本阶段发生的事件（每条 50–80 字，schema 硬门控；不累积历史） |
+| `character_arc` | 角色从阶段 1 到当前的整体弧线概述（单一字符串） |
+| `stage_events` | 本阶段发生的事件（每条一句话，不累积历史） |
 
 **自包含契约（schema 硬门控）**：`required` 除元信息外还包含
 `timeline_anchor` / `snapshot_summary` / `active_aliases` /
@@ -303,20 +285,19 @@ item `target_type` ≤ 15 字；`habitual_behaviors` ≤ 15 条，每条 ≤ 50 
 
 **关键字段**：
 - `memory_id` — 格式 `M-S{stage:03d}-{seq:02d}`（例：`M-S003-02`）
-- `time` — 故事内时间（≤15 字，required）
-- `location` — 事件发生地点（≤15 字，required）
-- `event_description` — 客观事件描述（**150–200 字**，schema 硬门控）
-- `digest_summary` — 用于 memory_digest 的精简摘要（**30–50 字**，schema 硬门控；独立撰写，聚焦可检索关键词，**不是** `event_description` 的机械截断）
-- `subjective_experience` — 角色对事件的主观体验（第一人称视角，核心字段，**100–200 字**）
-- `emotional_impact` — 情感影响（≤ 50 字）
-- `knowledge_gained` — 本事件带来的新认知（最多 10 条，每条 ≤ 50 字）
-- `misunderstanding` — 是否产生了误解（数组，最多 5 条；`content` / `truth` 各 ≤ 50 字）
-- `concealment` — 是否选择隐瞒（数组，最多 5 条；`content` / `reason` 各 ≤ 50 字）
-- `relationship_impact` — 关系影响（数组，`change` ≤ 100 字）
+- `time` / `location` — 故事内时间 / 地点，required
+- `event_description` — 客观事件描述，下限硬门控避免空摘要
+- `digest_summary` — 用于 memory_digest 的精简摘要；独立撰写，聚焦可检索关键词，**不是** `event_description` 的机械截断
+- `subjective_experience` — 角色对事件的主观体验（第一人称视角，核心字段）
+- `emotional_impact` — 情感影响
+- `knowledge_gained` — 本事件带来的新认知
+- `misunderstanding` — 是否产生了误解（数组，条目含 `content` / `truth`）
+- `concealment` — 是否选择隐瞒（数组，条目含 `content` / `reason`）
+- `relationship_impact` — 关系影响（数组，条目含 `target` / `change`）
 - `memory_importance` — 重要程度（trivial ~ defining）
 
 **归纳要求**：角色第一人称主观视角，是归纳不是原文复制。必须包含心理活动
-和态度变化的因果。全条目长度约束由 schema minLength/maxLength 硬门控。
+和态度变化的因果。
 
 ---
 
@@ -329,10 +310,9 @@ item `target_type` ≤ 15 字；`habitual_behaviors` ≤ 15 条，每条 ≤ 50 
 
 **关键字段**：
 - `memory_id` — 格式 `M-S{stage:03d}-{seq:02d}`；与 memory_timeline 条目的 `memory_id` 一一对应
-- `summary` — 事件精简摘要（**30–50 字**；1:1 复制自 memory_timeline 的 `digest_summary`）
+- `summary` — 事件精简摘要（1:1 复制自 memory_timeline 的 `digest_summary`）
 - `importance` — 5 级重要度（`trivial` / `minor` / `significant` / `critical` / `defining`）
-- `time` — 故事内时间（≤15 字，required）
-- `location` — 事件地点（≤15 字，required）
+- `time` / `location` — 故事内时间 / 地点，required
 
 ---
 
@@ -340,7 +320,7 @@ item `target_type` ≤ 15 字；`habitual_behaviors` ≤ 15 条，每条 ≤ 50 
 
 **用途**：角色阶段目录，与世界 stage_catalog 对称。仅用于 bootstrap 阶段选择，运行时不加载。
 **位置**：`characters/{character_id}/canon/stage_catalog.json`
-**关键字段**：stages[].stage_id（`S###`，与世界 stage_id 对齐，字典序即阶段顺序）、stages[].stage_title（≤15 字）、stages[].summary、stages[].snapshot_path、stages[].timeline_anchor / chapter_scope（可选）
+**关键字段**：stages[].stage_id（`S###`，与世界 stage_id 对齐，字典序即阶段顺序）、stages[].stage_title、stages[].summary、stages[].snapshot_path、stages[].timeline_anchor / chapter_scope（可选）
 
 ---
 

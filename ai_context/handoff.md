@@ -55,38 +55,33 @@ the already-produced stage products against the **current** schemas —
 schema tightening over the 2026-04 cleanup series invalidates earlier
 products. Known break points on surviving branches:
 
-- `world/stage_snapshots/{stage_id}.json` — now requires
-  `timeline_anchor` + `location_anchor` (both ≤15 chars). Snapshots
-  written before the tightening will fail L1 schema gate.
+Files likely broken by newer schema gates (exact bounds → each schema
+file):
+
+- `world/stage_snapshots/{stage_id}.json` — new required anchors
+  (`timeline_anchor` + `location_anchor`).
 - `world/stage_catalog.json` + `characters/*/canon/stage_catalog.json`
-  — `order` field no longer allowed (`additionalProperties: false`).
+  — `order` field removed.
 - `world/foundation/fixed_relationships.json` — `source_type` +
   `evidence_refs` removed.
 - `memory_timeline/{stage_id}.json` — `scene_refs` removed; `time` /
-  `location` required ≤15 chars.
+  `location` required short strings.
 - `characters/*/canon/stage_snapshots/{stage_id}.json` — `timeline_anchor`
-  now required (≤50), `snapshot_summary` 100–200; `character_arc` is
-  now a single string (≤200), old object form (arc_summary /
-  arc_stages[] / current_position) will fail; top-level `memory_refs`
-  and `evidence_refs` removed (`additionalProperties: false`);
-  per-item `evidence_ref` inside any `dialogue_examples` /
-  `action_examples` removed; `relationship_history_summary` tightened
-  to 100 chars; `misunderstandings` / `concealments` tightened to 15
-  items each; `boundary_state.hard_boundaries` added (mirrors baseline
-  boundaries item shape); `emotional_voice_map` widened to 15,
-  `typical_expressions` widened to 10.
-- `characters/*/canon/voice_rules.json` — all `dialogue_examples`
-  entries with `evidence_ref` will fail; containers capped at 10
-  items; `typical_expressions` widened to 10 items.
+  + `snapshot_summary` required; `character_arc` is now a short
+  string (old `{arc_summary, arc_stages[], current_position}` object
+  rejected); top-level `memory_refs` + `evidence_refs` removed;
+  per-item `evidence_ref` in every `dialogue_examples` /
+  `action_examples` removed; `boundary_state.hard_boundaries` added;
+  various capacity tightens / widenings.
+- `characters/*/canon/voice_rules.json` — per-item `evidence_ref` in
+  `dialogue_examples` removed; container caps tightened.
 - `characters/*/canon/behavior_rules.json` — `relationship_behavior_map`
-  renamed to `target_behavior_map`; inner `relationship_type` renamed
-  to `target_type` (≤15 chars). Existing files keep the old keys and
-  will fail L1 (`additionalProperties: false`) until migrated.
+  → `target_behavior_map`; inner `relationship_type` → `target_type`.
 
 Remediation options: rerun affected stages, write a one-off patch
-script, or carry forward only from the next stage (older stages will
-stay INVALID until rerun). Decide before `--resume` — repair agent's
-L1 gate will trip on every existing file otherwise.
+script, or carry forward only from the next stage (older stages stay
+INVALID until rerun). Decide before `--resume` — repair agent's L1
+gate will trip on every pre-tightening file otherwise.
 
 ## What The User Cares About
 

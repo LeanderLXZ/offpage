@@ -173,12 +173,11 @@ identity / 角色 manifest / foundation / fixed_relationships 为必须
 - **未变化的内容也必须包含在快照中**——快照是自包含的，运行时不依赖 baseline
 - `stage_delta` 记录从上一阶段的变化（信息性，便于理解演变弧线）
 
-**长度硬门控**：
-
-- 世界 / 角色 `stage_events`：每条 50–80 字（schema minLength/maxLength）
-- memory_timeline `event_description`：150–200 字（schema 硬门控）
-- memory_timeline `digest_summary`：30–50 字（schema 硬门控，独立撰写，
-  非 `event_description` 机械截断，直接作为 memory_digest 的来源）
+**长度硬门控**：所有字段级长度限制由对应 schema 的 `minLength` /
+`maxLength` 承担——`stage_events` 每条一句话、`event_description` 需有
+完整因果链、`digest_summary` 是独立撰写的精简检索摘要（非
+`event_description` 的机械截断，直接作为 memory_digest 来源）。具体
+数值以 schema 文件为准。
 
 **对应提示词**：步骤 6 按 1+2N 拆分为 `character_snapshot_extraction.md`
 （角色快照）与 `character_support_extraction.md`（memory_timeline + baseline
@@ -355,7 +354,7 @@ CLI：`--start-phase 4` 可独立运行 Phase 4
 - [ ] target_behavior_map 每个 target 是否有至少 3-5 条 action_examples
 - [ ] 每个阶段快照的 relationships 是否完整（对每个重要角色都有条目）
 - [ ] memory_timeline 是否每个阶段都有文件
-- [ ] memory_timeline 条目是否包含 `memory_id`（`M-S###-##`）、`time`、`location`；`event_description` 是否 150–200 字、`digest_summary` 是否 30–50 字（均为 schema 硬门控）
+- [ ] memory_timeline 条目是否包含 `memory_id`（`M-S###-##`）、`time`、`location`；`event_description` / `digest_summary` 长度是否通过 schema 硬门控
 - [ ] memory_digest.jsonl 是否与 memory_timeline 条目一一对应（summary = digest_summary 1:1 复制）
 - [ ] stage_catalog 的阶段数 = stage_snapshots 目录下的文件数
 - [ ] 世界 `stage_snapshot` 的 `evidence_refs` 是否有效引用（角色 stage_snapshot 与 memory_timeline 均不涉及此字段）
