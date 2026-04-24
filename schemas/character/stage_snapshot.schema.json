@@ -75,13 +75,13 @@
           "description": "本阶段角色正在使用的所有名称（包括 primary_name）。可以是简单字符串，也可以是带语境的对象。最多 5 条。",
           "items": {
             "oneOf": [
-              { "type": "string" },
+              { "type": "string", "maxLength": 10 },
               {
                 "type": "object",
                 "additionalProperties": false,
                 "required": ["name"],
                 "properties": {
-                  "name": { "type": "string" },
+                  "name": { "type": "string", "maxLength": 10 },
                   "context": {
                     "type": "string",
                     "maxLength": 50,
@@ -101,7 +101,7 @@
             "additionalProperties": false,
             "required": ["name"],
             "properties": {
-              "name": { "type": "string" },
+              "name": { "type": "string", "maxLength": 10 },
               "hidden_from": {
                 "type": "string",
                 "description": "对谁隐藏。可以是角色 ID、'所有人'等。"

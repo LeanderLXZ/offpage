@@ -269,7 +269,7 @@ item `target_type` ≤ 15 字；`habitual_behaviors` ≤ 15 条，每条 ≤ 50 
 |---------|------|
 | `timeline_anchor` | 本阶段时间锚点短描述（≤ 50 字，required） |
 | `snapshot_summary` | 阶段一段式摘要（100–200 字，required） |
-| `active_aliases` | 本阶段活跃名称（primary_name、active_names ≤ 5、hidden_identities ≤ 5、known_as 称呼映射 ≤ 10 个角色） |
+| `active_aliases` | 本阶段活跃名称（primary_name、active_names ≤ 5、hidden_identities ≤ 5；每个 name ≤ 10 字；known_as 称呼映射 ≤ 10 个角色） |
 | `voice_state` | 语气基调、语言习惯、用词偏好、口头禅、禁忌用语、情绪语气矩阵（emotional_voice_map，≤ 15）、**对象语气矩阵**（target_voice_map，≤ 10，按具体角色区分，每 target 至少 3-5 条对话示例）、典型对话示例（≤ 10；dialogue_examples item `quote` ≤ 30 字、`context` ≤ 50 字，无 evidence_ref） |
 | `behavior_state` | **core_goals**（理性目标）、**obsessions**（执念）、决策风格、情绪触发器、情绪反应矩阵（emotional_reaction_map，≤ 15；emotion ≤ 10 字，typical_actions ≤ 5 条）、**对象行为矩阵**（target_behavior_map，≤ 10，与 target_voice_map 平行且对齐，按具体角色区分，每 target 至少 3-5 条行为示例；action_examples item `action` ≤ 50 字、`context` ≤ 100 字，无 evidence_ref）、习惯性行为、压力应对 |
 | `boundary_state` | `hard_boundaries`（≤ 15，rule ≤ 50 字 + reason ≤ 50 字）、`soft_boundaries`（≤ 15）、`common_misconceptions`（≤ 15） |
