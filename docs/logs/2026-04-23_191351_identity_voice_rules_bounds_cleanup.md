@@ -188,3 +188,24 @@
 
 - **Status**: DONE
 - **Finished**: 2026-04-23 19:30:00 EDT
+
+<!-- /after-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：9/9 项计划 + 6/6 项验证
+- Missed updates: 0 条（`simulation/retrieval/load_strategy.md` 在 PRE 的"连带影响"段内提及并落地，属于合理扩散）
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=0 / Low=1
+  - [L] `simulation/retrieval/load_strategy.md:21-24` + `docs/requirements.md §7.1` — "field-level caps live in identity.schema.json" 措辞用了 e.g./等，对 6 个短标签类字段（schema_version/work_id/character_id/canonical_name/gender/species）无 maxLength 构成轻度不穷举；这 6 个字段天然短，无 prompt 膨胀风险，不建议本轮改。
+- Open Questions: 1 条（详见对话）
+  1. Phase 2.5 如果已经落地过带旧 `evidence_refs` 顶层的 identity.json，`additionalProperties:false` 下会 FAIL；当前仓库 `works/` 无 identity 实例，暂无实际风险，但未来跑 Phase 2.5 前应心里有数。
+
+## 复查时状态
+
+- **Reviewed**: 2026-04-23 19:45:00 EDT
+- **Status**: REVIEWED-PASS
+  - 轨 1 全部落实（9/9 计划 + 6/6 验证），轨 2 无 High / Medium，仅 1 条 Low 的 doc 措辞轻议。
+- **Conversation ref**: 同会话内 /after-check 输出
