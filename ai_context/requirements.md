@@ -113,8 +113,8 @@ stage (stage N = complete current state, including unchanged fields).
 ## §11 Automated Extraction Pipeline
 
 Python orchestrator at `automation/persona_extraction/`. Phase 0
-parallel summarization → Phase 1 analysis → Phase 2 user confirm →
-Phase 2.5 baseline → Phase 3 stage loop (1+2N split extraction, PP,
+parallel summarization → Phase 1 analysis → Phase 1.5 user confirm →
+Phase 2 baseline → Phase 3 stage loop (1+2N split extraction, PP,
 repair agent, commit) → Phase 3.5 cross-stage consistency → Phase 4
 scene archive (independent). Supports Claude CLI and Codex CLI backends.
 

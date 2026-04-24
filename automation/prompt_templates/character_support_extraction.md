@@ -26,7 +26,7 @@
 
 1. **仅产出 memory_timeline + baseline 修正**：本次调用负责 `{character_id}` 的 memory_timeline 和 baseline 文件修正。stage_snapshot 由独立调用完成
 2. **独立于快照**：memory_timeline 是逐事件的主观记忆录制，独立于 stage_snapshot 的聚合状态。你不需要参照快照内容
-3. **Baseline 修正**：所有 baseline 文件（identity.json、voice_rules.json、behavior_rules.json、boundaries.json、failure_modes.json）已在 Phase 2.5 全书分析阶段产出骨架初稿。任何阶段中如发现原文与初稿不符，应直接修正。注意：这些 baseline 只记录跨阶段稳定的角色基底，阶段性变化写入 stage_snapshot（由独立调用处理）
+3. **Baseline 修正**：所有 baseline 文件（identity.json、voice_rules.json、behavior_rules.json、boundaries.json、failure_modes.json）已在 Phase 2 全书分析阶段产出骨架初稿。任何阶段中如发现原文与初稿不符，应直接修正。注意：这些 baseline 只记录跨阶段稳定的角色基底，阶段性变化写入 stage_snapshot（由独立调用处理）
 4. **角色别名跟踪**：遇到新名称时，先与 `identity.json` 中的 `aliases` 列表比对。发现新别名时更新 `identity.json` 的 `aliases`（追加新条目，含 type、effective_stages、source）
 5. **标识命名**：中文作品的 `work_id`、`character_id` 和路径段使用中文；`stage_id` 使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`）
 6. **时间性**：记忆以事件发生时的视角书写

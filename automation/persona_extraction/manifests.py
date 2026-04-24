@@ -3,12 +3,12 @@
 Two canon-side manifests are produced deterministically from upstream
 artifacts (no LLM involvement):
 
-- ``works/{work_id}/manifest.json`` — written at Phase 2 end, after the
-  user confirms characters and stage range. Derives its fields from the
-  source manifest + ``analysis/stage_plan.json`` + the confirmed
+- ``works/{work_id}/manifest.json`` — written at Phase 1.5 end, after
+  the user confirms characters and stage range. Derives its fields from
+  the source manifest + ``analysis/stage_plan.json`` + the confirmed
   character list.
 
-- ``works/{work_id}/world/manifest.json`` — written at Phase 2.5 end,
+- ``works/{work_id}/world/manifest.json`` — written at Phase 2 end,
   alongside the world foundation. Derives its fields from the stage
   plan only; no LLM content required.
 
@@ -54,7 +54,7 @@ def write_works_manifest(
 ) -> Path:
     """Write ``works/{work_id}/manifest.json``.
 
-    Called at the end of Phase 2, once the user has confirmed which
+    Called at the end of Phase 1.5, once the user has confirmed which
     characters to extract. ``character_ids`` is the confirmed list.
     """
     source_dir = project_root / "sources" / "works" / work_id
@@ -100,7 +100,7 @@ def write_works_manifest(
 def write_world_manifest(project_root: Path, work_id: str) -> Path:
     """Write ``works/{work_id}/world/manifest.json``.
 
-    Called at the end of Phase 2.5 baseline production. Derives all
+    Called at the end of Phase 2 baseline production. Derives all
     fields from the stage plan; no LLM content required.
     """
     work_dir = project_root / "works" / work_id

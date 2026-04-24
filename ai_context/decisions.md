@@ -48,7 +48,7 @@ source. Long discussion chains live in `docs/logs/`.
 12. stage (extraction) = stage (runtime), 1:1. Natural story boundaries
     (target 10, min 5, max 15). Cumulative 1..N. `stage_id` = `S###`;
     sibling `stage_title` (short label; cap in schema).
-13. Phase 2.5 produces world foundation + character baseline drafts
+13. Phase 2 produces world foundation + character baseline drafts
     from full-book context. Phase 3 does 1+2N split extraction per stage
     (1 world + N char_snapshot + N char_support); any stage may correct
     any existing baseline (via char_support) or asset across the work package.
@@ -98,7 +98,7 @@ source. Long discussion chains live in `docs/logs/`.
 32. `world_event_digest.summary` = 1:1 copy of source `stage_events` (enforced at write time by prompt + repair agent). 5-level importance inferred by keyword; default significant.
 33. `memory_digest.summary` = 1:1 copy of `digest_summary` (30–50 CJK chars, hard gate).
 34. Character `stage_snapshot.stage_events` = this stage only (50–80 CJK chars, hard gate), not accumulated. Cross-stage history lives in `memory_timeline` + `memory_digest` + `world_event_digest`.
-35. `fixed_relationships.json` (blood / lineage / faction) not stage-dependent. Phase 2.5 skeleton; later stages may correct. Runtime Tier 0.
+35. `fixed_relationships.json` (blood / lineage / faction) not stage-dependent. Phase 2 skeleton; later stages may correct. Runtime Tier 0.
 
 ## Retrieval
 

@@ -13,9 +13,9 @@ Shorter is better than longer; push detail into the linked source rather than gr
 ## Project Stage
 
 Architecture scaffold done. One work package under automated extraction.
-Phase 0/1/2/2.5/4 complete; Phase 3 in progress — S001 committed
-(sha `3bf25bf`), S002 in ERROR awaiting `--resume`, S003–S049 pending.
-No runtime code yet.
+Phase 0/1/1.5/2/4 complete; Phase 3 in progress — S001 + S002 committed,
+S003 in ERROR awaiting `--resume`, S004–S049 pending. Phase 3.5 pending
+(blocked on all-stages-COMMITTED). No runtime code yet.
 
 ## What Exists
 
@@ -30,9 +30,11 @@ No runtime code yet.
 ## First Work Package — Phase 3 State
 
 - 2 target characters confirmed
-- S001 committed (sha `3bf25bf`, 2026-04-22)
-- S002 ERROR awaiting `--resume` (preflight false-positive from 2026-04-22 working-tree state)
-- S003–S049 pending
+- S001 committed (sha `991c09f`, 2026-04-23)
+- S002 committed (sha `7639c8b`, 2026-04-23)
+- S003 ERROR (`char_support` lane — `error_max_turns`); awaiting `--resume`
+- S004–S049 pending
+- Phase 3.5 pending — blocked on all stages `COMMITTED`
 
 Resume command → `handoff.md` §Current Work Continuation.
 

@@ -110,9 +110,17 @@ PHASE_DONE = "done"
 
 # Canonical phase keys
 PHASE_KEYS = (
-    "phase_0", "phase_1", "phase_2", "phase_2_5",
+    "phase_0", "phase_1", "phase_1_5", "phase_2",
     "phase_3", "phase_3_5", "phase_4",
 )
+
+# Old → new phase key mapping for `pipeline.json` forward migration.
+# Older runs wrote `phase_2` (user confirmation) and `phase_2_5` (baseline);
+# current code reorganizes these as `phase_1_5` and `phase_2`.
+_LEGACY_PHASE_KEY_MAP = {
+    "phase_2": "phase_1_5",
+    "phase_2_5": "phase_2",
+}
 
 
 @dataclass
@@ -171,11 +179,19 @@ class PipelineProgress:
             return None
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
+            raw_phases = data.get("phases", {})
+            phases: dict[str, str] = {}
+            for key, state in raw_phases.items():
+                new_key = _LEGACY_PHASE_KEY_MAP.get(key, key)
+                # If both old and new keys are present, DONE wins.
+                if phases.get(new_key) == PHASE_DONE:
+                    continue
+                phases[new_key] = state
             return cls(
                 work_id=data["work_id"],
                 extraction_branch=data.get("extraction_branch", ""),
                 target_characters=data.get("target_characters", []),
-                phases=data.get("phases", {}),
+                phases=phases,
                 created_at=data.get("created_at", ""),
                 last_updated=data.get("last_updated", ""),
             )
@@ -770,9 +786,9 @@ def migrate_legacy_progress(
     if data.get("analysis_done"):
         pipeline.mark_done("phase_1")
     if data.get("characters_confirmed"):
-        pipeline.mark_done("phase_2")
+        pipeline.mark_done("phase_1_5")
     if data.get("baseline_done"):
-        pipeline.mark_done("phase_2_5")
+        pipeline.mark_done("phase_2")
 
     phase3 = Phase3Progress(
         work_id=data["work_id"],

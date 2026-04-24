@@ -7,6 +7,6 @@ dependencies = [
     "jsonschema>=4.0",
 ]
 
-# jsonschema is a REQUIRED hard dependency. The commit gate and Phase 2.5
+# jsonschema is a REQUIRED hard dependency. The commit gate and Phase 2
 # exit validation rely on it to guarantee identical gate strength on every
 # machine; see docs/requirements.md §11.4 "第一层：程序化校验".

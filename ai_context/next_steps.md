@@ -13,9 +13,10 @@ Shorter is better than longer; push detail into the linked source rather than gr
 ## Highest Priority
 
 1. **Continue automated extraction for the onboarded work package.**
-   - Phase 0/1/2/2.5/4 complete; Phase 3 in progress — S001 committed
-     (sha `3bf25bf`, 2026-04-22), S002 in ERROR awaiting `--resume`,
-     S003–S049 pending.
+   - Phase 0/1/1.5/2/4 complete; Phase 3 in progress — S001 (sha
+     `991c09f`) + S002 (sha `7639c8b`) committed, S003 in ERROR
+     (`char_support` lane — `error_max_turns`), S004–S049 pending.
+     Phase 3.5 pending — blocked on all stages `COMMITTED`.
    - Resume command → `handoff.md` §Current Work Continuation.
    - `--resume` auto-resets ERROR → PENDING; committed stages + lane
      products preserved.

@@ -229,7 +229,7 @@ README.md，零 Python。
 - 不改 ai_context / docs 里"committed indexes"的叙述（等 Phase 5
   落定后再批量同步，否则来回改噪声大）
 - 不把 `works/*/indexes/` 加入 `.gitignore`（决策未定）
-- 不要把 `vocab_dict.txt` 硬塞进 Phase 2.5 / Phase 3.5（B 方案已否决：
+- 不要把 `vocab_dict.txt` 硬塞进 Phase 2 / Phase 3.5（B 方案已否决：
   两 Phase 本职不是 retrieval，硬塞会扭曲 Phase 边界）
 
 **依赖**：Phase 3 全量完成 + retrieval 层设计定稿

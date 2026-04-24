@@ -877,7 +877,7 @@ class ExtractionOrchestrator:
         }
 
     # ------------------------------------------------------------------
-    # Phase 2.5: Baseline production
+    # Phase 2: Baseline production
     # ------------------------------------------------------------------
 
     def run_baseline_production(
@@ -885,7 +885,7 @@ class ExtractionOrchestrator:
     ) -> None:
         """Produce world foundation + character identity baselines."""
         print("\n" + "=" * 60)
-        print("  Phase 2.5: Baseline Production")
+        print("  Phase 2: Baseline Production")
         print("=" * 60 + "\n")
 
         print(f"  Characters: {target_characters}")
@@ -920,7 +920,7 @@ class ExtractionOrchestrator:
             print("  [OK] World fixed_relationships produced.")
         else:
             print("  [WARN] World fixed_relationships.json not found "
-                  "(Phase 2.5 should create).")
+                  "(Phase 2 should create).")
 
         for char_id in target_characters:
             canon_dir = work_dir / "characters" / char_id / "canon"
@@ -938,7 +938,7 @@ class ExtractionOrchestrator:
                     print(f"  [OK] {char_id}/{fname} produced.")
                 else:
                     print(f"  [WARN] {char_id}/{fname} not found "
-                          f"(Phase 2.5 should create).")
+                          f"(Phase 2 should create).")
 
         if missing_critical:
             print(f"\n[ERROR] Missing critical baseline files: "
@@ -952,8 +952,8 @@ class ExtractionOrchestrator:
             self.project_root, self.work_id)
         print(f"  [OK] Wrote world manifest: {world_manifest_path}")
 
-        # Phase 2.5 exit validation — catch schema/field errors early
-        print("\n--- Phase 2.5 Validation ---")
+        # Phase 2 exit validation — catch schema/field errors early
+        print("\n--- Phase 2 Validation ---")
         baseline_report = validate_baseline(
             self.project_root, self.work_id, target_characters)
         print(baseline_report.summary())
@@ -964,13 +964,13 @@ class ExtractionOrchestrator:
 
         # Mark baseline as done in pipeline so resume skips it
         if self.pipeline:
-            self.pipeline.mark_done("phase_2_5")
+            self.pipeline.mark_done("phase_2")
             self.pipeline.save(self.project_root)
 
         print("\n[OK] Baseline production complete.")
 
     # ------------------------------------------------------------------
-    # Phase 2: User confirmation
+    # Phase 1.5: User confirmation
     # ------------------------------------------------------------------
 
     def confirm_with_user(
@@ -982,7 +982,7 @@ class ExtractionOrchestrator:
     ) -> tuple[PipelineProgress, Phase3Progress]:
         """Interactive user confirmation of characters and parameters."""
         print("\n" + "=" * 60)
-        print("  Phase 2: User Confirmation")
+        print("  Phase 1.5: User Confirmation")
         print("=" * 60 + "\n")
 
         candidates = analysis.get("candidates") or {}
@@ -1038,7 +1038,7 @@ class ExtractionOrchestrator:
             target_characters=selected,
         )
         pipeline.mark_done("phase_1")
-        pipeline.mark_done("phase_2")
+        pipeline.mark_done("phase_1_5")
         pipeline.save(self.project_root)
 
         # Write works manifest now that characters + stages are confirmed.
@@ -1109,11 +1109,11 @@ class ExtractionOrchestrator:
             # Still need baseline
             force_baseline = True
         else:
-            force_baseline = self.start_phase == "2.5"
+            force_baseline = self.start_phase == "2"
 
-        # Force baseline if --start-phase 2.5
+        # Force baseline if --start-phase 2
         if force_baseline:
-            pipeline.set_phase("phase_2_5", PHASE_RUNNING)
+            pipeline.set_phase("phase_2", PHASE_RUNNING)
             pipeline.save(self.project_root)
 
         # Enter the extraction branch FIRST, then run baseline rerun +
@@ -1136,7 +1136,7 @@ class ExtractionOrchestrator:
             work_dir = self.project_root / "works" / pipeline.work_id
             fixed_rel = (work_dir / "world" / "foundation"
                          / "fixed_relationships.json")
-            if not pipeline.is_done("phase_2_5") or (
+            if not pipeline.is_done("phase_2") or (
                     force_baseline and not fixed_rel.exists()):
                 foundation = (work_dir / "world" / "foundation"
                               / "foundation.json")
@@ -1148,7 +1148,7 @@ class ExtractionOrchestrator:
                 if (foundation.exists() and identities_ok
                         and fixed_rel.exists() and not force_baseline):
                     # Files exist from a prior partial run — still must pass
-                    # Phase 2.5 exit validation before marking done. File
+                    # Phase 2 exit validation before marking done. File
                     # presence alone does not guarantee schema / required-
                     # field correctness; external damage or stale baseline
                     # formats must be caught here rather than silently
@@ -1161,23 +1161,23 @@ class ExtractionOrchestrator:
                     print(baseline_report.summary())
                     if not baseline_report.passed:
                         print("  [WARN] Existing baseline failed validation. "
-                              "Re-running Phase 2.5 to repair.")
+                              "Re-running Phase 2 to repair.")
                         self.run_baseline_production(pipeline.target_characters)
                         sha = commit_stage(
                             self.project_root, "baseline",
-                            message="Phase 2.5 baseline (validation-triggered "
+                            message="Phase 2 baseline (validation-triggered "
                                     "recovery)")
                         if sha:
                             print(f"  [OK] Baseline committed as {sha}")
                     else:
-                        pipeline.mark_done("phase_2_5")
+                        pipeline.mark_done("phase_2")
                         pipeline.save(self.project_root)
                 else:
-                    print("  [WARN] Baseline not completed. Running Phase 2.5...")
+                    print("  [WARN] Baseline not completed. Running Phase 2...")
                     self.run_baseline_production(pipeline.target_characters)
                     # Commit baseline so extraction starts with clean tree
                     sha = commit_stage(self.project_root, "baseline",
-                                       message="Phase 2.5 baseline (recovery)")
+                                       message="Phase 2 baseline (recovery)")
                     if sha:
                         print(f"  [OK] Baseline committed as {sha}")
 
@@ -2079,11 +2079,11 @@ class ExtractionOrchestrator:
             phase3 = Phase3Progress.load(
                 self.project_root, self.work_id)
 
-        # Self-heal: if Phase 2 is done and stage_plan exists but
+        # Self-heal: if Phase 1.5 is done and stage_plan exists but
         # phase3_stages.json was deleted/corrupted, rebuild from stage_plan
         # rather than falling through to the fresh-start path (which would
         # re-prompt for characters and overwrite pipeline.json).
-        if (pipeline and pipeline.is_done("phase_2") and phase3 is None):
+        if (pipeline and pipeline.is_done("phase_1_5") and phase3 is None):
             stage_plan_path = (self.project_root / "works" / self.work_id
                                / "analysis" / "stage_plan.json")
             if stage_plan_path.exists():
@@ -2116,7 +2116,7 @@ class ExtractionOrchestrator:
                       f"missing from git")
                 phase3.save(self.project_root)
 
-        if pipeline and phase3 and pipeline.is_done("phase_2"):
+        if pipeline and phase3 and pipeline.is_done("phase_1_5"):
             print(f"Found existing progress for {self.work_id}.")
             print(f"  Completed: {phase3.completed_stage_count()}"
                   f"/{len(phase3.stages)}")
@@ -2169,7 +2169,7 @@ class ExtractionOrchestrator:
 
             # Commit baseline output so Phase 3 starts with a clean tree
             sha = commit_stage(self.project_root, "baseline",
-                               message="Phase 0-2.5 baseline")
+                               message="Phase 0-2 baseline")
             if sha:
                 print(f"  [OK] Baseline committed as {sha}")
 
