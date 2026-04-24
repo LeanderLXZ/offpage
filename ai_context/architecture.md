@@ -144,8 +144,8 @@ Phases (full detail → `automation/README.md` +
 
 - **Phase 0** — chapter summarization, parallel chunks; 3-level JSON repair (L1 regex / L2 LLM / L3 full re-run max 1); gate blocks Phase 1.
 - **Phase 1** — global analysis (identity merge → world overview → stage plan → candidates). Stage chapter-count exit validation (5–15).
-- **Phase 2** — user confirms targets + stages.
-- **Phase 2.5** — baseline production (world foundation + character baselines, draft).
+- **Phase 1.5** — user confirms targets + stages.
+- **Phase 2** — baseline production (world foundation + character baselines, draft).
 - **Phase 3** — per-stage loop: (1) 1+2N extraction (1 world + N char_snapshot + N char_support) → (2) programmatic post-processing (digests + catalog; summaries 1:1 copy of source) → (3) `repair_agent` per file in parallel → (4) post-repair PP rerun **before** `transition(PASSED)` → (5) commit-ordering contract (commit first; non-empty SHA → `COMMITTED`; empty → `FAILED`). JSONL slice write-back merges by key so prior stages cannot be truncated. Extraction prompts do NOT read `baseline_merge.md`, digests, or catalog; char extraction does NOT read world snapshot.
 - **Phase 3.5** — 10 programmatic cross-stage consistency checks (0 token), incl. `memory_digest` / `world_event_digest` 1:1 equality gates. `consistency_report.json` committed regardless of pass/fail; errors block Phase 4.
 - **Phase 4** — scene archive (independent; needs only `stage_plan.json`). Per-chapter parallel LLM + programmatic extraction → `works/{work_id}/retrieval/scene_archive.jsonl` (git-ignored). Same-run retry budget `[phase4].max_retries_per_chapter` (default 2); circuit breaker `[phase4].circuit_breaker_*`. CLI `--start-phase 4`.

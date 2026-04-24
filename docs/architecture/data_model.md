@@ -164,7 +164,7 @@ works/{work_id}/
 必需内容：
 
 - `manifest.json` — canon 作品包清单（schema：`schemas/work/works_manifest.schema.json`；
-  Phase 2 用户确认后由 `automation.persona_extraction.manifests.write_works_manifest`
+  Phase 1.5 用户确认后由 `automation.persona_extraction.manifests.write_works_manifest`
   程序化写出）
 - `world/`
 - `characters/`
@@ -208,18 +208,18 @@ works/{work_id}/world/
 必需内容（已 schema-gated）：
 
 - `manifest.json` — world 包清单（schema：`schemas/world/world_manifest.schema.json`；
-  Phase 2.5 baseline 产出后由 `automation.persona_extraction.manifests.write_world_manifest`
+  Phase 2 baseline 产出后由 `automation.persona_extraction.manifests.write_world_manifest`
   程序化写出）
 - `stage_catalog.json` — `schemas/world/world_stage_catalog.schema.json`
 - `stage_snapshots/{stage_id}.json` — 世界当前阶段状态；`stage_events`
   **只记录该阶段的世界公共层事件**（每条一句话，长度由 schema 硬门控），
   不累积历史，不收录角色私人场景/内心决定（后者属于角色 memory_timeline）。
   跨阶段事件时间线由 `world_event_digest.jsonl` 承担（1:1 复制 stage_events）。
-- `foundation/foundation.json` — Phase 2.5 产出的统一基础设定
+- `foundation/foundation.json` — Phase 2 产出的统一基础设定
   （`schemas/world/foundation.schema.json`；未来可拆分为 setting.json、
   cosmology.json、power_system.json 等）
 - `foundation/fixed_relationships.json` — 世界级固定关系网络
-  （`schemas/world/fixed_relationships.schema.json`；Phase 2.5 骨架，
+  （`schemas/world/fixed_relationships.schema.json`；Phase 2 骨架，
   后续阶段可修正）
 
 计划内容（**schema 未补齐前不是硬门控必需；schema 补全后再升级为必需**，

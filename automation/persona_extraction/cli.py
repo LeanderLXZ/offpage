@@ -20,7 +20,7 @@ from .rate_limit import RateLimitHardStop, WEEKLY_EXIT_CODE
 from .scene_archive import run_scene_archive
 
 # Phase 4 does not need git preflight (no commits) and uses its own lock.
-VALID_PHASES = ("auto", "0", "1", "2", "2.5", "3", "3.5", "4")
+VALID_PHASES = ("auto", "0", "1", "1.5", "2", "3", "3.5", "4")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -94,8 +94,8 @@ def main(argv: list[str] | None = None) -> None:
         choices=VALID_PHASES,
         default="auto",
         help="Start from this phase (default: auto-detect). "
-             "Phases: 0 (summarization), 1 (analysis), 2 (confirmation), "
-             "2.5 (baseline), 3 (extraction), 3.5 (consistency), 4 (scenes)",
+             "Phases: 0 (summarization), 1 (analysis), 1.5 (confirmation), "
+             "2 (baseline), 3 (extraction), 3.5 (consistency), 4 (scenes)",
     )
     parser.add_argument(
         "--concurrency",
@@ -242,8 +242,8 @@ def main(argv: list[str] | None = None) -> None:
             phase3 = Phase3Progress.load(project_root, args.work_id)
 
             # Self-heal: rebuild phase3 from stage_plan when pipeline has
-            # phase_2 done but phase3_stages.json was deleted/corrupted.
-            if (pipeline and pipeline.is_done("phase_2")
+            # phase_1_5 done but phase3_stages.json was deleted/corrupted.
+            if (pipeline and pipeline.is_done("phase_1_5")
                     and phase3 is None):
                 stage_plan_path = (
                     project_root / "works" / args.work_id

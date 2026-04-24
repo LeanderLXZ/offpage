@@ -192,7 +192,7 @@ JSON 结构：
 
 ## 不需要你产出的文件
 
-- `works/{work_id}/manifest.json`（作品包清单）——Phase 2 用户确认角色与
+- `works/{work_id}/manifest.json`（作品包清单）——Phase 1.5 用户确认角色与
   阶段范围后，由 orchestrator 程序化写出，schema 为
   `schemas/work/works_manifest.schema.json`；你只需保证 `stage_plan.json`
   与 `candidate_characters.json` 正确即可，不要手动创建 `manifest.json`。

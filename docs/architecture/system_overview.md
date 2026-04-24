@@ -128,8 +128,8 @@
 1. **阶段 1 — 全书分析**（基于摘要）：跨 chunk 角色身份合并 → 世界观概览
    (`world_overview.json`) → 剧情阶段划分 (`stage_plan.json`) →
    候选角色识别 (`candidate_characters.json`)
-2. **阶段 2 — 用户确认**：用户选定目标角色、确认 stage 边界
-3. **阶段 2.5 — Baseline 产出**：基于全书摘要上下文，产出世界 foundation
+2. **阶段 1.5 — 用户确认**：用户选定目标角色、确认 stage 边界
+3. **阶段 2 — Baseline 产出**：基于全书摘要上下文，产出世界 foundation
    (`world/foundation/foundation.json`) 和已确认角色的 identity baseline
    (`identity.json`, `manifest.json`)。这些是初稿，后续阶段可修正
 4. **阶段 3 — 1+2N 分层阶段提取**：逐 stage 读原文，采用 1+2N 架构：1 次

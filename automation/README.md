@@ -235,7 +235,7 @@ automation/
     ├── orchestrator.py             ← 主循环
     ├── llm_backend.py              ← Claude/Codex 后端抽象
     ├── progress.py                 ← 进度追踪和状态机
-    ├── validator.py                ← 程序化校验（Phase 2.5 baseline 校验）
+    ├── validator.py                ← 程序化校验（Phase 2 baseline 校验）
     ├── post_processing.py          ← 程序化后处理（digest/catalog）
     ├── json_repair.py              ← Phase 0 JSON 修复
     ├── prompt_builder.py           ← 上下文感知的 prompt 组装
@@ -358,16 +358,16 @@ Phase 0（章节归纳）仍使用 `persona_extraction/json_repair.py` 的三级
   ERROR 并回滚，避免浪费重试配额
 - 脚本崩溃 → 重启后加 `--resume` 从最后一个 committed stage 继续
 - 提取失败 → 自动回滚未提交的文件变更（全仓库范围，不仅限于 `works/`）
-- **Baseline 恢复**：`--resume` 时自动检测 Phase 2.5 baseline 是否完成，
+- **Baseline 恢复**：`--resume` 时自动检测 Phase 2 baseline 是否完成，
   缺失则补跑，避免后续 stage 因缺少 identity.json 而全部失败
-- **Baseline 出口验证**：Phase 2.5 完成后运行 `validate_baseline()`
+- **Baseline 出口验证**：Phase 2 完成后运行 `validate_baseline()`
   校验 schema + required 字段非空，阻断不合格的 baseline 进入 Phase 3
 - **磁盘对账自愈**：每次启动加载 progress 后自动调用 `reconcile_with_disk()`
   对账（Phase 0/3/4 全覆盖）。规则：(1) 终态但产物缺失 → 回退 PENDING；
   (2) PENDING 但磁盘有产物 → 清掉产物（视为不完整的半成品）；
   (3) 任意中间态 → 清产物 + 回退。Phase 3 额外用 `git cat-file -e` 校验
   `committed_sha` 是否仍可达，reset/rebase 丢掉的 commit 视同产物缺失
-- **Phase 3 progress 自愈**：若 Phase 2 已完成但 `phase3_stages.json`
+- **Phase 3 progress 自愈**：若 Phase 1.5 已完成但 `phase3_stages.json`
   缺失或损坏，从 `stage_plan.json` 重建（全部 stage 标 pending），避免
   落到 fresh-start 路径重新提示选角色 + 覆写 pipeline.json
 - Resume 时自动重置 ERROR stage → PENDING，无需手动编辑 progress

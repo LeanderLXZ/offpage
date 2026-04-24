@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "persona-engine/world/fixed_relationships.schema.json",
   "title": "世界级固定关系网络",
-  "description": "不随阶段变化的结构性纽带（血缘、师承、门派归属等）。Phase 2.5 产出骨架，后续 stage 维护修正。",
+  "description": "不随阶段变化的结构性纽带（血缘、师承、门派归属等）。Phase 2 产出骨架，后续 stage 维护修正。",
   "type": "object",
   "additionalProperties": false,
   "required": [

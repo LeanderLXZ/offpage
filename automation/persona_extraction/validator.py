@@ -1,6 +1,6 @@
-"""Programmatic validator — Phase 2.5 baseline gate.
+"""Programmatic validator — Phase 2 baseline gate.
 
-After Phase 2.5 produces baseline outputs (identity, manifest, world
+After Phase 2 produces baseline outputs (identity, manifest, world
 foundation, and the skeleton voice/behavior/boundary/failure-mode files)
 this validator checks that every file parses as JSON, matches its schema
 and carries the required non-empty fields. It runs before Phase 3 starts
@@ -132,7 +132,7 @@ def validate_baseline(
     character_ids: list[str],
     schema_dir: Path | None = None,
 ) -> ValidationReport:
-    """Validate Phase 2.5 baseline outputs (identity, manifest, foundation).
+    """Validate Phase 2 baseline outputs (identity, manifest, foundation).
 
     Run after baseline production to catch issues early before Phase 3.
     """
@@ -140,12 +140,12 @@ def validate_baseline(
     schema_dir = schema_dir or (project_root / "schemas")
     work_dir = project_root / "works" / work_id
 
-    # Works manifest (written programmatically at end of Phase 2)
+    # Works manifest (written programmatically at end of Phase 1.5)
     works_manifest_path = work_dir / "manifest.json"
     if not works_manifest_path.exists():
         issues.append(ValidationIssue(
             "error", str(works_manifest_path),
-            "works manifest missing (should be written at Phase 2 end)"))
+            "works manifest missing (should be written at Phase 1.5 end)"))
     else:
         try_repair_json_file(works_manifest_path)
         wm_data = _load_json(works_manifest_path)
@@ -158,12 +158,12 @@ def validate_baseline(
                 schema_dir / "work" / "works_manifest.schema.json",
                 str(works_manifest_path)))
 
-    # World manifest (written programmatically at end of Phase 2.5)
+    # World manifest (written programmatically at end of Phase 2)
     world_manifest_path = work_dir / "world" / "manifest.json"
     if not world_manifest_path.exists():
         issues.append(ValidationIssue(
             "error", str(world_manifest_path),
-            "world manifest missing (should be written at Phase 2.5 end)"))
+            "world manifest missing (should be written at Phase 2 end)"))
     else:
         try_repair_json_file(world_manifest_path)
         wom_data = _load_json(world_manifest_path)
@@ -190,14 +190,14 @@ def validate_baseline(
             issues.append(ValidationIssue(
                 "error", str(foundation_path), "work_id is empty"))
 
-    # fixed_relationships.json — required output of Phase 2.5
+    # fixed_relationships.json — required output of Phase 2
     fixed_rel_path = (work_dir / "world" / "foundation"
                       / "fixed_relationships.json")
     if not fixed_rel_path.exists():
         issues.append(ValidationIssue(
             "error", str(fixed_rel_path),
             "fixed_relationships.json not produced "
-            "(Phase 2.5 must create)"))
+            "(Phase 2 must create)"))
     else:
         try_repair_json_file(fixed_rel_path)
         fr_data = _load_json(fixed_rel_path)
@@ -271,7 +271,7 @@ def validate_baseline(
             if not fpath.exists():
                 issues.append(ValidationIssue(
                     "warning", str(fpath),
-                    f"{fname} not produced (Phase 2.5 should create)"))
+                    f"{fname} not produced (Phase 2 should create)"))
             else:
                 try_repair_json_file(fpath)
                 data = _load_json(fpath)

@@ -11,8 +11,8 @@
 1. 作品入库
 2. 章节归纳（Phase 0，按 chunk 并行）
 3. 全书分析（Phase 1：身份合并 → 世界观 → 阶段规划 → 候选角色）
-4. 活跃角色确认（Phase 2，用户参与）
-5. Baseline 产出（Phase 2.5，全书视野）
+4. 活跃角色确认（Phase 1.5，用户参与）
+5. Baseline 产出（Phase 2，全书视野）
 6. 1+2N 分层阶段提取（Phase 3，world + char_snapshot×N + char_support×N 并行）
 7. 跨阶段一致性检查（Phase 3.5）
 8. 场景切分（Phase 4，scene_archive，独立阶段）
@@ -70,7 +70,7 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 `stage_plan.json`，带修正反馈重新调用 LLM 产出更精准的切分（最多重试
 2 次）。若重试耗尽仍有违规，流程终止（`sys.exit(1)`）。
 
-### 4. 活跃角色确认（Phase 2）
+### 4. 活跃角色确认（Phase 1.5）
 
 - **用户参与**：用户从候选中选择要建包的目标角色
 - 确认完成后 orchestrator 程序化写出
@@ -79,7 +79,7 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
   `automation.persona_extraction.manifests.write_works_manifest`）
 - 进入 baseline 产出和 1+2N 分层提取模式
 
-### 5. Baseline 产出（Phase 2.5）
+### 5. Baseline 产出（Phase 2）
 
 基于全书摘要上下文和确认的角色，产出：
 
@@ -95,12 +95,12 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 这些 baseline 记录**跨阶段稳定的角色基底**，作为后续 stage 的修正与补充
 锚点。阶段性变化由 stage_snapshot 覆盖。
 
-Phase 2.5 baseline 完成后，orchestrator 程序化写出
+Phase 2 baseline 完成后，orchestrator 程序化写出
 `works/{work_id}/world/manifest.json`（schema：
 `schemas/world/world_manifest.schema.json`；写入器：
 `automation.persona_extraction.manifests.write_world_manifest`）。
 
-**出口验证**：Phase 2.5 完成后运行 `validate_baseline()`，校验所有
+**出口验证**：Phase 2 完成后运行 `validate_baseline()`，校验所有
 baseline 文件的 schema 合规性。works manifest / world manifest /
 identity / 角色 manifest / foundation / fixed_relationships 为必须
 （error），voice_rules/behavior_rules/boundaries/failure_modes 为建议
@@ -367,7 +367,7 @@ CLI：`--start-phase 4` 可独立运行 Phase 4
 Baseline 文件记录**跨阶段稳定的角色基底**（本性风格、本性行为、底线禁忌、
 易崩模式等），在提取流程中有两个用途：
 
-1. **提取参照锚点**：Phase 2.5 产出全书视野骨架，后续 stage 据此修正和补充
+1. **提取参照锚点**：Phase 2 产出全书视野骨架，后续 stage 据此修正和补充
 2. **跨阶段稳定参照**：提取者用 baseline 判断"角色的本性是什么"，阶段性
    变化写入 stage_snapshot，不写入 baseline
 
@@ -517,7 +517,7 @@ orchestrator (Python)
   以最小 `claude -p "1" --max-turns 1` 探测限额是否解除。周限额等待 ≥
   `[rate_limit].weekly_max_wait_h`（默认 12h）则写
   `rate_limit_exit.log` 并以 exit code 2 停机
-- Baseline 恢复：resume 时自动检测 Phase 2.5 产出完整性，缺失则补跑
+- Baseline 恢复：resume 时自动检测 Phase 2 产出完整性，缺失则补跑
 - Progress 与 `--end-stage` 分离（同 Phase 4 模式）：progress 始终包含完整
   stage plan，`--end-stage` 仅控制运行时执行范围；入口防御性补全应对边缘情况
 - 回滚范围覆盖全仓库（不仅限 `works/`），防止 LLM agent 在其他目录写入残留

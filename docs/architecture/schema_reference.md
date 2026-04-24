@@ -33,7 +33,7 @@
 **用途**：canon 作品包 manifest（作品包目录页）。
 **位置**：`works/{work_id}/manifest.json`
 **关键字段**：work_id, title, language, source_package_ref, paths, chapter_count, stage_count, character_count, stage_ids, character_ids
-**生成时机**：Phase 2 用户确认完成时由 `automation.persona_extraction.manifests.write_works_manifest` 程序化写出；不走 LLM。
+**生成时机**：Phase 1.5 用户确认完成时由 `automation.persona_extraction.manifests.write_works_manifest` 程序化写出；不走 LLM。
 
 ---
 
@@ -71,7 +71,7 @@
 **用途**：世界包 manifest（世界包目录页）。
 **位置**：`works/{work_id}/world/manifest.json`
 **关键字段**：work_id, world_id, paths, stage_ids
-**生成时机**：Phase 2.5 baseline 产出后由 `automation.persona_extraction.manifests.write_world_manifest` 程序化写出；不走 LLM。
+**生成时机**：Phase 2 baseline 产出后由 `automation.persona_extraction.manifests.write_world_manifest` 程序化写出；不走 LLM。
 
 ---
 
@@ -113,7 +113,7 @@ prompt + L2/L3。
 **用途**：世界级固定关系网络（血缘、宗族、师徒、势力从属等不随阶段变化的结构性关系）。
 **位置**：`works/{work_id}/world/foundation/fixed_relationships.json`
 **关键字段**：relationships[].relationship_id, relationships[].type, relationships[].parties, relationships[].description
-**生命周期**：Phase 2.5 产出骨架，后续阶段可修正。运行时 Tier 0 加载。
+**生命周期**：Phase 2 产出骨架，后续阶段可修正。运行时 Tier 0 加载。
 
 ---
 
@@ -121,7 +121,7 @@ prompt + L2/L3。
 
 **用途**：世界基础设定（genre / tone / world_structure / power_system / core_rules / world_lines / major_factions）。不含 stage-scoped 信息，作为运行时 Tier 0 的静态背景加载。
 **位置**：`works/{work_id}/world/foundation/foundation.json`
-**生命周期**：Phase 2.5 基线产出；后续阶段可通过 world_stage_snapshot.foundation_corrections 增量修正。
+**生命周期**：Phase 2 基线产出；后续阶段可通过 world_stage_snapshot.foundation_corrections 增量修正。
 **形态**：`additionalProperties: true`（顶层与子对象），容纳 per-work 扩展字段；`required` 仅 `work_id`。字段级上下限以 schema 为准。
 
 ---
@@ -150,7 +150,7 @@ prompt + L2/L3。
 **用途**：角色包 manifest（角色包目录页）。
 **位置**：`works/{work_id}/characters/{character_id}/manifest.json`
 **关键字段**：schema_version, character_id, work_id, canonical_name, aliases（扁平字符串数组）, paths, source_scope
-**生成时机**：Phase 2.5 baseline 由 LLM 按 `baseline_production.md` 产出。
+**生成时机**：Phase 2 baseline 由 LLM 按 `baseline_production.md` 产出。
 
 ---
 
