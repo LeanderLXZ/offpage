@@ -26,8 +26,8 @@ characters, stage-based state, multi-terminal.
   boundary propagates to world / character / memory / retrieval.
 - Stage N cumulative through 1..N; latest stage = "now".
 - Shared `stage_id` (`S###`, 3-digit zero-pad) across world / character /
-  memory; paired `stage_title` (≤15 chars, work language) for bootstrap
-  selector.
+  memory; paired `stage_title` (short label, work language — exact cap
+  in schema) for bootstrap selector.
 - Cross-stage recall uses behavioral details (nicknames, speech,
   attitude, knowledge state), not just event summaries.
 - → `docs/requirements.md` §2.

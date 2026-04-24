@@ -95,7 +95,7 @@ Contract → `simulation/contracts/baseline_merge.md`.
 ## Three-Layer Memory
 
 1. **stage_snapshot** — aggregated state per stage ("I trust him now"). Runtime loads current stage only.
-2. **memory_timeline** — subjective process per event. `memory_id` (`M-S###-##`), `time` / `location` (≤15 CJK chars, required), `event_description` (150–200 CJK chars), `digest_summary` (30–50 CJK chars), `subjective_experience`. Recent 2 stages full at startup; distant via `memory_digest.jsonl` + FTS5 / embedding on demand.
+2. **memory_timeline** — subjective process per event. `memory_id` (`M-S###-##`), required short `time` / `location` anchors, `event_description`, `digest_summary`, `subjective_experience` (exact bounds in `schemas/character/memory_timeline_entry.schema.json`). Recent 2 stages full at startup; distant via `memory_digest.jsonl` + FTS5 / embedding on demand.
 3. **scene_archive** — original text split by scene. `scene_id` (`SC-S###-##`), `stage_id`, `chapter`, `time`, `location`, `characters_present`, `summary`, `full_text`. Work-level. Only most recent `scene_fulltext_window` `full_text` loaded; summaries via FTS5 only.
 
 Inter-character relationship evolution: `relationships` per stage snapshot

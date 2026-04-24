@@ -212,7 +212,7 @@ works/{work_id}/world/
   程序化写出）
 - `stage_catalog.json` — `schemas/world/world_stage_catalog.schema.json`
 - `stage_snapshots/{stage_id}.json` — 世界当前阶段状态；`stage_events`
-  **只记录该阶段的世界公共层事件**（每条 50–80 字一句话，schema 硬门控），
+  **只记录该阶段的世界公共层事件**（每条一句话，长度由 schema 硬门控），
   不累积历史，不收录角色私人场景/内心决定（后者属于角色 memory_timeline）。
   跨阶段事件时间线由 `world_event_digest.jsonl` 承担（1:1 复制 stage_events）。
 - `foundation/foundation.json` — Phase 2.5 产出的统一基础设定
@@ -317,13 +317,13 @@ works/{work_id}/characters/{character_id}/
 - `canon/failure_modes.json`
 - `canon/stage_catalog.json` — `schemas/character/stage_catalog.schema.json`
 - `canon/stage_snapshots/{stage_id}.json` — **自包含**，运行时核心；
-  `stage_events` **仅记录该阶段发生的事件**（每条 50–80 字，schema 硬门控），
+  `stage_events` **仅记录该阶段发生的事件**（每条一句话，长度由 schema 硬门控），
   不累积历史。跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
   `world_event_digest.jsonl` 承担。
 - `canon/memory_timeline/{stage_id}.json`
 - `canon/memory_digest.jsonl` — 压缩摘要索引，stage 1..N 过滤加载
 
-`{stage_id}` 路径片段统一使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`），与 `M-S###-##` / `E-S###-##` 等 ID 家族共享 stage 段；阶段的人类可读短标题由 `stage_title`（≤15 字）承载，仅出现在 `stage_catalog` / `stage_plan` 等条目内，不进入文件路径。
+`{stage_id}` 路径片段统一使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`），与 `M-S###-##` / `E-S###-##` 等 ID 家族共享 stage 段；阶段的人类可读短标题由 `stage_title`（短标题，长度见 schema）承载，仅出现在 `stage_catalog` / `stage_plan` 等条目内，不进入文件路径。
 
 角色包可比世界观包保存更丰富的事件细节，包括记忆权重、情感解读以及与扮演相关的角色视角。
 
