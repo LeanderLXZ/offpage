@@ -57,7 +57,48 @@
 
 ## 立即执行
 
-（暂无条目）
+### [T-EXTRACTION-SYNC-MASTER] extraction/我和女帝的九世孽缘 分支同步 master
+
+**动机**
+
+2026-04-24 `/go character_schemas_bounds_round3` 已把 stage_snapshot /
+voice_rules / behavior_rules 的字段级上下限收口落地到 `master`（commit
+4526640）。extraction/我和女帝的九世孽缘 分支当前有一处未提交的
+`schemas/character/voice_rules.schema.json` 修改（typical_expressions
+maxItems 5 → 10，是本轮同一意图下的 in-flight 手改），所以
+`/go` Step 9 没法自动把 master 合并进 extraction——遇 dirty 工作区不
+强推。
+
+**改动清单**
+
+1. 在 extraction 分支上决定未提交改动的去向：
+   - 若放弃（master 已有更完整版本）：`git restore schemas/character/voice_rules.schema.json`
+   - 若另有意图未被 master 覆盖：先 `git stash` 或 commit 后再 merge
+2. `git merge master`
+3. 冲突处理：voice_rules.schema.json 的 typical_expressions 行几乎必冲突，
+   保留 master 版本（master 已同步到 maxItems:10 + 描述一致）
+4. 把 extraction 分支下的既有 stage_snapshot / voice_rules /
+   behavior_rules 产物（character_arc object 形态 / 顶层 evidence_refs /
+   memory_refs / dialogue_examples 里的 evidence_ref /
+   relationship_behavior_map 外壳）按 ai_context/handoff.md 的 advisory
+   选择迁移策略（重跑 stage / 写 patch 脚本 / 从下个 stage 起前向生效）
+
+**验证**
+
+- `git merge-base --is-ancestor master extraction/...` 返回 0
+- extraction 分支上 `jsonschema` 对既有 S001 / S002 产物跑一遍，
+  INVALID 清单与 handoff advisory 匹配
+- 决策完成后再触发 repair_agent / `--resume`
+
+**依赖**
+
+- 用户对 in-flight 修改的取舍
+- 既有 S001 / S002 产物迁移策略定案
+
+**未落地原因**
+
+- 该分支为 dirty 工作区，`/go` 规则要求不强推；本条目存在于 todo_list
+  直到用户显式处理
 
 ---
 
