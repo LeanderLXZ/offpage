@@ -942,18 +942,19 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 
 每个 stage_snapshot 必须包含以下全部维度（即使某维度相比上一阶段无变化）：
 
-- `active_aliases`：当前活跃名称、隐藏身份、各角色对本角色的称呼
+- `timeline_anchor`（≤ 50 字，required）、`snapshot_summary`（100–200 字，required）
+- `active_aliases`：当前活跃名称（≤ 5 条）、隐藏身份（≤ 5 条）、各角色对本角色的称呼（≤ 10 个角色）
 - `voice_state`：语气基调、语言习惯、用词偏好、口头禅、禁忌用语、
-  **情绪语气矩阵**（emotional_voice_map，≤ 10 种情绪，覆盖主要情绪类型）、
-  **对象语气矩阵**（target_voice_map，≤ 5 个对象，只对主要角色和重要配角
-  详细记录，使用具体角色名，每个 target 至少 3-5 条对话示例（≤ 5 条），
+  **情绪语气矩阵**（emotional_voice_map，≤ 15 种情绪，覆盖主要情绪类型）、
+  **对象语气矩阵**（target_voice_map，≤ 10 个对象，只对主要角色和重要配角
+  详细记录，使用具体角色名，每个 target 至少 3-5 条对话示例（≤ 10 条），
   覆盖该对象下不同情绪和场景；泛化类型如"陌生人"简要描述即可，LLM 可从
   整体性格推断）、
-  典型对话示例（dialogue_examples，至少 2-3 条，≤ 5 条）
+  典型对话示例（dialogue_examples，至少 2-3 条，≤ 10 条，item `quote` ≤ 30 字 / `context` ≤ 50 字）
 - `behavior_state`：**core_goals**（理性目标）、**obsessions**（执念——
   非理性的心结，区别于可权衡调整的目标）、决策风格、情绪触发器、
-  **情绪反应矩阵**（emotional_reaction_map，≤ 10 种情绪）、
-  **对象行为矩阵**（target_behavior_map，≤ 5 个对象，与 target_voice_map
+  **情绪反应矩阵**（emotional_reaction_map，≤ 15 种情绪）、
+  **对象行为矩阵**（target_behavior_map，≤ 10 个对象，与 target_voice_map
   平行且对齐，只对主要角色和重要配角详细记录，描述面对该对象时的肢体反应、
   距离感、习惯性动作、回避模式等，每个 target 至少 3-5 条行为示例（≤ 5 条）；
   泛化类型简要描述即可）、
@@ -968,10 +969,10 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
   角色扮演的条目、② 与 `core_wounds` / `active_obsessions` / 活跃
   `relationships` 相关的条目；优先丢弃 ① 日常常识类条目、② 早期阶段已无
   触发点的细节、③ 已在 `memory_timeline` 中完整承载的条目
-- `misunderstandings`：角色持有的误解（主观 vs 客观）。**条数上限 ≤ 20**
+- `misunderstandings`：角色持有的误解（主观 vs 客观）。**条数上限 ≤ 15**
   （schema 硬门控）。已 resolved 的误解（`resolved_at_stage` 非空且 ≤ 当前阶段）
   应移除，优先保留影响当前决策的条目
-- `concealments`：角色主动隐瞒的事情。**条数上限 ≤ 20**（schema 硬门控）。
+- `concealments`：角色主动隐瞒的事情。**条数上限 ≤ 15**（schema 硬门控）。
   已 revealed 的隐瞒（`revealed_at_stage` 非空且 ≤ 当前阶段）应移除，
   优先保留当前仍在隐瞒的条目
 - `emotional_baseline`：主导特质、**active_goals**（活跃理性目标）、
@@ -979,9 +980,9 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 - `current_personality`（≤ 10 条）、`current_mood`（≤ 10 条）、
   `current_status`（≤ 10 条）
 - `stage_delta`：从上一阶段的变化摘要（信息性，便于理解演变弧线）
-- `character_arc`：角色从阶段 1 到当前阶段的 **整体弧线概览**——
-  弧线摘要、关键节点列表（每个节点含 stage_id 和描述）、
-  当前在弧线中的位置和趋势。第一个阶段可省略或仅写起点
+- `character_arc`：角色从阶段 1 到当前阶段的整体弧线概述，
+  **单一字符串**（≤ 200 字），一句到一段话概括核心变化轨迹。
+  第一个阶段可省略或仅写起点
 
 #### 字段条数上限汇总（schema 硬门控）
 
@@ -995,17 +996,18 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 | `knowledge_scope.knows` | 50 | 见上方裁剪策略 |
 | `knowledge_scope.does_not_know` | 30 | 同上 |
 | `knowledge_scope.uncertain` | 30 | 同上 |
-| `concealments` | 20 | 移除已 revealed 的，保留当前隐瞒 |
-| `misunderstandings` | 20 | 移除已 resolved 的，保留当前误解 |
+| `concealments` | 15 | 移除已 revealed 的，保留当前隐瞒 |
+| `misunderstandings` | 15 | 移除已 resolved 的，保留当前误解 |
 | `relationships` | 10 | 只含重要角色，不含边缘角色 |
-| `emotional_voice_map` | 10 | 保留最重要、最常见的情绪 |
-| `emotional_reaction_map` | 10 | 保留最重要、最常见的情绪 |
-| `target_voice_map` | 5 | 只含主要角色和重要配角 |
-| `target_behavior_map` | 5 | 与 target_voice_map 对齐 |
-| 各 `dialogue_examples` | 5 | 每个 target/emotion 内 |
+| `emotional_voice_map` | 15 | 保留最重要、最常见的情绪 |
+| `emotional_reaction_map` | 15 | 保留最重要、最常见的情绪 |
+| `target_voice_map` | 10 | 只含主要角色和重要配角 |
+| `target_behavior_map` | 10 | 与 target_voice_map 对齐 |
+| 各 `dialogue_examples` | 10 | 每个 target/emotion 内 |
 | 各 `action_examples` | 5 | 每个 target 内 |
-| 各 `typical_expressions` | 15 | 每个 target/emotion 内；放宽以覆盖同一情绪/对象下的常见短句模板 |
+| 各 `typical_expressions` | 10 | 每个 target/emotion 内 |
 | 各 `typical_actions` | 5 | 每个 emotion 内 |
+| `boundary_state.hard_boundaries` / `soft_boundaries` / `common_misconceptions` | 各 15 | 每项限 15 条 |
 
 **缺少任何一个维度都会导致扮演缺陷。** 例如：
 - 缺少 emotional_voice_map → AI 在角色愤怒/吃醋/委屈时语气无法区分
@@ -1113,8 +1115,8 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
   │    progress 文件 + 前阶段输出 + schema + baseline       │
   │                                                      │
   │  退化信号监控:                                        │
-  │    字段粗糙 | evidence_refs 减少 | stage_events 空泛  │
-  │    dialogue/action_examples 减少 | 关系缺 events     │
+  │    字段粗糙 | stage_events 空泛 | 关系缺 events       │
+  │    dialogue/action_examples 减少 | relationships 缺失 │
   └──────────────────────────────────────────────────────┘
 ```
 
@@ -1164,7 +1166,6 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 **输出质量递减**：
 
 - stage_snapshot 字段填充从详尽变为粗糙
-- evidence_refs 引用越来越少
 - stage_events / memory_timeline 摘要越来越空泛
 - emotional_voice_map、relationship 等复杂字段被敷衍填充
 
@@ -1560,7 +1561,7 @@ L0 json_syntax → L1 schema → L2 structural → L3 semantic
 |------|---------|------|
 | L0 json_syntax | 文件存在、JSON/JSONL 可解析、UTF-8 编码 | 0 token |
 | L1 schema | jsonschema 全字段校验（required / type / enum / additionalProperties / minLength / maxLength / maxItems）；`jsonschema` 为硬依赖。**所有字段级长度 / 条数上下限一律由 L1 承担**——L2 不再镜像长度门控 | 0 token |
-| L2 structural | schema 表达不了的业务规则：target_voice_map / target_behavior_map 示例数阈值（importance-based，见下）；memory_id / event_id 格式（`M-S###-##` / `E-S###-##`）；`driving_events` / `relationships[*].relationship_history_summary` 缺失/空串 warning；stage_id 对齐；catalog / digest 完整性；snapshot 存在性；跨实体引用解析（warn-only）。内部仍保留 `relationship_history_summary` 超长 error 作为 schema 失效时的最后一道保险，值与 schema 保持一致（300） | 0 token |
+| L2 structural | schema 表达不了的业务规则：target_voice_map / target_behavior_map 示例数阈值（importance-based，见下）；memory_id / event_id 格式（`M-S###-##` / `E-S###-##`）；`driving_events` / `relationships[*].relationship_history_summary` 缺失/空串 warning；stage_id 对齐；catalog / digest 完整性；snapshot 存在性；跨实体引用解析（warn-only）。内部仍保留 `relationship_history_summary` 超长 error 作为 schema 失效时的最后一道保险，值与 schema 保持一致（100） | 0 token |
 | L3 semantic | 内容事实正确性；阶段间连贯性（数值跳变、关系突变）；关系描述与行为描述一致性；stage_delta 与实际变化一致性。输出为结构化 Issue list（JSON array），不是自由文本 | LLM |
 
 **L2 structural 包含原「提交门控」的全部结构性检查**（snapshot 存在 + stage_id
@@ -2154,7 +2155,7 @@ Phase 3 全部 stage 提交后，运行跨阶段一致性检查。
 | 1 | alias 一致性 | stage_snapshot 的 active_aliases 是否在 identity.json aliases 中有定义 |
 | 2 | 快照字段完整性 | 每个 stage_snapshot 是否包含全部 13 个必填维度（personality, mood, voice_state, behavior_state, boundary_state, relationships, knowledge_scope, stage_delta 等） |
 | 3 | 关系连续性 | 相邻 stage 间 attitude/trust/intimacy 变化是否有 driving_events 归因 |
-| 4 | evidence_refs 覆盖率 | 角色/世界 stage_snapshot 中 evidence_refs 为空的比例（memory_timeline 不再持有 evidence_refs） |
+| 4 | evidence_refs 覆盖率 | 世界 stage_snapshot 中 evidence_refs 为空的比例（角色 stage_snapshot 与 memory_timeline 均不持有 evidence_refs，仅世界层保留章节锚点） |
 | 5 | memory_digest 对应 | memory_digest.jsonl 条目是否与 memory_timeline memory_id 一一对应 |
 | 6 | memory_digest 摘要一致 | 每条 memory_digest `summary` 是否与对应 memory_timeline `digest_summary` **文本完全相等**（1:1 拷贝契约，防止 repair 改写源字段后 digest 漂移） |
 | 7 | target_map 样本数 | target_voice_map / target_behavior_map 样本数是否满足 importance-based 阈值（§11.4.3） |

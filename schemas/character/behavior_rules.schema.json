@@ -84,7 +84,8 @@
         "properties": {
           "emotion": {
             "type": "string",
-            "description": "情绪状态标签。例如：暧昧、愤怒、委屈、嘴硬、关心、吃醋、悲伤、得意、心虚、害羞、嫉妒、思念、恐惧、内疚。"
+            "maxLength": 10,
+            "description": "情绪状态标签。例如：暧昧、愤怒、委屈、嘴硬、关心、吃醋、悲伤、得意、心虚、害羞、嫉妒、思念、恐惧、内疚。上限 10 字。"
           },
           "internal_response": {
             "type": "string",
@@ -98,7 +99,8 @@
           },
           "typical_actions": {
             "type": "array",
-            "description": "这种情绪下的典型行为动作。例如：吃醋时会找借口离开、生气时会摔东西、害羞时会转移话题。",
+            "maxItems": 5,
+            "description": "这种情绪下的典型行为动作。最多 5 条，每条 ≤ 50 字。",
             "items": {
               "type": "string",
               "maxLength": 50
@@ -112,18 +114,19 @@
         }
       }
     },
-    "relationship_behavior_map": {
+    "target_behavior_map": {
       "type": "array",
       "maxItems": 10,
-      "description": "角色面对不同关系类型的人时的行为模式。最多 10 条。",
+      "description": "角色面对不同对象类型时的行为模式。与 voice_rules.target_voice_map 平行且对齐。最多 10 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["relationship_type", "default_stance"],
+        "required": ["target_type", "default_stance"],
         "properties": {
-          "relationship_type": {
+          "target_type": {
             "type": "string",
-            "description": "关系类型标签。例如：亲近者、陌生人、敌对者、暧昧对象、下属、长辈、竞争对手。"
+            "maxLength": 15,
+            "description": "对象类型标签。例如：亲近者、陌生人、敌对者、暧昧对象、下属、长辈、竞争对手。上限 15 字。"
           },
           "default_stance": {
             "type": "string",

@@ -363,12 +363,10 @@ def _check_relationship_continuity(
 def _check_evidence_refs_coverage(
     work_dir: Path, character_ids: list[str], stage_ids: list[str],
 ) -> list[ConsistencyIssue]:
-    """Flag snapshots with empty ``evidence_refs``.
+    """Flag world_stage_snapshot entries with empty ``evidence_refs``.
 
-    ``evidence_refs`` exists on character stage_snapshot (chapter anchor
-    for the snapshot as a whole) and on world_stage_snapshot (chapter
-    anchor for the world-level snapshot). An empty list means the
-    snapshot has no chapter anchor for later verification.
+    Chapter anchors live only on world_stage_snapshot now; character
+    stage_snapshot no longer carries ``evidence_refs``.
     """
     issues: list[ConsistencyIssue] = []
 
@@ -379,16 +377,6 @@ def _check_evidence_refs_coverage(
             issues.append(ConsistencyIssue(
                 "warning", "evidence_refs", f"world/{stage_id}",
                 "world stage_snapshot has empty evidence_refs"))
-
-    for char_id in character_ids:
-        for stage_id in stage_ids:
-            snapshot = _load_json(_snapshot_path(work_dir, char_id, stage_id))
-            if snapshot is not None:
-                refs = snapshot.get("evidence_refs", [])
-                if not refs:
-                    issues.append(ConsistencyIssue(
-                        "warning", "evidence_refs", f"{char_id}/{stage_id}",
-                        "stage_snapshot has empty evidence_refs"))
 
     return issues
 

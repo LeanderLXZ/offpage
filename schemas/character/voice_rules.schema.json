@@ -57,7 +57,8 @@
     },
     "dialogue_examples": {
       "type": "array",
-      "description": "从原著中提取的代表性台词，用于展示角色的语言风格。每条应标注出处和语境。",
+      "maxItems": 10,
+      "description": "从原著中提取的代表性台词，用于展示角色的语言风格。最多 10 条。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -65,15 +66,13 @@
         "properties": {
           "quote": {
             "type": "string",
-            "description": "原文台词。"
+            "maxLength": 30,
+            "description": "原文台词。上限 30 字。"
           },
           "context": {
             "type": "string",
-            "description": "说这句话时的场景和情绪状态。"
-          },
-          "evidence_ref": {
-            "type": "string",
-            "description": "章节引用。"
+            "maxLength": 50,
+            "description": "说这句话时的场景和情绪状态。上限 50 字。"
           }
         }
       }
@@ -98,8 +97,8 @@
           },
           "typical_expressions": {
             "type": "array",
-            "maxItems": 5,
-            "description": "这种情绪下的典型表达方式或句式。最多 5 条，每条 ≤ 15 字。",
+            "maxItems": 10,
+            "description": "这种情绪下的典型表达方式或句式。最多 10 条，每条 ≤ 15 字。",
             "items": {
               "type": "string",
               "maxLength": 15
@@ -107,20 +106,20 @@
           },
           "dialogue_examples": {
             "type": "array",
-            "description": "这种情绪下的代表性台词示例。",
+            "maxItems": 10,
+            "description": "这种情绪下的代表性台词示例。最多 10 条。",
             "items": {
               "type": "object",
               "additionalProperties": false,
               "required": ["quote", "context"],
               "properties": {
                 "quote": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 30
                 },
                 "context": {
-                  "type": "string"
-                },
-                "evidence_ref": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 50
                 }
               }
             }
@@ -148,8 +147,8 @@
           },
           "typical_expressions": {
             "type": "array",
-            "maxItems": 5,
-            "description": "面对这类对象时的典型表达方式。最多 5 条，每条 ≤ 15 字。",
+            "maxItems": 10,
+            "description": "面对这类对象时的典型表达方式。最多 10 条，每条 ≤ 15 字。",
             "items": {
               "type": "string",
               "maxLength": 15
@@ -157,20 +156,20 @@
           },
           "dialogue_examples": {
             "type": "array",
-            "description": "面对这类对象时的代表性台词示例。",
+            "maxItems": 10,
+            "description": "面对这类对象时的代表性台词示例。最多 10 条。",
             "items": {
               "type": "object",
               "additionalProperties": false,
               "required": ["quote", "context"],
               "properties": {
                 "quote": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 30
                 },
                 "context": {
-                  "type": "string"
-                },
-                "evidence_ref": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 50
                 }
               }
             }

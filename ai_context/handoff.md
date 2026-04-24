@@ -64,6 +64,24 @@ products. Known break points on surviving branches:
   `evidence_refs` removed.
 - `memory_timeline/{stage_id}.json` — `scene_refs` removed; `time` /
   `location` required ≤15 chars.
+- `characters/*/canon/stage_snapshots/{stage_id}.json` — `timeline_anchor`
+  now required (≤50), `snapshot_summary` 100–200; `character_arc` is
+  now a single string (≤200), old object form (arc_summary /
+  arc_stages[] / current_position) will fail; top-level `memory_refs`
+  and `evidence_refs` removed (`additionalProperties: false`);
+  per-item `evidence_ref` inside any `dialogue_examples` /
+  `action_examples` removed; `relationship_history_summary` tightened
+  to 100 chars; `misunderstandings` / `concealments` tightened to 15
+  items each; `boundary_state.hard_boundaries` added (mirrors baseline
+  boundaries item shape); `emotional_voice_map` widened to 15,
+  `typical_expressions` widened to 10.
+- `characters/*/canon/voice_rules.json` — all `dialogue_examples`
+  entries with `evidence_ref` will fail; containers capped at 10
+  items; `typical_expressions` widened to 10 items.
+- `characters/*/canon/behavior_rules.json` — `relationship_behavior_map`
+  renamed to `target_behavior_map`; inner `relationship_type` renamed
+  to `target_type` (≤15 chars). Existing files keep the old keys and
+  will fail L1 (`additionalProperties: false`) until migrated.
 
 Remediation options: rerun affected stages, write a one-off patch
 script, or carry forward only from the next stage (older stages will
