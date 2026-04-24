@@ -52,14 +52,6 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 ---
 
-### work/stage_catalog.schema.json
-
-**用途**：角色阶段目录，与世界 stage_catalog 对应。
-**位置**：`characters/{character_id}/canon/stage_catalog.json`
-**关键字段**：stages[].stage_id（`S###`，与世界的 stage_id 一致）、stages[].order、stages[].stage_title（≤15 字）、stages[].summary、stages[].snapshot_path
-
----
-
 ### work/load_profiles.schema.json
 
 **用途**：Per-work 运行时加载配置，作为 sparse override 覆盖 simulation 启动器默认值。文件不存在时 loader 使用内置默认。
@@ -84,7 +76,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 **用途**：世界阶段目录，列出作品的所有可选阶段。仅用于 bootstrap 阶段选择，运行时不加载。
 **位置**：`works/{work_id}/world/stage_catalog.json`
-**关键字段**：stages[].stage_id（`S###`）, stages[].stage_title（≤15 字）, stages[].summary
+**关键字段**：stages[].stage_id（`S###`，既是主键也是排序键）, stages[].stage_title（≤15 字）, stages[].summary, stages[].snapshot_path
 
 ---
 
@@ -93,6 +85,8 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **用途**：世界阶段快照，描述某个阶段下的世界状态。
 **位置**：`works/{work_id}/world/stage_snapshots/{stage_id}.json`
 **关键字段**：
+- `timeline_anchor` — 本阶段时间锚点（≤15 字，required，post_processing 复制到 world_event_digest.time）
+- `location_anchor` — 本阶段主要发生地锚点（≤15 字，required，post_processing 复制到 world_event_digest.location）
 - `snapshot_summary` — 阶段的世界状态概述
 - `foundation_corrections` — 对基础设定的修正
 - `stage_events` — 本阶段事件（**唯一事件清单**，≤ 30 条；每条 **50–80 字**一句话，schema 硬门控；**仅收录世界公共层事件**，角色私事/内心决定应写入该角色 memory_timeline；既是快照内容又是 `world_event_digest.jsonl` 的直接来源，1:1 复制）
@@ -103,11 +97,12 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 - `evidence_refs` — 章节号列表
 
 **自包含契约（schema 硬门控）**：`required` 除元信息外还包含
-`foundation_corrections` / `stage_events` / `current_world_state` /
-`relationship_shifts` / `character_status_changes` / `location_changes` /
-`map_changes` / `evidence_refs`。L1 schema 层即强制所有自包含维度存在
-（允许空数组，但不允许缺字段），让 schema gate 承担 self-contained
-契约而非仅依赖 prompt + L2/L3。
+`timeline_anchor` / `location_anchor` / `foundation_corrections` /
+`stage_events` / `current_world_state` / `relationship_shifts` /
+`character_status_changes` / `location_changes` / `map_changes` /
+`evidence_refs`。L1 schema 层即强制所有自包含维度存在（允许空数组，但
+不允许缺字段），让 schema gate 承担 self-contained 契约而非仅依赖
+prompt + L2/L3。
 
 ---
 
@@ -115,7 +110,7 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 
 **用途**：世界级固定关系网络（血缘、宗族、师徒、势力从属等不随阶段变化的结构性关系）。
 **位置**：`works/{work_id}/world/foundation/fixed_relationships.json`
-**关键字段**：relationships[].relationship_id, relationships[].type, relationships[].parties, relationships[].description
+**关键字段**：relationships[].relationship_id, relationships[].type, relationships[].parties, relationships[].description（≤100 字）
 **生命周期**：Phase 2.5 产出骨架，后续阶段可修正。运行时 Tier 0 加载。
 
 ---
@@ -126,6 +121,14 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 **位置**：`works/{work_id}/world/foundation/foundation.json`
 **生命周期**：Phase 2.5 基线产出；后续阶段可通过 world_stage_snapshot.foundation_corrections 增量修正。
 **形态**：`additionalProperties: true`（顶层与子对象），容纳 per-work 扩展字段；`required` 仅 `work_id`。
+
+**字段级上下限**：
+- `tone` ≤100 字
+- `world_structure.summary` ≤200 字；`major_regions` ≤20 条，item `description` ≤50 字
+- `power_system.summary` ≤200 字；`levels` ≤15 条，item `description` ≤50 字
+- `core_rules` ≤20 条，item `description` / `impact` 各 ≤50 字
+- `world_lines` ≤20 条，item `core_conflict` / `setting_features` 各 ≤50 字
+- `major_factions` ≤20 条，item `description` ≤50 字，`key_figures` ≤10 条
 
 ---
 
@@ -140,8 +143,8 @@ Schema 文件本身是权威定义，本文档仅提供快速导航。
 - `event_id` — 格式 `E-S{stage:03d}-{seq:02d}`（例：`E-S003-02`）；阶段号编码在 ID 中
 - `summary` — 事件精简摘要（**50–80 字**，1:1 复制自世界快照 `stage_events`）
 - `importance` — 5 级重要度（`trivial` / `minor` / `significant` / `critical` / `defining`）
-- `time` — 故事内时间（可选）
-- `location` — 事件地点（可选）
+- `time` — 故事内时间（≤15 字，required，来自 snapshot `timeline_anchor`）
+- `location` — 事件地点（≤15 字，required）
 - `involved_characters` — 涉及的角色（可选）
 
 ---
@@ -292,18 +295,17 @@ prompt + L2/L3 兜底。
 
 **关键字段**：
 - `memory_id` — 格式 `M-S{stage:03d}-{seq:02d}`（例：`M-S003-02`）
-- `time` — 故事内时间（可选）
-- `location` — 事件发生地点
+- `time` — 故事内时间（≤15 字，required）
+- `location` — 事件发生地点（≤15 字，required）
 - `event_description` — 客观事件描述（**150–200 字**，schema 硬门控）
 - `digest_summary` — 用于 memory_digest 的精简摘要（**30–50 字**，schema 硬门控；独立撰写，聚焦可检索关键词，**不是** `event_description` 的机械截断）
 - `subjective_experience` — 角色对事件的主观体验（第一人称视角，核心字段，**100–200 字**）
 - `emotional_impact` — 情感影响（≤ 50 字）
-- `knowledge_gained` — 本事件带来的新认知（最多 5 条）
+- `knowledge_gained` — 本事件带来的新认知（最多 10 条，每条 ≤ 50 字）
 - `misunderstanding` — 是否产生了误解（数组，最多 5 条；`content` / `truth` 各 ≤ 50 字）
 - `concealment` — 是否选择隐瞒（数组，最多 5 条；`content` / `reason` 各 ≤ 50 字）
 - `relationship_impact` — 关系影响（数组，`change` ≤ 100 字）
 - `memory_importance` — 重要程度（trivial ~ defining）
-- `scene_refs` — 关联的 scene_archive scene_id（追溯到原文）
 
 **归纳要求**：角色第一人称主观视角，是归纳不是原文复制。必须包含心理活动
 和态度变化的因果。全条目长度约束由 schema minLength/maxLength 硬门控。
@@ -321,8 +323,16 @@ prompt + L2/L3 兜底。
 - `memory_id` — 格式 `M-S{stage:03d}-{seq:02d}`；与 memory_timeline 条目的 `memory_id` 一一对应
 - `summary` — 事件精简摘要（**30–50 字**；1:1 复制自 memory_timeline 的 `digest_summary`）
 - `importance` — 5 级重要度（`trivial` / `minor` / `significant` / `critical` / `defining`）
-- `time` — 故事内时间（可选）
-- `location` — 事件地点（可选）
+- `time` — 故事内时间（≤15 字，required）
+- `location` — 事件地点（≤15 字，required）
+
+---
+
+### character/stage_catalog.schema.json
+
+**用途**：角色阶段目录，与世界 stage_catalog 对称。仅用于 bootstrap 阶段选择，运行时不加载。
+**位置**：`characters/{character_id}/canon/stage_catalog.json`
+**关键字段**：stages[].stage_id（`S###`，与世界 stage_id 对齐，字典序即阶段顺序）、stages[].stage_title（≤15 字）、stages[].summary、stages[].snapshot_path、stages[].timeline_anchor / chapter_scope（可选）
 
 ---
 

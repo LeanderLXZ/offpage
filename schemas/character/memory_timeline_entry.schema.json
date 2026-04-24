@@ -8,6 +8,8 @@
   "required": [
     "memory_id",
     "stage_id",
+    "time",
+    "location",
     "event_description",
     "digest_summary",
     "subjective_experience"
@@ -25,11 +27,13 @@
     },
     "time": {
       "type": "string",
-      "description": "故事内时间。格式不必严格统一，保留原文的时间表述即可（例如：某节前夕、两年后、大婚当日）。"
+      "maxLength": 15,
+      "description": "故事内时间，≤15 字短语（保留原文时间表述，例如：某节前夕、两年后、大婚当日）。"
     },
     "location": {
       "type": "string",
-      "description": "事件发生的地点。例如：某宗门·演武场、某城外。"
+      "maxLength": 15,
+      "description": "事件发生的地点，≤15 字短语（例如：某宗门·演武场、某城外）。"
     },
     "event_description": {
       "type": "string",
@@ -56,10 +60,11 @@
     },
     "knowledge_gained": {
       "type": "array",
-      "maxItems": 5,
-      "description": "角色通过这件事获得了哪些新的认知或信息。最多 5 条。",
+      "maxItems": 10,
+      "description": "角色通过这件事获得了哪些新的认知或信息。最多 10 条，每条 ≤50 字。",
       "items": {
-        "type": "string"
+        "type": "string",
+        "maxLength": 50
       }
     },
     "misunderstanding": {
@@ -132,13 +137,6 @@
       "type": "string",
       "enum": ["trivial", "minor", "significant", "critical", "defining"],
       "description": "这条记忆对角色的重要程度。defining = 塑造角色人生的关键事件。"
-    },
-    "scene_refs": {
-      "type": "array",
-      "description": "关联的 scene_archive scene_id，形成从主观记忆到原文的追溯链。非必填——有些记忆可能跨多个场景或无法精确对应。",
-      "items": {
-        "type": "string"
-      }
     }
   }
 }

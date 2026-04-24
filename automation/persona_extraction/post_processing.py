@@ -172,8 +172,9 @@ def generate_memory_digest(
 def _timeline_to_digest(entry: dict, stage_id: str) -> dict | None:
     """Map a single memory_timeline entry to a memory_digest entry.
 
-    Digest fields: ``memory_id``, ``summary``, ``importance`` (required);
-    ``time``, ``location`` (optional). The stage number is carried by the
+    Digest fields: ``memory_id``, ``summary``, ``importance``, ``time``,
+    ``location`` — all required on digest schema (≤15 char caps on
+    ``time`` / ``location``). The stage number is carried by the
     ``memory_id`` prefix; other timeline fields are recoverable via FTS5.
     """
     memory_id = entry.get("memory_id")
@@ -280,6 +281,7 @@ def generate_world_event_digest(
 
     stage_seg = _stage_segment(stage_id)
     timeline_anchor = snapshot.get("timeline_anchor", "")
+    location_anchor = snapshot.get("location_anchor", "")
 
     names = character_names or []
     new_entries: list[dict] = []
@@ -291,9 +293,9 @@ def generate_world_event_digest(
             "event_id": f"E-{stage_seg}-{i + 1:02d}",
             "summary": summary,
             "importance": _infer_importance(summary),
+            "time": timeline_anchor,
+            "location": location_anchor,
         }
-        if timeline_anchor:
-            entry["time"] = timeline_anchor
         involved = [n for n in names if n in summary]
         if involved:
             entry["involved_characters"] = involved
@@ -366,7 +368,6 @@ def generate_world_event_digest(
 def upsert_stage_catalog(
     catalog_path: Path,
     stage_id: str,
-    order: int,
     snapshot_path_rel: str,
     snapshot_data: dict,
     work_id: str,
@@ -378,12 +379,12 @@ def upsert_stage_catalog(
 
     If the catalog file doesn't exist, creates it with proper structure.
     If an entry with the same stage_id exists, replaces it.
-    Entries are sorted by ``order`` after upsert.
+    Entries are sorted by ``stage_id`` after upsert (``S###`` sorts
+    lexicographically and matches stage order).
 
     Args:
         catalog_path: Path to stage_catalog.json
         stage_id: The stage identifier
-        order: Numeric ordering (stage index)
         snapshot_path_rel: Relative path to the snapshot file
         snapshot_data: Parsed snapshot JSON (to extract stage_title, summary)
         work_id: Work identifier
@@ -398,7 +399,6 @@ def upsert_stage_catalog(
     # --- build the new stage entry ---
     new_entry: dict[str, Any] = {
         "stage_id": stage_id,
-        "order": order,
         "stage_title": snapshot_data.get("stage_title", stage_id),
         "summary": snapshot_data.get("snapshot_summary", stage_id),
         "snapshot_path": snapshot_path_rel,
@@ -411,13 +411,6 @@ def upsert_stage_catalog(
 
     if chapter_scope:
         new_entry["chapter_scope"] = chapter_scope
-
-    # Character catalog extra summary fields (from snapshot if available)
-    if character_id is not None:
-        for src_field, cat_field in _CHAR_CATALOG_SUMMARY_FIELDS:
-            val = snapshot_data.get(src_field)
-            if val and isinstance(val, str):
-                new_entry[cat_field] = val
 
     # --- load or create catalog ---
     catalog: dict[str, Any]
@@ -442,15 +435,15 @@ def upsert_stage_catalog(
     # Remove existing entry with same stage_id
     stages = [s for s in stages if s.get("stage_id") != stage_id]
     stages.append(new_entry)
-    # Sort by order
-    stages.sort(key=lambda s: s.get("order", 0))
+    # Sort by stage_id (S### sorts lexicographically and matches stage order)
+    stages.sort(key=lambda s: s.get("stage_id", ""))
     catalog["stages"] = stages
 
     # --- validate against schema ---
     if schema_dir:
         schema_name = ("world/world_stage_catalog.schema.json"
                        if character_id is None
-                       else "work/stage_catalog.schema.json")
+                       else "character/stage_catalog.schema.json")
         schema_path = schema_dir / schema_name
         if schema_path.exists():
             schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -470,18 +463,9 @@ def upsert_stage_catalog(
         encoding="utf-8",
     )
 
-    logger.info("stage_catalog: upserted stage '%s' (order=%d) into %s",
-                stage_id, order, catalog_path.name)
+    logger.info("stage_catalog: upserted stage '%s' into %s",
+                stage_id, catalog_path.name)
     return issues
-
-
-# Character catalog optional summary fields:
-# (snapshot_field, catalog_field)
-_CHAR_CATALOG_SUMMARY_FIELDS = [
-    # These fields don't exist as top-level strings in stage_snapshot,
-    # but we try to extract them if present for richer catalog entries.
-    # If not found, the entry is simply omitted (all are optional).
-]
 
 
 # ---------------------------------------------------------------------------
@@ -492,7 +476,6 @@ def run_stage_post_processing(
     project_root: Path,
     work_id: str,
     stage_id: str,
-    stage_order: int,
     character_ids: list[str],
     chapter_range: str,
 ) -> tuple[list[str], list[str]]:
@@ -533,7 +516,6 @@ def run_stage_post_processing(
             catalog_issues = upsert_stage_catalog(
                 catalog_path=world_catalog_path,
                 stage_id=stage_id,
-                order=stage_order,
                 snapshot_path_rel=f"stage_snapshots/{stage_id}.json",
                 snapshot_data=snapshot_data,
                 work_id=work_id,
@@ -611,7 +593,6 @@ def run_stage_post_processing(
             catalog_issues = upsert_stage_catalog(
                 catalog_path=catalog_path,
                 stage_id=stage_id,
-                order=stage_order,
                 snapshot_path_rel=(
                     f"canon/stage_snapshots/{stage_id}.json"),
                 snapshot_data=snapshot_data,

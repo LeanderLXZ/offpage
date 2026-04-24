@@ -581,7 +581,7 @@ class ExtractionOrchestrator:
             # Stage catalog
             e = _entry(
                 char_dir / "stage_catalog.json",
-                "work/stage_catalog.schema.json")
+                "character/stage_catalog.schema.json")
             if e:
                 files.append(e)
 
@@ -1579,16 +1579,10 @@ class ExtractionOrchestrator:
             tracker.start_step()
             tracker.print_step(3, 5, "Post-processing (digest + catalog)")
 
-            # Determine stage order (0-based index in stages list)
-            stage_order = next(
-                (i for i, b in enumerate(phase3.stages)
-                 if b.stage_id == stage.stage_id), 0)
-
             pp_errors, pp_warnings = run_stage_post_processing(
                 project_root=self.project_root,
                 work_id=pipeline.work_id,
                 stage_id=stage.stage_id,
-                stage_order=stage_order,
                 character_ids=pipeline.target_characters,
                 chapter_range=stage.chapters,
             )
@@ -1799,14 +1793,10 @@ class ExtractionOrchestrator:
             # SIGKILL mid-rerun leaves state=REVIEWING, so --resume
             # re-enters Step 4 (repair is idempotent) and reruns PP —
             # the PASSED-resume branch never sees a half-synced state.
-            stage_order_pp2 = next(
-                (i for i, b in enumerate(phase3.stages)
-                 if b.stage_id == stage.stage_id), 0)
             pp2_errors, pp2_warnings = run_stage_post_processing(
                 project_root=self.project_root,
                 work_id=pipeline.work_id,
                 stage_id=stage.stage_id,
-                stage_order=stage_order_pp2,
                 character_ids=pipeline.target_characters,
                 chapter_range=stage.chapters,
             )

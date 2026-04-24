@@ -25,7 +25,8 @@
 3. **证据引用**：`evidence_refs` 字段为本阶段涉及的章节号列表（如 `["0001", "0002"]`）。正文字段（stage_events、current_world_state 等）**不需要**逐条标注 `[NNNN]`
 4. **标识命名**：中文作品的 `work_id` 和路径段使用中文；`stage_id` 使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`），与 `M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##` 家族对齐
 5. **时间性**：当前阶段写清"现在"，不要混成扁平总结
-6. **仅本阶段事件**：`stage_events` 只记录本 stage 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 50–80 字的一句话摘要**（schema 两端硬门控；过短会直接判失败），既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。digest 是 1:1 机械展开，**你在此处写几条就是几条**——所以边界判定必须在你落笔时完成。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）
+6. **阶段级锚点**：`timeline_anchor` 和 `location_anchor` 各为 **≤15 字**的短语（schema 硬门控 required）。前者是本阶段的故事内时间锚（如"开篇前夕"、"三年后"），后者是本阶段的主要发生地（如"某宗门"、"某城外"）。post_processing 将这两个值复制到本阶段每条 world_event_digest 的 `time` / `location` 字段
+7. **仅本阶段事件**：`stage_events` 只记录本 stage 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 50–80 字的一句话摘要**（schema 两端硬门控；过短会直接判失败），既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。digest 是 1:1 机械展开，**你在此处写几条就是几条**——所以边界判定必须在你落笔时完成。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）
 
 ### 世界层 vs 角色层（判定示例）
 

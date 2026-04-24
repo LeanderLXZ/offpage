@@ -167,7 +167,7 @@ def build_baseline_prompt(
                    "character/failure_modes.schema.json",
                    "world/fixed_relationships.schema.json",
                    "world/world_stage_catalog.schema.json",
-                   "work/stage_catalog.schema.json"):
+                   "character/stage_catalog.schema.json"):
         files.append(f"- `{project_root / 'schemas' / schema}`")
 
     # Analysis outputs

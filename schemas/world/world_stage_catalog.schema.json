@@ -32,7 +32,6 @@
         "additionalProperties": false,
         "required": [
           "stage_id",
-          "order",
           "stage_title",
           "summary",
           "snapshot_path"
@@ -41,11 +40,7 @@
           "stage_id": {
             "type": "string",
             "pattern": "^S[0-9]{3}$",
-            "description": "作品级阶段标识，紧凑英文代号 S###。"
-          },
-          "order": {
-            "type": "integer",
-            "minimum": 0
+            "description": "作品级阶段标识，紧凑英文代号 S###；条目排序直接按此字段字典序。"
           },
           "stage_title": {
             "type": "string",
