@@ -78,9 +78,10 @@ Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
 - User data under `users/`; never write canon from user context.
 - Baseline files = extraction anchors only — not runtime-loaded.
 - Stage snapshots are **self-contained** — never merged with baseline at runtime.
-- **Bounds only in schema** — all `maxLength` / `minLength` / `maxItems` / `required` gates live in `schemas/**.schema.json` exclusively. No parallel tunables in `config.toml`, no duplicate numeric caps in L2 `StructuralChecker`, no numeric repeats in docs / ai_context / prompt templates. Over-limit → trim least relevant; exact values → the schema file. Index → `docs/architecture/schema_reference.md`.
-- Character `stage_snapshot` carries only `timeline_anchor`; no `evidence_refs` / `memory_refs`. Chapter anchors live only on `world_stage_snapshot.evidence_refs`. Baseline files (`identity` / `voice_rules` / `behavior_rules` / `boundaries` / `failure_modes` / `memory_timeline_entry` / `fixed_relationships`) carry no `evidence_refs` / `source_type`. Per-item `evidence_ref` is absent from every `dialogue_examples` / `action_examples` container. `memory_timeline` has no `scene_refs` (resolve via FTS5 on `scene_archive`). `behavior_rules` uses `target_behavior_map` / `target_type` (same vocabulary as stage `behavior_state`).
-- `stage_catalog` schema position: world at `schemas/world/world_stage_catalog.schema.json`, character at `schemas/character/stage_catalog.schema.json`. Entries carry `stage_id` / `stage_title` / `summary` / `snapshot_path` (+ optional `timeline_anchor` / `chapter_scope`) only; no `order` field — `stage_id` (`S###`, zero-padded) is lexicographic and the sole sort key. Catalog files are bootstrap-only; not runtime-loaded.
+- **Bounds only in schema.** All `maxLength` / `minLength` / `maxItems` / `required` live in `schemas/**.schema.json`; no duplicates anywhere else. Exact values → schema file. Index → `docs/architecture/schema_reference.md`.
+- **Chapter anchors only on `world_stage_snapshot.evidence_refs`.** Character baselines + `stage_snapshot` + `memory_timeline` carry no `evidence_refs` / `source_type` / `scene_refs`; no per-item `evidence_ref` in `dialogue_examples` / `action_examples`. Character anchors use `timeline_anchor` + `memory_timeline`.
+- **Unified vocabulary**: `behavior_rules` uses `target_behavior_map` / `target_type` (same as stage `behavior_state`).
+- **`stage_catalog`** at `schemas/{world,character}/stage_catalog.schema.json`; bootstrap-only, not runtime-loaded; sort by `stage_id` lex (no `order` field).
 
 ## Git
 
