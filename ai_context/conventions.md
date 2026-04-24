@@ -16,21 +16,21 @@ live in `CLAUDE.md` / `AGENTS.md`.
 ## Logging
 
 `docs/logs/` uses a three-timepoint contract (PRE / POST / REVIEW) — one
-log file spans one `/go` → `/after-check` lifecycle. Filename:
+log file spans one `/go` → `/post-check` lifecycle. Filename:
 `YYYY-MM-DD_HHMMSS_slug.md` (HHMMSS mandatory —
 `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'`).
 
 - **PRE** (`/go` Step 1) — context / decision / planned action list / verification criteria
 - **POST** (`/go` Step 7) — landed changes / diff vs plan / verification results / DONE|BLOCKED
-- **REVIEW** (`/after-check` Step 5) — two-track review summary + REVIEWED-PASS|PARTIAL|FAIL
+- **REVIEW** (`/post-check` Step 5) — two-track review summary + REVIEWED-PASS|PARTIAL|FAIL
 
 Rules:
 
 - No PRE log → `/go` must not modify files.
-- `/after-check` is the only skill allowed to write back to logs.
+- `/post-check` is the only skill allowed to write back to logs.
 - Pre-contract single-timepoint logs stay as-is.
 
-Full text → `.claude/commands/go.md`, `.claude/commands/after-check.md`.
+Full text → `.claude/commands/go.md`, `.claude/commands/post-check.md`.
 
 ## Cross-File Alignment
 
@@ -44,7 +44,7 @@ When a concept changes, update every file in its row:
 | Extraction workflow | `docs/architecture/extraction_workflow.md`, `automation/prompt_templates/`, `automation/persona_extraction/`, `ai_context/architecture.md` |
 | Runtime prompts | `simulation/prompt_templates/`, `simulation/` |
 | Any durable decision | `ai_context/decisions.md` |
-| `/go` or `/after-check` run | `docs/logs/` PRE / POST / REVIEW segments all present |
+| `/go` or `/post-check` run | `docs/logs/` PRE / POST / REVIEW segments all present |
 
 After any change, grep for the old phrasing to catch stale references.
 

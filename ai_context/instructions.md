@@ -50,9 +50,9 @@ three timepoints:
 
 - **PRE** — `/go` Step 1, before any file change
 - **POST** — `/go` Step 7, before commit
-- **REVIEW** — `/after-check` Step 5
+- **REVIEW** — `/post-check` Step 5
 
-Full contract → `conventions.md` §Logging. `/go` + `/after-check` skills
+Full contract → `conventions.md` §Logging. `/go` + `/post-check` skills
 own the format; do not duplicate it here.
 
 ## TODO List
