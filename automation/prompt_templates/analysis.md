@@ -25,7 +25,7 @@
 
 `{summaries_dir}`
 
-每个文件是一个 chunk 的归纳结果（JSON），包含该 chunk 内每章的 summary、key_events、characters_present、potential_boundary 等字段。
+每个文件是一个 chunk 的归纳结果（JSON），包含该 chunk 内每章的 summary、key_events、characters_present、location、emotional_tone、identity_notes 等字段。schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`。
 
 ## 执行步骤
 
@@ -35,7 +35,7 @@
 
 重点关注：
 - 每章的 `summary` 和 `key_events` — 了解剧情走向
-- `potential_boundary` 标记为 true 的章节 — 候选阶段边界
+- `location` 转换 / `emotional_tone` 突变 — 候选阶段边界信号
 - `characters_present` — 角色出场频率
 - `identity_notes` — 角色身份变化线索（获得新名称、揭示真实身份、化名等）
 
@@ -114,7 +114,7 @@ JSON 结构：
 - `stage_id` 使用紧凑英文代号格式 `S###`（三位数字零填充，如 `S001`、`S002`、`S049`），**不使用中文或其他格式**。这是整套 ID 家族（`M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##`）的共同 stage 段。
 - `stage_title` 是人类可读的中文短标题（如"<location_a>初遇"、"<location_b>下山"），作为 bootstrap 阶段选择时展示给用户的阶段名
 - `boundary_reason` 必须说明为什么在此处切分（例如"主角离开某地""重大事件结束""新势力登场"），不能只写"满 10 章"
-- 参考摘要中的 `potential_boundary` 标记，但不要机械地以它为唯一依据——你需要从全局剧情结构出发做最终判断
+- 边界判断从全局剧情结构出发：综合 `summary` / `key_events` / `location` 转换 / `emotional_tone` 突变 / `identity_notes` 中的身份转折等多重信号
 - **自检**：完成 stage plan 后，逐一检查每个 stage 的 `chapter_count`。如有任何一个 ≤4 或 ≥16，必须调整切分点直到全部 stage 满足 5-15 章约束
 
 输出文件：`{work_dir}/analysis/stage_plan.json`

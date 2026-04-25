@@ -63,6 +63,79 @@
 
 ## 下一步
 
+### [T-PHASE1-OUTPUT-SCHEMAS] Phase 1 输出三件套缺正式 schema
+
+**上下文**
+
+`automation/prompt_templates/analysis.md` 产出三个文件，但 `schemas/` 下都没对应 schema：
+
+- `works/{work_id}/analysis/world_overview.json`
+- `works/{work_id}/analysis/stage_plan.json`
+- `works/{work_id}/analysis/candidate_characters.json`
+
+字段集只在 prompt 内部定义。和本次新加的 `schemas/analysis/chapter_summary_chunk.schema.json`（Phase 0 输出）/ `schemas/analysis/scene_split.schema.json`（Phase 4 中间产物）不一样的是，Phase 1 输出**进 git**且喂给 Phase 2 / Phase 3 / Phase 4 全部下游环节，缺 schema 隐患更大。
+
+**改动清单**
+
+1. 新增 [schemas/analysis/world_overview.schema.json](schemas/analysis/world_overview.schema.json)：覆盖 `analysis.md` JSON 模板里的所有字段（genre / tone / world_structure / power_system / major_factions / world_lines / core_rules）+ bound
+2. 新增 [schemas/analysis/stage_plan.schema.json](schemas/analysis/stage_plan.schema.json)：work_id / default_stage_size / total_chapters / stages[]（每条 stage_id 满足 `^S\d{3}$` / chapter_count 5–15 / boundary_reason 非空 / key_events_expected 等）
+3. 新增 [schemas/analysis/candidate_characters.schema.json](schemas/analysis/candidate_characters.schema.json)：candidates[] 每条 character_id / aliases[] 每条 type 走 `本名/化名/代称/称呼/昵称/绰号/封号/道号/武器名/其他` enum / description / frequency `高/中/低` enum / importance `主角/重要配角/次要配角` enum / recommended bool
+4. [schemas/README.md](schemas/README.md) `analysis/` 行典型成员列表加入这三个
+5. [docs/architecture/schema_reference.md](docs/architecture/schema_reference.md) Analysis 层加 3 段
+6. [automation/prompt_templates/analysis.md](automation/prompt_templates/analysis.md) 三处 JSON 模板段附 schema 链接
+
+**待决策项**
+
+1. bound 取值——尤其 stage_plan stages 数组上限（实测 49 stages，所以 maxItems ≥ 49 或大些 100）
+2. world_overview 是否完全锁定字段集，还是 `additionalProperties: true`（per-work 扩展）
+3. 数据迁移：现存 stage_plan / candidate_characters / world_overview（已被删除——extraction 分支上 phase 1/2/3 全删了）将来重抽时直接合规，无需迁移
+
+**完成标准**
+
+- 三个新 schema 文件存在并自身 valid（`Draft202012Validator.check_schema`）
+- 重抽 phase 1 后产出能通过 schema 验证
+- README + schema_reference + analysis.md 三处同步
+- 本 todo 条目删除
+
+**预估**：M（半天到一天）
+
+**依赖**：phase 1 输出字段集稳定（当前 prompt 已稳定）；不阻塞重抽 phase 1，但建议 schema 先于重抽
+
+---
+
+### [T-SCENE-ARCHIVE-SUMMARY-REQUIRED] scene_archive_entry summary 应升 required
+
+**上下文**
+
+[schemas/runtime/scene_archive_entry.schema.json](schemas/runtime/scene_archive_entry.schema.json) 当前 `required` = `[scene_id, stage_id, chapter, characters_present, full_text]`，**summary 不在 required 列表**。但实际上：
+
+- Phase 4 scene_split 把 summary 列为 required（已落 `schemas/analysis/scene_split.schema.json`）
+- `automation/persona_extraction/scene_archive.py:569` 程序 1:1 直拷 scene_split 的 summary 到 scene_archive
+- 现存 1236 行无一缺 summary
+
+→ scene_archive_entry summary **事实上总是非空**，schema 应该 required 反映此契约。
+
+**改动清单**
+
+1. [schemas/runtime/scene_archive_entry.schema.json](schemas/runtime/scene_archive_entry.schema.json) `required` 数组加入 `summary` / `time` / `location`（这三个同样总是非空，由 scene_split 直拷）
+2. [docs/architecture/schema_reference.md](docs/architecture/schema_reference.md) runtime/scene_archive_entry 段无需改（已经描述契约）
+
+**待决策项**
+
+无——纯契约硬化
+
+**完成标准**
+
+- required 列表升级
+- 现存 1236 行 scene_archive 100% 通过新 required（实测前已确认）
+- 本 todo 条目删除
+
+**预估**：S（30 分钟）
+
+**依赖**：无
+
+---
+
 ### [T-WORLD-SNAPSHOT-S001-S002-MIGRATE] S001 / S002 世界快照迁移到新 schema
 
 **上下文**
