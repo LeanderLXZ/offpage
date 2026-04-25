@@ -142,3 +142,27 @@ PRE 计划清单覆盖 19 个文件全部命中，外加补漏 `.gitignore:18` 1
 
 - **Status**: DONE
 - **Finished**: 2026-04-24 22:17:53 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+
+- 落实率：19/19 计划文件 + 7/7 验证标准全部 ✅
+- Missed updates：0 条
+
+### 轨 2 — 影响扩散
+
+- Findings：High=0 / Medium=2 / Low=1
+  - [M] `.claude/settings.json:24-48`：`additionalDirectories` 含 ~17 条 `persona-engine-master/...` 旧 worktree 路径（gitignored，非 commit scope，但 rename 让既有 staleness 更突出）
+  - [M] `.claude/settings.local.json:56-60,100,134`：6 处 `persona-engine-master/...` 历史 Bash 白名单 + 1 处 `if [ "$branch" = "master" ]` hook fallback（gitignored）
+  - [L] `works/.../extraction.log:385`：runtime 历史 log "Failed to checkout master:"（执行 artifact，无需回填）
+- Open Questions：1 条 — 是否本轮 /update-config 清理 settings\*.json 的 persona-engine-master 路径
+
+## 复查时状态
+
+- **Reviewed**: 2026-04-24 22:22:58 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全落实 + 验证全过；轨 2 的 2 条 Medium 都在 .gitignored 文件中、不在 commit scope 内，但 rename 后路径约定升级为 `persona-engine-main` 让设置过时更显眼，建议跑 /update-config 清理
+- **Conversation ref**: 同会话内 /post-check 输出（含完整双轨报告 + Open Question）
