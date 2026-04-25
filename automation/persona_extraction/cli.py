@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> None:
     cfg = get_config()
     parser = argparse.ArgumentParser(
         prog="persona-extract",
-        description="Automated stage extraction for offpage",
+        description="Automated stage extraction for Offpage",
     )
     parser.add_argument(
         "work_id",
@@ -142,7 +142,7 @@ def main(argv: list[str] | None = None) -> None:
 
     project_root = args.project_root.resolve()
     if not (project_root / "schemas").exists():
-        print(f"[ERROR] {project_root} does not look like a offpage "
+        print(f"[ERROR] {project_root} does not look like an Offpage "
               f"project root (no schemas/ directory).")
         sys.exit(1)
 
