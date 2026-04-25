@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/character/identity.schema.json",
+  "$id": "offpage/character/identity.schema.json",
   "title": "角色基础身份",
   "description": "角色不随剧情阶段变化的底层身份信息。随阶段变化的状态（等级、地位、关系等）应放在 stage_snapshot 中。",
   "type": "object",

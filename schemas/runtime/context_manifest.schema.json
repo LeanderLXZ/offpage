@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/runtime/context_manifest.schema.json",
+  "$id": "offpage/runtime/context_manifest.schema.json",
   "title": "上下文清单",
   "type": "object",
   "additionalProperties": false,

@@ -1,7 +1,7 @@
 # ============================================================
 # automation/config.toml
 # ------------------------------------------------------------
-# Persona Engine 自动化提取流水线配置
+# Offpage 自动化提取流水线配置
 #
 # 加载入口：automation.persona_extraction.config.load_config()
 # 覆盖优先级（高 → 低）：

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/shared/source_note.schema.json",
+  "$id": "offpage/shared/source_note.schema.json",
   "title": "源文件自带问题记录（accept_with_notes）",
   "description": "repair agent triage 阶段写出的 accept_with_notes 记录。两个来源：(1) L3 语义 issue 被 LLM triage 判定为源文件自带；(2) L2 structural 下的 min_examples 被判定为 coverage_shortage（原文素材不足以达到 importance_min_examples 下限，T2 单次尝试未能补齐）。存储在 {entity}/canon/extraction_notes/{stage_id}.jsonl，每行一个对象。stage 视为通过，但保留可审计信息供未来 fixer 使用。",
   "type": "object",

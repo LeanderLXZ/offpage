@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/character/stage_catalog.schema.json",
+  "$id": "offpage/character/stage_catalog.schema.json",
   "title": "角色阶段目录",
   "description": "角色阶段索引，仅用于 bootstrap 阶段选择，运行时不加载。",
   "type": "object",

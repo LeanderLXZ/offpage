@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/work/chapter_index.schema.json",
+  "$id": "offpage/work/chapter_index.schema.json",
   "title": "章节索引",
   "type": "array",
   "description": "source package 章节清单，按 sequence 升序排列，与 chapters/ 目录下的规范化文件一一对应。",

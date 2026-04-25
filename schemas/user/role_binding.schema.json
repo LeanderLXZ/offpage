@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/user/role_binding.schema.json",
+  "$id": "offpage/user/role_binding.schema.json",
   "title": "角色绑定",
   "type": "object",
   "additionalProperties": false,

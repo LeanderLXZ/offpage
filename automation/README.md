@@ -77,7 +77,7 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
 所有命令从**项目根目录**运行：
 
 ```bash
-cd /path/to/persona-engine
+cd /path/to/offpage
 ```
 
 ### 完整流程（从分析到提取）

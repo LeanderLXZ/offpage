@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/work/book_metadata.schema.json",
+  "$id": "offpage/work/book_metadata.schema.json",
   "title": "书籍元数据",
   "type": "object",
   "additionalProperties": false,

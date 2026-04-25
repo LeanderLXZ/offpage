@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/character/boundaries.schema.json",
+  "$id": "offpage/character/boundaries.schema.json",
   "title": "角色人设边界",
   "description": "角色人设边界。hard_boundaries 是运行时始终加载的硬约束，不可阶段覆写。soft_boundaries 和 common_misconceptions 在运行时由 stage_snapshot 的 boundary_state 提供当前阶段的有效状态，此文件仅在提取阶段作为参照锚点。",
   "type": "object",

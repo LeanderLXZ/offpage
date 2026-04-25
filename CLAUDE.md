@@ -1,4 +1,4 @@
-# Persona Engine — Claude Entry Point
+# Offpage — Claude Entry Point
 
 This file is auto-loaded at session start. Keep it short — detailed context
 lives in `ai_context/`, not here.

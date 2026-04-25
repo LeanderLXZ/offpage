@@ -1,6 +1,6 @@
-# Persona Engine
+# Offpage
 
-Persona Engine is a work-scoped, multi-character roleplay architecture for
+Offpage is a work-scoped, multi-character roleplay architecture for
 long-form novels.
 
 The project is designed around two work-scoped package families:

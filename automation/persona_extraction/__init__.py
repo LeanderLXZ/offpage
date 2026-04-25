@@ -1,1 +1,1 @@
-"""Persona Engine — automated stage extraction orchestrator."""
+"""Offpage — automated stage extraction orchestrator."""

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/world/world_event_digest_entry.schema.json",
+  "$id": "offpage/world/world_event_digest_entry.schema.json",
   "title": "世界事件摘要条目",
   "description": "世界级重要事件的增量索引条目。从 world stage_snapshot 的 stage_events 自动生成。启动时按 event_id 中的 S### 段过滤加载。",
   "type": "object",

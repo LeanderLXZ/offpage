@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/user/long_term_profile.schema.json",
+  "$id": "offpage/user/long_term_profile.schema.json",
   "title": "用户长期画像",
   "type": "object",
   "additionalProperties": false,
