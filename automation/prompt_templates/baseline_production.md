@@ -268,3 +268,7 @@ boundaries / failure_modes / manifest / 空 stage_catalog。
 - 创建目录结构时确保所有中间目录存在
 - 这是基于摘要的初稿——宁可保守少写，不可编造细节
 - 如果某个字段在摘要中完全无法判断，留空或省略，不要猜测
+- **`maxLength` / `maxItems` 是上限不是配额**：schema 给的字段长度 / 条数
+  上限只是硬门控，不是要写到的目标。摘要里能支撑 3 条就写 3 条，能写
+  50 字就写 50 字，不要为了凑到 maxItems 或 maxLength 而虚构、扩写、
+  灌水
