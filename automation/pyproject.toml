@@ -1,7 +1,7 @@
 [project]
 name = "persona-extraction"
 version = "0.1.0"
-description = "Automated stage extraction orchestrator for offpage"
+description = "Automated stage extraction orchestrator for Offpage"
 requires-python = ">=3.11"
 dependencies = [
     "jsonschema>=4.0",
