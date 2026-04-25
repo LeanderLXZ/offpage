@@ -31,14 +31,14 @@
 在 extraction 分支（主 worktree `/home/leander/Leander/persona-engine`）：
 
 ```
-rm works/我和女帝的九世孽缘/retrieval/scene_archive.jsonl   # 4.3 MB
-rm -rf works/我和女帝的九世孽缘/analysis/scene_splits/       # 213 个 .json
-rm works/我和女帝的九世孽缘/analysis/progress/phase4_scenes.json  # 85 KB
-rm works/我和女帝的九世孽缘/analysis/.scene_archive.lock     # 确保无残留锁
+rm works/<work_id>/retrieval/scene_archive.jsonl   # 4.3 MB
+rm -rf works/<work_id>/analysis/scene_splits/       # 213 个 .json
+rm works/<work_id>/analysis/progress/phase4_scenes.json  # 85 KB
+rm works/<work_id>/analysis/.scene_archive.lock     # 确保无残留锁
 ```
 
 全部是 gitignore 文件，git 工作区无改动；下一次运行
-`python -m automation.persona_extraction "我和女帝的九世孽缘" --start-phase 4`
+`python -m automation.persona_extraction "<work_id>" --start-phase 4`
 （**不带** `--resume`）即走正确的"从空状态全量切场景"路径，并发 LLM
 跑 537 章，merge 一次性写出正确 stage_id 的 `scene_archive.jsonl`。
 

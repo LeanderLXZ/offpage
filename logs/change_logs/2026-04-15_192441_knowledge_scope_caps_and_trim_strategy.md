@@ -69,9 +69,9 @@ prompt 层裁剪策略 + 审校层语义检查。
 
 发现并手动修复两条超长条目（已以独立 commit 落在 extraction 分支）：
 
-- `姜寒汐/阶段04/knows[1]`：56 → 26 字（被剥离的细节已在 `does_not_know[5]`
+- `<character_a>/阶段04/knows[1]`：56 → 26 字（被剥离的细节已在 `does_not_know[5]`
   中独立承载）
-- `姜寒汐/阶段05/uncertain[2]`：51 → 26 字（具体信号明细归
+- `<character_a>/阶段05/uncertain[2]`：51 → 26 字（具体信号明细归
   `memory_timeline.subjective_experience`）
 
 修复后对全部 10 个角色 stage_snapshot 跑新 schema 校验：**0 violations**。

@@ -1,7 +1,7 @@
 # active_aliases_name_caps
 
 - **Started**: 2026-04-24 06:22:24 EDT
-- **Branch**: master (via worktree ../persona-engine-master；主 checkout 停留 extraction/我和女帝的九世孽缘 dirty 不动)
+- **Branch**: master (via worktree ../persona-engine-master；主 checkout 停留 extraction/<work_id> dirty 不动)
 - **Status**: PRE
 
 ## 背景 / 触发

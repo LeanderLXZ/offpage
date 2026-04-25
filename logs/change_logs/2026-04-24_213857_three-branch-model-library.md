@@ -6,7 +6,7 @@
 
 ## 背景 / 触发
 
-用户当前 workflow 痛点：master 分支跟踪了 `sources/works/我和女帝的九世孽缘/manifest.json`，泄漏真实作品 ID。沿伸讨论后用户提出三分支模型：
+用户当前 workflow 痛点：master 分支跟踪了 `sources/works/<work_id>/manifest.json`，泄漏真实作品 ID。沿伸讨论后用户提出三分支模型：
 
 1. **master** —— 永远干净的框架仓库，对外 push；不含任何作品 ID 命名的目录、源文件、产物文件、真实书名出现在代码 / schema / 文档中
 2. **extraction/{work_id}** —— 每部作品独立的提取分支，本地工作流，永不 push
@@ -19,10 +19,10 @@
 ## 结论与决策
 
 - **manifest.json 彻底 ignore**：用 `sources/works/[!_]*/manifest.json` pattern 在 .gitignore 添加，泛化以覆盖未来作品；`_template/` 不受影响
-- **现存泄漏文件下架**：`git rm --cached sources/works/我和女帝的九世孽缘/manifest.json`
+- **现存泄漏文件下架**：`git rm --cached sources/works/<work_id>/manifest.json`
 - **squash 目标改为 `library`**：所有 ai_context / docs / 代码 / config 中"squash-merge to master"统一替换；新增 `GitConfig.squash_merge_target` 字段，默认 `"library"`
 - **创建 `library` 分支**：从本次 master commit 切出，作为日后所有 extraction 完成时的 squash 归档目标
-- **不强制让 library 立即 squash 进当前 in-progress extraction 内容**：当前 `extraction/我和女帝的九世孽缘` 仍在进行中，按规则只在完成后 squash；本次仅创建空架构
+- **不强制让 library 立即 squash 进当前 in-progress extraction 内容**：当前 `extraction/<work_id>` 仍在进行中，按规则只在完成后 squash；本次仅创建空架构
 
 `library` 分支的同步规则（写入 conventions / architecture）：
 - 单向：`master → library`（吸收框架更新，定期 `git merge master`）
@@ -33,7 +33,7 @@
 ## 计划动作清单
 
 - file: `.gitignore` → 在 sources 节追加 `sources/works/[!_]*/manifest.json`（保留 `_template/` 豁免）
-- file: `sources/works/我和女帝的九世孽缘/manifest.json` → `git rm --cached`（保留 working tree 文件，extraction 分支仍能用）
+- file: `sources/works/<work_id>/manifest.json` → `git rm --cached`（保留 working tree 文件，extraction 分支仍能用）
 - file: `ai_context/conventions.md` Git 节 → `Squash-merge to master on completion` → `Squash-merge to library on completion (master 不回流)`；补一段 library 分支说明
 - file: `ai_context/decisions.md` §26 → 同上"squash to master" → "squash to library"；新增一条决策捕捉三分支模型
 - file: `ai_context/architecture.md` Git Branch Model 节 → 引入 library 分支描述
@@ -46,7 +46,7 @@
 
 ## 验证标准
 
-- [ ] `git ls-files | grep 我和女帝` 在 master 上结果为空
+- [ ] `git ls-files | grep 我和<character_d>` 在 master 上结果为空
 - [ ] `grep -rn "squash.*master\|master.*squash" ai_context/ docs/ automation/` 无 stale 引用
 - [ ] `python3 -c "from automation.persona_extraction.config import get_config; print(get_config().git.squash_merge_target)"` 输出 `library`
 - [ ] `python3 -c "from automation.persona_extraction.orchestrator import Orchestrator"` import 不报错
@@ -63,7 +63,7 @@
 
 `.gitignore` (1 处)：sources 节追加 `sources/works/[!_]*/manifest.json` + 注释（保 `_template/` 豁免）。
 
-`git rm --cached`：`sources/works/我和女帝的九世孽缘/manifest.json`（master 上下架；working tree 文件保留，extraction 分支 tracked 不变）。
+`git rm --cached`：`sources/works/<work_id>/manifest.json`（master 上下架；working tree 文件保留，extraction 分支 tracked 不变）。
 
 `ai_context/conventions.md` Git 节：单段列表改为三分支表 + flow rules，新增 library 分支语义、squash 目标改 library、`master` 永不接收 artefact。
 

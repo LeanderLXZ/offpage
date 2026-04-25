@@ -31,8 +31,8 @@ gpt-5 H3：character / world stage_snapshot schema 的 `required` 只到
 
 - `Draft202012Validator.check_schema` 两个 schema 都通过
 - extraction 分支 S001：
-  - `姜寒汐` 角色快照 → PASS
-  - `王枫` 角色快照 → PASS
+  - `<character_a>` 角色快照 → PASS
+  - `<character_b>` 角色快照 → PASS
   - 世界快照 → PASS
 - 即：现有实例数据与新门控兼容，不会 break S001 已提交内容；S002 ERROR
   待 `--resume` 重跑时将用新 schema 严格校验

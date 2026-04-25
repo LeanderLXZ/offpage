@@ -13,11 +13,11 @@ folders under both `sources/works/` and `works/`.
 - renamed the current source package root from:
   - `sources/works/wo-he-nvdi-de-jiushi-nieyuan/`
   - to:
-  - `sources/works/我和女帝的九世孽缘/`
+  - `sources/works/<work_id>/`
 - renamed the current canonical work package root from:
   - `works/wo-he-nvdi-de-jiushi-nieyuan/`
   - to:
-  - `works/我和女帝的九世孽缘/`
+  - `works/<work_id>/`
 - updated current manifests, work README, candidate-analysis header, and AI
   handoff docs to use the Chinese `work_id`
 - updated schema guidance so `work_id` may also be Chinese for Chinese works

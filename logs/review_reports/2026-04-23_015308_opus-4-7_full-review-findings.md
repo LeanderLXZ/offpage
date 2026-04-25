@@ -2,7 +2,7 @@
 
 **Scope**: `/full-review` 全仓库审计。三条并行审计线：规范线（`ai_context/` / `docs/` / `schemas/` / `prompts/`）、实现线（`automation/` / `repair_agent/`）、样例产物线（`works/` / `users/` / gitignore vs 实况）。
 
-**审计基准**：主分支 `master` at HEAD = `05f2d0f`，以及 `extraction/我和女帝的九世孽缘` HEAD = `e140f5d`。
+**审计基准**：主分支 `master` at HEAD = `05f2d0f`，以及 `extraction/<work_id>` HEAD = `e140f5d`。
 
 ---
 
@@ -12,8 +12,8 @@
 
 #### H1 — `phase3_stages.json` 与 `pipeline.json` / `ai_context/` 三方不一致（数据与叙述严重漂移）
 - **结论**：
-  - [pipeline.json](works/我和女帝的九世孽缘/analysis/progress/pipeline.json) 声明 `phase_3: "pending"` / `phase_4: "done"` / `last_updated: 2026-04-18T09:00:19+00:00`
-  - [phase3_stages.json](works/我和女帝的九世孽缘/analysis/progress/phase3_stages.json) 显示 S001 = `committed`（SHA `3bf25bf`，`last_updated: 2026-04-22T23:30:06+00:00`），S002 = `error`（error_message "Working tree has uncommitted changes"），S003–S049 = `pending`
+  - [pipeline.json](works/<work_id>/analysis/progress/pipeline.json) 声明 `phase_3: "pending"` / `phase_4: "done"` / `last_updated: 2026-04-18T09:00:19+00:00`
+  - [phase3_stages.json](works/<work_id>/analysis/progress/phase3_stages.json) 显示 S001 = `committed`（SHA `3bf25bf`，`last_updated: 2026-04-22T23:30:06+00:00`），S002 = `error`（error_message "Working tree has uncommitted changes"），S003–S049 = `pending`
   - 提取分支 HEAD 确实包含 commit `3bf25bf "S001: 分层提取完成"`（2026-04-22 19:30 -0400），含 2 个角色 + world 的完整 S001 产物（5 条 lane 全 complete）
   - [ai_context/current_status.md:5-9](ai_context/current_status.md#L5-L9) 与 [ai_context/next_steps.md:5-13](ai_context/next_steps.md#L5-L13) 仍写"Phase 3 reset to fresh start — all 49 stages pending after 2026-04-20 rollback"
 - **为什么是问题**：三个不同文件对"Phase 3 当前位置"给出三个互不相容的答案。pipeline.json 仍是 2026-04-21 回滚之前的状态（日期 04-18 早于 04-21 回滚日志），phase3_stages.json 反映的是 2026-04-22 的 S001 重跑，ai_context 则停留在"回滚后全部待做"。
@@ -23,17 +23,17 @@
   - S002 "working tree 有未提交改动" 的 error_message 提示回滚/重跑期间 git 状态异常，未被任何 log 记录
   - `pipeline.json` 中"phase_4: done"与 S001 之后 Phase 4 是否重跑无法核验（`retrieval/scene_archive.jsonl` 有 1236 行但 mtime 无法反推是否包含新 S001 场景）
 - **证据**：
-  - [works/我和女帝的九世孽缘/analysis/progress/pipeline.json](works/我和女帝的九世孽缘/analysis/progress/pipeline.json)
-  - [works/我和女帝的九世孽缘/analysis/progress/phase3_stages.json](works/我和女帝的九世孽缘/analysis/progress/phase3_stages.json) 行 4–35（S001 + S002）
+  - [works/<work_id>/analysis/progress/pipeline.json](works/<work_id>/analysis/progress/pipeline.json)
+  - [works/<work_id>/analysis/progress/phase3_stages.json](works/<work_id>/analysis/progress/phase3_stages.json) 行 4–35（S001 + S002）
   - [ai_context/current_status.md:5-9](ai_context/current_status.md#L5-L9)
   - [ai_context/next_steps.md:5-13](ai_context/next_steps.md#L5-L13)
-  - `git log extraction/我和女帝的九世孽缘 --oneline | grep S001` → `3bf25bf S001: 分层提取完成`
+  - `git log extraction/<work_id> --oneline | grep S001` → `3bf25bf S001: 分层提取完成`
   - `docs/logs/` 下没有 2026-04-22 S001 重跑的日志条目；最接近的是 2026-04-21 `rollback_phase3_to_phase_2_5.md`
 - **类型**：冲突（数据漂移）。必须选一个为"真相"：`phase3_stages.json` 是权威（由 orchestrator 维护），其余两方应立即同步。
 
 #### H2 — 缺 3 份关键 schema：`foundation.json` / `scene_archive` / `load_profiles.json`
 - **结论**：
-  1. `foundation.json`：文档 8 处（requirements/architecture/data_model/extraction_workflow/startup_load）都把它列为 Phase 2.5 产出 + Tier 0 运行时加载的基础设定，但 `schemas/world/` 没有 `foundation.schema.json`。已在 extraction 分支 `works/我和女帝的九世孽缘/world/foundation/foundation.json` 落盘但无任何 schema gate。
+  1. `foundation.json`：文档 8 处（requirements/architecture/data_model/extraction_workflow/startup_load）都把它列为 Phase 2.5 产出 + Tier 0 运行时加载的基础设定，但 `schemas/world/` 没有 `foundation.schema.json`。已在 extraction 分支 `works/<work_id>/world/foundation/foundation.json` 落盘但无任何 schema gate。
   2. `scene_archive` 条目：`data_model.md:136-141` 明确给出字段（scene_id/stage_id/chapter/time/location/characters_present/summary/full_text），`retrieval/scene_archive.jsonl` 是检索核心 + Phase 4 产出，仍无 schema。
   3. `load_profiles.json`：至少 3 处文档（[ai_context/requirements.md:239-240](ai_context/requirements.md#L239-L240)、[simulation/retrieval/load_strategy.md:69-71](simulation/retrieval/load_strategy.md#L69-L71)、[simulation/retrieval/load_strategy.md:201](simulation/retrieval/load_strategy.md#L201)）承诺 per-work 可覆盖 `scene_fulltext_window` 等参数，但无 schema、无代码加载器、无默认模板。
 - **为什么是问题**：运行时加载（startup_load）、Phase 4 输出、per-work 配置三者都依赖这些结构，缺 schema 意味着 validator / consistency_checker 不能 gate，也意味着未来 AI agent 在"写"这些结构时没有契约可循。
@@ -65,7 +65,7 @@
 
 #### M1 — `fail_source` 字段在 `ERROR → PENDING` 重置时不清空
 - **结论**：[automation/persona_extraction/orchestrator.py:1183-1192](automation/persona_extraction/orchestrator.py#L1183-L1192) 在 `--resume` 自动重置 ERROR → PENDING 时，清空了 `error_message` 与 `last_reviewer_feedback`，但没有清空 `fail_source`。对照 [progress.py:379-392](automation/persona_extraction/progress.py#L379-L392) 的 `force_reset_to_pending()`，它清空 `error_message` 但同样不清 `fail_source`。
-- **为什么是问题**：`fail_source` 旨在记录"最近一次失败来源于哪条 lane / 哪一环"（见 phase3_stages.json 结构）。若前一次失败把它设为 `support:王枫`，重置到 PENDING 后这个遗留值会在下次运行时误导观察者，也可能影响决定性 branching 逻辑（如果有 lane-level 优先级规则读它）。
+- **为什么是问题**：`fail_source` 旨在记录"最近一次失败来源于哪条 lane / 哪一环"（见 phase3_stages.json 结构）。若前一次失败把它设为 `support:<character_b>`，重置到 PENDING 后这个遗留值会在下次运行时误导观察者，也可能影响决定性 branching 逻辑（如果有 lane-level 优先级规则读它）。
 - **影响范围**：运维可见性（中等），若将来代码基于 fail_source 做调度决策则会升级。
 - **证据**：`grep fail_source automation/persona_extraction/progress.py automation/persona_extraction/orchestrator.py`。
 - **类型**：bug（小）/ 审计可见性。

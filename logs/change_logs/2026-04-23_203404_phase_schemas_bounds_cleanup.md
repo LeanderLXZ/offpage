@@ -1,7 +1,7 @@
 # phase_schemas_bounds_cleanup
 
 - **Started**: 2026-04-23 20:34:04 EDT
-- **Branch**: extraction/我和女帝的九世孽缘（编辑阶段）→ master（提交阶段）
+- **Branch**: extraction/<work_id>（编辑阶段）→ master（提交阶段）
 - **Status**: PRE
 
 ## 背景 / 触发

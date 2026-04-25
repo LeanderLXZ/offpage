@@ -1,7 +1,7 @@
 # timeline_anchor_revert_and_bounds_not_target
 
 - **Started**: 2026-04-24 19:49:13 EDT
-- **Branch**: extraction/我和女帝的九世孽缘 → master worktree (`../persona-engine-master`)
+- **Branch**: extraction/<work_id> → master worktree (`../persona-engine-master`)
 - **Status**: PRE
 
 ## 背景 / 触发
@@ -12,7 +12,7 @@ Open Question。用户拍板：
 
 1. `timeline_anchor` 撤销 ≤15→≤50 的放宽，回到 ≤15。这条直接消解
    post_processing.py 裸拷贝问题（Open Q #1）—— 派生侧不需要再压缩。
-2. `works/我和女帝的九世孽缘/world/stage_snapshots/S001.json` +
+2. `works/<work_id>/world/stage_snapshots/S001.json` +
    `S002.json` 保持原样，不动（Open Q #2 关闭）。登记到
    `docs/todo_list.md` 作 Residual Risk，未来 Phase 3 重抽或一致性
    检查碰到再处理。

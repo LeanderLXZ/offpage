@@ -31,7 +31,7 @@
   触发重复 confirmation。
 - **做**：current_status.md 的 First Work Package — Phase 3 State 小节贴齐
   `phase3_stages.json`（S001 `991c09f`、S002 `7639c8b`、S003 ERROR / 原因
-  `char_support:姜寒汐 error_max_turns`）；删除"preflight false-positive"
+  `char_support:<character_a> error_max_turns`）；删除"preflight false-positive"
   叙事。
 - **不做**：H1（world `location_anchor` 缺失）、H2（角色 stage_snapshot 字段
   漂移）— 需等用户拍板 rerun / patch / forward 路径，本轮不动。
@@ -92,7 +92,7 @@
 - `docs/logs/` 历史日志**不动**（那是历史事实，按当时的编号写成）
 
 **持久化 state**：
-- `works/我和女帝的九世孽缘/analysis/progress/pipeline.json` — 不手动改；
+- `works/<work_id>/analysis/progress/pipeline.json` — 不手动改；
   靠 progress.py loader 的兼容逻辑在下次 orchestrator 启动时自动迁移。
 
 ### Commit B — H3 事实修正
@@ -102,7 +102,7 @@
     State 小节贴齐 `phase3_stages.json`：
     - S001 committed (`991c09f`, 2026-04-23)
     - S002 committed (`7639c8b`, 2026-04-23)
-    - S003 ERROR（`char_support:姜寒汐 error_max_turns`, num_turns=51）
+    - S003 ERROR（`char_support:<character_a> error_max_turns`, num_turns=51）
     - S004–S049 pending
   - 删除 L34 的 "preflight false-positive from 2026-04-22 working-tree
     state" 叙事

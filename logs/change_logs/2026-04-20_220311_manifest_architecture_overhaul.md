@@ -108,13 +108,13 @@
 
 ### 首个 work 的实际数据
 
-- [sources/works/我和女帝的九世孽缘/manifest.json](../../sources/works/我和女帝的九世孽缘/manifest.json) —
+- [sources/works/<work_id>/manifest.json](../../sources/works/<work_id>/manifest.json) —
   按新 source manifest schema 手写
-- [works/我和女帝的九世孽缘/manifest.json](../../works/我和女帝的九世孽缘/manifest.json) —
+- [works/<work_id>/manifest.json](../../works/<work_id>/manifest.json) —
   `write_works_manifest` 程序化生成（537 章 / 49 stage / 2 character）
-- [works/我和女帝的九世孽缘/world/manifest.json](../../works/我和女帝的九世孽缘/world/manifest.json) —
+- [works/<work_id>/world/manifest.json](../../works/<work_id>/world/manifest.json) —
   `write_world_manifest` 程序化生成（49 stage_ids）
-- `works/我和女帝的九世孽缘/characters/{姜寒汐,王枫}/manifest.json` —
+- `works/<work_id>/characters/{<character_a>,<character_b>}/manifest.json` —
   去掉 `build_status` 行，仍通过 schema
 
 ### ai_context/
@@ -138,7 +138,7 @@ print('schema OK')
 "
 
 # 2. source validator 对已有 work 通过
-python3 -m automation.ingestion.validator 我和女帝的九世孽缘
+python3 -m automation.ingestion.validator <work_id>
 # 预期 exit 0
 
 # 3. 程序化 writer 可重入不破坏 created_at
@@ -148,8 +148,8 @@ from automation.persona_extraction.manifests import (
 )
 from pathlib import Path
 root = Path('.')
-write_works_manifest(root, '我和女帝的九世孽缘', ['姜寒汐', '王枫'])
-write_world_manifest(root, '我和女帝的九世孽缘')
+write_works_manifest(root, '<work_id>', ['<character_a>', '<character_b>'])
+write_world_manifest(root, '<work_id>')
 print('writer OK')
 "
 
@@ -160,7 +160,7 @@ from pathlib import Path
 schema = json.loads(
     Path('schemas/character/character_manifest.schema.json').read_text()
 )
-for p in Path('works/我和女帝的九世孽缘/characters').glob('*/manifest.json'):
+for p in Path('works/<work_id>/characters').glob('*/manifest.json'):
     jsonschema.validate(json.loads(p.read_text()), schema)
 print('character manifest OK')
 "

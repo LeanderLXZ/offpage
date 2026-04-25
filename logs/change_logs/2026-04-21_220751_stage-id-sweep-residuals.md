@@ -39,7 +39,7 @@ description 里点明"紧凑英文代号 S###"。
 ## 不动的区域
 
 - `docs/logs/` + `docs/review_reports/`：历史快照，按约定保留原文
-- `works/我和女帝的九世孽缘/characters/姜寒汐/canon/failure_modes.json`
+- `works/<work_id>/characters/<character_a>/canon/failure_modes.json`
   中 `evidence_refs` 里散文字符串 `FM-JHX-04S003追踪：...`：这是 /go
   批量转换时 `阶段03` → `S003` 直接替换的结果，语义仍然清晰，保留
 - 所有 `{stage_id}.json` 形式的路径片段占位符：语义无偏移（代入值

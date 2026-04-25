@@ -5,7 +5,7 @@ schema v4 refactor 之后，代码中仍保留了大量 `batch` / `Batch` / `批
 以及 `batch_id` 字段。这些概念与 `stage` / `stage_id` 在语义上完全重合
 （5–15 章一段的抽取切片），并行存在导致：
 - 概念冗余：同一对象在不同文件里有两个名字。
-- 命名不一致：`source_batch_plan.json` vs `阶段01_南林初遇` 的 stage_id。
+- 命名不一致：`source_batch_plan.json` vs `阶段01_<location_a>初遇` 的 stage_id。
 - 历史包袱：早期设计区分 "batch（技术切片）" 与 "stage（业务阶段）"，
   v4 之后 batch ≡ stage，但字段仍然并列。
 

@@ -41,18 +41,18 @@ It did not use:
 
 Current leading candidate roles include:
 
-- `王枫`
-- `姜寒汐`
-- `萧浩`
-- `楚妍儿`
-- `冷凝月`
-- `苏婉`
-- `许青枫`
-- `柳青瑶`
-- `楚沫兮`
-- `秦羽溪`
+- `<character_b>`
+- `<character_a>`
+- `<character_c1>`
+- `<character_c2>`
+- `<character_c3>`
+- `<character_c4>`
+- `<character_c5>`
+- `<character_c6>`
+- `<character_c7>`
+- `<character_c8>`
 
-`哈弟` was noted separately as an important non-human recurring companion.
+`<character_c9>` was noted separately as an important non-human recurring companion.
 
 ## Next Recommended Step
 

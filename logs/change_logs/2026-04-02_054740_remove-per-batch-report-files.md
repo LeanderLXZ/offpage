@@ -22,7 +22,7 @@ Multiple prompt files instructed AI agents to generate per-batch report files:
 
 ### Deleted
 
-- `works/我和女帝的九世孽缘/analysis/incremental/world_batch_001.md`
+- `works/<work_id>/analysis/incremental/world_batch_001.md`
 
 ### Updated Prompts (Root Cause Fix)
 

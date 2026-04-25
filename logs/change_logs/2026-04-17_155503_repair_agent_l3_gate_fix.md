@@ -167,7 +167,7 @@ error。验证：
 - 本次变更在 worktree `/tmp/persona-engine-repair-l3gate`（基于 `master` HEAD
   `1e29331`）完成。
 - master 提交后，需要合并到 extraction 分支
-  `extraction/我和女帝的九世孽缘` 才能让中断的 Stage 02 重跑时拿到
+  `extraction/<work_id>` 才能让中断的 Stage 02 重跑时拿到
   新行为。**主仓工作区现有 14 个脏文件（Stage 02 产物）**，merge 时
   需要先 stash 或借助工作流检查点保护。
 - 合并建议：`git checkout extraction/...` → `git stash` →

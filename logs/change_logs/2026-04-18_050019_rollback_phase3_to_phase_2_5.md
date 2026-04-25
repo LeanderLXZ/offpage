@@ -2,8 +2,8 @@
 
 ## 动机
 
-阶段02 离开南林在 repair agent 修复后仍有 3 条语义错误未能消除（姜寒汐
-memory_timeline 中过早使用"王枫"之名；王枫 stage_snapshot 中 voice_state
+阶段02 离开<location_a>在 repair agent 修复后仍有 3 条语义错误未能消除（<character_a>
+memory_timeline 中过早使用"<character_b>"之名；<character_b> stage_snapshot 中 voice_state
 台词归属错位 2 处）。决定放弃当前 Phase 3 全部产物，回到 Phase 2.5 结束
 点重新开始，顺带把 extraction 分支与 master 已有但尚未合入的代码/架构
 改动对齐。
@@ -14,14 +14,14 @@ memory_timeline 中过早使用"王枫"之名；王枫 stage_snapshot 中 voice_
 - 新增 `CLAUDE.md`（session entry point 指针文件，内容指向
   `ai_context/` 阅读顺序），提交 `930c715 chore: add CLAUDE.md entry point`
 
-### extraction/我和女帝的九世孽缘
+### extraction/<work_id>
 1. 清理工作区：丢弃阶段02 修改过的 tracked 文件
-   （姜寒汐/王枫 的 `identity.json` / `memory_digest.jsonl` /
+   （<character_a>/<character_b> 的 `identity.json` / `memory_digest.jsonl` /
    `stage_catalog.json`，以及 world `stage_catalog.json` /
    `world_event_digest.jsonl`）；删除未跟踪的阶段02 产物
-   （两个角色的 `stage_snapshots/阶段02_离开南林.json` +
-   `memory_timeline/阶段02_离开南林.json`，以及
-   `world/stage_snapshots/阶段02_离开南林.json`）。
+   （两个角色的 `stage_snapshots/阶段02_离开<location_a>.json` +
+   `memory_timeline/阶段02_离开<location_a>.json`，以及
+   `world/stage_snapshots/阶段02_离开<location_a>.json`）。
 2. `git reset --hard d62aed8`（"Phase 2.5 结束，尚未开始 Phase 3"的提交）。
    丢弃 stage 01 数据提交 `f06336c`、以及其后的两个 master merge
    `8afb87c` / `80e2fea`（代码改动都将在下一步的 merge 里重新拿到）。
@@ -61,10 +61,10 @@ memory_timeline 中过早使用"王枫"之名；王枫 stage_snapshot 中 voice_
 ## 后续
 
 ```bash
-python -m automation.persona_extraction "我和女帝的九世孽缘" --resume
+python -m automation.persona_extraction "<work_id>" --resume
 ```
 
-将从阶段01 南林初遇 开始重新抽取。smart resume 会检查磁盘上是否存在
+将从阶段01 <location_a>初遇 开始重新抽取。smart resume 会检查磁盘上是否存在
 1+2N 产物，全部缺失 → 正常重跑 LLM 抽取。Phase 4 不会重做。
 
 ## 影响范围

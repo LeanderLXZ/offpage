@@ -23,7 +23,7 @@ hook、config、prompt 都要同步更新。
 - Branch literal 替换：所有 `"master"` 字符串、shell 脚本里的 `"$branch" = "master"`、git 命令中的硬编码 `master`，统统改为 `main`
 - Docstring / 注释 / 错误 message / 用户提示中的 "master" 文字一并改 "main"
 - 文档层（ai_context / docs / README / skill mirrors / hook 注释）所有 master 表述改 main
-- Git 操作：本次 commit 后执行 `git branch -m master main`（局部 rename），其后把改动 merge 进 `library` 与 `extraction/我和女帝的九世孽缘`
+- Git 操作：本次 commit 后执行 `git branch -m master main`（局部 rename），其后把改动 merge 进 `library` 与 `extraction/<work_id>`
 
 **不做**：
 - `logs/` 历史 log 不动（约定豁免，历史就是历史）
@@ -71,7 +71,7 @@ Git 操作（Step 8）：
 - [ ] `python3 -c "from automation.persona_extraction.orchestrator import ExtractionOrchestrator"` 成功
 - [ ] `bash -n .claude/hooks/session_branch_check.sh` 通过
 - [ ] `git branch --list` 列出 `main` 而非 `master`
-- [ ] `git branch --list` 显示 `extraction/我和女帝的九世孽缘`、`library`、`main` 三分支
+- [ ] `git branch --list` 显示 `extraction/<work_id>`、`library`、`main` 三分支
 - [ ] 改完后 `git ls-files | grep -ic '\bmaster\b'` 在 logs 之外为 0（用 `git grep -n 'master' -- ':!logs/'` 验证）
 
 ## 执行偏差
@@ -136,7 +136,7 @@ PRE 计划清单覆盖 19 个文件全部命中，外加补漏 `.gitignore:18` 1
 - [x] `python3 -c "from automation.persona_extraction.orchestrator import ExtractionOrchestrator"` 成功
 - [x] `bash -n .claude/hooks/session_branch_check.sh` 通过
 - [ ] `git branch --list` 显示 `main` 而非 `master`（待 Step 8）
-- [ ] `extraction/我和女帝的九世孽缘` + `library` merge `main` 无冲突（待 Step 9）
+- [ ] `extraction/<work_id>` + `library` merge `main` 无冲突（待 Step 9）
 
 ## Completed
 

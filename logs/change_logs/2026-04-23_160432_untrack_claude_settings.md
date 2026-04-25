@@ -7,14 +7,14 @@ type: infra
 # untrack_claude_settings
 
 - **Started**: 2026-04-23 16:04:32 EDT
-- **Branch**: extraction/我和女帝的九世孽缘
+- **Branch**: extraction/<work_id>
 - **Status**: PRE
 
 ## 背景 / 触发
 
 用户在把 go.md skill 改动同步到 master 时发现 `.claude/settings.json`
 里新追加的 `permissions.allow` 条目带了具体书名路径（如
-`works/我和女帝的九世孽缘/analysis/progress/extraction.log`），而且每
+`works/<work_id>/analysis/progress/extraction.log`），而且每
 次 extraction 运行遇到新 awk 模式就会触发 Claude Code 的 permission
 prompt 并追加 allow 条目。这类条目：
 

@@ -96,5 +96,5 @@ PID 打印也无 lane 标识，tail extraction.log 时无法快速回推某个 P
 
 - 下次真实失败或人工 SIGTERM 某个运行中 lane，验证 `failed_lanes/*.log`
   写入完整
-- 分支策略：本次改动先在 `extraction/我和女帝的九世孽缘` 落地（master
+- 分支策略：本次改动先在 `extraction/<work_id>` 落地（master
   worktree 被另一个会话占用），待 master 空闲后 merge 过去

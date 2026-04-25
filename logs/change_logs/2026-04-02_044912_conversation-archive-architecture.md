@@ -49,7 +49,7 @@ runtime engine could:
 - `docs/architecture/system_overview.md`
 - `prompts/runtime/用户入口与上下文装载.md`
 - `prompts/runtime/users状态回写.md`
-- `works/我和女帝的九世孽缘/indexes/load_profiles.json`
+- `works/<work_id>/indexes/load_profiles.json`
 - relevant `ai_context/` handoff and decisions files
 
 ## Outcome

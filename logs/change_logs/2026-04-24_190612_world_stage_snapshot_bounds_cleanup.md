@@ -1,7 +1,7 @@
 # world_stage_snapshot_bounds_cleanup
 
 - **Started**: 2026-04-24 19:06:12 EDT
-- **Branch**: extraction/我和女帝的九世孽缘（编辑/提交阶段走 `../persona-engine-master` worktree → master）
+- **Branch**: extraction/<work_id>（编辑/提交阶段走 `../persona-engine-master` worktree → master）
 - **Status**: PRE
 
 ## 背景 / 触发
@@ -182,7 +182,7 @@
     digest 派生裸拷贝 timeline_anchor / location_anchor，未按文档
     承诺压缩；timeline_anchor ≤50 直接喂入 ≤15 的 digest
     time / location，会破坏 digest schema gate。
-  - [H] `works/我和女帝的九世孽缘/world/stage_snapshots/S001.json`
+  - [H] `works/<work_id>/world/stage_snapshots/S001.json`
     + `S002.json` — 既有产物含已删除字段 `character_status_changes`
     / `evidence_refs`；S002 `timeline_anchor` 93 字超新 ≤50 cap；
     多个数组字段 item 长度超新 maxLength。需决定手工裁剪 vs 重抽。

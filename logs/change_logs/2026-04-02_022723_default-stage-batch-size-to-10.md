@@ -21,8 +21,8 @@ source reading from `5` chapters to `10` chapters.
 
 ## Files Updated
 
-- `sources/works/我和女帝的九世孽缘/manifest.json`
-- `works/我和女帝的九世孽缘/manifest.json`
+- `sources/works/<work_id>/manifest.json`
+- `works/<work_id>/manifest.json`
 - `schemas/work_manifest.schema.json`
 - `prompts/analysis/世界信息抽取.md`
 - `prompts/analysis/角色信息抽取.md`

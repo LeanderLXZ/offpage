@@ -46,7 +46,7 @@ opus-4-7 audit M1 指出：Phase 3.5 的 `_check_field_completeness`
 ## 校验
 
 - `from automation.persona_extraction import consistency_checker` 成功。
-- 对现有 `阶段01_南林初遇`（两个角色：姜寒汐 / 王枫）跑
+- 对现有 `阶段01_<location_a>初遇`（两个角色：<character_a> / <character_b>）跑
   `_check_field_completeness`：0 completeness issue。
   两个 snapshot 均已包含 `stage_events`（list，9/10 条）与
   `character_arc`（dict）；首阶段 `stage_delta` 缺失被分支跳过，符合预期。

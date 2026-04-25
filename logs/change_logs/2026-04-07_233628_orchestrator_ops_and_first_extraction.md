@@ -8,10 +8,10 @@
 
 ## 1. 首批提取完成
 
-- 作品：我和女帝的九世孽缘
-- batch_001（阶段01_九世复活·南林初遇）通过完整流程：
+- 作品：<work_id>
+- batch_001（阶段01_九世复活·<location_a>初遇）通过完整流程：
   提取 → 程序化校验 → 语义审校 → git commit（eed29f7）
-- 产出：世界快照、姜寒汐/王枫角色快照和 memory_timeline
+- 产出：世界快照、<character_a>/<character_b>角色快照和 memory_timeline
 - 确认 40 batch 规划（此前 ai_context 误记为 36）
 - batch_002 因 SSH 断开超时失败，已回滚到干净状态
 

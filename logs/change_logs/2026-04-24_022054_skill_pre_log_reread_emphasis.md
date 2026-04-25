@@ -1,7 +1,7 @@
 # skill_pre_log_reread_emphasis
 
 - **Started**: 2026-04-24 02:20:54 EDT
-- **Branch**: extraction/我和女帝的九世孽缘（编辑阶段）→ master（提交阶段）
+- **Branch**: extraction/<work_id>（编辑阶段）→ master（提交阶段）
 - **Status**: PRE
 
 ## 背景 / 触发

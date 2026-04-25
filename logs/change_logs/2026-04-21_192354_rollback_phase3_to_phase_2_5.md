@@ -15,20 +15,20 @@ stage 01 的产物整体回滚掉。代码 / schema / ai_context / docs / prompt
 
 ## 改动概要
 
-- `git rm` 5 份 `阶段01_南林初遇.json`：
+- `git rm` 5 份 `阶段01_<location_a>初遇.json`：
   - `world/stage_snapshots/`
-  - `characters/姜寒汐/canon/stage_snapshots/`
-  - `characters/王枫/canon/stage_snapshots/`
-  - `characters/姜寒汐/canon/memory_timeline/`
-  - `characters/王枫/canon/memory_timeline/`
+  - `characters/<character_a>/canon/stage_snapshots/`
+  - `characters/<character_b>/canon/stage_snapshots/`
+  - `characters/<character_a>/canon/memory_timeline/`
+  - `characters/<character_b>/canon/memory_timeline/`
 - truncate 3 份 jsonl 到 0 字节（仍 tracked）：
   - `world/world_event_digest.jsonl`
-  - `characters/姜寒汐/canon/memory_digest.jsonl`
-  - `characters/王枫/canon/memory_digest.jsonl`
+  - `characters/<character_a>/canon/memory_digest.jsonl`
+  - `characters/<character_b>/canon/memory_digest.jsonl`
 - 清空 3 份 `stage_catalog.json` 的 `stages` 数组：
   - `world/stage_catalog.json`
-  - `characters/姜寒汐/canon/stage_catalog.json`
-  - `characters/王枫/canon/stage_catalog.json`
+  - `characters/<character_a>/canon/stage_catalog.json`
+  - `characters/<character_b>/canon/stage_catalog.json`
 - `works/.../analysis/progress/phase3_stages.json` 49 个条目一次性复位
   （本地进度文件，非 tracked）：
   - `state` → `pending`
@@ -57,4 +57,4 @@ stage 01 的产物整体回滚掉。代码 / schema / ai_context / docs / prompt
 - `phase3_stages.json`：49 个条目 state 全部为 `pending`
 - 3 份 digest jsonl 字节数 = 0
 - 3 份 stage_catalog.json 的 `stages` 数组为 `[]`
-- 5 份 `阶段01_南林初遇.json` 已从 index + working tree 移除
+- 5 份 `阶段01_<location_a>初遇.json` 已从 index + working tree 移除

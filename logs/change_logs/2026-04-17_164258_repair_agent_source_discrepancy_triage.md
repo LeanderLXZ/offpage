@@ -157,5 +157,5 @@ worktree `/tmp/persona-engine-source-discrepancy` 基于 master `8afb87c`。
 
 1. worktree commit → push master
 2. 回到 extraction 分支：`git stash`（阶段 02 脏改动）→
-   `git checkout extraction/我和女帝的九世孽缘` → `git merge master` →
+   `git checkout extraction/<work_id>` → `git merge master` →
    `git stash pop`

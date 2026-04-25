@@ -91,7 +91,7 @@ def importance_for_target(
     """Resolve a ``target_type`` label to its canonical importance.
 
     Matches each ``character_id`` in ``importance_map`` as a substring of
-    ``target`` so that annotated labels (``姜寒汐（仙女姐姐期）``) still
+    ``target`` so that annotated labels (``<character_a>（<phase_alias>）``) still
     map back to the base character. Among matches, picks the most
     important importance; ties broken by longer ``character_id`` so that
     a specific id wins over one that happens to be a substring of another

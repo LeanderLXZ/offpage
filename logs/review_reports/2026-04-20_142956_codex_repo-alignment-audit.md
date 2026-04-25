@@ -19,15 +19,15 @@
 ### Medium
 
 2. target-map 例句数量门控对带注释的主角/重要配角名称失效，主角条目会被按“其他”阈值放行。
-   - 结论：`load_importance_map()` 只返回 `{character_id: importance}`，而 `StructuralChecker._check_target_map()` 用 `self._importance_map.get(target_name, "其他")` 做精确匹配；但实际样例里的 `target_type` 经常写成带括号说明的字符串，如 `姜寒汐（仙女姐姐期）`。这类条目匹配不到 `candidate_characters.json` 中的 `姜寒汐`，于是阈值从主角的 5 条降成默认的 1 条。
+   - 结论：`load_importance_map()` 只返回 `{character_id: importance}`，而 `StructuralChecker._check_target_map()` 用 `self._importance_map.get(target_name, "其他")` 做精确匹配；但实际样例里的 `target_type` 经常写成带括号说明的字符串，如 `<character_a>（<phase_alias>）`。这类条目匹配不到 `candidate_characters.json` 中的 `<character_a>`，于是阈值从主角的 5 条降成默认的 1 条。
    - 为什么这是问题：文档和 prompt 都把 `target_voice_map` / `target_behavior_map` 的样本数当成核心质量门控；当前实现却会对最重要的对象降级放行，等于把“高风险退化”伪装成“通过结构校验”。
    - 影响范围：所有 `target_type` 不是裸 `character_id` 的快照；尤其是使用“角色名 + 阶段注释/认知标签”的写法时。
    - 证据：
      - `automation/persona_extraction/validator.py:64-80`
      - `automation/repair_agent/checkers/structural.py:182-205`
-     - `works/我和女帝的九世孽缘/analysis/candidate_characters.json:54-90`
-     - `works/我和女帝的九世孽缘/characters/王枫/canon/stage_snapshots/阶段01_南林初遇.json:478-492`
-     - `works/我和女帝的九世孽缘/characters/王枫/canon/stage_snapshots/阶段01_南林初遇.json:770-784`
+     - `works/<work_id>/analysis/candidate_characters.json:54-90`
+     - `works/<work_id>/characters/<character_b>/canon/stage_snapshots/阶段01_<location_a>初遇.json:478-492`
+     - `works/<work_id>/characters/<character_b>/canon/stage_snapshots/阶段01_<location_a>初遇.json:770-784`
      - 对照可见，`consistency_checker` 已经改成 substring 匹配：`automation/persona_extraction/consistency_checker.py:400-456`
 
 3. `automation/README.md` 的 Phase 3 状态机仍然写着 `failed → retrying → extracting`，与实际代码和 `ai_context` 已不一致。

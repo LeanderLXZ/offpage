@@ -1,7 +1,7 @@
 # post-check-fullreview-commit-after-log
 
 - **Started**: 2026-04-24 21:17:07 EDT
-- **Branch**: master（worktree `../persona-engine-master`，原仓 dirty 并停留在 `extraction/我和女帝的九世孽缘`，包含上一次 /post-check 未提交的 log 回写）
+- **Branch**: master（worktree `../persona-engine-master`，原仓 dirty 并停留在 `extraction/<work_id>`，包含上一次 /post-check 未提交的 log 回写）
 - **Status**: PRE
 
 ## 背景 / 触发

@@ -6,7 +6,7 @@
 
 ## 背景 / 触发
 
-本 session 原本是 /monitor 跟踪 `extraction/我和女帝的九世孽缘` 的抽取进程。进程在我盲区内跑崩（S003 `char_support:姜寒汐` 撞 `error_max_turns=50`）+ orchestrator finally 的 `checkout_master` 因 6 份 baseline 脏而中止，工作树卡在 extraction 分支。
+本 session 原本是 /monitor 跟踪 `extraction/<work_id>` 的抽取进程。进程在我盲区内跑崩（S003 `char_support:<character_a>` 撞 `error_max_turns=50`）+ orchestrator finally 的 `checkout_master` 因 6 份 baseline 脏而中止，工作树卡在 extraction 分支。
 
 用户由此提出对 `/go` 和 `/after-check` 的协作机制升级：
 
@@ -136,7 +136,7 @@ log 复查时状态三档：
 - [x] **本 log 文件的 POST 段在 /go 结束时已填写** — 本段即是
 - [x] **无"旧/legacy/已废弃/原为"残留误伤** — grep 命中的全部是规则定义文本（指导如何检查旧逻辑），不是残留旧内容
 - [x] **无真实书名/角色名混入 skill 或 conventions.md** — grep 命中仅在 PRE log（docs/logs/ 按 conventions §Generic Placeholders 显式豁免）
-- [ ] **commit 干净，非 master 分支按 Step 0 策略处理** — 下一步 Step 8 执行；当前主 working tree 仍在 `extraction/我和女帝的九世孽缘` 且有 S003 未提交脏，本次在 worktree 改，不触碰主 working tree，Step 8 里在 worktree commit 后删 worktree，主 working tree 保持原状
+- [ ] **commit 干净，非 master 分支按 Step 0 策略处理** — 下一步 Step 8 执行；当前主 working tree 仍在 `extraction/<work_id>` 且有 S003 未提交脏，本次在 worktree 改，不触碰主 working tree，Step 8 里在 worktree commit 后删 worktree，主 working tree 保持原状
 
 ## Completed
 

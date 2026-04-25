@@ -70,10 +70,10 @@
 2026-04-24 commit `2b3553b` 把 `world_stage_snapshot.schema.json` 收口：
 删除 `character_status_changes` 和 `evidence_refs`，并对各字段 `maxItems` /
 `maxLength` 做硬门控收紧。当前 extraction 分支
-(`extraction/我和女帝的九世孽缘`) 上既存的：
+(`extraction/<work_id>`) 上既存的：
 
-- `works/我和女帝的九世孽缘/world/stage_snapshots/S001.json`
-- `works/我和女帝的九世孽缘/world/stage_snapshots/S002.json`
+- `works/<work_id>/world/stage_snapshots/S001.json`
+- `works/<work_id>/world/stage_snapshots/S002.json`
 
 两份产出含已删除字段（`character_status_changes` / `evidence_refs`），
 S001/S002 各 9 项 `character_status_changes`、各 10 / 9 项

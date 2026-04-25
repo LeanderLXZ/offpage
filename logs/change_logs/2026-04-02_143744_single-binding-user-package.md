@@ -56,7 +56,7 @@ made the user package look more general than the actual product rule.
 - `prompts/runtime/users状态回写.md`
 - `prompts/shared/最小结构读取入口.md`
 - `prompts/analysis/角色信息抽取.md`
-- `works/我和女帝的九世孽缘/indexes/load_profiles.json`
+- `works/<work_id>/indexes/load_profiles.json`
 
 ## Outcome
 

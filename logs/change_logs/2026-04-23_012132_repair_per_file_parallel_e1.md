@@ -92,8 +92,8 @@ Stage 进入
   + `from automation.repair_agent.coordinator import run as repair_run`
   + `from automation.repair_agent.recorder import RepairRecorder`
 - `python -m automation.persona_extraction --help` 正常
-- `_repair_slug` 跨中文路径无碰撞：`姜寒汐/.../S001.json` vs
-  `王枫/.../S001.json` md5 suffix 分辨
+- `_repair_slug` 跨中文路径无碰撞：`<character_a>/.../S001.json` vs
+  `<character_b>/.../S001.json` md5 suffix 分辨
 - `_repair_slug` 长度 ≤ 70，包 filename ≈ 90 chars < ext4/NTFS 上限 255
 - `concurrent.futures` dispatch 模拟：11 个 fake task 并发 0.1s 完成
 - Per-file exception 容错：try/except 捕获 worker 异常，合成
