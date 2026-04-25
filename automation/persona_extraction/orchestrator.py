@@ -29,9 +29,11 @@ from .config import get_config
 from .consistency_checker import run_consistency_check, save_report
 from .failed_lane_log import write_failed_lane_log
 from .git_utils import (
+    branch_exists,
     checkout_master,
     commit_stage,
     create_extraction_branch,
+    ensure_branch_from_master,
     preflight_check,
     reset_paths,
     squash_merge_to,
@@ -1961,6 +1963,17 @@ class ExtractionOrchestrator:
             return
 
         target = get_config().git.squash_merge_target
+
+        # Lazy idempotent creation: library is local-only and does not exist
+        # in fresh clones, so create it from master on first use.
+        existed = branch_exists(self.project_root, target)
+        if not ensure_branch_from_master(self.project_root, target):
+            print(f"  [ERROR] Cannot ensure target branch '{target}' "
+                  f"exists. Squash-merge skipped — create it manually "
+                  f"with: git branch {target} master")
+            return
+        if not existed:
+            print(f"  [setup] target branch '{target}' created from master.")
 
         print(f"\n  All stages committed on branch '{branch}'.")
         print(f"  Squash-merge to '{target}' will consolidate all extraction")

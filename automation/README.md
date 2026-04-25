@@ -70,7 +70,7 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
   会话累计等待硬停 `probe_max_wait_h`）
 - `[runtime]` 默认 runtime 上限、心跳间隔、默认 backend
 - `[logging]` `failed_lanes/` 保留天数
-- `[git]` extraction 分支前缀、auto squash-merge 开关
+- `[git]` extraction 分支前缀、squash-merge 目标分支（默认 `library`）、auto squash-merge 开关
 
 ## 使用
 
@@ -198,7 +198,9 @@ orchestrator 自动落实这条纪律：
   询问是否 squash-merge 到 `library`（默认目标，由 `[git].squash_merge_target`
   控制；`[git].auto_squash_merge=true` 时自动执行）。三分支模型下作品
   artefact 永久归档在本地 `library` 分支，**不回流 `master`**，保持远程
-  仓库只承载框架。
+  仓库只承载框架。`library` 分支由 `_offer_squash_merge` 在首次 squash 时
+  按需自动从 master 创建（lazy + idempotent），无需手工 `git branch
+  library master` 初始化。
 
 ## 目录结构
 
