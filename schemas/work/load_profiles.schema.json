@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/work/load_profiles.schema.json",
+  "$id": "offpage/work/load_profiles.schema.json",
   "title": "WorkLoadProfile",
   "description": "Per-work 运行时加载配置。位于 works/{work_id}/indexes/load_profiles.json，作为 sparse override 覆盖 simulation 启动器的默认值——缺省时 loader 使用内置默认，不强制要求此文件存在。字段集随 simulation 层实现演进，暂以 additionalProperties=true 保留扩展空间。",
   "type": "object",

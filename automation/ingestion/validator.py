@@ -26,7 +26,7 @@ try:
     import jsonschema
 except ImportError as _jsonschema_exc:  # pragma: no cover
     raise ImportError(
-        "jsonschema is a required dependency of persona-engine ingestion "
+        "jsonschema is a required dependency of offpage ingestion "
         "validation. Install it with `pip install jsonschema`."
     ) from _jsonschema_exc
 

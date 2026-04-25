@@ -1,6 +1,6 @@
 # /full-review — 全仓库对齐审计
 
-对整个 `persona-engine` 仓库做一次"规范对齐 + 实现风险"的全量 review。`$ARGUMENTS` 存在则作为本轮重点或额外关注点。
+对整个 `offpage` 仓库做一次"规范对齐 + 实现风险"的全量 review。`$ARGUMENTS` 存在则作为本轮重点或额外关注点。
 
 ## 目标
 

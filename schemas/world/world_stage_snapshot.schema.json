@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/world/world_stage_snapshot.schema.json",
+  "$id": "offpage/world/world_stage_snapshot.schema.json",
   "title": "世界阶段快照",
   "type": "object",
   "additionalProperties": false,

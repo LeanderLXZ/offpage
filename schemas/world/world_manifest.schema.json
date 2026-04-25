@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/world/world_manifest.schema.json",
+  "$id": "offpage/world/world_manifest.schema.json",
   "title": "世界清单",
   "description": "works/{work_id}/world/ 下的世界包目录页。所有字段都可从 stage_plan 程序化派生；世界详情文字放在 foundation.json。",
   "type": "object",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/world/foundation.schema.json",
+  "$id": "offpage/world/foundation.schema.json",
   "title": "WorldFoundation",
   "description": "Phase 2 产出的世界基础设定，作为运行时 Tier 0 的静态背景加载。不含任何 stage-scoped 信息（阶段化内容归 world_stage_snapshot）。顶层 additionalProperties=true 以兼容 per-work 扩展字段，子对象按需收紧。",
   "type": "object",

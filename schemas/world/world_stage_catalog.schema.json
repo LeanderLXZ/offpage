@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/world/world_stage_catalog.schema.json",
+  "$id": "offpage/world/world_stage_catalog.schema.json",
   "title": "世界阶段目录",
   "description": "阶段索引，仅用于 bootstrap 阶段选择，运行时不加载。",
   "type": "object",

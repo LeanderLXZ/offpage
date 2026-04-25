@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/user/user_profile.schema.json",
+  "$id": "offpage/user/user_profile.schema.json",
   "title": "用户画像",
   "type": "object",
   "additionalProperties": false,

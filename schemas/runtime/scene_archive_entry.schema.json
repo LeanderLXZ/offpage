@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/runtime/scene_archive_entry.schema.json",
+  "$id": "offpage/runtime/scene_archive_entry.schema.json",
   "title": "SceneArchiveEntry",
   "description": "scene_archive.jsonl 中的单条记录——Phase 4 scene_split 后按行号切出的场景。每行一条，作为 FTS5 检索与 full_text 取回的基本单元。scene_id 的 stage 段由 stage_plan.json 查得，runtime 通过正则 S(\\d{3}) 过滤。",
   "type": "object",

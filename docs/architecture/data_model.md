@@ -3,7 +3,7 @@
 ## 顶层目录树
 
 ```text
-persona-engine/
+offpage/
   ai_context/
   automation/
   docs/

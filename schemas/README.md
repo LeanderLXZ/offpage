@@ -13,7 +13,7 @@
 | `runtime/` | Context / Session / 请求载荷 / 场景归档条目 | `context_manifest`、`context_character_state`、`session_manifest`、`runtime_session_request`、`scene_archive_entry` |
 | `shared/` | 跨域共享（extraction_notes 等） | `source_note` |
 
-各 schema 的 `$id` 统一为 `persona-engine/<subdir>/<name>.schema.json`；功能说明与字段索引见
+各 schema 的 `$id` 统一为 `offpage/<subdir>/<name>.schema.json`；功能说明与字段索引见
 [../docs/architecture/schema_reference.md](../docs/architecture/schema_reference.md)。
 
 这些 schema 当前采取保守设计，优先固定结构，再为后续更丰富的抽取细节预留空间。

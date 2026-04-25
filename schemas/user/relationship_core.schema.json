@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/user/relationship_core.schema.json",
+  "$id": "offpage/user/relationship_core.schema.json",
   "title": "关系核心",
   "type": "object",
   "additionalProperties": false,

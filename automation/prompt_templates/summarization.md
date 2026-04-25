@@ -1,6 +1,6 @@
 # 章节归纳（Chunk {chunk_index}/{total_chunks}）
 
-你现在接手本地项目 `persona-engine`，你没有任何额外背景知识。
+你现在接手本地项目 `offpage`，你没有任何额外背景知识。
 
 ## 目标
 

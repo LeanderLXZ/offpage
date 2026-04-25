@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "persona-engine/work/works_manifest.schema.json",
+  "$id": "offpage/work/works_manifest.schema.json",
   "title": "作品包清单",
   "description": "works/{work_id}/ 目录下的作品清单。与 sources/ 端的 work_manifest 不同：这个文件是 canon 工作包的目录页，列出 Phase 1 全局分析后已知的世界 / 角色 / 阶段组成。",
   "type": "object",
