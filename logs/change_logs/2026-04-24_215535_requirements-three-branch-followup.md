@@ -69,3 +69,25 @@ PRE 列了 3 处；POST 增加 1 处（流程图），已在"执行偏差"段记
 
 - **Status**: DONE
 - **Finished**: 2026-04-24 21:56:49 EDT
+
+<!-- /post-check 填写（与同主题前置 log `2026-04-24_213857_three-branch-model-library.md` 合并复审） -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+
+- 落实率：本 log 4/4 计划项（含执行偏差补的流程图） + 3/3 验证标准全部 ✅
+- Missed updates：0 条
+
+### 轨 2 — 影响扩散
+
+- Findings：合并到前置 log（同主题）
+- 详见 `2026-04-24_213857_three-branch-model-library.md` 的复查结论段
+
+## 复查时状态
+
+- **Reviewed**: 2026-04-24 22:01:51 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 本 log 自身轨 1 全落实
+  - 轨 2 的 Medium 命中（library 分支自检 + README 初始化指引缺失）属于上一次 commit 的扩散，未在本次补漏 commit 中处理
+- **Conversation ref**: 同会话内 /post-check 输出（双 log 合并复审）

@@ -98,3 +98,29 @@
 
 - **Status**: DONE
 - **Finished**: 2026-04-24 21:43:10 EDT
+
+<!-- /post-check 填写（与同主题后续补改 log `2026-04-24_215535_requirements-three-branch-followup.md` 合并复审） -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+
+- 落实率：本 log 11/11 计划项 + 6/6 验证标准全部 ✅
+- Missed updates：0 条
+
+### 轨 2 — 影响扩散
+
+- Findings：High=0 / Medium=2 / Low=2
+  - [M] orchestrator 缺 library 分支存在性自检，新环境首次 squash 会静默失败
+  - [M] automation/README.md 缺"首次 `git branch library master`"初始化指引
+  - [L] session_branch_check.sh 未把 library 列入合法分支白名单（可能误警告）
+  - [L] prompts/ingestion / prompts/shared 提及 manifest.json 未标注"已 .gitignore"
+- Open Questions：2 条（library 自检策略、hook 白名单；详见对话）
+
+## 复查时状态
+
+- **Reviewed**: 2026-04-24 22:01:51 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全落实，但轨 2 有 2 条 Medium，按 PASS/PARTIAL/FAIL 标准归 PARTIAL
+  - 两条 Medium 都是"未来在新环境跑会卡"性质，当前 session 已手工建 library，运行无阻
+- **Conversation ref**: 同会话内 /post-check 输出（含完整双轨报告）
