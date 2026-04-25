@@ -485,7 +485,9 @@ orchestrator (Python)
 - 提取在独立 git 分支（`extraction/{work_id}`）进行，每 stage 单独 commit
   （精确回滚）；全部完成后 squash merge 到 `library` 分支（默认目标，可由
   `[git].squash_merge_target` 配置），**不回流 `main`**——`main` 只承载
-  框架，作品 artefact 永久归档在本地 `library` 分支，extraction 分支可删除
+  框架，作品 artefact 永久归档在本地 `library` 分支。**squash 完成后必须
+  `git branch -D extraction/{work_id}` + `git gc --prune=now` 回收 blob**，
+  否则历次 regen commit 仍可达、长期占盘；`library` squash 是唯一保留记录
 - 分支纪律落实（见 `ai_context/architecture.md` §Git Branch Model）：
   - `run_extraction_loop` / `run_full` 把 `create_extraction_branch` +
     baseline rerun + Phase 3 循环整体包进 `try / finally:
