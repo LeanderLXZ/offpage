@@ -54,7 +54,7 @@ description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/
 
 ## 审计要求
 
-- 这是 review，**不是改代码**；不要修改文件
+- 这是 review，**不是改代码**；除"结果归档（必做）"那份新建的 review report 必须 commit 之外，不要修改、commit 或推送任何其他文件
 - 优先找"高价值问题"，不是泛泛而谈
 - 不要只给总结，先给 findings
 - findings 按严重性排序：High / Medium / Low
@@ -100,6 +100,13 @@ logs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
 - 一次 review 一个文件，不追加、不覆盖旧文件
 - `logs/review_reports/` 仅存 review 结果快照；与 `logs/change_logs/`（历史决策
   记录）、`docs/todo_list.md`（待办）职责互不重叠
+
+写完后**立即 commit 这一份 review report 文件**——不要留作脏工作区，否则下一轮 `/go` 的 Step 0 自动锁定逻辑会把这份残留误判为"dirty 工作区"而强制走 worktree 路径。
+
+- commit 在**当前分支**即可（`/full-review` 通常在用户当前所在分支跑，无需切换）
+- 仅 `git add` 这一份 review report 文件——不要顺手把其他无关 dirty 文件带进 commit
+- commit message 风格：`log(review_reports): /full-review {slug} ({model})`
+- 不 push，不切分支；commit 后即结束本轮 review
 
 ## 额外要求
 
