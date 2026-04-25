@@ -102,6 +102,78 @@ schema gate 拒绝。
 
 ---
 
+### [T-EXTRACTION-BRANCH-DISPOSE] orchestrator squash 后追加分支删除 + gc 选项
+
+**上下文**
+
+`ai_context/decisions.md` #26 / `conventions.md` §Git / `architecture.md` §Git Branch Model 已规约：extraction/{work_id} squash 进 library 后必须 `git branch -D extraction/{work_id}` + `git gc --prune=now`，否则旧 regen commit 与 blob 不可回收，长期占盘。
+
+`automation/persona_extraction/orchestrator.py::_offer_squash_merge` 当前只 offer squash 本身，不 offer 后续的分支删除 + gc。手工跑容易漏掉。
+
+**改动清单**
+
+1. [automation/persona_extraction/orchestrator.py](automation/persona_extraction/orchestrator.py) `_offer_squash_merge`（搜函数名定位）：squash 成功后追加二段交互
+   - 提示 `Delete extraction/{work_id} branch and run git gc? [y/N]`
+   - 同意则依次跑 `git branch -D extraction/{work_id}` + `git gc --prune=now`，失败 raise
+   - 拒绝则打印一行 reminder 提示用户日后手动跑
+2. [automation/README.md](automation/README.md) squash 段落补这条流程
+3. [docs/architecture/extraction_workflow.md](docs/architecture/extraction_workflow.md) 同步
+
+**验证方法**
+
+- 跑 `python -m py_compile automation/persona_extraction/orchestrator.py`
+- 模拟 squash 流程（用 `[git].squash_merge_target = test-library` + 假 work_id）走完，确认两步交互按预期执行
+- `git reflog` 确认旧 commit 在 gc 后真正变成 unreachable
+
+**完成标准**
+
+- orchestrator squash 完成后能交互 offer 删分支 + gc
+- 三处 doc 描述与代码一致
+- 本 todo 条目删除
+
+**预估**：S（半天）
+
+**依赖**：无
+
+---
+
+### [T-PHASE4-STAGE-REMAP] phase 4 scene_archive.jsonl 程序级 stage 重映射工具
+
+**上下文**
+
+`ai_context/architecture.md` §Automated Extraction Pipeline → Phase 4 已规约：scene_archive.jsonl 的 stage 赋值（`stage_id` 和 `SC-S###-##` 里的 `S###`）是程序级 chapter → stage_plan range 映射，新 stage_plan 可纯程序重映射，无需重跑 per-chapter LLM。
+
+当前 `automation/persona_extraction/` 没有 utility 实现这个能力。Phase 1 重抽 → 新 stage_plan 后，唯一可走路径是 `--start-phase 4` 全量重跑（per-chapter LLM 调用，token 成本高、耗时长）。
+
+**改动清单**
+
+1. 新增 [automation/persona_extraction/scene_archive_remap.py](automation/persona_extraction/scene_archive_remap.py)（或 module 内合适位置）：
+   - 输入：旧 `scene_archive.jsonl` + 新 `stage_plan.json`
+   - 处理：每行按 `chapter` 字段查新 stage_plan 的 chapter range，重赋 `stage_id`；按新 stage 分组重排 seq，重生成 `scene_id = SC-S###-##`
+   - 输出：新 `scene_archive.jsonl`（覆盖原文件 / 写新路径）
+   - chapter 不在新 stage_plan 任何 range 内时报错或写 unmapped 标记（待决策）
+2. CLI 入口：`persona-extract <work_id> --remap-scene-archive` 子命令
+3. 单元测试：构造 mini stage_plan + scene_archive，覆盖正常 / 边界（chapter 跨 stage 边界、unmapped chapter）
+4. 文档：[automation/README.md](automation/README.md) 加 utility 说明；[docs/architecture/extraction_workflow.md](docs/architecture/extraction_workflow.md) Phase 4 段落补 remap 路径
+
+**待决策项**
+
+1. unmapped chapter 行为：报错 abort vs 写 `stage_id = "UNMAPPED"` 让用户事后修
+2. CLI 接口：独立子命令 vs `--start-phase 4 --remap-only` flag
+
+**完成标准**
+
+- 给定旧 scene_archive + 新 stage_plan，能产出 stage_id / scene_id 正确重排的新 scene_archive
+- 单测覆盖核心 case
+- 文档 + ai_context Phase 4 段落引用此 utility
+- 本 todo 条目删除
+
+**预估**：M（一天）
+
+**依赖**：scene_archive.jsonl schema 稳定（当前 `schemas/retrieval/` 下若已定义则按该 schema 处理）
+
+---
+
 ### [T-CHAR-SNAPSHOT-13-DIM-VERIFY] 角色 stage_snapshot "13 必填维度" 表述核对
 
 **上下文**

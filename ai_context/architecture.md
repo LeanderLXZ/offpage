@@ -140,6 +140,7 @@ Flow:
 - `checkout_main` / `preflight_check` accept `scope_paths`; orchestrator passes `["works/{work_id}/"]` — only scope-internal dirt blocks; scope-external dirt tolerated.
 - Code / schema / prompt / docs / `ai_context/` commits → `main` first, then `git merge main` from extraction and library branches.
 - Extraction-data commits (baseline + Phase 3+ products) belong only on the extraction branch. `_offer_squash_merge` squash-merges to **`library`** (configurable via `[git].squash_merge_target`, default `library`) interactively after all stages `COMMITTED` — never to `main`, so the public-facing branch stays artefact-free.
+- After squash-merge, delete the source `extraction/{work_id}` branch (`git branch -D`) and run `git gc --prune=now` to reclaim the accumulated regen commits. The `library` squash is the only retained record; `extraction/{work_id}` is a disposable scratchpad — failed regens may be committed freely without polluting `library` history or long-term disk usage.
 - `library` absorbs framework updates via periodic `git merge main`; never flows back to main.
 - Anomaly guard: SessionStart hook (`.claude/hooks/session_branch_check.sh`) warns when working tree is non-main yet no orchestrator process is running.
 
@@ -157,7 +158,7 @@ Phases (full detail → `automation/README.md` +
 - **Phase 2** — baseline production (world foundation + character baselines, draft).
 - **Phase 3** — per-stage loop: (1) 1+2N extraction (1 world + N char_snapshot + N char_support) → (2) programmatic post-processing (digests + catalog; summaries 1:1 copy of source) → (3) `repair_agent` per file in parallel → (4) post-repair PP rerun **before** `transition(PASSED)` → (5) commit-ordering contract (commit first; non-empty SHA → `COMMITTED`; empty → `FAILED`). JSONL slice write-back merges by key so prior stages cannot be truncated. Extraction prompts do NOT read `baseline_merge.md`, digests, or catalog; char extraction does NOT read world snapshot.
 - **Phase 3.5** — 10 programmatic cross-stage consistency checks (0 token), incl. `memory_digest` / `world_event_digest` 1:1 equality gates. `consistency_report.json` committed regardless of pass/fail; errors block Phase 4.
-- **Phase 4** — scene archive (independent; needs only `stage_plan.json`). Per-chapter parallel LLM + programmatic extraction → `works/{work_id}/retrieval/scene_archive.jsonl` (git-ignored). Same-run retry budget `[phase4].max_retries_per_chapter` (default 2); circuit breaker `[phase4].circuit_breaker_*`. CLI `--start-phase 4`.
+- **Phase 4** — scene archive (independent; needs only `stage_plan.json`). Per-chapter parallel LLM + programmatic extraction → `works/{work_id}/retrieval/scene_archive.jsonl` (git-ignored). Same-run retry budget `[phase4].max_retries_per_chapter` (default 2); circuit breaker `[phase4].circuit_breaker_*`. CLI `--start-phase 4`. Stage assignment (`stage_id` and the `S###` segment of `SC-S###-##`) is program-level: chapter → `stage_plan` range. A new `stage_plan` can be applied to an existing `scene_archive.jsonl` via pure remap (re-derive `stage_id` and renumber per-stage seq) without re-running per-chapter LLM extraction.
 
 ### Key Design
 

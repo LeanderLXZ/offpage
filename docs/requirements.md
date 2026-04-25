@@ -2049,8 +2049,10 @@ Lane 名称约定：`world`、`snapshot:{char_id}`、`support:{char_id}`。
   以保持最细粒度的回滚能力
 - 全部提取完成后，squash merge 到 `library` 分支（默认目标，可由
   `[git].squash_merge_target` 配置）。library 是本地归档分支，作品
-  artefact **不回流 main**——main 永远只承载框架并对外 push；
-  extraction 分支 squash 完可删除
+  artefact **不回流 main**——main 永远只承载框架并对外 push。
+  **squash 完成后必须 `git branch -D extraction/{work_id}` + `git gc --prune=now`
+  回收 blob**，否则历次 regen commit 仍可达、长期占盘；`library` squash 是
+  唯一保留记录，extraction 分支是一次性 scratchpad，失败 regen 可放心 commit
 - 每个 stage 开始前执行 git preflight check
 
 ### 11.7 LLM 后端抽象
