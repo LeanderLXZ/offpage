@@ -18,6 +18,22 @@
 
 {files_to_read}
 
+## 长度与条数硬规则
+
+schema 给的 `maxLength` / `maxItems` 是**硬上限（cap）**，**不是配额（target）**。
+原文里有几条就写几条，每条按需写多长就多长——**不要为凑满 N 项灌水、
+不要把单条拉长到撑满字数**。整体守则：
+
+- 数组字段：原文里若只支持写 3 条相关的事件 / 状态 / 关系转变，就只写 3 条；
+  不要为了"用满 maxItems=10"而虚构、合并、拆分。
+- 字符串字段：能用一句话讲清的就一句话；不要把 100 字的内容硬拉到 200 字。
+- 长度下限（`minLength` / 最少字数描述）是**最低门控**，不是建议；过短确实
+  会被 schema 判失败，但从原文里**确有**对应内容时再写，没有就空数组 / 不
+  填可选字段，不要无中生有。
+
+判断标准：每一项 / 每一字都应该能从原文中找到对应素材，否则就是灌水。
+schema gate 拒绝的是"过长 / 过多"，**评审 / 复读会拒绝"灌水 / 凑数"**。
+
 ## 核心规则
 
 1. **仅产出世界层**：本次调用只负责世界信息，角色信息由后续独立调用处理
@@ -25,8 +41,8 @@
 3. **正文不带章节标注**：`stage_events`、`current_world_state` 等正文字段**不需要**逐条标注章节号，章节回溯由章节范围与上下文承担
 4. **标识命名**：中文作品的 `work_id` 和路径段使用中文；`stage_id` 使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`），与 `M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##` 家族对齐
 5. **时间性**：当前阶段写清"现在"，不要混成扁平总结
-6. **阶段级锚点**：`timeline_anchor` 为本阶段的故事内时间锚（≤50 字短语，如"开篇前夕"、"三年后"），`location_anchor` 为本阶段的主要发生地（≤15 字短语，如"某宗门"、"某城外"），两者均 schema 硬门控 required。post_processing 将这两个值派生到本阶段每条 world_event_digest 的 `time` / `location` 字段（digest 那侧仍是 ≤15 字的短锚，过长由 post_processing 压缩）
-7. **仅本阶段事件**：`stage_events` 只记录本 stage 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 50–100 字的一句话摘要**（schema 两端硬门控；过短会直接判失败），既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。digest 是 1:1 机械展开，**你在此处写几条就是几条**——所以边界判定必须在你落笔时完成。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）
+6. **阶段级锚点**：`timeline_anchor` 和 `location_anchor` 各为 **≤15 字**的短语（schema 硬门控 required）。前者是本阶段的故事内时间锚（如"开篇前夕"、"三年后"），后者是本阶段的主要发生地（如"某宗门"、"某城外"）。post_processing 将这两个值复制到本阶段每条 world_event_digest 的 `time` / `location` 字段
+7. **仅本阶段事件**：`stage_events` 只记录本 stage 章节范围内发生的事件，不重复前序阶段已记录的内容。**每条为 50–100 字的一句话摘要**（schema 两端硬门控；过短会直接判失败），既是快照中的事件清单，也是 `world_event_digest.jsonl` 的直接来源。digest 是 1:1 机械展开，**你在此处写几条就是几条**——所以边界判定必须在你落笔时完成。跨阶段时间线由 `world_event_digest.jsonl` 程序化累积（每条 digest 条目的 5 级 `importance`：`trivial` / `minor` / `significant` / `critical` / `defining` 由脚本按关键词推断——渡劫、战争、结丹等重大事件自动归为 `critical` / `defining`）。**maxItems 是上限不是配额**：原文里有几条世界级事件就写几条，不要为凑满虚构或拆分；同样 `current_world_state` / `relationship_shifts` / `foundation_corrections` / `location_changes` / `map_changes` / `unresolved_questions` 都是按需写，原文没素材就空数组
 
 ### 世界层 vs 角色层（判定示例）
 

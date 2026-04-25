@@ -88,7 +88,7 @@ source. Long discussion chains live in `docs/logs/`.
 27e. `foundation` / `fixed_relationships` / `stage_catalog` bound-collapsed. `fixed_relationships.{source_type,evidence_refs}` removed; `stage_catalog.order` removed (lex sort by `stage_id`); character catalog at `schemas/character/stage_catalog.schema.json`; placeholder `*_summary` fields deleted.
 27f. Character `stage_snapshot` full-body bound-collapsed: required `timeline_anchor` + `snapshot_summary` added; `boundary_state.hard_boundaries` added (peer of baseline).
 27g. `stage_snapshot` structural prunes: `character_arc` is a short string (was object); top-level `memory_refs` / `evidence_refs` removed; per-item `evidence_ref` removed from every `dialogue_examples` / `action_examples`. `behavior_rules.relationship_behavior_map` / `relationship_type` renamed to `target_behavior_map` / `target_type` — baseline ↔ stage unified.
-27h. `world_stage_snapshot` structural prunes: `character_status_changes` removed (角色个人状态变化由 character `stage_snapshot` / `memory_timeline` 承载，世界快照只保留世界公共层）；`evidence_refs` removed (no schema keeps chapter anchors). Field-level `maxItems` / `maxLength` tightened in schema; `stage_events` widened from 50–80 to 50–100 CJK chars; `timeline_anchor` widened from ≤15 to ≤50.
+27h. `world_stage_snapshot` structural prunes: `character_status_changes` removed (角色个人状态变化由 character `stage_snapshot` / `memory_timeline` 承载，世界快照只保留世界公共层）；`evidence_refs` removed (no schema keeps chapter anchors). Field-level `maxItems` / `maxLength` tightened in schema; `stage_events` widened from 50–80 to 50–100 CJK chars.
 
 ## Memory System
 

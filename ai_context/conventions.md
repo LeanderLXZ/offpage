@@ -79,6 +79,7 @@ Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
 - Baseline files = extraction anchors only — not runtime-loaded.
 - Stage snapshots are **self-contained** — never merged with baseline at runtime.
 - **Bounds only in schema.** All `maxLength` / `minLength` / `maxItems` / `required` live in `schemas/**.schema.json`; no duplicates anywhere else. Exact values → schema file. Index → `docs/architecture/schema_reference.md`.
+- **Bounds are caps, not targets.** Every extraction prompt template must explicitly tell the LLM that `maxLength` / `maxItems` are **hard ceilings, not quotas** — write what's actually in the source, do not pad / inflate / invent items to fill the cap. Without this, models default to writing exactly N items per array because "the schema says ≤N".
 - **No chapter anchors on snapshots.** No schema (world / character baselines / `stage_snapshot` / `memory_timeline`) carries `evidence_refs` / `source_type` / `scene_refs`; no per-item `evidence_ref` in `dialogue_examples` / `action_examples`. Anchoring uses `timeline_anchor` (+ `location_anchor` for world) and `memory_timeline`.
 - **Unified vocabulary**: `behavior_rules` uses `target_behavior_map` / `target_type` (same as stage `behavior_state`).
 - **`stage_catalog`** at `schemas/{world,character}/stage_catalog.schema.json`; bootstrap-only, not runtime-loaded; sort by `stage_id` lex (no `order` field).

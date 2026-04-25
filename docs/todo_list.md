@@ -63,7 +63,70 @@
 
 ## 下一步
 
-（暂无条目）
+### [T-WORLD-SNAPSHOT-S001-S002-MIGRATE] S001 / S002 世界快照迁移到新 schema
+
+**上下文**
+
+2026-04-24 commit `2b3553b` 把 `world_stage_snapshot.schema.json` 收口：
+删除 `character_status_changes` 和 `evidence_refs`，并对各字段 `maxItems` /
+`maxLength` 做硬门控收紧。当前 extraction 分支
+(`extraction/我和女帝的九世孽缘`) 上既存的：
+
+- `works/我和女帝的九世孽缘/world/stage_snapshots/S001.json`
+- `works/我和女帝的九世孽缘/world/stage_snapshots/S002.json`
+
+两份产出含已删除字段（`character_status_changes` / `evidence_refs`），
+S001/S002 各 9 项 `character_status_changes`、各 10 / 9 项
+`evidence_refs`；多处数组 item 长度也超过新 maxLength。两份产物会被新
+schema gate 拒绝。
+
+**为什么不在原 commit 内迁移**
+
+- S001 已完成 Phase 3 提取并 commit，重跑代价高
+- S002 位于 extraction 分支当前活跃 stage，本应在下一轮 Phase 3 重抽时
+  顺手按新 schema 产出
+- 用户在 /post-check 后明确选择"S001/S002 先不动"
+
+**待决策项**
+
+1. 修复路径：手工裁剪（删两个字段 + 截短超长 item）vs Phase 3 重抽
+2. 时间窗：在 Phase 3 真正继续推进时立即处理，还是 Phase 3.5 一致性
+   检查报错时再处理
+
+**完成标准**
+
+- S001 / S002 世界快照通过新 `world_stage_snapshot.schema.json` 校验
+- 本 todo 条目删除
+
+**依赖**：extraction 分支下一次 Phase 3 / 3.5 推进
+
+---
+
+### [T-CHAR-SNAPSHOT-13-DIM-VERIFY] 角色 stage_snapshot "13 必填维度" 表述核对
+
+**上下文**
+
+`docs/architecture/extraction_workflow.md:266` 与 `docs/requirements.md:2135`
+仍称角色 `stage_snapshot` 含"13 个必填维度"。2026-04-24 /post-check
+规范线 sub-agent 怀疑此数已漂移到 ~17（personality / mood / voice_state /
+behavior_state / boundary_state / relationships / knowledge_scope /
+stage_events / character_arc / timeline_anchor / snapshot_summary 等
+近年陆续加入），文档未跟。
+
+**待决策项**
+
+1. 真实 required 数 = 多少？（以 `schemas/character/stage_snapshot.schema.json`
+   为准点数）
+2. 文档表述要不要去掉具体数字，改为"以 schema required 列表为准"以
+   减少未来漂移？
+
+**完成标准**
+
+- `docs/architecture/extraction_workflow.md` + `docs/requirements.md`
+  的"N 个必填维度"表述与 schema 实际匹配
+- 本 todo 条目删除
+
+**依赖**：无
 
 ---
 
