@@ -165,3 +165,40 @@
 
 - **Status**: DONE
 - **Finished**: 2026-04-24 19:33:07 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+
+- 落实率：13/13 项计划 + 4/4 项验证 全通过
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+
+- Findings: High=2 / Medium=0 / Low=1
+  - [H] `automation/persona_extraction/post_processing.py:276-290` —
+    digest 派生裸拷贝 timeline_anchor / location_anchor，未按文档
+    承诺压缩；timeline_anchor ≤50 直接喂入 ≤15 的 digest
+    time / location，会破坏 digest schema gate。
+  - [H] `works/我和女帝的九世孽缘/world/stage_snapshots/S001.json`
+    + `S002.json` — 既有产物含已删除字段 `character_status_changes`
+    / `evidence_refs`；S002 `timeline_anchor` 93 字超新 ≤50 cap；
+    多个数组字段 item 长度超新 maxLength。需决定手工裁剪 vs 重抽。
+  - [L] `docs/architecture/schema_reference.md:271` 残留 evidence_refs
+    字面 token，但是负向描述，语义正确。
+- Open Questions: 3 条（详见对话）
+  1. post_processing 压缩策略选型（截断 / LLM 摘要 / 放宽 digest cap）。
+  2. S001 / S002 stage_snapshot 修复路径（手工裁剪 vs 重抽）。
+  3. 角色 stage_snapshot "13 必填维度" 数字是否仍对得上（疑漂移到
+     17，登记后续）。
+
+## 复查时状态
+
+- **Reviewed**: 2026-04-24 19:44:49 EDT
+- **Status**: REVIEWED-FAIL
+  - 轨 1 全落实，但轨 2 出现 2 项 High 级 Findings
+    （post_processing 裸拷贝 + 既有产物失效），影响下一阶段
+    实际跑 Phase 3 / 3.5 的能力。
+- **Conversation ref**: 同会话内 /post-check 输出
