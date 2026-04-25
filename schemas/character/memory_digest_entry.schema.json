@@ -20,19 +20,15 @@
     },
     "time": {
       "type": "string",
-      "maxLength": 15,
-      "description": "故事内时间（≤15 字短语，来自 memory_timeline 同名字段）。"
+      "description": "故事内时间（来自 memory_timeline 同名字段，长度上限由上游承担）。"
     },
     "location": {
       "type": "string",
-      "maxLength": 15,
-      "description": "事件发生地点（≤15 字短语）。"
+      "description": "事件发生地点（来自 memory_timeline 同名字段，长度上限由上游承担）。"
     },
     "summary": {
       "type": "string",
-      "minLength": 30,
-      "maxLength": 50,
-      "description": "客观层面发生了什么（30–50 字的一句话摘要，由提取阶段保证）。直接复制 memory_timeline 的 digest_summary 字段。"
+      "description": "客观层面发生了什么（直接复制 memory_timeline 的 digest_summary 字段，长度上限由上游承担）。"
     },
     "importance": {
       "type": "string",

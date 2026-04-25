@@ -16,7 +16,6 @@
     },
     "work_id": {
       "type": "string",
-      "minLength": 1,
       "description": "作品包命名空间键。对于中文作品，这个值本身也可以直接是中文。"
     },
     "default_stage_id": {
@@ -26,7 +25,6 @@
     },
     "stages": {
       "type": "array",
-      "minItems": 0,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -44,16 +42,13 @@
           },
           "stage_title": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 15,
-            "description": "阶段的人类可读短标题（≤15 字）。"
+            "description": "阶段的人类可读短标题。"
           },
           "timeline_anchor": {
             "type": "string"
           },
           "summary": {
             "type": "string",
-            "minLength": 1,
             "description": "世界事件概要（本阶段世界发生了什么），供 bootstrap 阶段选择时展示。"
           },
           "chapter_scope": {

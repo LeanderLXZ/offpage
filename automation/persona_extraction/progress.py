@@ -367,7 +367,7 @@ class StageEntry:
     stage_id: str
     chapters: str               # e.g. "0001-0010"
     chapter_count: int
-    stage_title: str = ""       # human-readable short title (≤15 chars)
+    stage_title: str = ""       # human-readable short title
     state: StageState = StageState.PENDING
     last_reviewer_feedback: str = ""
     committed_sha: str = ""
