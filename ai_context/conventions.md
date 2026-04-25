@@ -86,11 +86,22 @@ Exempt (history is the point): `logs/change_logs/`, `logs/review_reports/`,
 
 ## Git
 
+Three-branch model (master is the only branch ever pushed to remote):
+
+| Branch | Role | Pushes to remote? |
+|---|---|---|
+| `master` | Framework only — code / schema / prompt / docs / `ai_context/` / skills. Never carries real work IDs, source novels, or extraction artefacts. | ✅ |
+| `extraction/{work_id}` | Per-work in-progress extraction. Each passing stage committed. | ❌ local only |
+| `library` | Archive of completed works. Each finished `extraction/{work_id}` squash-merges here. | ❌ local only |
+
+Flow rules:
+
 - Default branch = `master`. Stay on `master` unless actively running extraction.
-- Code / schema / prompt / docs / `ai_context/` commits go to `master` first; extraction branch syncs via `git merge master`.
-- Extraction branch carries stage outputs only. Squash-merge to `master` on completion.
+- Code / schema / prompt / docs / `ai_context/` / skill commits go to `master` first; extraction and library branches sync via `git merge master`.
+- `extraction/{work_id}` carries stage outputs only. **Squash-merge to `library` on completion** (never to master — master must stay artefact-free).
+- `library` periodically `git merge master` to absorb framework updates; never flows back to master.
 - Enforcement: orchestrator `try/finally: checkout_master(...)` + `.claude/hooks/session_branch_check.sh`. Detail → `architecture.md` §Git Branch Model.
-- Never commit: novels, databases, embeddings, caches, real user packages.
+- Never commit: novels, databases, embeddings, caches, real user packages, real `work_id`-named manifests on `master`.
 - Don't amend others' commits.
 - `/go` git contract: when not already on master-clean, `/go` automatically opens `../<repo>-master` as a `git worktree`, does all edits + commit there, then `git worktree remove --force` after commit. Main checkout is never moved off its branch during Steps 1–8, so in-flight extraction / dirty work continues undisturbed. Step 9 fast-forwards master into each non-master branch and asks **exactly once at the very end** whether to `git checkout master` — no inline prompts between steps or between branches.
 
