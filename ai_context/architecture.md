@@ -128,20 +128,20 @@ Single SQLite, no separate vector DB.
 
 ## Git Branch Model
 
-Three-branch model — `master` is the only branch ever pushed to remote:
+Three-branch model — `main` is the only branch ever pushed to remote:
 
-- `master` = framework only (code / schema / prompt / docs / `ai_context/` / skills). No real `work_id`-named directories or manifests; `_template/` scaffolding only.
+- `main` = framework only (code / schema / prompt / docs / `ai_context/` / skills). No real `work_id`-named directories or manifests; `_template/` scaffolding only.
 - `extraction/{work_id}` = per-work in-progress extraction. Local only.
 - `library` = archive of completed extractions. Each finished `extraction/{work_id}` squash-merges here. Local only.
 
 Flow:
 
-- Idle = `master`. Orchestrator auto-checks out `extraction/{work_id}` and returns to `master` on any exit via `try / finally: checkout_master(...)` in `automation/persona_extraction/orchestrator.py`.
-- `checkout_master` / `preflight_check` accept `scope_paths`; orchestrator passes `["works/{work_id}/"]` — only scope-internal dirt blocks; scope-external dirt tolerated.
-- Code / schema / prompt / docs / `ai_context/` commits → `master` first, then `git merge master` from extraction and library branches.
-- Extraction-data commits (baseline + Phase 3+ products) belong only on the extraction branch. `_offer_squash_merge` squash-merges to **`library`** (configurable via `[git].squash_merge_target`, default `library`) interactively after all stages `COMMITTED` — never to `master`, so the public-facing branch stays artefact-free.
-- `library` absorbs framework updates via periodic `git merge master`; never flows back to master.
-- Anomaly guard: SessionStart hook (`.claude/hooks/session_branch_check.sh`) warns when working tree is non-master yet no orchestrator process is running.
+- Idle = `main`. Orchestrator auto-checks out `extraction/{work_id}` and returns to `main` on any exit via `try / finally: checkout_main(...)` in `automation/persona_extraction/orchestrator.py`.
+- `checkout_main` / `preflight_check` accept `scope_paths`; orchestrator passes `["works/{work_id}/"]` — only scope-internal dirt blocks; scope-external dirt tolerated.
+- Code / schema / prompt / docs / `ai_context/` commits → `main` first, then `git merge main` from extraction and library branches.
+- Extraction-data commits (baseline + Phase 3+ products) belong only on the extraction branch. `_offer_squash_merge` squash-merges to **`library`** (configurable via `[git].squash_merge_target`, default `library`) interactively after all stages `COMMITTED` — never to `main`, so the public-facing branch stays artefact-free.
+- `library` absorbs framework updates via periodic `git merge main`; never flows back to main.
+- Anomaly guard: SessionStart hook (`.claude/hooks/session_branch_check.sh`) warns when working tree is non-main yet no orchestrator process is running.
 
 ## Automated Extraction Pipeline
 

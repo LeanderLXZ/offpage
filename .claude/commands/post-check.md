@@ -136,7 +136,7 @@ log 缺失时：打印"⚠️ 无 log 可回写，复查结论仅在对话中保
 
 回写完成后**立即 commit 这一份 log 文件**——不要留作脏工作区，否则下一轮 `/go` 的 Step 0 自动锁定逻辑会把这份残留误判为"dirty 工作区"而强制走 worktree 路径，形成"上轮 log 回写在干扰下一轮开发"的副作用。
 
-- commit 在**当前分支**即可（`/post-check` 通常运行于 extraction 分支或 master，无需切换）
+- commit 在**当前分支**即可（`/post-check` 通常运行于 extraction 分支或 main，无需切换）
 - 仅 `git add` 这一份 log 文件——不要顺手把其他无关 dirty 文件带进 commit
 - commit message 风格对齐既有先例：`log({slug}): /post-check 复查结论回写 REVIEWED-PASS|PARTIAL|FAIL`
 - 不 push，不切分支；commit 后立刻进入 Step 6

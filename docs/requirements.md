@@ -2049,7 +2049,7 @@ Lane 名称约定：`world`、`snapshot:{char_id}`、`support:{char_id}`。
   以保持最细粒度的回滚能力
 - 全部提取完成后，squash merge 到 `library` 分支（默认目标，可由
   `[git].squash_merge_target` 配置）。library 是本地归档分支，作品
-  artefact **不回流 master**——master 永远只承载框架并对外 push；
+  artefact **不回流 main**——main 永远只承载框架并对外 push；
   extraction 分支 squash 完可删除
 - 每个 stage 开始前执行 git preflight check
 
@@ -2164,7 +2164,7 @@ Phase 3 全部 stage 提交后，运行跨阶段一致性检查。
 Phase 3.5 的产物（`consistency_report.json`）是 tracked 文件；编排器在
 保存报告后立即在 extraction 分支上 commit（`phase3.5: consistency_report
 {S###..S###}`），与 pass/fail 无关。两条理由：
-1. 未提交的报告会以 dirty 状态留在工作区，阻塞 `checkout_master` 在 work
+1. 未提交的报告会以 dirty 状态留在工作区，阻塞 `checkout_main` 在 work
    scope 下清场。
 2. 接受 squash-merge 时，报告必须是 extraction 分支的已提交对象才能进入
    最终 squash-merge 的 commit（默认目标 `library`，由

@@ -30,10 +30,10 @@ from .consistency_checker import run_consistency_check, save_report
 from .failed_lane_log import write_failed_lane_log
 from .git_utils import (
     branch_exists,
-    checkout_master,
+    checkout_main,
     commit_stage,
     create_extraction_branch,
-    ensure_branch_from_master,
+    ensure_branch_from_main,
     preflight_check,
     reset_paths,
     squash_merge_to,
@@ -1120,10 +1120,10 @@ class ExtractionOrchestrator:
 
         # Enter the extraction branch FIRST, then run baseline rerun +
         # loop inside ``try`` — ``finally`` below guarantees the working
-        # tree returns to ``master`` on every exit path (normal completion,
+        # tree returns to ``main`` on every exit path (normal completion,
         # BLOCKED, --end-stage stop, keyboard interrupt, exception, or
         # ``sys.exit`` from branch creation failure). Baseline rerun
-        # commits land on the extraction branch, not master, honoring the
+        # commits land on the extraction branch, not main, honoring the
         # "extraction data only on extraction branch" rule. See
         # ai_context/architecture.md §Git Branch Model.
         try:
@@ -1276,7 +1276,7 @@ class ExtractionOrchestrator:
             tracker.print_summary()
         finally:
             if pipeline.extraction_branch:
-                checkout_master(
+                checkout_main(
                     self.project_root,
                     scope_paths=[f"works/{pipeline.work_id}/"])
 
@@ -1867,7 +1867,7 @@ class ExtractionOrchestrator:
 
         The generated ``consistency_report.json`` is committed to the
         extraction branch before returning — regardless of pass/fail.
-        Committing on both paths keeps ``checkout_master`` clean (report
+        Committing on both paths keeps ``checkout_main`` clean (report
         sits in the work scope) and ensures the squash-merge includes
         the report as documented in current_status.md.
         """
@@ -1883,7 +1883,7 @@ class ExtractionOrchestrator:
         # Save + commit the report on the extraction branch. Commit is
         # best-effort — the report save itself is authoritative, the
         # commit is so the file doesn't linger as uncommitted dirt when
-        # the orchestrator later attempts checkout_master().
+        # the orchestrator later attempts checkout_main().
         save_report(report, self.project_root, self.pipeline.work_id)
         self._commit_consistency_report(stage_ids)
 
@@ -1910,7 +1910,7 @@ class ExtractionOrchestrator:
 
         Called right after ``save_report`` in ``_run_consistency_check``.
         A missing commit here would leave the tracked report as
-        uncommitted dirt, blocking the final ``checkout_master`` under
+        uncommitted dirt, blocking the final ``checkout_main`` under
         the work scope (see gpt-5 H4).
         """
         assert self.pipeline
@@ -1953,7 +1953,7 @@ class ExtractionOrchestrator:
         """After all stages complete, offer to squash-merge to the
         archive branch (default ``library`` — see ``[git].squash_merge_target``).
 
-        Three-branch model: master is framework-only and never receives
+        Three-branch model: main is framework-only and never receives
         extraction artefacts; library is the local archive of completed
         works.
         """
@@ -1965,15 +1965,15 @@ class ExtractionOrchestrator:
         target = get_config().git.squash_merge_target
 
         # Lazy idempotent creation: library is local-only and does not exist
-        # in fresh clones, so create it from master on first use.
+        # in fresh clones, so create it from main on first use.
         existed = branch_exists(self.project_root, target)
-        if not ensure_branch_from_master(self.project_root, target):
+        if not ensure_branch_from_main(self.project_root, target):
             print(f"  [ERROR] Cannot ensure target branch '{target}' "
                   f"exists. Squash-merge skipped — create it manually "
-                  f"with: git branch {target} master")
+                  f"with: git branch {target} main")
             return
         if not existed:
-            print(f"  [setup] target branch '{target}' created from master.")
+            print(f"  [setup] target branch '{target}' created from main.")
 
         print(f"\n  All stages committed on branch '{branch}'.")
         print(f"  Squash-merge to '{target}' will consolidate all extraction")
@@ -2180,7 +2180,7 @@ class ExtractionOrchestrator:
         self.phase3 = phase3
 
         # Create extraction branch, run baseline + extraction. ``finally``
-        # returns to ``master`` if anything raises between switching to
+        # returns to ``main`` if anything raises between switching to
         # the extraction branch and ``run_extraction_loop`` completing
         # its own cleanup. See ai_context/architecture.md §Git Branch Model.
         try:
@@ -2200,7 +2200,7 @@ class ExtractionOrchestrator:
                                      max_stages=preset_end_stage)
         finally:
             if pipeline and pipeline.extraction_branch:
-                checkout_master(
+                checkout_main(
                     self.project_root,
                     scope_paths=[f"works/{pipeline.work_id}/"])
 

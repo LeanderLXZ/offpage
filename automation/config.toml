@@ -204,10 +204,10 @@ extraction_log_backup_count = 3
 # extraction 分支名前缀。最终分支名为 `{prefix}{work_id}`。
 extraction_branch_prefix = "extraction/"
 
-# 全部 stage COMMITTED 后 squash-merge 的目标分支。三分支模型：master 只
+# 全部 stage COMMITTED 后 squash-merge 的目标分支。三分支模型：main 只
 # 承载框架（对外 push），extraction/{work_id} 是逐部作品的本地工作分支，
 # library 是完成态归档分支（永不 push）。默认值 `library` 让作品产物
-# 永久不回流 master、保持远程仓库洁净。
+# 永久不回流 main、保持远程仓库洁净。
 squash_merge_target = "library"
 
 # 全部 stage COMMITTED 后是否自动执行 squash-merge。false 时仅打印
