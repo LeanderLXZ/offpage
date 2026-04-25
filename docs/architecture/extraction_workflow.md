@@ -483,8 +483,9 @@ orchestrator (Python)
   一旦发现任何 L0–L2 错误（JSON 语法/schema/结构被破坏），Phase B 直接以
   `T3_CORRUPTED` 中止并 FAIL，**不走 triage**——机械损坏不可能是"源文件的错"。
 - 提取在独立 git 分支（`extraction/{work_id}`）进行，每 stage 单独 commit
-  （精确回滚）；全部完成后 squash merge 回 `master`（干净历史），extraction
-  分支可删除
+  （精确回滚）；全部完成后 squash merge 到 `library` 分支（默认目标，可由
+  `[git].squash_merge_target` 配置），**不回流 `master`**——`master` 只承载
+  框架，作品 artefact 永久归档在本地 `library` 分支，extraction 分支可删除
 - 分支纪律落实（见 `ai_context/architecture.md` §Git Branch Model）：
   - `run_extraction_loop` / `run_full` 把 `create_extraction_branch` +
     baseline rerun + Phase 3 循环整体包进 `try / finally:

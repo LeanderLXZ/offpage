@@ -134,6 +134,10 @@ class LoggingConfig:
 class GitConfig:
     extraction_branch_prefix: str = "extraction/"
     auto_squash_merge: bool = False
+    # Three-branch model: master = framework (pushed), extraction/{work_id}
+    # = per-work in-progress (local), library = completed-works archive
+    # (local). Squash target defaults to library so master stays artefact-free.
+    squash_merge_target: str = "library"
 
 
 @dataclass(frozen=True)

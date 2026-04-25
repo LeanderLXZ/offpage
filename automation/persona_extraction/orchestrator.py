@@ -1948,14 +1948,22 @@ class ExtractionOrchestrator:
         )
 
     def _offer_squash_merge(self) -> None:
-        """After all stages complete, offer to squash-merge to master."""
+        """After all stages complete, offer to squash-merge to the
+        archive branch (default ``library`` — see ``[git].squash_merge_target``).
+
+        Three-branch model: master is framework-only and never receives
+        extraction artefacts; library is the local archive of completed
+        works.
+        """
         assert self.pipeline and self.phase3
         branch = self.pipeline.extraction_branch
         if not branch:
             return
 
+        target = get_config().git.squash_merge_target
+
         print(f"\n  All stages committed on branch '{branch}'.")
-        print(f"  Squash-merge to master will consolidate all extraction")
+        print(f"  Squash-merge to '{target}' will consolidate all extraction")
         print(f"  commits into a single clean commit.")
 
         if get_config().git.auto_squash_merge:
@@ -1963,13 +1971,15 @@ class ExtractionOrchestrator:
             answer = "y"
         else:
             try:
-                answer = input("  Squash-merge to master now? [Y/n]: ").strip()
+                answer = input(
+                    f"  Squash-merge to '{target}' now? [Y/n]: "
+                ).strip()
             except EOFError:
                 answer = "n"
 
         if answer.lower() == "n":
             print(f"  Skipped. You can manually merge later:\n"
-                  f"    git checkout master && "
+                  f"    git checkout {target} && "
                   f"git merge --squash {branch} && "
                   f"git commit")
             return
@@ -1981,9 +1991,9 @@ class ExtractionOrchestrator:
                    f"Squash-merged from {branch}.\n"
                    f"Automated extraction via persona-extraction orchestrator.")
 
-        sha = squash_merge_to(self.project_root, "master", branch, message)
+        sha = squash_merge_to(self.project_root, target, branch, message)
         if sha:
-            print(f"  [OK] Squash-merged to master as {sha}")
+            print(f"  [OK] Squash-merged to '{target}' as {sha}")
             print(f"  Extraction branch '{branch}' preserved. "
                   f"Delete with: git branch -d {branch}")
         else:

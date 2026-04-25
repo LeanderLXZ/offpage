@@ -195,8 +195,10 @@ orchestrator 自动落实这条纪律：
   （`.claude/hooks/session_branch_check.sh`）在每次新会话启动时检测
   "非 master 分支 + 无 orchestrator 进程" 的异常组合并提示。
 - **squash-merge**：全部 stage COMMITTED 后，`_offer_squash_merge` 交互式
-  询问是否 squash-merge 到 `master`（`[git].auto_squash_merge=true` 时
-  自动执行）。
+  询问是否 squash-merge 到 `library`（默认目标，由 `[git].squash_merge_target`
+  控制；`[git].auto_squash_merge=true` 时自动执行）。三分支模型下作品
+  artefact 永久归档在本地 `library` 分支，**不回流 `master`**，保持远程
+  仓库只承载框架。
 
 ## 目录结构
 
