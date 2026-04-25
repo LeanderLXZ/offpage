@@ -104,12 +104,18 @@ POST 段落就地写入该路径）。
 - `docs/todo_list.md` L12 / L26 / L38 / L42 — 文件说明节 4 处
 - `prompts/review/全仓库对齐审计.md` L27 / L85 / L94 — 提示词内嵌路径
 - `works/README.md` L246 — 增量抽取建议路径
+- `logs/change_logs/README.md`（原 `docs/logs/README.md`）—— 跟进 commit
+  补：标题 `# Logs` → `# Change Logs`；Git Rule 段 `docs/logs/` →
+  `logs/change_logs/`（首次 commit 后被发现：grep sweep 误把
+  `logs/change_logs/` 整个排除导致这条遗漏）
 
 ## 与计划的差异
 
-无。计划清单中所有 19 个文件 + 2 个目录搬迁均如约落地；未引入计划外
-改动；未触动 `docs/requirements.md` / `docs/architecture/`（这两处确认无
-引用）。
+唯一差异：`logs/change_logs/README.md` 的两处自我描述（标题 + Git Rule
+段路径）属计划外补丁。原计划假定该 README 内容只描述"仓库历史日志"
+通用语义，与目录改名无耦合；实际上含 1 处直链 `docs/logs/`。已在跟进
+commit 中修复，残留为 0。其他 19 个文件 + 2 个目录搬迁均如约落地；未
+触动 `docs/requirements.md` / `docs/architecture/`（这两处确认无引用）。
 
 ## 验证结果
 
