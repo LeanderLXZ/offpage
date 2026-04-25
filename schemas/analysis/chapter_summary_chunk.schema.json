@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "offpage/analysis/chapter_summary_chunk.schema.json",
+  "title": "ChapterSummaryChunk",
+  "description": "Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳。chunks 联合覆盖 0001..total_chapters 全集，Phase 1 (analysis.md) 把 chunks 作为输入构造 stage_plan / world_overview / candidate_characters；不入运行时。",
+  "type": "object",
+  "required": ["work_id", "chunk_index", "chapters", "summaries"],
+  "additionalProperties": false,
+  "properties": {
+    "work_id": {
+      "type": "string",
+      "description": "作品包命名空间键。"
+    },
+    "chunk_index": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "本 chunk 在全书中的序号，从 1 开始。"
+    },
+    "chapters": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{4}$",
+      "description": "本 chunk 覆盖的章节范围，形如 0001-0025（4 位零填充 + 连字符 + 4 位零填充）。"
+    },
+    "summaries": {
+      "type": "array",
+      "minItems": 1,
+      "description": "本 chunk 内每章一条结构化归纳，按章节顺序。",
+      "items": {
+        "type": "object",
+        "required": [
+          "chapter",
+          "title",
+          "summary",
+          "key_events",
+          "characters_present",
+          "location",
+          "emotional_tone",
+          "identity_notes"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "chapter": {
+            "type": "string",
+            "pattern": "^\\d{4}$",
+            "description": "章节编号（4 位零填充，例如 0001）。"
+          },
+          "title": {
+            "type": "string",
+            "description": "章节标题（从原文提取；原文无明确标题时可为空字符串）。"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 50,
+            "maxLength": 100,
+            "description": "本章核心剧情概述，1-3 句话，长度 50-100 字。事件描述而非文学评论。"
+          },
+          "key_events": {
+            "type": "array",
+            "maxItems": 5,
+            "description": "推动剧情的关键事件列表，最多 5 条；跳过日常水文。",
+            "items": {
+              "type": "string",
+              "maxLength": 49,
+              "description": "单条关键事件，<50 字。"
+            }
+          },
+          "characters_present": {
+            "type": "array",
+            "description": "本章有实质互动的角色列表（不计背景群演）。化名 / 代称在 key_events 注明，本字段使用最常用名。",
+            "items": { "type": "string" }
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 19,
+            "description": "本章主要场景 / 地点（<20 字）。"
+          },
+          "emotional_tone": {
+            "type": "string",
+            "maxLength": 19,
+            "description": "本章主要情绪基调（<20 字，例如\"紧张\" / \"温馨\" / \"悲伤\"）。"
+          },
+          "identity_notes": {
+            "type": "string",
+            "maxLength": 49,
+            "description": "本章中的角色身份相关线索（化名建立、真名揭示、封号赋予等）；<50 字。无此类事件时为空字符串。"
+          }
+        }
+      }
+    }
+  }
+}

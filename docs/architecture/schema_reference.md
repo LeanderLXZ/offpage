@@ -10,12 +10,35 @@
 
 | 子目录 | 作用 | 文件数 |
 |--------|------|--------|
+| `schemas/analysis/` | Phase 0 / Phase 4 LLM 中间产物（不入运行时） | 2 |
 | `schemas/work/` | 作品入库、目录、阶段目录、per-work 加载配置 | 6 |
 | `schemas/world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | 6 |
 | `schemas/character/` | 角色 baseline + 阶段快照 + 记忆 | 9 |
 | `schemas/user/` | 用户根画像、绑定、长期档案、关系核心、钉选记忆条目 | 5 |
 | `schemas/runtime/` | Context / Session / 请求载荷 / 场景归档条目 | 5 |
 | `schemas/shared/` | 跨域共享（extraction_notes 等） | 1 |
+
+## Analysis 层（`schemas/analysis/`）
+
+### analysis/chapter_summary_chunk.schema.json
+
+**用途**：Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳。
+**位置**：`works/{work_id}/analysis/chapter_summaries/chunk_NNN.json`（本地生成，不入 git）
+**关键字段**：`work_id` / `chunk_index` / `chapters` / `summaries[]`（per-summary 含 `chapter` / `title` / `summary` / `key_events` / `characters_present` / `location` / `emotional_tone` / `identity_notes`）
+**消费方**：Phase 1 (`automation/prompt_templates/analysis.md`) 把所有 chunk 作为输入构造 stage_plan / world_overview / candidate_characters。
+**生成时机**：Phase 0 by `automation/prompt_templates/summarization.md`，分 chunk 并行 LLM 调用。
+
+---
+
+### analysis/scene_split.schema.json
+
+**用途**：Phase 4 per-chapter 场景切分结果。每个 chapter 一份 LLM 调用结果，按行号自然场景边界切，每章硬上限 5 个场景。
+**位置**：`works/{work_id}/analysis/scene_splits/{chapter}.json`（本地生成，不入 git）
+**关键字段**：array of `{scene_start_line, scene_end_line, time, location, characters_present, summary}`
+**消费方**：`automation/persona_extraction/scene_archive.py` 程序拼接到 `retrieval/scene_archive.jsonl`：`summary` / `time` / `location` / `characters_present` 1:1 直拷，`stage_id` / `scene_id` (`SC-S###-##`) 由程序按 `stage_plan.json` chapter→stage 映射赋值。
+**生成时机**：Phase 4 by `automation/prompt_templates/scene_split.md`，per-chapter 并行 LLM 调用。
+
+---
 
 ## Work 层（`schemas/work/`）
 
@@ -406,6 +429,7 @@ permanence_reason?, pinned_at?
 **用途**：`scene_archive.jsonl` 单条记录——Phase 4 `scene_split` 按行号切出的场景。作为 FTS5 检索与 `full_text` 取回的基本单元。
 **位置**：`works/{work_id}/retrieval/scene_archive.jsonl`（本地生成，不入 git）
 **关键字段**：`scene_id`（`SC-S###-##`）/ `stage_id`（`S###`）/ `chapter` / `time` / `location` / `characters_present[]` / `summary` / `full_text`
+**契约**：`summary` / `time` / `location` / `characters_present` 由 `automation/persona_extraction/scene_archive.py` 从 `analysis/scene_split` LLM 输出 1:1 程序直拷；`stage_id` 与 `scene_id` 的 `S###` 段由程序按 `stage_plan.json` chapter→stage 映射赋值。新 stage_plan 可纯程序 remap，无需重跑 LLM。
 **运行时**：最近 `scene_fulltext_window` 条在 Tier 0 直接加载 `full_text`，其余由 FTS5 on-demand 取回；`summary` 不单独进入 Tier 0。
 
 ---

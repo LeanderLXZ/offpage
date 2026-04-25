@@ -42,7 +42,9 @@
     },
     "summary": {
       "type": "string",
-      "description": "场景一句话摘要（30–50 字），供 FTS5 检索命中后人工判重用。不单独加载到 Tier 0。"
+      "minLength": 50,
+      "maxLength": 100,
+      "description": "场景客观事件梗概（50–100 字），由 Phase 4 scene_split LLM 产出后程序 1:1 直拷至此；供 FTS5 检索命中后人工判重用。不单独加载到 Tier 0。"
     },
     "full_text": {
       "type": "string",
