@@ -1409,7 +1409,7 @@ LLM token：
 - 以 `event_id` 为主键做 upsert，重跑不重复
 - 按 `event_id` 字典序排序（`S###` 段自带阶段顺序）
 - 运行时按 stage 范围过滤加载（stage 1 到用户选定 stage N）
-- 写入前做 schema 校验（`summary` / `time` / `location` 硬门控由 schema 承担）
+- 写入前做 schema 校验（`event_id` 格式、required 字段由 digest schema 硬门控；`summary` / `time` / `location` 的内容长度由上游 `world_stage_snapshot` 承担）
 
 **世界事件过滤（在提取/审校阶段完成）**
 

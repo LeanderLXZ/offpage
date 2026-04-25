@@ -20,9 +20,7 @@
     },
     "summary": {
       "type": "string",
-      "minLength": 50,
-      "maxLength": 80,
-      "description": "事件摘要（50–80 字，直接复制 stage_events[i]）。"
+      "description": "事件摘要（直接复制 stage_events[i]）。长度上限由上游 stage_events 承担。"
     },
     "importance": {
       "type": "string",
@@ -31,13 +29,11 @@
     },
     "time": {
       "type": "string",
-      "maxLength": 15,
-      "description": "故事内时间锚点（≤15 字短语，来自 snapshot.timeline_anchor）。"
+      "description": "故事内时间锚点（来自 snapshot.timeline_anchor，长度上限由上游承担）。"
     },
     "location": {
       "type": "string",
-      "maxLength": 15,
-      "description": "事件发生地点（≤15 字短语）。"
+      "description": "事件发生地点（来自 snapshot.location_anchor，长度上限由上游承担）。"
     },
     "involved_characters": {
       "type": "array",
