@@ -6,7 +6,7 @@
 
 ## 背景 / 触发
 
-本 session 原本是 /monitor 跟踪 `extraction/<work_id>` 的抽取进程。进程在我盲区内跑崩（S003 `char_support:Character A` 撞 `error_max_turns=50`）+ orchestrator finally 的 `checkout_master` 因 6 份 baseline 脏而中止，工作树卡在 extraction 分支。
+本 session 原本是 /monitor 跟踪 `extraction/<work_id>` 的抽取进程。进程在我盲区内跑崩（S003 `char_support:<character_a>` 撞 `error_max_turns=50`）+ orchestrator finally 的 `checkout_master` 因 6 份 baseline 脏而中止，工作树卡在 extraction 分支。
 
 用户由此提出对 `/go` 和 `/after-check` 的协作机制升级：
 

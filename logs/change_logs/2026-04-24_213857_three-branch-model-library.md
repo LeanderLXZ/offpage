@@ -46,7 +46,7 @@
 
 ## 验证标准
 
-- [ ] `git ls-files | grep 我和<character>` 在 master 上结果为空
+- [ ] `git ls-files | grep 我和<character_d>` 在 master 上结果为空
 - [ ] `grep -rn "squash.*master\|master.*squash" ai_context/ docs/ automation/` 无 stale 引用
 - [ ] `python3 -c "from automation.persona_extraction.config import get_config; print(get_config().git.squash_merge_target)"` 输出 `library`
 - [ ] `python3 -c "from automation.persona_extraction.orchestrator import Orchestrator"` import 不报错

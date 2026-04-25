@@ -47,8 +47,8 @@ ThreadPoolExecutor 的每个 worker 独立执行，N 个 lane 同时撞同一次
 **结论**
 `current_status.md:6` 与 :32 写 "Phase 3 pending — no stages committed
 yet"，但 `works/<work_id>/analysis/progress/phase3_stages.json`
-中 `阶段01_<stage_title>初遇` state=`committed`, committed_sha=`dc1d058`；
-阶段 02 已是 ERROR。git log 对应 `dc1d058 阶段01_<stage_title>初遇: 分层提取完成`。
+中 `阶段01_<location_a>初遇` state=`committed`, committed_sha=`dc1d058`；
+阶段 02 已是 ERROR。git log 对应 `dc1d058 阶段01_<location_a>初遇: 分层提取完成`。
 
 **为何是问题**
 `current_status.md` 是新 session 入场文档。"no stages committed yet"

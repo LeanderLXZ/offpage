@@ -18,8 +18,8 @@ git rm -r "works/<work_id>/"
 删除 25 个 tracked 文件：
 
 - `analysis/`：candidate_characters.json / stage_plan.json / world_overview.json
-- `characters/{Character A,Character B}/canon/`：behavior_rules / boundaries / failure_modes / identity / memory_digest / stage_catalog / voice_rules
-- `characters/{Character A,Character B}/manifest.json`
+- `characters/{<character_a>,<character_b>}/canon/`：behavior_rules / boundaries / failure_modes / identity / memory_digest / stage_catalog / voice_rules
+- `characters/{<character_a>,<character_b>}/manifest.json`
 - `manifest.json`
 - `world/foundation/{fixed_relationships,foundation}.json`
 - `world/{manifest,stage_catalog}.json` + `world/world_event_digest.jsonl`

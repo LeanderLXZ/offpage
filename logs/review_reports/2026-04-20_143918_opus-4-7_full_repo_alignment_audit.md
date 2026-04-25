@@ -32,14 +32,14 @@ use generic placeholders"）直接冲突。
 | [schemas/stage_snapshot.schema.json:635](schemas/stage_snapshot.schema.json#L635) | `"例如：对萧尘从戒备转为信任。"` |
 | [schemas/stage_snapshot.schema.json:639](schemas/stage_snapshot.schema.json#L639) | `"例如：萧尘放弃帝位陪她渡劫。"` |
 | [schemas/stage_snapshot.schema.json:667](schemas/stage_snapshot.schema.json#L667) | `"从完全冰冷的前大帝，到被一个人的善意逐渐撬开冰层……"` |
-| [schemas/identity.schema.json:106](schemas/identity.schema.json#L106) | `"例如：'五岁被亲生父母抛弃于<location>门前'。"` |
-| [docs/requirements.md:2314](docs/requirements.md#L2314) | `首次撞限的 lane 标识（如 \`char_snapshot:Character B\`）` |
+| [schemas/identity.schema.json:106](schemas/identity.schema.json#L106) | `"例如：'五岁被亲生父母抛弃于<location_b>门前'。"` |
+| [docs/requirements.md:2314](docs/requirements.md#L2314) | `首次撞限的 lane 标识（如 \`char_snapshot:<character_b>\`）` |
 
 前 5 处是 json schema 的 `description` 字段，后 1 处在 requirements §11.13.3
 "暂停文件契约"的字段表里。
 
 另外 [automation/persona_extraction/git_utils.py:134](automation/persona_extraction/git_utils.py#L134)
-把 `阶段01_<stage_title>初遇` 写进 `commit_stage()` 的 docstring，作为 stage_id 的示例，
+把 `阶段01_<location_a>初遇` 写进 `commit_stage()` 的 docstring，作为 stage_id 的示例，
 也复用了当前唯一在跑的作品的具体 stage 名——同类问题但属代码注释层，定性上
 轻一档，与 schema/requirements 不同批处理。
 
@@ -183,7 +183,7 @@ behavior_rules.json） |`——既保留防坑意图，又不带"已移除"这�
 #### M4 — sample stage 01 的 progress 条目缺 `lane_states`，与 T-RESUME 约定的 in-disk 状态不一致
 
 **结论**：[works/<work_id>/analysis/progress/phase3_stages.json:9](works/<work_id>/analysis/progress/phase3_stages.json#L9)
-`阶段01_<stage_title>初遇` 的 StageEntry JSON **没有 `lane_states` 字段**，但 stage 02
+`阶段01_<location_a>初遇` 的 StageEntry JSON **没有 `lane_states` 字段**，但 stage 02
 存在且已进入 ERROR 流程。当前 `StageEntry.from_dict`（[automation/persona_extraction/progress.py:463](automation/persona_extraction/progress.py#L463)）
 对缺失字段默认空 dict，orchestrator 对 `committed` 状态也不再依赖
 `lane_states` 走任何分支——所以不会直接坏 flow。但**样例与 handoff

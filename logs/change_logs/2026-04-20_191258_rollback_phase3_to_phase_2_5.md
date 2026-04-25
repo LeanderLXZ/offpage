@@ -10,24 +10,24 @@
 
 ### 删除（git rm）
 
-- `works/<work_id>/world/stage_snapshots/阶段01_<stage_title>初遇.json`
-- `works/<work_id>/characters/Character A/canon/stage_snapshots/阶段01_<stage_title>初遇.json`
-- `works/<work_id>/characters/Character A/canon/memory_timeline/阶段01_<stage_title>初遇.json`
-- `works/<work_id>/characters/Character B/canon/stage_snapshots/阶段01_<stage_title>初遇.json`
-- `works/<work_id>/characters/Character B/canon/memory_timeline/阶段01_<stage_title>初遇.json`
+- `works/<work_id>/world/stage_snapshots/阶段01_<location_a>初遇.json`
+- `works/<work_id>/characters/<character_a>/canon/stage_snapshots/阶段01_<location_a>初遇.json`
+- `works/<work_id>/characters/<character_a>/canon/memory_timeline/阶段01_<location_a>初遇.json`
+- `works/<work_id>/characters/<character_b>/canon/stage_snapshots/阶段01_<location_a>初遇.json`
+- `works/<work_id>/characters/<character_b>/canon/memory_timeline/阶段01_<location_a>初遇.json`
 
 ### Truncate 到 0 字节（文件保留）
 
 - `works/<work_id>/world/world_event_digest.jsonl`
-- `works/<work_id>/characters/Character A/canon/memory_digest.jsonl`
-- `works/<work_id>/characters/Character B/canon/memory_digest.jsonl`
+- `works/<work_id>/characters/<character_a>/canon/memory_digest.jsonl`
+- `works/<work_id>/characters/<character_b>/canon/memory_digest.jsonl`
 
 ### 清空 stages 数组
 
 - `works/<work_id>/world/stage_catalog.json` → `"stages": []`
-- `works/<work_id>/characters/Character A/canon/stage_catalog.json`
+- `works/<work_id>/characters/<character_a>/canon/stage_catalog.json`
   → `"stages": []`
-- `works/<work_id>/characters/Character B/canon/stage_catalog.json`
+- `works/<work_id>/characters/<character_b>/canon/stage_catalog.json`
   → `"stages": []`
 
 ### 进度文件（.gitignore 本地文件）

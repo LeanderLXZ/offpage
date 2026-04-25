@@ -65,7 +65,7 @@
 
 #### M1 — `fail_source` 字段在 `ERROR → PENDING` 重置时不清空
 - **结论**：[automation/persona_extraction/orchestrator.py:1183-1192](automation/persona_extraction/orchestrator.py#L1183-L1192) 在 `--resume` 自动重置 ERROR → PENDING 时，清空了 `error_message` 与 `last_reviewer_feedback`，但没有清空 `fail_source`。对照 [progress.py:379-392](automation/persona_extraction/progress.py#L379-L392) 的 `force_reset_to_pending()`，它清空 `error_message` 但同样不清 `fail_source`。
-- **为什么是问题**：`fail_source` 旨在记录"最近一次失败来源于哪条 lane / 哪一环"（见 phase3_stages.json 结构）。若前一次失败把它设为 `support:Character B`，重置到 PENDING 后这个遗留值会在下次运行时误导观察者，也可能影响决定性 branching 逻辑（如果有 lane-level 优先级规则读它）。
+- **为什么是问题**：`fail_source` 旨在记录"最近一次失败来源于哪条 lane / 哪一环"（见 phase3_stages.json 结构）。若前一次失败把它设为 `support:<character_b>`，重置到 PENDING 后这个遗留值会在下次运行时误导观察者，也可能影响决定性 branching 逻辑（如果有 lane-level 优先级规则读它）。
 - **影响范围**：运维可见性（中等），若将来代码基于 fail_source 做调度决策则会升级。
 - **证据**：`grep fail_source automation/persona_extraction/progress.py automation/persona_extraction/orchestrator.py`。
 - **类型**：bug（小）/ 审计可见性。

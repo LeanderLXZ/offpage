@@ -114,7 +114,7 @@
   `write_works_manifest` 程序化生成（537 章 / 49 stage / 2 character）
 - [works/<work_id>/world/manifest.json](../../works/<work_id>/world/manifest.json) —
   `write_world_manifest` 程序化生成（49 stage_ids）
-- `works/<work_id>/characters/{Character A,Character B}/manifest.json` —
+- `works/<work_id>/characters/{<character_a>,<character_b>}/manifest.json` —
   去掉 `build_status` 行，仍通过 schema
 
 ### ai_context/
@@ -148,7 +148,7 @@ from automation.persona_extraction.manifests import (
 )
 from pathlib import Path
 root = Path('.')
-write_works_manifest(root, '<work_id>', ['Character A', 'Character B'])
+write_works_manifest(root, '<work_id>', ['<character_a>', '<character_b>'])
 write_world_manifest(root, '<work_id>')
 print('writer OK')
 "
