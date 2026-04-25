@@ -1,4 +1,4 @@
-# Logs
+# Change Logs
 
 This directory is for timestamped historical records of meaningful project
 changes.
@@ -46,7 +46,7 @@ location instead.
 
 ## Git Rule
 
-Timestamped log entries under `docs/logs/` are git-tracked. They are
+Timestamped log entries under `logs/change_logs/` are git-tracked. They are
 lightweight text summaries and should remain small enough to commit without
 concern. Do not paste large source text, database dumps, or binary data into
 log files.
