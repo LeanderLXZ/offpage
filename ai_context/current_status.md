@@ -55,6 +55,6 @@ Resume command → `handoff.md` §Current Work Continuation.
 - No novels / databases / indexes / large artifacts in git
 - `works/*/analysis/`: only `world_overview`, `stage_plan`, `candidate_characters`, `consistency_report` tracked; `progress/`, `chapter_summaries/`, `scene_splits/`, `evidence/*` local
 - `works/*/world/`, `works/*/characters/`, `works/*/indexes/` tracked; `works/*/retrieval/` local
-- `docs/logs/` + `docs/review_reports/` write-mostly — do not proactively read
+- `logs/change_logs/` + `logs/review_reports/` write-mostly — do not proactively read
 - No per-stage report files; progress updated in-place
 - Stages split by natural story boundaries (target 10, min 5, max 15)

@@ -26,8 +26,8 @@ prompt-related.
 - `sources/` — large raw corpus
 - `users/.../sessions/` — full conversation history
 - `works/.../analysis/evidence/` — full evidence
-- `docs/logs/` — full history
-- `docs/review_reports/` — past audit snapshots
+- `logs/change_logs/` — full history
+- `logs/review_reports/` — past audit snapshots
 - Databases, vector stores, indexes, large generated artifacts
 
 ## When To Read Deeper

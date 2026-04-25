@@ -243,6 +243,6 @@ works/{work_id}/
 
 - 后续 agent 应优先读取 `analysis/progress/pipeline.json` 来确定当前阶段
 - 每次有实质进度变化时，优先更新 `analysis/progress/` 下的进度文件
-- work-local 进度推进默认不需要同步改 `ai_context/` 或 `docs/logs/`，除非
+- work-local 进度推进默认不需要同步改 `ai_context/` 或 `logs/change_logs/`，除非
   连带改变了仓库级规则或架构
 

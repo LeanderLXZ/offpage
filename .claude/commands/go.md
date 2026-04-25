@@ -19,8 +19,8 @@
 ## 1. PRE log 登记（先登记再动手）
 **任何代码 / schema / prompt / docs / ai_context / skill 改动之前**，先创建本次改动的 log 文件并写入 PRE 段。这是 `/post-check` 的 intent 基线来源，强制。
 
-- 文件名：`docs/logs/{YYYY-MM-DD}_{HHMMSS}_{slug}.md`。HHMMSS 强制，`TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'` 获取；slug 语义化英文短名
-- 回显路径给用户（一行 `LOG: docs/logs/...md`），便于后续 `/post-check` 显式引用
+- 文件名：`logs/change_logs/{YYYY-MM-DD}_{HHMMSS}_{slug}.md`。HHMMSS 强制，`TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'` 获取；slug 语义化英文短名
+- 回显路径给用户（一行 `LOG: logs/change_logs/...md`），便于后续 `/post-check` 显式引用
 
 PRE 段必须包含：
 

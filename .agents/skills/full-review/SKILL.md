@@ -1,6 +1,6 @@
 ---
 name: full-review
-description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/样例产物，找跨文件不一致、legacy 残留、文档与实现漂移、状态机/门控缺口、bug 与隐患，输出按严重度排序的 findings 并归档到 docs/review_reports/。用户说"全库 review"、"对齐审计"、"full-review"、"跑一轮 review" 时触发。只审计，不改代码。
+description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/样例产物，找跨文件不一致、legacy 残留、文档与实现漂移、状态机/门控缺口、bug 与隐患，输出按严重度排序的 findings 并归档到 logs/review_reports/。用户说"全库 review"、"对齐审计"、"full-review"、"跑一轮 review" 时触发。只审计，不改代码。
 ---
 
 # /full-review — 全仓库对齐审计
@@ -22,7 +22,7 @@ description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/
 
 - 先读 `ai_context/`，把它当作默认 handoff 入口
 - 再读 `docs/requirements.md` 和 `docs/architecture/`
-- 不要默认去读 `docs/logs/`，除非已发现冲突、必须追溯历史决策
+- 不要默认去读 `logs/change_logs/`，除非已发现冲突、必须追溯历史决策
 - 然后扫描整个仓库，包括但不限于：
   - `automation/`
   - `simulation/`
@@ -86,7 +86,7 @@ Review 结束后，把本轮完整 findings（含 False Positives、Open Questio
 Alignment Summary、Residual Risks、建议落地顺序）写到：
 
 ```
-docs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
+logs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
 ```
 
 - **时间戳**：用 `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'` 取
@@ -98,7 +98,7 @@ docs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
 - **文件开头**必须有一行 `**Review 模型**：<完整模型名>（`<model-id>`）`，
   与文件名中的 `{model}` 对应，便于后续搜索 / 区分不同模型的判断差异
 - 一次 review 一个文件，不追加、不覆盖旧文件
-- `docs/review_reports/` 仅存 review 结果快照；与 `docs/logs/`（历史决策
+- `logs/review_reports/` 仅存 review 结果快照；与 `logs/change_logs/`（历史决策
   记录）、`docs/todo_list.md`（待办）职责互不重叠
 
 ## 额外要求
