@@ -270,6 +270,35 @@ def rollback_last_commit(project_root: Path) -> bool:
     return success
 
 
+def branch_exists(project_root: Path, branch: str) -> bool:
+    """Return True iff *branch* is a local ref."""
+    return _git(
+        ["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"],
+        project_root,
+    ).returncode == 0
+
+
+def ensure_branch_from_master(project_root: Path,
+                              branch: str) -> bool:
+    """Ensure *branch* exists locally, creating it from ``master`` if not.
+
+    Idempotent: returns ``True`` if the branch already existed or was
+    successfully created; returns ``False`` only on hard failure (master
+    missing, name invalid, git error). Used by ``_offer_squash_merge`` to
+    lazily create the ``library`` archive branch on first use.
+    """
+    if branch_exists(project_root, branch):
+        return True
+
+    create = _git(["branch", branch, "master"], project_root)
+    if create.returncode != 0:
+        logger.error("Cannot create branch %s from master: %s",
+                     branch, create.stderr.strip())
+        return False
+    logger.info("Created branch %s from master", branch)
+    return True
+
+
 def squash_merge_to(project_root: Path, target_branch: str,
                     source_branch: str, message: str) -> str | None:
     """Squash-merge *source_branch* into *target_branch*.
