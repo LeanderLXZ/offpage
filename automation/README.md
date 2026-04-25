@@ -173,8 +173,8 @@ works/{work_id}/analysis/.extraction.lock
 
 ## 分支纪律
 
-代码 / schema / prompt / docs / `ai_context/` 的修改一律在 `master` 提交，
-然后从 extraction 分支 `git merge master` 同步；提取数据（baseline +
+代码 / schema / prompt / docs / `ai_context/` 的修改一律在 `main` 提交，
+然后从 extraction 分支 `git merge main` 同步；提取数据（baseline +
 Phase 3+ 产物）只在 `extraction/{work_id}` 上 commit。详见
 `ai_context/architecture.md §Git Branch Model`。
 
@@ -183,24 +183,24 @@ orchestrator 自动落实这条纪律：
 - **进入**：`run_extraction_loop` / `run_full` 开头调 `create_extraction_branch`
   切到（或新建）`extraction/{work_id}`。
 - **退出**：建分支 + baseline rerun + Phase 3 循环整体包在
-  `try / finally: checkout_master(...)` 内，任何退出路径（DONE / BLOCKED /
-  `--end-stage` / Ctrl+C / 异常 / `sys.exit`）工作树都回到 `master`。
-- **Dirty guard**：`checkout_master` / `preflight_check` 都接受可选
+  `try / finally: checkout_main(...)` 内，任何退出路径（DONE / BLOCKED /
+  `--end-stage` / Ctrl+C / 异常 / `sys.exit`）工作树都回到 `main`。
+- **Dirty guard**：`checkout_main` / `preflight_check` 都接受可选
   `scope_paths` 参数，orchestrator 传入 `["works/{work_id}/"]`——
   只有 scope 内（即 extraction commit 路径内）的脏文件才阻断切换 /
   拒绝启动；scope 外的脏改动（IDE 临时文件、其他无关本地改动等）
   被静默容许。无 scope 时退化为整树 clean 检查。保留"半 stage
-  产物不跟到 `master`"的不变量，避免被无关脏文件拦停。
+  产物不跟到 `main`"的不变量，避免被无关脏文件拦停。
 - **异常检测**：SessionStart Claude Code hook
   （`.claude/hooks/session_branch_check.sh`）在每次新会话启动时检测
-  "非 master 分支 + 无 orchestrator 进程" 的异常组合并提示。
+  "非 main 分支 + 无 orchestrator 进程" 的异常组合并提示。
 - **squash-merge**：全部 stage COMMITTED 后，`_offer_squash_merge` 交互式
   询问是否 squash-merge 到 `library`（默认目标，由 `[git].squash_merge_target`
   控制；`[git].auto_squash_merge=true` 时自动执行）。三分支模型下作品
-  artefact 永久归档在本地 `library` 分支，**不回流 `master`**，保持远程
+  artefact 永久归档在本地 `library` 分支，**不回流 `main`**，保持远程
   仓库只承载框架。`library` 分支由 `_offer_squash_merge` 在首次 squash 时
-  按需自动从 master 创建（lazy + idempotent），无需手工 `git branch
-  library master` 初始化。
+  按需自动从 main 创建（lazy + idempotent），无需手工 `git branch
+  library main` 初始化。
 
 ## 目录结构
 

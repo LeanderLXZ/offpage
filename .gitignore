@@ -15,7 +15,7 @@ sources/works/*/scenes/
 sources/works/*/chunks/
 sources/works/*/metadata/
 
-# Per-work manifests carry the real work_id; keep them off master.
+# Per-work manifests carry the real work_id; keep them off main.
 # `_template/` is exempt — it stays tracked for scaffolding.
 sources/works/[!_]*/manifest.json
 

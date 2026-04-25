@@ -156,7 +156,7 @@ def _load_json(path: Path) -> dict | list | None:
     """Read a JSON file read-only.
 
     Phase 3.5 must not mutate tracked artifacts as a side effect — any
-    write here would leave uncommitted dirt that blocks ``checkout_master``
+    write here would leave uncommitted dirt that blocks ``checkout_main``
     (see requirements §11.10 "Phase 3.5 产物提交契约"). Parse errors are
     the repair agent's responsibility; here we just log and return None.
     """

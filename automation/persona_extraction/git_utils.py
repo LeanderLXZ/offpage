@@ -135,25 +135,25 @@ def create_extraction_branch(project_root: Path,
     return True
 
 
-def checkout_master(project_root: Path,
+def checkout_main(project_root: Path,
                     scope_paths: list[str] | None = None) -> bool:
-    """Return working tree to ``master``. Idempotent and non-destructive.
+    """Return working tree to ``main``. Idempotent and non-destructive.
 
-    Returns ``True`` when the tree is on ``master`` after the call (either
+    Returns ``True`` when the tree is on ``main`` after the call (either
     already there or switched successfully). Returns ``False`` when the
     switch is skipped (dirty tree) or the underlying ``git checkout``
     fails. Callers treat this as best-effort cleanup and should not raise
     on failure.
 
     A dirty working tree under the extraction scope is refused: untracked
-    / modified files could leak onto ``master`` when switching from an
+    / modified files could leak onto ``main`` when switching from an
     extraction branch (e.g. SIGINT mid-stage leaves
     ``works/.../S###.json`` untracked). When ``scope_paths`` is provided,
     dirt outside those prefixes is tolerated; otherwise the whole tree
     must be clean.
     """
     gs = git_status(project_root)
-    if gs.branch == "master":
+    if gs.branch == "main":
         return True
     scoped_dirty: list[str] = []
     if not gs.clean:
@@ -169,14 +169,14 @@ def checkout_master(project_root: Path,
     if scoped_dirty or (not gs.clean and not scope_paths):
         logger.warning(
             "Working tree dirty on '%s' — staying put instead of "
-            "switching to master. Inspect and clean up manually, then "
-            "run 'git checkout master'.", gs.branch)
+            "switching to main. Inspect and clean up manually, then "
+            "run 'git checkout main'.", gs.branch)
         return False
-    result = _git(["checkout", "master"], project_root)
+    result = _git(["checkout", "main"], project_root)
     if result.returncode != 0:
-        logger.error("Failed to checkout master: %s", result.stderr)
+        logger.error("Failed to checkout main: %s", result.stderr)
         return False
-    logger.info("Returned to master branch")
+    logger.info("Returned to main branch")
     return True
 
 
@@ -278,24 +278,24 @@ def branch_exists(project_root: Path, branch: str) -> bool:
     ).returncode == 0
 
 
-def ensure_branch_from_master(project_root: Path,
+def ensure_branch_from_main(project_root: Path,
                               branch: str) -> bool:
-    """Ensure *branch* exists locally, creating it from ``master`` if not.
+    """Ensure *branch* exists locally, creating it from ``main`` if not.
 
     Idempotent: returns ``True`` if the branch already existed or was
-    successfully created; returns ``False`` only on hard failure (master
+    successfully created; returns ``False`` only on hard failure (main
     missing, name invalid, git error). Used by ``_offer_squash_merge`` to
     lazily create the ``library`` archive branch on first use.
     """
     if branch_exists(project_root, branch):
         return True
 
-    create = _git(["branch", branch, "master"], project_root)
+    create = _git(["branch", branch, "main"], project_root)
     if create.returncode != 0:
-        logger.error("Cannot create branch %s from master: %s",
+        logger.error("Cannot create branch %s from main: %s",
                      branch, create.stderr.strip())
         return False
-    logger.info("Created branch %s from master", branch)
+    logger.info("Created branch %s from main", branch)
     return True
 
 

@@ -11,7 +11,7 @@
 ## 1. 分支正确性
 
 - `git branch --show-current` 打印当前分支
-- 按项目硬规则：代码 / schema / prompt / docs / ai_context 改动应在 master；功能实验 / 长跑进程在对应 feature 分支
+- 按项目硬规则：代码 / schema / prompt / docs / ai_context 改动应在 main；功能实验 / 长跑进程在对应 feature 分支
 - 当前分支与改动性质不匹配 → 先停手报告，等用户决定（切分支、worktree、或坚持当前分支）
 
 ## 2. 追踪状态
