@@ -1,22 +1,22 @@
 ---
 name: check-review
-description: 复核 review 报告 — 读取 docs/review_reports/ 下最近一份报告（可选按模型过滤：claude / codex / 具体 slug；不传参则取全局最新），逐条复核 finding / risk / open question 是否仍真实存在，给出证据（文件+行号）与落地方案草稿，输出不落盘不改代码，等用户确认后再用 /go 执行。用户说"复核 review"、"核一下 codex/claude 的 review"、"check-review" 时触发。
+description: 复核 review 报告 — 读取 logs/review_reports/ 下最近一份报告（可选按模型过滤：claude / codex / 具体 slug；不传参则取全局最新），逐条复核 finding / risk / open question 是否仍真实存在，给出证据（文件+行号）与落地方案草稿，输出不落盘不改代码，等用户确认后再用 /go 执行。用户说"复核 review"、"核一下 codex/claude 的 review"、"check-review" 时触发。
 ---
 
 # /check-review — 复核 review 报告
 
-对 `docs/review_reports/` 下指定模型**最近一次** review 报告做"真实性复核 + 方案设计"。**不改代码**，只确认每条 finding / risk / open question 是否真实存在，并给出落地方案草稿；用户确认细节后再用 `/go` 执行。
+对 `logs/review_reports/` 下指定模型**最近一次** review 报告做"真实性复核 + 方案设计"。**不改代码**，只确认每条 finding / risk / open question 是否真实存在，并给出落地方案草稿；用户确认细节后再用 `/go` 执行。
 
 `$ARGUMENTS` = 模型筛选关键字，**可选**。映射规则：
 - 缺省（不传参） → 不按模型过滤，直接取目录下**时间戳最新**的一份
 - `claude` → 匹配 slug 以 `opus-` / `sonnet-` / `haiku-` 开头的报告
 - `codex` → 匹配 slug 为 `codex`
 - `gpt-5`、`opus-4-7` 等具体 slug → 精确匹配
-- 有参数但无匹配：报错，列出 `docs/review_reports/` 下已有的 model slug 供选择
+- 有参数但无匹配：报错，列出 `logs/review_reports/` 下已有的 model slug 供选择
 
 ## 0. 选文件
 
-1. 枚举 `docs/review_reports/` 下所有 `{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md`
+1. 枚举 `logs/review_reports/` 下所有 `{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md`
 2. 按 `$ARGUMENTS` 映射规则过滤（无参数则跳过过滤）
 3. 按时间戳降序取**最新一份**（只取 1 份，不合并多份）
 4. 打印："选中：`{filename}`（模型：{model}，生成时间：{timestamp}）"

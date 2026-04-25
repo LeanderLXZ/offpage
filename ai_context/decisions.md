@@ -11,7 +11,7 @@ Shorter is better than longer; push detail into the linked source rather than gr
 # Key Decisions — Compressed ADRs
 
 One line decision + one line rationale + pointer to authoritative
-source. Long discussion chains live in `docs/logs/`.
+source. Long discussion chains live in `logs/change_logs/`.
 
 ## Roleplay Philosophy
 
@@ -131,6 +131,6 @@ source. Long discussion chains live in `docs/logs/`.
 
 41. No novels / databases / indexes / large artifacts / real user packages in git.
 42. `works/*/analysis/` + `works/*/indexes/` tracked as canonical; `works/*/retrieval/` local-only.
-43. `docs/logs/` + `docs/review_reports/` write-mostly — do not proactively read.
+43. `logs/change_logs/` + `logs/review_reports/` write-mostly — do not proactively read.
 44. `prompts/` = manual scenarios only (ingest / review / supplement / cold start). Extraction prompts in `automation/prompt_templates/`; runtime rules in `simulation/prompt_templates/`. Self-contained modules.
 47. `/go` git flow is contract-driven: **zero mid-flow questions, exactly one question at the very end**. When not starting on master-clean, `/go` auto-opens `../<repo>-master` as a `git worktree`, does all edits + commit there, then `git worktree remove --force` post-commit. Main checkout never moves during Steps 1–8 — in-flight extraction / dirty work is preserved. Step 9 merges master into each non-master branch; only after every branch is synced and HEAD != master does `/go` ask "checkout master?" once. Rationale: the old flow asked N+1 times (commit time + after each branch merge), violating the "one decision per run" principle. → `.claude/commands/go.md` Step 0 / 8 / 9.

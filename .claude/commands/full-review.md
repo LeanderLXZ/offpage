@@ -17,7 +17,7 @@
 
 - 先读 `ai_context/`，把它当作默认 handoff 入口
 - 再读 `docs/requirements.md` 和 `docs/architecture/`
-- 不要默认去读 `docs/logs/`，除非已发现冲突、必须追溯历史决策
+- 不要默认去读 `logs/change_logs/`，除非已发现冲突、必须追溯历史决策
 - 然后扫描整个仓库，包括但不限于：
   - `automation/`
   - `simulation/`
@@ -81,7 +81,7 @@ Review 结束后，把本轮完整 findings（含 False Positives、Open Questio
 Alignment Summary、Residual Risks、建议落地顺序）写到：
 
 ```
-docs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
+logs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
 ```
 
 - **时间戳**：用 `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'` 取
@@ -93,7 +93,7 @@ docs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
 - **文件开头**必须有一行 `**Review 模型**：<完整模型名>（`<model-id>`）`，
   与文件名中的 `{model}` 对应，便于后续搜索 / 区分不同模型的判断差异
 - 一次 review 一个文件，不追加、不覆盖旧文件
-- `docs/review_reports/` 仅存 review 结果快照；与 `docs/logs/`（历史决策
+- `logs/review_reports/` 仅存 review 结果快照；与 `logs/change_logs/`（历史决策
   记录）、`docs/todo_list.md`（待办）职责互不重叠
 
 ## 额外要求

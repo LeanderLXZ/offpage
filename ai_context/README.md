@@ -14,5 +14,5 @@ Compressed handoff index for future AI sessions. Each file points to
 authoritative sources instead of re-stating them.
 
 Read `instructions.md` first — it lists the session-start reading order.
-Only load heavier layers (`docs/logs/`, `docs/review_reports/`,
+Only load heavier layers (`logs/change_logs/`, `logs/review_reports/`,
 `docs/architecture/`, raw sources) when the task directly requires it.

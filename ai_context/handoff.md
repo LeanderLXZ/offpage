@@ -96,12 +96,12 @@ gate will trip on every pre-tightening file otherwise.
 - **No real book / character / chapter / plot names** in docs,
   requirements, README, prompt templates, schemas, or `ai_context/`.
   Use generic placeholders (`角色A`, `<work_id>`, `S001`). Only
-  `works/`, `sources/`, and `docs/logs/` may carry work-specific
+  `works/`, `sources/`, and `logs/change_logs/` may carry work-specific
   references.
 
 ## After Each Milestone
 
-1. `docs/logs/` entry with HHMMSS timestamp (mandatory for schema /
+1. `logs/change_logs/` entry with HHMMSS timestamp (mandatory for schema /
    architecture / prompt / simulation / directory changes).
 2. Update `current_status.md`, `next_steps.md`, and this file only
    when durable.

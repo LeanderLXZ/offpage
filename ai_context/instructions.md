@@ -45,7 +45,7 @@ progress files, not here.
 ## Logging
 
 Every change outside `ai_context/` → one log at
-`docs/logs/YYYY-MM-DD_HHMMSS_slug.md` (HHMMSS mandatory), written across
+`logs/change_logs/YYYY-MM-DD_HHMMSS_slug.md` (HHMMSS mandatory), written across
 three timepoints:
 
 - **PRE** — `/go` Step 1, before any file change

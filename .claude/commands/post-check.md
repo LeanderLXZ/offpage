@@ -2,7 +2,7 @@
 
 对**本次修改**做一次聚焦复审，双轨并进：**轨 1 — 原始需求落实情况**（对账 PRE log 的计划动作清单 + 验证标准）、**轨 2 — 影响扩散 / 计划外副作用**（向计划之外的文件扩散找冲突 / bug / 歧义 / 不一致）。**可并行用 sub-agent 扫描审计**。
 
-这不是全仓 review（那是 `/full-review`），只针对这次 `/go` 触及的细节。`$ARGUMENTS` 存在则作为本轮 log 文件 slug 精确匹配；否则取 `docs/logs/` 按 filename 时间戳最新的一份作为 intent 基线。
+这不是全仓 review（那是 `/full-review`），只针对这次 `/go` 触及的细节。`$ARGUMENTS` 存在则作为本轮 log 文件 slug 精确匹配；否则取 `logs/change_logs/` 按 filename 时间戳最新的一份作为 intent 基线。
 
 ## 0. 界定本次改动范围
 
@@ -12,9 +12,9 @@
 
 ## 0.5 加载 intent 基线（强制）
 
-- `$ARGUMENTS` 传 slug → 精确匹配 `docs/logs/*_{slug}.md`；否则取 `docs/logs/` 按 filename 时间戳最新的一份
+- `$ARGUMENTS` 传 slug → 精确匹配 `logs/change_logs/*_{slug}.md`；否则取 `logs/change_logs/` 按 filename 时间戳最新的一份
 - 读 PRE 段：**背景 / 触发**、**结论与决策**、**计划动作清单**、**验证标准**、**执行偏差**
-- 打印："intent 基线：`docs/logs/{...}.md`" + PRE 段结构化摘要
+- 打印："intent 基线：`logs/change_logs/{...}.md`" + PRE 段结构化摘要
 - log 缺失或无 PRE 段 → 打印"⚠️ intent 基线缺失，轨 1 跳过，只跑轨 2"并继续
 
 ## 1. Cross-File Alignment 对照
@@ -50,7 +50,7 @@
 ```markdown
 ## Scope
 - commits {X..Y}（或 working tree），N 个文件
-- intent 基线：`docs/logs/{...}.md`（或"缺失"）
+- intent 基线：`logs/change_logs/{...}.md`（或"缺失"）
 
 ---
 

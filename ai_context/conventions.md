@@ -15,7 +15,7 @@ live in `CLAUDE.md` / `AGENTS.md`.
 
 ## Logging
 
-`docs/logs/` uses a three-timepoint contract (PRE / POST / REVIEW) — one
+`logs/change_logs/` uses a three-timepoint contract (PRE / POST / REVIEW) — one
 log file spans one `/go` → `/post-check` lifecycle. Filename:
 `YYYY-MM-DD_HHMMSS_slug.md` (HHMMSS mandatory —
 `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'`).
@@ -44,7 +44,7 @@ When a concept changes, update every file in its row:
 | Extraction workflow | `docs/architecture/extraction_workflow.md`, `automation/prompt_templates/`, `automation/persona_extraction/`, `ai_context/architecture.md` |
 | Runtime prompts | `simulation/prompt_templates/`, `simulation/` |
 | Any durable decision | `ai_context/decisions.md` |
-| `/go` or `/post-check` run | `docs/logs/` PRE / POST / REVIEW segments all present |
+| `/go` or `/post-check` run | `logs/change_logs/` PRE / POST / REVIEW segments all present |
 
 After any change, grep for the old phrasing to catch stale references.
 
@@ -70,7 +70,7 @@ work-agnostic:
 - Schema `description` examples stay structural, not narrative (or omitted).
 - No history narration ("legacy", "deprecated", "formerly", "renamed from").
 
-Exempt (history is the point): `docs/logs/`, `docs/review_reports/`,
+Exempt (history is the point): `logs/change_logs/`, `logs/review_reports/`,
 `works/*/` sample outputs, git commit messages.
 
 ## Data Separation — Hard Schema Gates
