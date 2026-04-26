@@ -42,9 +42,12 @@
 
 - 将全书按分组（chunk，约 20-25 章/组）归纳
 - 多 chunk 并行处理（`--concurrency` 控制，默认 10）
-- 产出每章的结构化摘要（事件、出场角色、地点、情绪基调、身份变化线索、
-  候选阶段边界标记）
+- 产出每章的结构化摘要（事件、出场角色、地点、情绪基调、身份变化线索）
 - JSON 修复：L1 程序化 → L2 LLM（600s）→ L3 全量重跑（最多 1 次）
+- **Schema gate**：每个 chunk 落盘后跑 jsonschema (`schemas/analysis/chapter_summary_chunk.schema.json`) 校验，
+  bound（summary 50–100、key_events ≤5 项 + 每项 <50、location/emotional_tone <20、identity_notes <50、
+  additionalProperties:false）违反归入同一 fail 类型；失败路由到 L3 全量重跑，
+  把上次错误（schema 失败首条 / JSON 解析失败 desc）作为 `prior_error` 注入新 prompt 的 `{retry_note}` 段
 - 完成门控：全部 chunk 成功后才进入 Phase 1，有缺失则阻断并退出
 - 输出：`works/{work_id}/analysis/chapter_summaries/`
 
@@ -301,8 +304,12 @@ Phase 4（见 §11.4.2）；`--start-phase 4` 可跳过此门控独立运行。P
 
 **并行**：多章并行处理（`--concurrency`，默认 10）。
 
-**质量保障**：仅程序化校验（行号有效、不重叠、覆盖全章、alias 匹配），
-不做语义审校。失败（LLM/解析/校验）同次运行内自动重试（≤2 次），
+**质量保障**：程序化校验（行号有效、不重叠、覆盖全章、alias 匹配）
+**+ jsonschema gate**（`schemas/analysis/scene_split.schema.json`，bound 含
+time/location <20、summary 50–100、maxItems 5、additionalProperties:false），
+schema 失败和手写 fail 一起进 errors list；不做语义审校。
+失败（LLM/解析/校验/schema）同次运行内自动重试（≤2 次），重试时
+LLM 通过 `prior_error` 看到上次 errors 拼接（`build_scene_split_prompt(prior_error=...)`）；
 超限进 ERROR 状态；`--resume` 时 ERROR 重置且 retry_count 清零。
 
 产出：

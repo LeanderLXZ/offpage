@@ -24,8 +24,11 @@ import time
 from concurrent.futures import ThreadPoolExecutor, FIRST_COMPLETED, wait
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+import jsonschema
 
 from .config import get_config
 from .llm_backend import LLMBackend, run_with_retry
@@ -33,6 +36,15 @@ from .json_repair import programmatic_repair
 from .process_guard import PidLock
 from .prompt_builder import build_scene_split_prompt
 from .rate_limit import RateLimitController, get_active as get_active_rl, set_active as set_active_rl
+
+
+@lru_cache(maxsize=1)
+def _scene_split_validator() -> jsonschema.Draft202012Validator:
+    """Lazy-load schemas/analysis/scene_split.schema.json once per process."""
+    schema_path = (Path(__file__).resolve().parents[2]
+                   / "schemas/analysis/scene_split.schema.json")
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    return jsonschema.Draft202012Validator(schema)
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +315,14 @@ def validate_scene_split(
         errors.append(
             f"Incomplete coverage: last scene ends at line {prev_end}, "
             f"but chapter has {total_lines} lines")
+
+    # JSON Schema gate (schemas/analysis/scene_split.schema.json)
+    # Bound enforcement (time/location ≤19, summary 50-100, maxItems 5,
+    # additionalProperties=false). Fail messages are appended to the same
+    # errors list so the existing retry-with-prior-error path picks them up.
+    for err in _scene_split_validator().iter_errors(scenes):
+        path = "/".join(str(p) for p in err.absolute_path) or "<root>"
+        errors.append(f"schema {path}: {err.message[:80]}")
 
     return errors
 
