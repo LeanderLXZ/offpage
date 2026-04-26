@@ -68,6 +68,19 @@ from .prompt_builder import (
     build_world_extraction_prompt,
 )
 from .json_repair import try_repair_json_file
+from functools import lru_cache as _lru_cache
+import jsonschema as _jsonschema
+
+
+@_lru_cache(maxsize=1)
+def _chunk_validator() -> _jsonschema.Draft202012Validator:
+    """Lazy-load schemas/analysis/chapter_summary_chunk.schema.json once."""
+    schema_path = (Path(__file__).resolve().parents[2]
+                   / "schemas/analysis/chapter_summary_chunk.schema.json")
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    return _jsonschema.Draft202012Validator(schema)
+
+
 from .rate_limit import (
     RateLimitController,
     get_active as get_active_rl,
@@ -375,19 +388,23 @@ class ExtractionOrchestrator:
         summaries_dir: Path,
         *,
         _is_l3_retry: bool = False,
+        _prior_error: str = "",
     ) -> tuple[int, bool, str]:
         """Process a single summarization chunk.
 
         Returns (chunk_index, success, message).
 
-        If L1+L2 JSON repair both fail and this is not already an L3 retry,
-        the chunk is automatically re-run once from scratch (L3).
+        If L1+L2 JSON repair fails or schema validation fails, and this is
+        not already an L3 retry, the chunk is automatically re-run once from
+        scratch (L3) with the previous error injected as ``prior_error`` so
+        the LLM is told what to fix.
         """
         output_path = summaries_dir / f"chunk_{idx:03d}.json"
 
         prompt = build_summarization_prompt(
             self.project_root, self.work_id,
-            idx, total_chunks, start, end)
+            idx, total_chunks, start, end,
+            prior_error=_prior_error)
 
         result = run_with_retry(
             self.backend, prompt,
@@ -414,14 +431,38 @@ class ExtractionOrchestrator:
                 data = _load_json(output_path)
             else:
                 output_path.unlink(missing_ok=True)
-                # L3: full re-run (once)
+                # L3: full re-run (once) with prior_error injected
                 if not _is_l3_retry:
-                    logger.info("L3 full re-run for chunk_%03d", idx)
+                    logger.info("L3 full re-run for chunk_%03d (json fail: %s)",
+                                idx, desc)
                     return self._summarize_chunk(
                         idx, total_chunks, start, end, summaries_dir,
                         _is_l3_retry=True,
+                        _prior_error=f"JSON 解析失败: {desc}",
                     )
                 return idx, False, f"JSON repair failed (L3 also failed): {desc}"
+
+        # JSON Schema gate (schemas/analysis/chapter_summary_chunk.schema.json)
+        # Bound enforcement (summary 50-100, key_events ≤5 + items <50,
+        # location/emotional_tone <20, identity_notes <50,
+        # additionalProperties=false). Fail → L3 retry with prior_error.
+        schema_errs = list(_chunk_validator().iter_errors(data))
+        if schema_errs:
+            first = schema_errs[0]
+            err_path = "/".join(str(p) for p in first.absolute_path) or "<root>"
+            err_summary = f"{err_path}: {first.message[:120]}"
+            output_path.unlink(missing_ok=True)
+            if not _is_l3_retry:
+                logger.info("L3 full re-run for chunk_%03d (schema fail: %s)",
+                            idx, err_summary)
+                return self._summarize_chunk(
+                    idx, total_chunks, start, end, summaries_dir,
+                    _is_l3_retry=True,
+                    _prior_error=(f"Schema 校验失败（共 {len(schema_errs)} 处，"
+                                  f"首条：{err_summary}）"),
+                )
+            return idx, False, (f"Schema validation failed (L3 also failed): "
+                                f"{err_summary}")
 
         count = len(data.get("summaries", [])) if data else 0
         expected = end - start + 1

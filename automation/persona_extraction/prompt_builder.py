@@ -55,8 +55,17 @@ def build_summarization_prompt(
     total_chunks: int,
     start_chapter: int,
     end_chapter: int,
+    *,
+    prior_error: str = "",
 ) -> str:
-    """Build prompt for a single summarization chunk."""
+    """Build prompt for a single summarization chunk.
+
+    Args:
+        prior_error: If non-empty, an L3 retry trigger; the previous failure
+            message is injected as a 重试说明 block so the LLM can correct
+            JSON syntax / schema bound issues. Same shape as
+            ``build_scene_split_prompt``.
+    """
     template = _load_template("summarization.md")
 
     source_dir = project_root / "sources" / "works" / work_id
@@ -71,6 +80,15 @@ def build_summarization_prompt(
                      / "analysis" / "chapter_summaries")
     output_path = summaries_dir / f"chunk_{chunk_index:03d}.json"
 
+    retry_note = ""
+    if prior_error:
+        retry_note = (
+            f"\n## 重试说明\n\n"
+            f"上一次尝试校验失败，错误信息如下：\n\n"
+            f"```\n{prior_error}\n```\n\n"
+            f"请特别注意修正以上问题。"
+        )
+
     context = {
         "work_id": work_id,
         "title": manifest.get("title", work_id) if manifest else work_id,
@@ -83,6 +101,7 @@ def build_summarization_prompt(
         "source_dir": str(source_dir),
         "chapter_file_list": "\n".join(chapter_files),
         "output_path": str(output_path),
+        "retry_note": retry_note,
     }
 
     return _render_template(template, context)
