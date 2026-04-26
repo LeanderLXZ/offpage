@@ -1746,9 +1746,12 @@ class ExtractionOrchestrator:
                     ),
                 )
 
+            repair_logs_dir = progress_dir / "repair_logs"
+            repair_logs_dir.mkdir(parents=True, exist_ok=True)
+
             def _repair_one(f: RepairFileEntry) -> tuple[
                     RepairFileEntry, RepairResult]:
-                rec_path = progress_dir / (
+                rec_path = repair_logs_dir / (
                     f"repair_{stage.stage_id}_"
                     f"{_repair_slug(f.path)}.jsonl")
                 with RepairRecorder(rec_path) as recorder:

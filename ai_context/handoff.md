@@ -39,7 +39,7 @@ python -m automation.persona_extraction "<work_id>" \
     --resume --background --max-runtime 360
 
 # Follow log
-tail -f works/<work_id>/analysis/progress/extraction.log
+tail -f works/<work_id>/analysis/progress/extraction_logs/extraction.log
 ```
 
 Pipeline checks PID lock + clean git tree (scope-limited) before
@@ -47,18 +47,6 @@ starting. `jsonschema` is a HARD dep in `automation/pyproject.toml`.
 Full CLI + background semantics → `automation/README.md`.
 
 Manual repair scenarios → `prompts/review/*.md`.
-
-### Phase 0 chunk + Phase 4 scene_archive 不达新 schema (caveat)
-
-新增 `schemas/analysis/chapter_summary_chunk.schema.json` + `schemas/analysis/scene_split.schema.json` 后（2026-04-25），现存的 `works/{work_id}/analysis/chapter_summaries/chunk_NNN.json` 和 `works/{work_id}/retrieval/scene_archive.jsonl` 是**用旧 prompt 跑的产物**：
-
-- chunk 全部含 `potential_boundary` / `boundary_hint` 字段（新 schema `additionalProperties: false` 拒）
-- chunk summary 50–100 字 bound：实测 ~27% 违反；key_events ≤5 项 bound：~31% 违反
-- scene_archive summary 50–100 字 bound：实测 ~29% 违反
-
-新 schema 是 future contract——这些已知偏差不强制迁移，重抽 phase 0 / phase 4 时按新 prompt + 新 schema 自动收敛。Phase 1 重抽前建议先重抽 phase 0 让 chunk 合规；scene_archive 可继续使用，等想调 summary 风格时整轮重跑 phase 4。
-
----
 
 ### Extraction-branch artifact drift (resume gate)
 

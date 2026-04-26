@@ -1747,7 +1747,7 @@ stage 进入 ERROR（`error_message` 前缀 `post-repair PP:` 以区分
   （Phase A L3 prompt 只喂单文件 content；跨文件一致性由 Phase 3.5
   独立承担）
 - 每个文件有独立 `RepairRecorder`，写到
-  `works/{work_id}/analysis/progress/repair_{stage_id}_{slug(file)}.jsonl`，
+  `works/{work_id}/analysis/progress/repair_logs/repair_{stage_id}_{slug(file)}.jsonl`，
   天然无并发写冲突
 - `total_round_limit` 语义从"stage 全局 N 轮"变成"单文件 N 轮"；
   重试 / triage cap / T3 每文件上限等原本就是 per-file 的配置不变
