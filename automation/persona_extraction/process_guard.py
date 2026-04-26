@@ -170,7 +170,7 @@ def launch_background(
     Returns the child PID.
     """
     log_path = (project_root / "works" / work_id
-                / "analysis" / "progress" / "extraction.log")
+                / "analysis" / "progress" / "extraction_logs" / "extraction.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Rotate the old log so each run gets a fresh file (and a bounded

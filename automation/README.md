@@ -125,7 +125,7 @@ python -m automation.persona_extraction "<work_id>" \
     --resume --background --max-runtime 360
 
 # 跟踪日志
-tail -f works/<work_id>/analysis/progress/extraction.log
+tail -f works/<work_id>/analysis/progress/extraction_logs/extraction.log
 
 # 停止（优雅退出，保存进度并释放锁）
 kill <PID>
@@ -250,12 +250,16 @@ automation/
 
 ## 进度文件
 
-进度文件存储在 `works/{work_id}/analysis/progress/` 下：
+进度文件存储在 `works/{work_id}/analysis/progress/` 下，按用途分类放在子目录：
 
 - `pipeline.json` — 流水线总进度（各 phase 完成状态）
 - `phase0_summaries.json` — Phase 0 各 chunk 状态
 - `phase3_stages.json` — Phase 3 各 stage 状态机
 - `phase4_scenes.json` — Phase 4 各章节状态
+- `extraction_logs/extraction.log{,.1,.2,...}` — orchestrator 主日志（`--background` 模式 stderr 重定向；`extraction_log_backup_count` 控制轮转保留数）
+- `repair_logs/repair_{stage_id}_{slug(file)}.jsonl` — Phase 3 repair_agent 每文件结构化事件日志
+- `failed_lanes/{stage_id}__{lane_type}_{lane_id}__{pid}.log` — 失败 lane 单独日志
+- `rate_limit_pause.json` / `.lock` — 订阅 rate limit 暂停状态（`RateLimitController` 进程单例 + flock）
 
 Phase 3 stage 状态机（详见 `persona_extraction/progress.py` 顶部 docstring）：
 

@@ -443,7 +443,7 @@ orchestrator (Python)
   订阅 rate_limit 由 `RateLimitController` 进程单例统一管理。
 - **Repair Agent 结构化事件日志**：每个待修文件独立打开一个
   `RepairRecorder`，写到
-  `works/{work_id}/analysis/progress/repair_{stage_id}_{slug(file)}.jsonl`。
+  `works/{work_id}/analysis/progress/repair_logs/repair_{stage_id}_{slug(file)}.jsonl`。
   `slug(file)` = 路径末两段 + 8 位 md5 摘要，避免中文路径 ASCII 折叠后
   冲突。coordinator 在每个 phase 起止、每条 blocking issue、每轮
   fix、L3 gate 结果、T3_CORRUPTED、最终结论处 append 一条 JSON 事件

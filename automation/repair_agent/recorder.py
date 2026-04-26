@@ -1,7 +1,7 @@
 """Structured JSONL recorder for repair agent events.
 
 One file per repaired target at
-``works/{work_id}/analysis/progress/repair_{stage_id}_{slug(file)}.jsonl``.
+``works/{work_id}/analysis/progress/repair_logs/repair_{stage_id}_{slug(file)}.jsonl``.
 Each line is a self-describing JSON object. The repair coordinator emits
 events at key transitions (phase starts, issue discovery, escalations,
 fixes, triage verdicts, round summaries, completion). Consumers can
