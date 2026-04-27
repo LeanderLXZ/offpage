@@ -58,8 +58,13 @@ own the format; do not duplicate it here.
 ## TODO List
 
 `docs/todo_list.md` — Chinese working queue of planned-but-unfinished
-tasks. Read-on-demand, **not** part of the session-start reading order.
-Usage rules live inside the file's `## 文件说明` section.
+tasks (segments: `## 正在执行` / `## 下一步` / `## 讨论中`). Top of file
+has a `## 索引` section that caches all entries as three sub-tables; the
+`/todo` skill reads only that. Completed / abandoned tasks move out to
+`docs/todo_list_archived.md` (slim entries; details live in `git log` +
+`logs/change_logs/`). Both files are read-on-demand, **not** part of the
+session-start reading order. Usage rules live inside the source file's
+`## 文件说明` section.
 
 ## Project Focus
 

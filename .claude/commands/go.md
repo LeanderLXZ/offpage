@@ -63,7 +63,7 @@ PRE 段必须包含：
 Import 检查 + 关键函数 smoke test；schema 改动跑 `jsonschema` 校验。有错立即修。
 
 ## 5. 文档对齐
-同步 `ai_context/`（仅 durable truth）、`docs/architecture/`、相关 README。再查 `docs/todo_list.md`：新任务登记、已完成条目**清除**、状态变化更新。
+同步 `ai_context/`（仅 durable truth）、`docs/architecture/`、相关 README。再查 `docs/todo_list.md`：新任务登记到合适分段、本次涉及的已完成条目**整条移到 `docs/todo_list_archived.md`** 的 `## 已完成` 段（瘦身：标题 + 完成形式 + 1 行摘要 + 本次 log 链接）、状态变化更新；任务移段 / 增改后**同步刷新顶部 `## 索引` 段**（规则在 `docs/todo_list.md` 顶部"如何维护索引"小节）。`/todo` skill 只读索引，不刷新就会给出过期信息。
 
 ## 6. 全库 review
 并行扫描（可派 Agent）所有可能涉及的文件：需求、schema、代码、README、architecture、ai_context、prompts、目录结构。检查项：**残留旧逻辑、歧义、跨文件不一致、冲突、遗漏更新、bug、风险**；顺查有无混入真实书名或 legacy 字样。**发现即修**；太大则登记到 `docs/todo_list.md`。
