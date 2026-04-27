@@ -99,7 +99,7 @@ Flow rules:
 - Default branch = `main`. Stay on `main` unless actively running extraction.
 - Code / schema / prompt / docs / `ai_context/` / skill commits go to `main` first; extraction and library branches sync via `git merge main`.
 - `extraction/{work_id}` carries stage outputs only. **Squash-merge to `library` on completion** (never to main — main must stay artefact-free).
-- **After squash-merge, delete the source `extraction/{work_id}` branch (`git branch -D`) and run `git gc --prune=now`** so accumulated regen commits become unreachable and are reclaimed. The `library` squash is the only retained record; `extraction/{work_id}` is a disposable scratchpad.
+- **After a successful squash-merge the orchestrator interactively offers (`[y/N]`, default N) to delete the source `extraction/{work_id}` branch (`git branch -D`) and run `git gc --prune=now`** so accumulated regen commits become unreachable and are reclaimed. Branch deletion is destructive — the prompt always runs even when `[git].auto_squash_merge=true`. Once the user opts in, the `library` squash is the only retained record; `extraction/{work_id}` is a disposable scratchpad.
 - `library` periodically `git merge main` to absorb framework updates; never flows back to main.
 - Enforcement: orchestrator `try/finally: checkout_main(...)` + `.claude/hooks/session_branch_check.sh`. Detail → `architecture.md` §Git Branch Model.
 - Never commit: novels, databases, embeddings, caches, real user packages, real `work_id`-named manifests on `main`.

@@ -201,6 +201,12 @@ orchestrator 自动落实这条纪律：
   仓库只承载框架。`library` 分支由 `_offer_squash_merge` 在首次 squash 时
   按需自动从 main 创建（lazy + idempotent），无需手工 `git branch
   library main` 初始化。
+- **squash 后 dispose（交互）**：squash 成功后 `_offer_squash_merge` 紧接着
+  追问 `Delete extraction/{work_id} branch and run 'git gc --prune=now'? [y/N]`
+  （默认 N）。用户输入 `y` 才执行 `git branch -D extraction/{work_id}` +
+  `git gc --prune=now`，回收历次 regen commit 占用的 blob；否则保留分支
+  并打印手动命令提示。**分支删除是 destructive 操作**，即使
+  `[git].auto_squash_merge=true` 也仍走交互路径，永远不会自动删分支。
 
 ## 目录结构
 
@@ -405,7 +411,7 @@ retry 通路接住，不引入新模块：
 
 ## Phase 3.5：跨阶段一致性检查
 
-Phase 3 全部 stage 提交后自动运行。包含 10 项程序化检查（零 token，含
+Phase 3 全部 stage 提交后自动运行。包含 9 项程序化检查（零 token，含
 `memory_digest.summary` ↔ timeline `digest_summary` 以及
 `world_event_digest.summary` ↔ world `stage_events[i]` 两条 1:1 文本
 等值 gate），可选 LLM 裁定标记项。产出 `consistency_report.json`，并在

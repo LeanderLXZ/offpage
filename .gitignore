@@ -1,11 +1,19 @@
-# Extraction runtime artifacts (lock, progress, summaries, splits)
+# ===== Extraction runtime artifacts =====
+# Locks, progress, summaries, splits — regenerated each run, never tracked.
 works/*/analysis/.extraction.lock
 works/*/analysis/.scene_archive.lock
 works/*/analysis/progress/
 works/*/analysis/chapter_summaries/
 works/*/analysis/scene_splits/
 
-# Large novel corpus and derived source data
+# ===== Generated retrieval / evidence artifacts =====
+# Large intermediate outputs, regenerated on demand.
+works/*/retrieval/
+works/*/analysis/evidence/*
+!works/*/analysis/evidence/.gitkeep
+
+# ===== Source corpus =====
+# Raw novels and derived source data: large, copyrighted, never tracked.
 sources/raw/*
 !sources/raw/.gitkeep
 sources/works/*/raw/
@@ -15,26 +23,17 @@ sources/works/*/scenes/
 sources/works/*/chunks/
 sources/works/*/metadata/
 
-# Per-work manifests carry the real work_id; keep them off main.
+# Per-work source manifests carry the real work_id; keep them off main.
 # `_template/` is exempt — it stays tracked for scaffolding.
 sources/works/[!_]*/manifest.json
 
-# Retrieval artifacts (large, generated at runtime)
-works/*/retrieval/
-
-# Evidence artifacts (large intermediate outputs)
-analysis/evidence/*
-!analysis/evidence/.gitkeep
-works/*/analysis/evidence/*
-!works/*/analysis/evidence/.gitkeep
-
-# User data, relationship memory, and session artifacts
-# Keep real user packages local; only the structural README stays tracked.
+# ===== User data =====
+# Real user packages stay local; only the structural template + README track.
 users/*
 !users/README.md
 !users/_template
 
-# Common local data / database / index artifacts
+# ===== Local databases / indexes =====
 *.db
 *.sqlite
 *.sqlite3
@@ -46,22 +45,16 @@ users/*
 *.npy
 *.npz
 
-# Python bytecode
-__pycache__/
-*.pyc
-
-# Claude Code local config (user-specific allowlist / overrides)
+# ===== Local config overrides =====
+# Per-deployment, never committed.
+automation/config.local.toml
 .claude/settings.json
 .claude/settings.local.json
-.claude/scheduled_tasks.lock
 .claude/*.lock
 
-# Local automation config overrides (per-deployment, never committed)
-automation/config.local.toml
-
-# IDE / editor history
+# ===== Tool / OS artifacts =====
+__pycache__/
+*.pyc
 .history/
-
-# Local environment noise
 .DS_Store
 Thumbs.db

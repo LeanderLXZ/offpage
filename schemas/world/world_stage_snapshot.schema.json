@@ -34,9 +34,7 @@
     },
     "stage_title": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 15,
-      "description": "阶段的人类可读短标题（≤15 字）。"
+      "description": "阶段的人类可读短标题。从 stage_plan.json 的同 stage_id 条目拉取；bound 由 stage_plan.schema.json 单源定义，本 schema 不重复约束。"
     },
     "timeline_anchor": {
       "type": "string",

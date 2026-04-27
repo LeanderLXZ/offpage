@@ -50,39 +50,12 @@ Manual repair scenarios → `prompts/review/*.md`.
 
 ### Extraction-branch artifact drift (resume gate)
 
-Before `--resume` on an existing `extraction/<work_id>` branch, check
-the already-produced stage products against the **current** schemas —
-schema tightening over the 2026-04 cleanup series invalidates earlier
-products. Known break points on surviving branches:
-
-Files likely broken by newer schema gates (exact bounds → each schema
-file):
-
-- `world/stage_snapshots/{stage_id}.json` — new required anchors
-  (`timeline_anchor` + `location_anchor`); `character_status_changes` +
-  `evidence_refs` removed; per-field `maxItems` / `maxLength` tightened.
-- `world/stage_catalog.json` + `characters/*/canon/stage_catalog.json`
-  — `order` field removed.
-- `world/foundation/fixed_relationships.json` — `source_type` +
-  `evidence_refs` removed.
-- `memory_timeline/{stage_id}.json` — `scene_refs` removed; `time` /
-  `location` required short strings.
-- `characters/*/canon/stage_snapshots/{stage_id}.json` — `timeline_anchor`
-  + `snapshot_summary` required; `character_arc` is now a short
-  string (old `{arc_summary, arc_stages[], current_position}` object
-  rejected); top-level `memory_refs` + `evidence_refs` removed;
-  per-item `evidence_ref` in every `dialogue_examples` /
-  `action_examples` removed; `boundary_state.hard_boundaries` added;
-  various capacity tightens / widenings.
-- `characters/*/canon/voice_rules.json` — per-item `evidence_ref` in
-  `dialogue_examples` removed; container caps tightened.
-- `characters/*/canon/behavior_rules.json` — `relationship_behavior_map`
-  → `target_behavior_map`; inner `relationship_type` → `target_type`.
-
-Remediation options: rerun affected stages, write a one-off patch
-script, or carry forward only from the next stage (older stages stay
-INVALID until rerun). Decide before `--resume` — repair agent's L1
-gate will trip on every pre-tightening file otherwise.
+Before `--resume` on an existing `extraction/<work_id>` branch, read the
+**`## 立即执行` section of `docs/todo_list.md`** for active migration
+tasks against the current schemas. **Do NOT read the `## 下一步` or
+`## 讨论中` sections for this gate** — those are deferred / non-blocking
+and only waste tokens. The repair agent's L1 gate will trip on every
+pre-tightening file otherwise.
 
 ## What The User Cares About
 
