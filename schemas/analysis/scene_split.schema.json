@@ -30,13 +30,13 @@
       },
       "time": {
         "type": "string",
-        "maxLength": 19,
-        "description": "故事内时间（保留原文表述，可模糊；<20 字）。"
+        "maxLength": 20,
+        "description": "故事内时间（保留原文表述，可模糊；≤20 字）。"
       },
       "location": {
         "type": "string",
-        "maxLength": 19,
-        "description": "场景发生地点（<20 字）。"
+        "maxLength": 20,
+        "description": "场景发生地点（≤20 字）。"
       },
       "characters_present": {
         "type": "array",

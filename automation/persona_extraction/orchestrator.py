@@ -467,9 +467,8 @@ class ExtractionOrchestrator:
                 return idx, False, f"JSON repair failed (L3 also failed): {desc}"
 
         # JSON Schema gate (schemas/analysis/chapter_summary_chunk.schema.json)
-        # Bound enforcement (summary 50-100, key_events ≤5 + items <50,
-        # location/emotional_tone <20, identity_notes <50,
-        # additionalProperties=false). Fail → L3 retry with prior_error.
+        # Schema enforces all bounds + additionalProperties=false; exact
+        # numbers live in the schema. Fail → L3 retry with prior_error.
         schema_errs = list(_chunk_validator().iter_errors(data))
         if schema_errs:
             first = schema_errs[0]

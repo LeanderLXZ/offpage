@@ -60,8 +60,8 @@
             "description": "推动剧情的关键事件列表，最多 5 条；跳过日常水文。",
             "items": {
               "type": "string",
-              "maxLength": 49,
-              "description": "单条关键事件，<50 字。"
+              "maxLength": 50,
+              "description": "单条关键事件，≤50 字。"
             }
           },
           "characters_present": {
@@ -71,18 +71,18 @@
           },
           "location": {
             "type": "string",
-            "maxLength": 19,
-            "description": "本章主要场景 / 地点（<20 字）。"
+            "maxLength": 20,
+            "description": "本章主要场景 / 地点（≤20 字）。"
           },
           "emotional_tone": {
             "type": "string",
-            "maxLength": 19,
-            "description": "本章主要情绪基调（<20 字，例如\"紧张\" / \"温馨\" / \"悲伤\"）。"
+            "maxLength": 20,
+            "description": "本章主要情绪基调（≤20 字，例如\"紧张\" / \"温馨\" / \"悲伤\"）。"
           },
           "identity_notes": {
             "type": "string",
-            "maxLength": 49,
-            "description": "本章中的角色身份相关线索（化名建立、真名揭示、封号赋予等）；<50 字。无此类事件时为空字符串。"
+            "maxLength": 50,
+            "description": "本章中的角色身份相关线索（化名建立、真名揭示、封号赋予等）；≤50 字。无此类事件时为空字符串。"
           }
         }
       }

@@ -61,7 +61,7 @@
           "boundary_reason": {
             "type": "string",
             "maxLength": 100,
-            "description": "本 stage 的切分理由（<100 字）。不能只写\"满 N 章\"。"
+            "description": "本 stage 的切分理由（≤100 字）。不能只写\"满 N 章\"。"
           }
         }
       }

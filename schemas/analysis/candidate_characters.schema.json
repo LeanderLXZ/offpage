@@ -14,8 +14,8 @@
     "candidates": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 29,
-      "description": "候选角色列表，每条对应一个独立角色（已合并所有别名；<30 项）。",
+      "maxItems": 30,
+      "description": "候选角色列表，每条对应一个独立角色（已合并所有别名；≤30 项）。",
       "items": {
         "type": "object",
         "required": [
@@ -31,7 +31,7 @@
           "character_id": {
             "type": "string",
             "maxLength": 30,
-            "description": "角色 ID（最常用 / 最终的正式名，<30 字）。"
+            "description": "角色 ID（最常用 / 最终的正式名，≤30 字）。"
           },
           "aliases": {
             "type": "array",
@@ -45,7 +45,7 @@
                 "name": {
                   "type": "string",
                   "maxLength": 30,
-                  "description": "别名文本（<30 字）。"
+                  "description": "别名文本（≤30 字）。"
                 },
                 "type": {
                   "type": "string",
@@ -55,7 +55,7 @@
                 "first_appearance": {
                   "type": "string",
                   "maxLength": 30,
-                  "description": "首次出现位置描述（<30 字，例如\"约第 0042 章\"）。"
+                  "description": "首次出现位置描述（≤30 字，例如\"约第 0042 章\"）。"
                 }
               }
             }
