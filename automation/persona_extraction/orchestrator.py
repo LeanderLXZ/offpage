@@ -72,13 +72,35 @@ from functools import lru_cache as _lru_cache
 import jsonschema as _jsonschema
 
 
+def _load_analysis_schema(name: str) -> _jsonschema.Draft202012Validator:
+    schema_path = (Path(__file__).resolve().parents[2]
+                   / "schemas/analysis" / name)
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    return _jsonschema.Draft202012Validator(schema)
+
+
 @_lru_cache(maxsize=1)
 def _chunk_validator() -> _jsonschema.Draft202012Validator:
     """Lazy-load schemas/analysis/chapter_summary_chunk.schema.json once."""
-    schema_path = (Path(__file__).resolve().parents[2]
-                   / "schemas/analysis/chapter_summary_chunk.schema.json")
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    return _jsonschema.Draft202012Validator(schema)
+    return _load_analysis_schema("chapter_summary_chunk.schema.json")
+
+
+@_lru_cache(maxsize=1)
+def _world_overview_validator() -> _jsonschema.Draft202012Validator:
+    """Lazy-load schemas/analysis/world_overview.schema.json once."""
+    return _load_analysis_schema("world_overview.schema.json")
+
+
+@_lru_cache(maxsize=1)
+def _stage_plan_validator() -> _jsonschema.Draft202012Validator:
+    """Lazy-load schemas/analysis/stage_plan.schema.json once."""
+    return _load_analysis_schema("stage_plan.schema.json")
+
+
+@_lru_cache(maxsize=1)
+def _candidate_characters_validator() -> _jsonschema.Draft202012Validator:
+    """Lazy-load schemas/analysis/candidate_characters.schema.json once."""
+    return _load_analysis_schema("candidate_characters.schema.json")
 
 
 from .rate_limit import (
@@ -868,42 +890,79 @@ class ExtractionOrchestrator:
             else:
                 print("  [WARN] World overview not found.")
 
+            # Phase 1 schema gate (schemas/analysis/{world_overview,stage_plan,
+            # candidate_characters}.schema.json). Schema fails feed
+            # correction_feedback together with stage limit violations and
+            # share the existing retry budget.
+            schema_failures: list[tuple[str, list[Any]]] = []
+            for fname, data, validator in (
+                ("world_overview.json", world_overview, _world_overview_validator()),
+                ("stage_plan.json", stage_plan, _stage_plan_validator()),
+                ("candidate_characters.json", candidates, _candidate_characters_validator()),
+            ):
+                if data is None:
+                    continue  # missing file is a separate failure path
+                errs = list(validator.iter_errors(data))
+                if errs:
+                    schema_failures.append((fname, errs))
+
             # Phase 1 exit validation: check stage chapter_count limits
+            violating: list[dict[str, Any]] = []
             if stage_plan:
                 violating = _check_stage_plan_limits(
                     stage_plan,
                     max_stage_size=STAGE_MAX,
                     min_stage_size=STAGE_MIN,
                 )
-                if not violating:
-                    break  # all good
 
+            if schema_failures or violating:
                 if attempt <= MAX_ANALYSIS_RETRIES:
-                    # Build correction feedback for next attempt
-                    details = "; ".join(
-                        f"{b.get('stage_id', '?')}={b.get('chapter_count')}章"
-                        for b in violating)
+                    feedback_lines: list[str] = []
+                    if schema_failures:
+                        feedback_lines.append("Schema 校验失败：")
+                        for fname, errs in schema_failures:
+                            first = errs[0]
+                            err_path = "/".join(
+                                str(p) for p in first.absolute_path) or "<root>"
+                            feedback_lines.append(
+                                f"- `{fname}`: {len(errs)} 处违反，"
+                                f"首条 `{err_path}`: {first.message[:120]}"
+                            )
+                    if violating:
+                        details = "; ".join(
+                            f"{b.get('stage_id', '?')}={b.get('chapter_count')}章"
+                            for b in violating)
+                        feedback_lines.append(
+                            f"stage_plan 中有 {len(violating)} 个 stage "
+                            f"不满足 {STAGE_MIN}-{STAGE_MAX} 章限制：{details}。"
+                            "对于跨度大的故事弧，必须拆分为多个 stage；"
+                            "对于过短的 stage，应合并到相邻 stage。"
+                        )
                     correction_feedback = (
-                        f"上次产出的 stage plan 中有 {len(violating)} 个 stage "
-                        f"不满足 {STAGE_MIN}-{STAGE_MAX} 章限制：{details}。\n\n"
-                        "请重新生成 `stage_plan.json`，确保每个 stage "
-                        f"的 chapter_count 在 {STAGE_MIN}-{STAGE_MAX} 范围内。"
-                        "对于跨度大的故事弧，必须在其中寻找次级剧情节点拆分为多个 stage；"
-                        "对于过短的 stage，应合并到相邻 stage。\n\n"
-                        "其他已产出的文件（world_overview.json、"
-                        "candidate_characters.json）如果已存在且正确，"
-                        "可以保留不变，只需重写 stage plan。"
+                        "\n".join(feedback_lines)
+                        + "\n\nschema 契约见 "
+                        "`schemas/analysis/{world_overview,stage_plan,"
+                        "candidate_characters}.schema.json`。"
+                        "请重新生成对应文件以满足 schema + stage 限制；"
+                        "其他通过校验的文件如已存在可保留不变。"
                     )
-                    # Delete the bad plan so the LLM regenerates it
-                    plan_path = inc_dir / "stage_plan.json"
-                    if plan_path.exists():
-                        plan_path.unlink()
-                    print(f"  [RETRY] Will re-run Phase 1 to correct "
-                          f"stage plan (attempt {attempt + 1})...")
+                    # Delete failing files so the LLM regenerates only those
+                    for fname, _ in schema_failures:
+                        (inc_dir / fname).unlink(missing_ok=True)
+                    if violating:
+                        plan_path = inc_dir / "stage_plan.json"
+                        if plan_path.exists():
+                            plan_path.unlink()
+                    print(f"  [RETRY] Will re-run Phase 1 to fix "
+                          f"{len(schema_failures)} schema fail(s) + "
+                          f"{len(violating)} stage limit violation(s) "
+                          f"(attempt {attempt + 1})...")
                 else:
-                    print(f"  [FATAL] Stage plan still has violating stages "
-                          f"after {MAX_ANALYSIS_RETRIES} retries. Aborting.")
+                    print(f"  [FATAL] Phase 1 still failing after "
+                          f"{MAX_ANALYSIS_RETRIES} retries. Aborting.")
                     sys.exit(1)
+            elif stage_plan:
+                break  # all good
             else:
                 break  # no plan produced, let downstream handle
 

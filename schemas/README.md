@@ -6,7 +6,7 @@
 
 | 子目录 | 作用 | 典型成员 |
 |--------|------|---------|
-| `analysis/` | Phase 0 / Phase 4 LLM 中间产物（不入运行时） | `chapter_summary_chunk`、`scene_split` |
+| `analysis/` | Phase 0 / Phase 1 / Phase 4 LLM 产物（不入运行时；Phase 1 三件套入 git） | `chapter_summary_chunk`、`scene_split`、`world_overview`、`stage_plan`、`candidate_characters` |
 | `work/` | 作品级入库、目录、per-work 加载配置 | `work_manifest`、`works_manifest`、`book_metadata`、`chapter_index`、`load_profiles` |
 | `world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | `world_manifest`、`foundation`、`world_stage_snapshot`、`world_event_digest_entry`、`fixed_relationships`、`world_stage_catalog` |
 | `character/` | 角色 baseline + 阶段目录 + 阶段快照 + 记忆 | `identity`、`character_manifest`、`voice_rules`、`behavior_rules`、`boundaries`、`failure_modes`、`stage_catalog`、`stage_snapshot`、`memory_timeline_entry`、`memory_digest_entry` |

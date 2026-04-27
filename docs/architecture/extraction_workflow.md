@@ -68,10 +68,19 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 阶段规划是分析阶段**最核心的产出**——每个 stage 边界直接成为系统的 stage 边界，
 世界快照、角色快照、记忆时间线、运行时阶段选择全部建立在此切分之上。
 
-**出口验证（硬性门控）**：Phase 1 完成后程序化检查所有 stage 的 `chapter_count`
-是否在 5-15 范围内。违规 stage 会触发 Phase 1 重跑——删除
-`stage_plan.json`，带修正反馈重新调用 LLM 产出更精准的切分（最多重试
-2 次）。若重试耗尽仍有违规，流程终止（`sys.exit(1)`）。
+**出口验证（硬性门控）**：Phase 1 完成后跑两层校验，**共享同一 retry 预算**
+（`[phase1].exit_validation_max_retry`，默认 2 次）：
+
+1. **jsonschema 校验**：三件套各自跑 `Draft202012Validator.iter_errors`
+   （`schemas/analysis/{world_overview,stage_plan,candidate_characters}.schema.json`），
+   覆盖结构 / bound / enum / pattern。
+2. **stage `chapter_count` 5-15 限制**（`_check_stage_plan_limits`，与 schema
+   `chapter_count: minimum 5, maximum 15` 同义；belt-and-suspenders）。
+
+任一层失败 → 把首条 schema 错误 + stage 限制违规明细合并进
+`correction_feedback`（按 `build_analysis_prompt(correction_feedback=...)`
+追加到 prompt 的"⚠️ 修正要求"段），删除失败的文件让 LLM 重生（通过校验的
+文件保留），重新跑 Phase 1。若重试耗尽仍 fail，流程终止（`sys.exit(1)`）。
 
 ### 4. 活跃角色确认（Phase 1.5）
 
