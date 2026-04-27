@@ -147,3 +147,23 @@
 
 - **Status**: DONE
 - **Finished**: 2026-04-27 04:39:24 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：7/7 项计划 + 5/5 项验证标准
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=0 / Low=0
+- Open Questions: 0 条
+- Residual Risks: 2 条（描述性约定无 lint 强制 + 未来改上游 bound 不级联到下游标注；详见对话）
+
+## 复查时状态
+- **Reviewed**: 2026-04-27 04:56:35 EDT
+- **Status**: REVIEWED-PASS
+  - 轨 1 全部落实（7/7 计划项 + 5/5 验证标准）
+  - 轨 2 无 High/Medium/Low finding
+- **Conversation ref**: 同会话内 /post-check 输出
