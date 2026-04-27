@@ -57,41 +57,6 @@
 
 ## 立即执行
 
-### [T-SCENE-ARCHIVE-SUMMARY-REQUIRED] scene_archive_entry summary 应升 required
-
-**上下文**
-
-[schemas/runtime/scene_archive_entry.schema.json:7-13](schemas/runtime/scene_archive_entry.schema.json#L7-L13) 当前 `required` = `[scene_id, stage_id, chapter, characters_present, full_text]`，**summary / time / location 三个字段不在 required 列表**。但实际上：
-
-- Phase 4 scene_split 把 summary / time / location 都列为 required（[schemas/analysis/scene_split.schema.json:11-18](schemas/analysis/scene_split.schema.json#L11-L18)）
-- `automation/persona_extraction/scene_archive.py` 程序 1:1 直拷 scene_split 这三个字段到 scene_archive
-- 历史数据上无一缺 summary / time / location（产物已清，下次 Phase 4 跑出来必然非空）
-
-→ scene_archive_entry 这三个字段**事实上总是非空**，schema 应 required 反映契约。
-
-**改动清单**
-
-1. [schemas/runtime/scene_archive_entry.schema.json:7-13](schemas/runtime/scene_archive_entry.schema.json#L7-L13) `required` 数组加入 `summary` / `time` / `location`
-2. [docs/architecture/schema_reference.md](docs/architecture/schema_reference.md) runtime/scene_archive_entry 段无需改（已经描述契约）
-
-**待决策项**
-
-无——纯契约硬化
-
-**完成标准**
-
-- required 列表升级
-- 下次 Phase 4 产物自然通过新 required（程序 1:1 直拷自 scene_split，scene_split 已 require 这三个字段）
-- 本 todo 条目删除
-
-**预估**：S（30 分钟）
-
-**依赖**：无
-
----
-
-## 下一步
-
 ### [T-CHAR-SNAPSHOT-13-DIM-VERIFY] 角色 stage_snapshot "13 必填维度" 表述核对
 
 **上下文**
@@ -133,6 +98,8 @@ boundary_state, relationships, stage_events, character_arc
 **依赖**：无
 
 ---
+
+## 下一步
 
 ### [T-PHASE35-IMPORTANCE-AWARE] Phase 3.5 一致性检查按 importance 调门槛
 
