@@ -317,9 +317,10 @@ def validate_scene_split(
             f"but chapter has {total_lines} lines")
 
     # JSON Schema gate (schemas/analysis/scene_split.schema.json)
-    # Bound enforcement (time/location ≤19, summary 50-100, maxItems 5,
-    # additionalProperties=false). Fail messages are appended to the same
-    # errors list so the existing retry-with-prior-error path picks them up.
+    # Schema enforces all bounds (time/location, summary, maxItems,
+    # additionalProperties=false); exact numbers live in the schema.
+    # Fail messages are appended to the same errors list so the existing
+    # retry-with-prior-error path picks them up.
     for err in _scene_split_validator().iter_errors(scenes):
         path = "/".join(str(p) for p in err.absolute_path) or "<root>"
         errors.append(f"schema {path}: {err.message[:80]}")

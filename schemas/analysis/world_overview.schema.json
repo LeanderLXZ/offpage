@@ -23,12 +23,12 @@
     "genre": {
       "type": "string",
       "maxLength": 30,
-      "description": "题材类型（<30 字，例如\"东方玄幻\" / \"都市修真\"）。"
+      "description": "题材类型（≤30 字，例如\"东方玄幻\" / \"都市修真\"）。"
     },
     "tone": {
       "type": "string",
-      "maxLength": 49,
-      "description": "整体基调（<50 字）。"
+      "maxLength": 50,
+      "description": "整体基调（≤50 字）。"
     },
     "world_structure": {
       "type": "object",
@@ -43,9 +43,9 @@
         },
         "major_regions": {
           "type": "array",
-          "maxItems": 29,
-          "items": { "type": "string", "maxLength": 29 },
-          "description": "主要区域名列表（<30 项，每项 <30 字）。"
+          "maxItems": 30,
+          "items": { "type": "string", "maxLength": 30 },
+          "description": "主要区域名列表（≤30 项，每项 ≤30 字）。"
         }
       }
     },
@@ -62,30 +62,30 @@
         },
         "levels": {
           "type": "array",
-          "maxItems": 19,
+          "maxItems": 20,
           "items": { "type": "string", "maxLength": 30 },
-          "description": "等级 / 阶段名列表（<20 项，每项 <30 字）。"
+          "description": "等级 / 阶段名列表（≤20 项，每项 ≤30 字）。"
         }
       }
     },
     "major_factions": {
       "type": "array",
-      "maxItems": 19,
-      "description": "主要势力（<20 项）。",
+      "maxItems": 20,
+      "description": "主要势力（≤20 项）。",
       "items": {
         "type": "object",
         "required": ["name", "description"],
         "additionalProperties": false,
         "properties": {
           "name": { "type": "string", "maxLength": 30 },
-          "description": { "type": "string", "maxLength": 99 }
+          "description": { "type": "string", "maxLength": 100 }
         }
       }
     },
     "world_lines": {
       "type": "array",
-      "maxItems": 19,
-      "description": "大世界线 / 篇章划分（<20 项）。",
+      "maxItems": 20,
+      "description": "大世界线 / 篇章划分（≤20 项）。",
       "items": {
         "type": "object",
         "required": ["name", "chapter_range", "core_conflict", "setting_features"],
@@ -97,8 +97,8 @@
             "pattern": "^\\d{4}-\\d{4}$",
             "description": "章节范围（4 位零填充 + 连字符 + 4 位零填充）。"
           },
-          "core_conflict": { "type": "string", "maxLength": 99 },
-          "setting_features": { "type": "string", "maxLength": 99 }
+          "core_conflict": { "type": "string", "maxLength": 100 },
+          "setting_features": { "type": "string", "maxLength": 100 }
         }
       }
     },
@@ -106,7 +106,7 @@
       "type": "array",
       "maxItems": 20,
       "items": { "type": "string", "maxLength": 100 },
-      "description": "影响剧情走向的关键世界规则（≤20 条，每条 <100 字）。"
+      "description": "影响剧情走向的关键世界规则（≤20 条，每条 ≤100 字）。"
     }
   }
 }
