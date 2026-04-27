@@ -8,7 +8,10 @@
     "scene_id",
     "stage_id",
     "chapter",
+    "time",
+    "location",
     "characters_present",
+    "summary",
     "full_text"
   ],
   "additionalProperties": false,
