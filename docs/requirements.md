@@ -2136,7 +2136,7 @@ Phase 3 全部 stage 提交后，运行跨阶段一致性检查。
 | # | 检查 | 说明 |
 |---|------|------|
 | 1 | alias 一致性 | stage_snapshot 的 active_aliases 是否在 identity.json aliases 中有定义 |
-| 2 | 快照字段完整性 | 每个 stage_snapshot 是否包含全部 13 个必填维度（personality, mood, voice_state, behavior_state, boundary_state, relationships, knowledge_scope, stage_delta 等） |
+| 2 | 快照字段完整性 | 每个 stage_snapshot 的必填维度是否齐全；维度清单以 `schemas/character/stage_snapshot.schema.json` 的 `required` 列表为单一权威来源（schema 是权威，本文档不复述具体字段名 / 条数，避免漂移） |
 | 3 | 关系连续性 | 相邻 stage 间 attitude/trust/intimacy 变化是否有 driving_events 归因 |
 | 4 | memory_digest 对应 | memory_digest.jsonl 条目是否与 memory_timeline memory_id 一一对应 |
 | 5 | memory_digest 摘要一致 | 每条 memory_digest `summary` 是否与对应 memory_timeline `digest_summary` **文本完全相等**（1:1 拷贝契约，防止 repair 改写源字段后 digest 漂移） |

@@ -73,7 +73,10 @@
 
 ## 已完成
 
-_（暂无条目。第一个完成的任务从 `todo_list.md` 移过来时按上方"已完成段"格式追加到本节顶部。）_
+### [T-CHAR-SNAPSHOT-13-DIM-VERIFY] 角色 stage_snapshot "13 必填维度" 表述核对 · 完成于 2026-04-27 · 改方案后完成
+
+- 1 行摘要：原方案候选"字面 17 条" vs 实际方案"指针式"；`docs/architecture/extraction_workflow.md:277` 与 `docs/requirements.md:2139` 改为"以 `schemas/character/stage_snapshot.schema.json` 的 `required` 列表为准"，去掉具体数字与字段示例，避免下次 schema 增减字段时再次漂移。
+- 关联 log: [logs/change_logs/2026-04-27_185531_char-snapshot-required-fields-pointer.md](../logs/change_logs/2026-04-27_185531_char-snapshot-required-fields-pointer.md)
 
 ---
 
