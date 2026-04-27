@@ -14,8 +14,8 @@
     "candidates": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 100,
-      "description": "候选角色列表，每条对应一个独立角色（已合并所有别名）。",
+      "maxItems": 29,
+      "description": "候选角色列表，每条对应一个独立角色（已合并所有别名；<30 项）。",
       "items": {
         "type": "object",
         "required": [
@@ -62,8 +62,9 @@
           },
           "description": {
             "type": "string",
+            "minLength": 100,
             "maxLength": 200,
-            "description": "角色简介（<200 字，2-3 句）。"
+            "description": "角色简介（100-200 字，2-3 句）。"
           },
           "frequency": {
             "type": "string",
