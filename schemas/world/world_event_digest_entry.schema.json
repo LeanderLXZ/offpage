@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/world/world_event_digest_entry.schema.json",
   "title": "世界事件摘要条目",
-  "description": "世界级重要事件的增量索引条目。从 world stage_snapshot 的 stage_events 自动生成。启动时按 event_id 中的 S### 段过滤加载。",
+  "description": "世界级重要事件的增量索引条目。启动时按 event_id 中的 S### 段过滤加载。由 automation/persona_extraction/post_processing.py:generate_world_event_digest 程序级从上游 world_stage_snapshot.schema.json 派生（零 LLM）：summary 来自 stage_events[i] 1:1 拉取，time / location 来自 snapshot timeline_anchor / location_anchor 1:1 拉取，event_id / importance 由程序生成。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -16,28 +16,28 @@
     "event_id": {
       "type": "string",
       "pattern": "^E-S[0-9]{3}-[0-9]{2}$",
-      "description": "唯一标识符，格式 E-S{stage:03d}-{seq:02d}。阶段号由 S### 段承载。"
+      "description": "唯一标识符，格式 E-S{stage:03d}-{seq:02d}。由 post_processing.py 程序生成（stage 段来自当前阶段，seq 按 stage_events 数组下标 +1）；阶段号由 S### 段承载，loader 按此过滤；pattern 在 runtime 加载侧仍校验格式正确性。"
     },
     "summary": {
       "type": "string",
-      "description": "事件摘要（直接复制 stage_events[i]）。长度上限由上游 stage_events 承担。"
+      "description": "事件摘要。从上游 schemas/world/world_stage_snapshot.schema.json 的 stage_events[i] 1:1 拉取，bound 由上游单源定义。"
     },
     "importance": {
       "type": "string",
       "enum": ["trivial", "minor", "significant", "critical", "defining"],
-      "description": "事件重要度。由程序从 stage_events + current_world_state 推断，无法判定时默认 significant。"
+      "description": "事件重要度。由 post_processing.py:_infer_importance 按 summary 关键词推断（程序生成，0 token），无法判定时默认 significant。"
     },
     "time": {
       "type": "string",
-      "description": "故事内时间锚点（来自 snapshot.timeline_anchor，长度上限由上游承担）。"
+      "description": "故事内时间锚点。从上游 schemas/world/world_stage_snapshot.schema.json 的 timeline_anchor 字段 1:1 拉取，bound 由上游单源定义。"
     },
     "location": {
       "type": "string",
-      "description": "事件发生地点（来自 snapshot.location_anchor，长度上限由上游承担）。"
+      "description": "事件发生地点。从上游 schemas/world/world_stage_snapshot.schema.json 的 location_anchor 字段 1:1 拉取，bound 由上游单源定义。"
     },
     "involved_characters": {
       "type": "array",
-      "description": "涉及的角色名列表。",
+      "description": "涉及的角色名列表。由 post_processing.py 对 summary 做 substring match 候选名（程序生成，0 token），命中即写入；无命中则字段省略。",
       "items": { "type": "string" }
     }
   }
