@@ -133,7 +133,8 @@
 
 **用途**：世界阶段目录，列出作品的所有可选阶段。仅用于 bootstrap 阶段选择，运行时不加载。
 **位置**：`works/{work_id}/world/stage_catalog.json`
-**关键字段**：stages[].stage_id（`S###`，既是主键也是排序键）, stages[].stage_title, stages[].summary, stages[].snapshot_path
+**关键字段**：stages[].stage_id（`S###`，既是主键也是排序键）, stages[].stage_title, stages[].timeline_anchor, stages[].summary, stages[].snapshot_path
+**生成方式**：由 `post_processing.py:upsert_stage_catalog` 程序级从世界 stage_snapshot 派生。`stage_title` / `timeline_anchor` / `summary` 从对应 snapshot 1:1 拉取，bound 由上游 schema 单源定义；`stage_id` / `snapshot_path` / `chapter_scope` 由程序生成。
 
 ---
 
@@ -372,7 +373,8 @@ key_relationships 提供关系的全局演变轨迹。
 
 **用途**：角色阶段目录，与世界 stage_catalog 对称。仅用于 bootstrap 阶段选择，运行时不加载。
 **位置**：`characters/{character_id}/canon/stage_catalog.json`
-**关键字段**：stages[].stage_id（`S###`，与世界 stage_id 对齐，字典序即阶段顺序）、stages[].stage_title、stages[].summary、stages[].snapshot_path、stages[].timeline_anchor / chapter_scope（可选）
+**关键字段**：stages[].stage_id（`S###`，与世界 stage_id 对齐，字典序即阶段顺序）、stages[].stage_title、stages[].timeline_anchor、stages[].summary、stages[].snapshot_path、stages[].chapter_scope（可选）
+**生成方式**：由 `post_processing.py:upsert_stage_catalog` 程序级从角色 stage_snapshot 派生。`stage_title` / `timeline_anchor` / `summary` 从对应 snapshot 1:1 拉取，bound 由上游 schema 单源定义；`stage_id` / `snapshot_path` / `chapter_scope` 由程序生成。
 
 ---
 
@@ -460,7 +462,7 @@ permanence_reason?, pinned_at?
 **用途**：`scene_archive.jsonl` 单条记录——Phase 4 `scene_split` 按行号切出的场景。作为 FTS5 检索与 `full_text` 取回的基本单元。
 **位置**：`works/{work_id}/retrieval/scene_archive.jsonl`（本地生成，不入 git）
 **关键字段**：`scene_id`（`SC-S###-##`）/ `stage_id`（`S###`）/ `chapter` / `time` / `location` / `characters_present[]` / `summary` / `full_text`
-**契约**：`summary` / `time` / `location` / `characters_present` 由 `automation/persona_extraction/scene_archive.py` 从 `analysis/scene_split` LLM 输出 1:1 程序直拷；`stage_id` 与 `scene_id` 的 `S###` 段由程序按 `stage_plan.json` chapter→stage 映射赋值。新 stage_plan 可纯程序 remap，无需重跑 LLM。
+**契约**：`summary` / `time` / `location` / `characters_present` 由 `automation/persona_extraction/scene_archive.py` 从 `analysis/scene_split` LLM 输出 1:1 程序直拷，bound 由上游 `scene_split.schema.json` 单源定义，本 schema 不重复约束；`stage_id` 与 `scene_id` 的 `S###` 段由程序按 `stage_plan.json` chapter→stage 映射赋值。新 stage_plan 可纯程序 remap，无需重跑 LLM。
 **运行时**：最近 `scene_fulltext_window` 条在 Tier 0 直接加载 `full_text`，其余由 FTS5 on-demand 取回；`summary` 不单独进入 Tier 0。
 
 ---

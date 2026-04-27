@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/character/memory_digest_entry.schema.json",
   "title": "记忆摘要条目",
-  "description": "memory_timeline 的压缩索引条目。启动时按 memory_id 中的 S### 段过滤加载（stage 1..N，N = 用户选定阶段），供 LLM 感知历史记忆并判断是否需要 FTS5 检索详情。从 memory_timeline 条目自动生成。",
+  "description": "memory_timeline 的压缩索引条目。启动时按 memory_id 中的 S### 段过滤加载（stage 1..N，N = 用户选定阶段），供 LLM 感知历史记忆并判断是否需要 FTS5 检索详情。由 automation/persona_extraction/post_processing.py:generate_memory_digest 程序级从上游 memory_timeline_entry.schema.json 1:1 派生（零 LLM）。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -16,24 +16,24 @@
     "memory_id": {
       "type": "string",
       "pattern": "^M-S[0-9]{3}-[0-9]{2}$",
-      "description": "对应 memory_timeline 条目的唯一标识，格式 M-S{stage:03d}-{seq:02d}。阶段号由 S### 段承载，loader 按此过滤。"
+      "description": "对应 memory_timeline 条目的唯一标识，格式 M-S{stage:03d}-{seq:02d}。从上游 schemas/character/memory_timeline_entry.schema.json 的 memory_id 字段 1:1 拉取；阶段号由 S### 段承载，loader 按此过滤；pattern 在 runtime 加载侧仍校验格式正确性。"
     },
     "time": {
       "type": "string",
-      "description": "故事内时间（来自 memory_timeline 同名字段，长度上限由上游承担）。"
+      "description": "故事内时间。从上游 schemas/character/memory_timeline_entry.schema.json 的 time 字段 1:1 拉取，bound 由上游单源定义。"
     },
     "location": {
       "type": "string",
-      "description": "事件发生地点（来自 memory_timeline 同名字段，长度上限由上游承担）。"
+      "description": "事件发生地点。从上游 schemas/character/memory_timeline_entry.schema.json 的 location 字段 1:1 拉取，bound 由上游单源定义。"
     },
     "summary": {
       "type": "string",
-      "description": "客观层面发生了什么（直接复制 memory_timeline 的 digest_summary 字段，长度上限由上游承担）。"
+      "description": "客观层面发生了什么。从上游 schemas/character/memory_timeline_entry.schema.json 的 digest_summary 字段 1:1 拉取，bound 由上游单源定义。"
     },
     "importance": {
       "type": "string",
       "enum": ["trivial", "minor", "significant", "critical", "defining"],
-      "description": "记忆重要度。"
+      "description": "记忆重要度。从上游 schemas/character/memory_timeline_entry.schema.json 的 memory_importance 字段 1:1 拉取（同 5 级 enum）。"
     }
   }
 }

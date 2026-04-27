@@ -390,17 +390,17 @@ def upsert_stage_catalog(
     issues: list[str] = []
 
     # --- build the new stage entry ---
+    # timeline_anchor is required upstream (stage_snapshot) and downstream
+    # (stage_catalog), so always copy it through unconditionally — the
+    # upstream schema gate guarantees the key exists. Empty string is
+    # legal at the snapshot side and is preserved as-is.
     new_entry: dict[str, Any] = {
         "stage_id": stage_id,
         "stage_title": snapshot_data.get("stage_title", stage_id),
+        "timeline_anchor": snapshot_data.get("timeline_anchor", ""),
         "summary": snapshot_data.get("snapshot_summary", stage_id),
         "snapshot_path": snapshot_path_rel,
     }
-
-    # Optional fields from snapshot
-    timeline_anchor = snapshot_data.get("timeline_anchor")
-    if timeline_anchor:
-        new_entry["timeline_anchor"] = timeline_anchor
 
     if chapter_scope:
         new_entry["chapter_scope"] = chapter_scope

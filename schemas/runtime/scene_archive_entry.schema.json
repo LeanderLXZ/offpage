@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/runtime/scene_archive_entry.schema.json",
   "title": "SceneArchiveEntry",
-  "description": "scene_archive.jsonl 中的单条记录——Phase 4 scene_split 后按行号切出的场景。每行一条，作为 FTS5 检索与 full_text 取回的基本单元。scene_id 的 stage 段由 stage_plan.json 查得，runtime 通过正则 S(\\d{3}) 过滤。",
+  "description": "scene_archive.jsonl 中的单条记录——Phase 4 scene_split 后按行号切出的场景。每行一条，作为 FTS5 检索与 full_text 取回的基本单元。由 automation/persona_extraction/scene_archive.py 程序级拼接产出（零 LLM）：scene_id / stage_id / chapter / full_text 由程序生成或按 stage_plan + 章节文本切片；time / location / characters_present / summary 从上游 scene_split.schema.json 1:1 拉取，bound 由上游单源定义。",
   "type": "object",
   "required": [
     "scene_id",
@@ -19,39 +19,37 @@
     "scene_id": {
       "type": "string",
       "pattern": "^SC-S\\d{3}-\\d{2}$",
-      "description": "场景 ID，形如 SC-S003-07（3 位 stage 序号 + 2 位 seq），随 Phase 4 生成。"
+      "description": "场景 ID，形如 SC-S003-07（3 位 stage 序号 + 2 位 seq）。由 scene_archive.py 按 stage_plan 计算赋值（程序保证），pattern 在 runtime 加载侧仍校验格式正确性。"
     },
     "stage_id": {
       "type": "string",
       "pattern": "^S\\d{3}$",
-      "description": "所属 stage（来自 stage_plan.json 查表），与 scene_id 的 stage 段一致。"
+      "description": "所属 stage。由 scene_archive.py 按 stage_plan.json chapter→stage range 查表赋值（程序保证），与 scene_id 的 stage 段一致。"
     },
     "chapter": {
       "type": "string",
-      "description": "章节号字符串（4 位零填充，例如 0042），跨章节场景使用连字符范围（例如 0042-0043）。"
+      "description": "章节号字符串（4 位零填充，例如 0042），跨章节场景使用连字符范围（例如 0042-0043）。由 scene_archive.py 按章节循环填入。"
     },
     "time": {
       "type": "string",
-      "description": "场景故事时间描述（作品内时间，例如\"清晨\"/\"三日后\"）。无法判断时留空串。"
+      "description": "场景故事时间描述（作品内时间，例如\"清晨\"/\"三日后\"）。从上游 schemas/analysis/scene_split.schema.json 的 time 字段 1:1 拉取，bound 由上游单源定义；无法判断时上游 LLM 输出空字符串。"
     },
     "location": {
       "type": "string",
-      "description": "场景发生地。无法判断时留空串。"
+      "description": "场景发生地。从上游 schemas/analysis/scene_split.schema.json 的 location 字段 1:1 拉取，bound 由上游单源定义；无法判断时上游 LLM 输出空字符串。"
     },
     "characters_present": {
       "type": "array",
-      "description": "场景中出现的角色 character_id 列表（主角与重要配角为主；runtime 按当前扮演角色过滤）。",
+      "description": "场景中出现的角色 character_id 列表（主角与重要配角为主；runtime 按当前扮演角色过滤）。从上游 schemas/analysis/scene_split.schema.json 的 characters_present 字段 1:1 拉取。",
       "items": { "type": "string" }
     },
     "summary": {
       "type": "string",
-      "minLength": 50,
-      "maxLength": 100,
-      "description": "场景客观事件梗概（50–100 字），由 Phase 4 scene_split LLM 产出后程序 1:1 直拷至此；供 FTS5 检索命中后人工判重用。不单独加载到 Tier 0。"
+      "description": "场景客观事件梗概。从上游 schemas/analysis/scene_split.schema.json 的 summary 字段 1:1 拉取，长度 bound 由上游单源定义（minLength / maxLength 在 scene_split）。供 FTS5 检索命中后人工判重用，不单独加载到 Tier 0。"
     },
     "full_text": {
       "type": "string",
-      "description": "场景原文（按行号切片，不做编辑）。runtime 仅在最近 scene_fulltext_window 条内直接加载，其余通过 FTS5 按需取回。"
+      "description": "场景原文。由 scene_archive.py 按 scene_split 给出的 scene_start_line..scene_end_line 切原文产出，不做编辑。runtime 仅在最近 scene_fulltext_window 条内直接加载，其余通过 FTS5 按需取回。"
     }
   }
 }

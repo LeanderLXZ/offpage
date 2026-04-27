@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/character/stage_catalog.schema.json",
   "title": "角色阶段目录",
-  "description": "角色阶段索引，仅用于 bootstrap 阶段选择，运行时不加载。",
+  "description": "角色阶段索引，仅用于 bootstrap 阶段选择，运行时不加载。由 automation/persona_extraction/post_processing.py:upsert_stage_catalog 程序级从角色 stage_snapshot 派生（零 LLM）：每条 stages[] 项的字段从同 stage_id 对应快照拉取。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -36,6 +36,7 @@
         "required": [
           "stage_id",
           "stage_title",
+          "timeline_anchor",
           "summary",
           "snapshot_path"
         ],
@@ -43,21 +44,23 @@
           "stage_id": {
             "type": "string",
             "pattern": "^S[0-9]{3}$",
-            "description": "作品级阶段标识，紧凑英文代号 S###（如 S001）；条目排序直接按此字段字典序。"
+            "description": "作品级阶段标识，紧凑英文代号 S###（如 S001）。由 orchestrator 传入 upsert_stage_catalog（程序保证），与上游 stage_snapshot.stage_id 同源；条目排序直接按此字段字典序。pattern 在 runtime 加载侧仍校验格式正确性。"
           },
           "stage_title": {
             "type": "string",
-            "description": "阶段的人类可读短标题。从 stage_plan.json 的同 stage_id 条目拉取；bound 由 stage_plan.schema.json 单源定义，本 schema 不重复约束。"
+            "description": "阶段的人类可读短标题。从上游 schemas/character/stage_snapshot.schema.json 的 stage_title 字段 1:1 拉取（stage_snapshot 自身又从 stage_plan 拉取，stage_plan.schema.json 是 stage_title bound 的单一权威源）。"
           },
           "timeline_anchor": {
-            "type": "string"
+            "type": "string",
+            "description": "本阶段时间锚点的短描述。从上游 schemas/character/stage_snapshot.schema.json 的 timeline_anchor 字段 1:1 拉取，bound 由上游单源定义。"
           },
           "summary": {
             "type": "string",
-            "description": "供 bootstrap 阶段选择时展示的摘要。"
+            "description": "供 bootstrap 阶段选择时展示的摘要。从上游 schemas/character/stage_snapshot.schema.json 的 snapshot_summary 字段 1:1 拉取，bound 由上游单源定义。"
           },
           "chapter_scope": {
             "type": "object",
+            "description": "本阶段覆盖的章节范围。由 orchestrator 从 stage_plan.json 查表后传入 upsert_stage_catalog（程序保证）；可选字段。",
             "additionalProperties": false,
             "properties": {
               "from": {
@@ -70,7 +73,7 @@
           },
           "snapshot_path": {
             "type": "string",
-            "description": "该阶段对应的快照路径，通常为 canon/stage_snapshots/{stage_id}.json。"
+            "description": "该阶段对应的快照路径，通常为 canon/stage_snapshots/{stage_id}.json。由 upsert_stage_catalog 程序生成（程序保证）。"
           }
         }
       }
