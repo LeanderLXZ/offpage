@@ -57,62 +57,21 @@
 
 ## 立即执行
 
-### [T-WORLD-SNAPSHOT-S001-S002-MIGRATE] S001 / S002 世界快照迁移到新 schema
-
-**上下文**
-
-2026-04-24 commit `2b3553b` 把 `world_stage_snapshot.schema.json` 收口：
-删除 `character_status_changes` 和 `evidence_refs`，并对各字段 `maxItems` /
-`maxLength` 做硬门控收紧。当前 extraction 分支
-(`extraction/<work_id>`) 上既存的：
-
-- `works/<work_id>/world/stage_snapshots/S001.json`
-- `works/<work_id>/world/stage_snapshots/S002.json`
-
-两份产出含已删除字段（`character_status_changes` / `evidence_refs`），
-S001/S002 各 9 项 `character_status_changes`、各 10 / 9 项
-`evidence_refs`；多处数组 item 长度也超过新 maxLength。两份产物会被新
-schema gate 拒绝。
-
-**为什么不在原 commit 内迁移**
-
-- S001 已完成 Phase 3 提取并 commit，重跑代价高
-- S002 位于 extraction 分支当前活跃 stage，本应在下一轮 Phase 3 重抽时
-  顺手按新 schema 产出
-- 用户在 /post-check 后明确选择"S001/S002 先不动"
-
-**待决策项**
-
-1. 修复路径：手工裁剪（删两个字段 + 截短超长 item）vs Phase 3 重抽
-2. 时间窗：在 Phase 3 真正继续推进时立即处理，还是 Phase 3.5 一致性
-   检查报错时再处理
-
-**完成标准**
-
-- S001 / S002 世界快照通过新 `world_stage_snapshot.schema.json` 校验
-- 本 todo 条目删除
-
-**依赖**：extraction 分支下一次 Phase 3 / 3.5 推进
-
----
-
-## 下一步
-
 ### [T-SCENE-ARCHIVE-SUMMARY-REQUIRED] scene_archive_entry summary 应升 required
 
 **上下文**
 
-[schemas/runtime/scene_archive_entry.schema.json](schemas/runtime/scene_archive_entry.schema.json) 当前 `required` = `[scene_id, stage_id, chapter, characters_present, full_text]`，**summary 不在 required 列表**。但实际上：
+[schemas/runtime/scene_archive_entry.schema.json:7-13](schemas/runtime/scene_archive_entry.schema.json#L7-L13) 当前 `required` = `[scene_id, stage_id, chapter, characters_present, full_text]`，**summary / time / location 三个字段不在 required 列表**。但实际上：
 
-- Phase 4 scene_split 把 summary 列为 required（已落 `schemas/analysis/scene_split.schema.json`）
-- `automation/persona_extraction/scene_archive.py:569` 程序 1:1 直拷 scene_split 的 summary 到 scene_archive
-- 现存 1236 行无一缺 summary
+- Phase 4 scene_split 把 summary / time / location 都列为 required（[schemas/analysis/scene_split.schema.json:11-18](schemas/analysis/scene_split.schema.json#L11-L18)）
+- `automation/persona_extraction/scene_archive.py` 程序 1:1 直拷 scene_split 这三个字段到 scene_archive
+- 历史数据上无一缺 summary / time / location（产物已清，下次 Phase 4 跑出来必然非空）
 
-→ scene_archive_entry summary **事实上总是非空**，schema 应该 required 反映此契约。
+→ scene_archive_entry 这三个字段**事实上总是非空**，schema 应 required 反映契约。
 
 **改动清单**
 
-1. [schemas/runtime/scene_archive_entry.schema.json](schemas/runtime/scene_archive_entry.schema.json) `required` 数组加入 `summary` / `time` / `location`（这三个同样总是非空，由 scene_split 直拷）
+1. [schemas/runtime/scene_archive_entry.schema.json:7-13](schemas/runtime/scene_archive_entry.schema.json#L7-L13) `required` 数组加入 `summary` / `time` / `location`
 2. [docs/architecture/schema_reference.md](docs/architecture/schema_reference.md) runtime/scene_archive_entry 段无需改（已经描述契约）
 
 **待决策项**
@@ -122,7 +81,7 @@ schema gate 拒绝。
 **完成标准**
 
 - required 列表升级
-- 现存 1236 行 scene_archive 100% 通过新 required（实测前已确认）
+- 下次 Phase 4 产物自然通过新 required（程序 1:1 直拷自 scene_split，scene_split 已 require 这三个字段）
 - 本 todo 条目删除
 
 **预估**：S（30 分钟）
@@ -131,65 +90,44 @@ schema gate 拒绝。
 
 ---
 
-### [T-PHASE4-STAGE-REMAP] phase 4 scene_archive.jsonl 程序级 stage 重映射工具
-
-**上下文**
-
-`ai_context/architecture.md` §Automated Extraction Pipeline → Phase 4 已规约：scene_archive.jsonl 的 stage 赋值（`stage_id` 和 `SC-S###-##` 里的 `S###`）是程序级 chapter → stage_plan range 映射，新 stage_plan 可纯程序重映射，无需重跑 per-chapter LLM。
-
-当前 `automation/persona_extraction/` 没有 utility 实现这个能力。Phase 1 重抽 → 新 stage_plan 后，唯一可走路径是 `--start-phase 4` 全量重跑（per-chapter LLM 调用，token 成本高、耗时长）。
-
-**改动清单**
-
-1. 新增 [automation/persona_extraction/scene_archive_remap.py](automation/persona_extraction/scene_archive_remap.py)（或 module 内合适位置）：
-   - 输入：旧 `scene_archive.jsonl` + 新 `stage_plan.json`
-   - 处理：每行按 `chapter` 字段查新 stage_plan 的 chapter range，重赋 `stage_id`；按新 stage 分组重排 seq，重生成 `scene_id = SC-S###-##`
-   - 输出：新 `scene_archive.jsonl`（覆盖原文件 / 写新路径）
-   - chapter 不在新 stage_plan 任何 range 内时报错或写 unmapped 标记（待决策）
-2. CLI 入口：`persona-extract <work_id> --remap-scene-archive` 子命令
-3. 单元测试：构造 mini stage_plan + scene_archive，覆盖正常 / 边界（chapter 跨 stage 边界、unmapped chapter）
-4. 文档：[automation/README.md](automation/README.md) 加 utility 说明；[docs/architecture/extraction_workflow.md](docs/architecture/extraction_workflow.md) Phase 4 段落补 remap 路径
-
-**待决策项**
-
-1. unmapped chapter 行为：报错 abort vs 写 `stage_id = "UNMAPPED"` 让用户事后修
-2. CLI 接口：独立子命令 vs `--start-phase 4 --remap-only` flag
-
-**完成标准**
-
-- 给定旧 scene_archive + 新 stage_plan，能产出 stage_id / scene_id 正确重排的新 scene_archive
-- 单测覆盖核心 case
-- 文档 + ai_context Phase 4 段落引用此 utility
-- 本 todo 条目删除
-
-**预估**：M（一天）
-
-**依赖**：scene_archive.jsonl schema 稳定（当前 `schemas/retrieval/` 下若已定义则按该 schema 处理）
-
----
+## 下一步
 
 ### [T-CHAR-SNAPSHOT-13-DIM-VERIFY] 角色 stage_snapshot "13 必填维度" 表述核对
 
 **上下文**
 
-`docs/architecture/extraction_workflow.md:266` 与 `docs/requirements.md:2135`
-仍称角色 `stage_snapshot` 含"13 个必填维度"。2026-04-24 /post-check
-规范线 sub-agent 怀疑此数已漂移到 ~17（personality / mood / voice_state /
-behavior_state / boundary_state / relationships / knowledge_scope /
-stage_events / character_arc / timeline_anchor / snapshot_summary 等
-近年陆续加入），文档未跟。
+`docs/architecture/extraction_workflow.md:277` 与 `docs/requirements.md:2139`
+仍称角色 `stage_snapshot` 含"13 个必填维度"，且 requirements.md 那行
+括号内列举的字段名（`personality, mood, voice_state, behavior_state,
+boundary_state, relationships, knowledge_scope, stage_delta 等`）与
+schema 实际字段名不完全对齐（实际是 `current_personality` /
+`current_mood`，且 stage_delta 在 schema 中 **非** required）。
+
+**实测**：`schemas/character/stage_snapshot.schema.json` `required` 当前
+**17 条**：
+
+```
+schema_version, work_id, character_id, stage_id, stage_title,
+timeline_anchor, snapshot_summary, active_aliases, current_personality,
+current_mood, knowledge_scope, voice_state, behavior_state,
+boundary_state, relationships, stage_events, character_arc
+```
 
 **待决策项**
 
-1. 真实 required 数 = 多少？（以 `schemas/character/stage_snapshot.schema.json`
-   为准点数）
-2. 文档表述要不要去掉具体数字，改为"以 schema required 列表为准"以
-   减少未来漂移？
+1. 文档表述改为字面 17 条（含具体字段名清单），还是去掉具体数字，
+   改为"以 `schemas/character/stage_snapshot.schema.json` 的 required
+   列表为准"以减少未来漂移？倾向后者（与 schema_reference.md 顶部
+   "schema 是权威，不复述具体数字"原则一致）。
+
+**改动清单**
+
+1. [docs/architecture/extraction_workflow.md:277](docs/architecture/extraction_workflow.md#L277) "13 个必填维度" 改为指针式表述
+2. [docs/requirements.md:2139](docs/requirements.md#L2139) 同上，括号内的字段示例也一并去掉（避免下一次漂移）
 
 **完成标准**
 
-- `docs/architecture/extraction_workflow.md` + `docs/requirements.md`
-  的"N 个必填维度"表述与 schema 实际匹配
+- 两处 docs 与 schema 实际匹配
 - 本 todo 条目删除
 
 **依赖**：无
@@ -401,43 +339,50 @@ README.md，零 Python。
 
 **上下文**
 
-某次长 lane 跑 38m 后 exit 1，未被 `run_with_retry` 重试。用户提问：短时间内 exit 是否可以重试或退避？T-LOG 完成后，长时失败现在可见 `subtype` / `num_turns`，重试决策可基于实际信号。
+T-LOG 已落地：[llm_backend.py:565-680](automation/persona_extraction/llm_backend.py#L565-L680) `run_with_retry` 已能解析 subtype / num_turns / total_cost_usd 并附在 LLMResult 与错误消息上。但 retry 决策本身**还没用上 subtype 分流**，且短时阈值仍是 5s（[config.toml:130](automation/config.toml#L130) `fast_empty_failure_threshold_s = 5`）。
 
-**现有机制**（[llm_backend.py `run_with_retry`](automation/persona_extraction/llm_backend.py)）
+**现有机制**（截至 2026-04-27）
 
-| 错误类型 | 识别 | 处理 |
-|---|---|---|
-| `fast_empty_failure` | duration < `[backoff].fast_empty_failure_threshold_s` + stderr 空 + exit N | 按 `[backoff].fast_empty_failure_backoff_s` 序列重试（默认 30s → 60s → 120s） |
-| `rate_limit` / `usage_limit` | stderr 含 "rate limit" / "weekly" / "5-hour" / "too many requests" | **暂停所有新请求**直到 reset，然后重发同一 prompt（**不消耗重试次数**，§11.13） |
-| `token_limit` | stderr 含 "context window" / "max_tokens" 等 | **不重试** |
-| 通用长时 exit N | stderr 空 + duration 长 | **不重试** |
+| 错误类型 | 识别 | 处理 | 状态 |
+|---|---|---|---|
+| `fast_empty_failure` | duration < 5s + stderr 空 + exit N | 按 backoff 序列重试（30s/60s/120s） | ✅ 已实现 |
+| `rate_limit` / `usage_limit` | stderr 含 "rate limit" / "weekly" / "5-hour" / "too many requests" | 暂停所有新请求直到 reset，重发同一 prompt（不消耗 retry slot，§11.13） | ✅ 已实现 |
+| `token_limit` | stderr 含 "context window" / "max_tokens" 等 | 不重试 | ✅ 已实现 |
+| 通用长时 exit N | stderr 空 + duration 长 | 不重试（直接 return） | ⚠️ 当前未按 subtype 分流 |
+
+**待落地（具体改动）**
+
+1. **短时阈值扩大**：[config.toml:130](automation/config.toml#L130) `fast_empty_failure_threshold_s` 从 5s 扩大到 60s（候选 120s）。
+   - 理由：char_snapshot 正常 10-20m，任何 <60s 失败几乎一定不是真正工作后失败，是 CLI launch / API 连接错误。
+   - 风险极小（<60s 浪费），独立可先行
+2. **长时 exit 按 subtype 分流**：[llm_backend.py `run_with_retry`](automation/persona_extraction/llm_backend.py) 在"非可重试错误"return 之前加一段判断：
+   - `subtype == "error_max_turns"` → 不重试（同 prompt 必再次触达）
+   - `subtype == "error_during_execution"` → 重试 1 次（瞬态可能性大）
+   - 无 subtype / 解析失败 → 可选重试 1 次（默认开 / 可由 config 关）
+3. **退避策略不动**：30s/60s/120s 已合理
+
+**改动清单**
+
+1. [automation/config.toml:130](automation/config.toml#L130) 改 `fast_empty_failure_threshold_s = 60`（或 120，待拍板）
+2. [automation/persona_extraction/llm_backend.py `run_with_retry`](automation/persona_extraction/llm_backend.py) 加 subtype 分流分支
+3. 新增 config 项 `[backoff].long_exit_retry_subtypes`（白名单）或对应布尔开关，默认 `["error_during_execution"]`
+4. 单测覆盖三类 subtype 的决策路径
+5. [docs/requirements.md §11.x](docs/requirements.md) 重试策略小节同步
 
 **待决策项**
 
-1. **短时间阈值扩大？** 当前 5s 过严。char_snapshot 正常 10-20m，任何 <60s（或 <120s）失败都不是真正工作后失败，更可能是 CLI launch 错误或 API 连接失败。候选阈值：60s 或 120s。
-   - 支持扩大：风险小（<2 分钟浪费），覆盖面更广
-   - 反对扩大：仍在盲猜，不如等 T-LOG 完成后按 subtype 分流
-2. **长时 exit 是否也重试一次？** 本次阶段 02 属此类。
-   - 代价：再跑 40m；若也失败总计浪费 ~80m
-   - 收益：若是瞬态错误能自愈
-   - 观点：**等 T-LOG 完成，根据 stdout subtype 分类**：
-     - `error_max_turns` → 不重试（同 prompt 同样触达）
-     - `error_during_execution` → 重试 1 次（瞬态可能性大）
-     - 无 subtype / 解析失败 → 可选重试 1 次
-3. **退避策略** 暂无调整需求，现有 30s/60s/120s 合理
+1. 短时阈值定 60s 还是 120s？
+2. 无 subtype 时默认重试 1 次，还是默认不重试？
 
-**未落地原因**
+**完成标准**
 
-- T-LOG 已完成，stdout/subtype 可见——盲猜问题已解除
-- 尚未收集足够的真实失败样本来验证不同 subtype 的重试收益
+- 短时阈值落地
+- subtype 分流生效（单测过 + 真实失败样本验证至少一类）
+- 本 todo 条目删除
 
-**争议**
+**预估**：S（半天 - 1 天）
 
-- 短时阈值是否一次扩大到 60s？风险小；可独立先行
-- 长时 exit 按 subtype 分流是否一步到位？待收集几次真实失败后决定
-- 结论：**待定案**，需要几次真实失败样本佐证
-
-**依赖**：T-LOG 已完成；可基于 `failed_lanes/` 日志样本决策
+**依赖**：无（T-LOG 已完成）；可基于 `failed_lanes/` 日志样本辅助决策
 
 ---
 
