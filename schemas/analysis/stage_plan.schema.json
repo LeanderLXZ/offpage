@@ -45,7 +45,7 @@
           "stage_title": {
             "type": "string",
             "maxLength": 14,
-            "description": "人类可读短标题（<15 字，bootstrap 选择阶段时展示）。"
+            "description": "人类可读短标题（≤14 字，bootstrap 选择阶段时展示）。本字段是 stage_title 的唯一权威源；下游 schema（stage_snapshot / world_stage_snapshot / stage_catalog / world_stage_catalog）的 stage_title 从这里按 stage_id 拉取，不重复定义 bound。"
           },
           "chapters": {
             "type": "string",

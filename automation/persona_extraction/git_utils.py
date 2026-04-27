@@ -299,12 +299,33 @@ def ensure_branch_from_main(project_root: Path,
     return True
 
 
+def delete_branch(project_root: Path, branch: str) -> tuple[bool, str]:
+    """Force-delete *branch* (``git branch -D``).
+
+    Returns ``(ok, stderr)``. Used by ``_offer_squash_merge`` after the
+    user opts in to disposing the source extraction branch post-squash.
+    """
+    result = _git(["branch", "-D", branch], project_root)
+    return result.returncode == 0, result.stderr.strip()
+
+
+def git_gc_prune_now(project_root: Path) -> tuple[bool, str]:
+    """Run ``git gc --prune=now``.
+
+    Returns ``(ok, stderr)``. Reclaims unreachable objects from squash-
+    merged extraction branches that have just been deleted.
+    """
+    result = _git(["gc", "--prune=now"], project_root)
+    return result.returncode == 0, result.stderr.strip()
+
+
 def squash_merge_to(project_root: Path, target_branch: str,
                     source_branch: str, message: str) -> str | None:
     """Squash-merge *source_branch* into *target_branch*.
 
     Returns the new commit SHA on *target_branch*, or None on failure.
-    The source branch is **not** deleted — caller decides.
+    The source branch is **not** deleted — caller decides via
+    ``delete_branch`` + ``git_gc_prune_now``.
     """
     # Switch to target branch
     result = _git(["checkout", target_branch], project_root)

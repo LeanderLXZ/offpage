@@ -33,7 +33,9 @@ from .git_utils import (
     checkout_main,
     commit_stage,
     create_extraction_branch,
+    delete_branch,
     ensure_branch_from_main,
+    git_gc_prune_now,
     preflight_check,
     reset_paths,
     squash_merge_to,
@@ -2108,13 +2110,40 @@ class ExtractionOrchestrator:
                    f"Automated extraction via persona-extraction orchestrator.")
 
         sha = squash_merge_to(self.project_root, target, branch, message)
-        if sha:
-            print(f"  [OK] Squash-merged to '{target}' as {sha}")
-            print(f"  Extraction branch '{branch}' preserved. "
-                  f"Delete with: git branch -d {branch}")
-        else:
+        if not sha:
             print(f"  [ERROR] Squash-merge failed. "
                   f"Merge manually from '{branch}'.")
+            return
+
+        print(f"  [OK] Squash-merged to '{target}' as {sha}")
+
+        # Branch dispose is destructive — always interactive, even when
+        # auto_squash_merge=true. Default N so the user must explicitly opt in.
+        try:
+            answer = input(
+                f"  Delete extraction branch '{branch}' and run "
+                f"'git gc --prune=now'? [y/N]: "
+            ).strip()
+        except EOFError:
+            answer = "n"
+
+        if answer.lower() != "y":
+            print(f"  Extraction branch '{branch}' preserved. "
+                  f"Delete later with: git branch -D {branch} && "
+                  f"git gc --prune=now")
+            return
+
+        ok, err = delete_branch(self.project_root, branch)
+        if not ok:
+            print(f"  [ERROR] Cannot delete branch '{branch}': {err}")
+            return
+        print(f"  [OK] Deleted branch '{branch}'.")
+
+        ok, err = git_gc_prune_now(self.project_root)
+        if not ok:
+            print(f"  [WARN] git gc reported error: {err}")
+        else:
+            print(f"  [OK] Reclaimed unreachable objects via git gc.")
 
     # ------------------------------------------------------------------
     # Stage expansion (like Phase 4: always derive targets from plan)

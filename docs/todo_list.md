@@ -57,45 +57,6 @@
 
 ## 立即执行
 
-（暂无条目）
-
----
-
-## 下一步
-
-### [T-SCENE-ARCHIVE-SUMMARY-REQUIRED] scene_archive_entry summary 应升 required
-
-**上下文**
-
-[schemas/runtime/scene_archive_entry.schema.json](schemas/runtime/scene_archive_entry.schema.json) 当前 `required` = `[scene_id, stage_id, chapter, characters_present, full_text]`，**summary 不在 required 列表**。但实际上：
-
-- Phase 4 scene_split 把 summary 列为 required（已落 `schemas/analysis/scene_split.schema.json`）
-- `automation/persona_extraction/scene_archive.py:569` 程序 1:1 直拷 scene_split 的 summary 到 scene_archive
-- 现存 1236 行无一缺 summary
-
-→ scene_archive_entry summary **事实上总是非空**，schema 应该 required 反映此契约。
-
-**改动清单**
-
-1. [schemas/runtime/scene_archive_entry.schema.json](schemas/runtime/scene_archive_entry.schema.json) `required` 数组加入 `summary` / `time` / `location`（这三个同样总是非空，由 scene_split 直拷）
-2. [docs/architecture/schema_reference.md](docs/architecture/schema_reference.md) runtime/scene_archive_entry 段无需改（已经描述契约）
-
-**待决策项**
-
-无——纯契约硬化
-
-**完成标准**
-
-- required 列表升级
-- 现存 1236 行 scene_archive 100% 通过新 required（实测前已确认）
-- 本 todo 条目删除
-
-**预估**：S（30 分钟）
-
-**依赖**：无
-
----
-
 ### [T-WORLD-SNAPSHOT-S001-S002-MIGRATE] S001 / S002 世界快照迁移到新 schema
 
 **上下文**
@@ -135,36 +96,36 @@ schema gate 拒绝。
 
 ---
 
-### [T-EXTRACTION-BRANCH-DISPOSE] orchestrator squash 后追加分支删除 + gc 选项
+## 下一步
+
+### [T-SCENE-ARCHIVE-SUMMARY-REQUIRED] scene_archive_entry summary 应升 required
 
 **上下文**
 
-`ai_context/decisions.md` #26 / `conventions.md` §Git / `architecture.md` §Git Branch Model 已规约：extraction/{work_id} squash 进 library 后必须 `git branch -D extraction/{work_id}` + `git gc --prune=now`，否则旧 regen commit 与 blob 不可回收，长期占盘。
+[schemas/runtime/scene_archive_entry.schema.json](schemas/runtime/scene_archive_entry.schema.json) 当前 `required` = `[scene_id, stage_id, chapter, characters_present, full_text]`，**summary 不在 required 列表**。但实际上：
 
-`automation/persona_extraction/orchestrator.py::_offer_squash_merge` 当前只 offer squash 本身，不 offer 后续的分支删除 + gc。手工跑容易漏掉。
+- Phase 4 scene_split 把 summary 列为 required（已落 `schemas/analysis/scene_split.schema.json`）
+- `automation/persona_extraction/scene_archive.py:569` 程序 1:1 直拷 scene_split 的 summary 到 scene_archive
+- 现存 1236 行无一缺 summary
+
+→ scene_archive_entry summary **事实上总是非空**，schema 应该 required 反映此契约。
 
 **改动清单**
 
-1. [automation/persona_extraction/orchestrator.py](automation/persona_extraction/orchestrator.py) `_offer_squash_merge`（搜函数名定位）：squash 成功后追加二段交互
-   - 提示 `Delete extraction/{work_id} branch and run git gc? [y/N]`
-   - 同意则依次跑 `git branch -D extraction/{work_id}` + `git gc --prune=now`，失败 raise
-   - 拒绝则打印一行 reminder 提示用户日后手动跑
-2. [automation/README.md](automation/README.md) squash 段落补这条流程
-3. [docs/architecture/extraction_workflow.md](docs/architecture/extraction_workflow.md) 同步
+1. [schemas/runtime/scene_archive_entry.schema.json](schemas/runtime/scene_archive_entry.schema.json) `required` 数组加入 `summary` / `time` / `location`（这三个同样总是非空，由 scene_split 直拷）
+2. [docs/architecture/schema_reference.md](docs/architecture/schema_reference.md) runtime/scene_archive_entry 段无需改（已经描述契约）
 
-**验证方法**
+**待决策项**
 
-- 跑 `python -m py_compile automation/persona_extraction/orchestrator.py`
-- 模拟 squash 流程（用 `[git].squash_merge_target = test-library` + 假 work_id）走完，确认两步交互按预期执行
-- `git reflog` 确认旧 commit 在 gc 后真正变成 unreachable
+无——纯契约硬化
 
 **完成标准**
 
-- orchestrator squash 完成后能交互 offer 删分支 + gc
-- 三处 doc 描述与代码一致
+- required 列表升级
+- 现存 1236 行 scene_archive 100% 通过新 required（实测前已确认）
 - 本 todo 条目删除
 
-**预估**：S（半天）
+**预估**：S（30 分钟）
 
 **依赖**：无
 
@@ -232,6 +193,38 @@ stage_events / character_arc / timeline_anchor / snapshot_summary 等
 - 本 todo 条目删除
 
 **依赖**：无
+
+---
+
+### [T-PHASE35-IMPORTANCE-AWARE] Phase 3.5 一致性检查按 importance 调门槛
+
+**上下文**
+
+[automation/persona_extraction/consistency_checker.py:96-117](automation/persona_extraction/consistency_checker.py#L96-L117) 读 `candidate_characters.json` 构造 `importance_map`，但当前只 `_check_target_map_counts` 消费它。其他 8 个 `_check_*`（含 `_check_field_completeness` / `_check_relationship_continuity` 等）对所有角色一刀切。
+
+`ai_context/decisions.md` #15 明确 "main / important chars (≥3–5 examples); generic types brief or omitted"——bound 本就因 importance 而异。一致性检查不区分 importance，会对次要配角过度报错（field_completeness 把可选字段也按主角标准查）或对主角过宽。
+
+**改动清单**
+
+1. [automation/persona_extraction/consistency_checker.py:271](automation/persona_extraction/consistency_checker.py#L271) `_check_field_completeness` 签名加 `importance_map: dict[str, str]`；调用点 [consistency_checker.py:111](automation/persona_extraction/consistency_checker.py#L111) 透传
+2. 内部按 importance（主角 / 重要配角 / 次要配角）调整必填字段集合或严重度（次要配角 → warning，主角 / 重要配角 → error）
+3. 视情况对 `_check_relationship_continuity` 也做同样处理（次要配角的关系不连续可能是合理的低存在感）
+4. 不动 `_check_alias_consistency` / `_check_memory_id_correspondence` 等（这些都是格式正确性，与重要度无关）
+
+**待决策项**
+
+1. 次要配角的 missing field 走 warning 还是直接跳过？
+2. 是否扩展到 `_check_relationship_continuity`？
+
+**完成标准**
+
+- `_check_field_completeness` 对次要配角不再产生过激 error
+- consistency_report 在多重要度场景下符合预期
+- 本 todo 条目删除
+
+**预估**：S（30 分钟 - 1 小时）
+
+**依赖**：无；触发自 2026-04-27 opus-4-7 review L-3 finding。
 
 ---
 
