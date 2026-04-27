@@ -27,8 +27,8 @@
     },
     "tone": {
       "type": "string",
-      "maxLength": 30,
-      "description": "整体基调（<30 字）。"
+      "maxLength": 49,
+      "description": "整体基调（<50 字）。"
     },
     "world_structure": {
       "type": "object",
@@ -37,14 +37,15 @@
       "properties": {
         "summary": {
           "type": "string",
+          "minLength": 100,
           "maxLength": 200,
-          "description": "世界结构概述（<200 字）。"
+          "description": "世界结构概述（100-200 字）。"
         },
         "major_regions": {
           "type": "array",
-          "maxItems": 20,
-          "items": { "type": "string", "maxLength": 30 },
-          "description": "主要区域名列表（≤20 项，每项 <30 字）。"
+          "maxItems": 29,
+          "items": { "type": "string", "maxLength": 29 },
+          "description": "主要区域名列表（<30 项，每项 <30 字）。"
         }
       }
     },
@@ -55,35 +56,36 @@
       "properties": {
         "summary": {
           "type": "string",
+          "minLength": 100,
           "maxLength": 200,
-          "description": "力量体系概述（<200 字）。"
+          "description": "力量体系概述（100-200 字）。"
         },
         "levels": {
           "type": "array",
-          "maxItems": 30,
+          "maxItems": 19,
           "items": { "type": "string", "maxLength": 30 },
-          "description": "等级 / 阶段名列表（≤30 项，每项 <30 字）。"
+          "description": "等级 / 阶段名列表（<20 项，每项 <30 字）。"
         }
       }
     },
     "major_factions": {
       "type": "array",
-      "maxItems": 30,
-      "description": "主要势力（≤30 项）。",
+      "maxItems": 19,
+      "description": "主要势力（<20 项）。",
       "items": {
         "type": "object",
         "required": ["name", "description"],
         "additionalProperties": false,
         "properties": {
           "name": { "type": "string", "maxLength": 30 },
-          "description": { "type": "string", "maxLength": 200 }
+          "description": { "type": "string", "maxLength": 99 }
         }
       }
     },
     "world_lines": {
       "type": "array",
-      "maxItems": 50,
-      "description": "大世界线 / 篇章划分（≤50 项）。",
+      "maxItems": 19,
+      "description": "大世界线 / 篇章划分（<20 项）。",
       "items": {
         "type": "object",
         "required": ["name", "chapter_range", "core_conflict", "setting_features"],
@@ -95,8 +97,8 @@
             "pattern": "^\\d{4}-\\d{4}$",
             "description": "章节范围（4 位零填充 + 连字符 + 4 位零填充）。"
           },
-          "core_conflict": { "type": "string", "maxLength": 200 },
-          "setting_features": { "type": "string", "maxLength": 200 }
+          "core_conflict": { "type": "string", "maxLength": 99 },
+          "setting_features": { "type": "string", "maxLength": 99 }
         }
       }
     },

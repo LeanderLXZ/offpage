@@ -55,7 +55,7 @@
 
 **用途**：Phase 1 stage 切分计划。下游 Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择都依赖此文件。
 **位置**：`works/{work_id}/analysis/stage_plan.json`（**入 git**）
-**关键字段**：`work_id` / `default_stage_size` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^\d{4}-\d{4}$` / `chapter_count` 5-15 hard / `boundary_reason` / `key_events_expected[]`）
+**关键字段**：`work_id` / `default_stage_size` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^\d{4}-\d{4}$` / `chapter_count` 5-15 hard / `boundary_reason`）
 **生成时机**：Phase 1 by `automation/prompt_templates/analysis.md`。
 **契约**：`chapter_count` 5-15 由 schema 强制（与 prompt 自检 + orchestrator `_check_stage_plan_limits` 一致；schema 是权威）。
 

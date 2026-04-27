@@ -33,8 +33,7 @@
           "stage_title",
           "chapters",
           "chapter_count",
-          "boundary_reason",
-          "key_events_expected"
+          "boundary_reason"
         ],
         "additionalProperties": false,
         "properties": {
@@ -45,8 +44,8 @@
           },
           "stage_title": {
             "type": "string",
-            "maxLength": 30,
-            "description": "人类可读短标题（<30 字，bootstrap 选择阶段时展示）。"
+            "maxLength": 14,
+            "description": "人类可读短标题（<15 字，bootstrap 选择阶段时展示）。"
           },
           "chapters": {
             "type": "string",
@@ -63,12 +62,6 @@
             "type": "string",
             "maxLength": 100,
             "description": "本 stage 的切分理由（<100 字）。不能只写\"满 N 章\"。"
-          },
-          "key_events_expected": {
-            "type": "array",
-            "maxItems": 10,
-            "items": { "type": "string", "maxLength": 80 },
-            "description": "本 stage 预期关键事件列表（≤10 条，每条 <80 字）。"
           }
         }
       }
