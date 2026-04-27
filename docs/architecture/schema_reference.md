@@ -10,7 +10,7 @@
 
 | 子目录 | 作用 | 文件数 |
 |--------|------|--------|
-| `schemas/analysis/` | Phase 0 / Phase 4 LLM 中间产物（不入运行时） | 2 |
+| `schemas/analysis/` | Phase 0 / Phase 1 / Phase 4 LLM 产物（Phase 1 三件套入 git，其余不入运行时） | 5 |
 | `schemas/work/` | 作品入库、目录、阶段目录、per-work 加载配置 | 6 |
 | `schemas/world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | 6 |
 | `schemas/character/` | 角色 baseline + 阶段快照 + 记忆 | 9 |
@@ -37,6 +37,37 @@
 **关键字段**：array of `{scene_start_line, scene_end_line, time, location, characters_present, summary}`
 **消费方**：`automation/persona_extraction/scene_archive.py` 程序拼接到 `retrieval/scene_archive.jsonl`：`summary` / `time` / `location` / `characters_present` 1:1 直拷，`stage_id` / `scene_id` (`SC-S###-##`) 由程序按 `stage_plan.json` chapter→stage 映射赋值。
 **生成时机**：Phase 4 by `automation/prompt_templates/scene_split.md`，per-chapter 并行 LLM 调用。
+
+---
+
+### analysis/world_overview.schema.json
+
+**用途**：Phase 1 全书世界观概览。基于全部 chapter_summary chunks 由 LLM 一次产出（与 stage_plan / candidate_characters 同次调用）。
+**位置**：`works/{work_id}/analysis/world_overview.json`（**入 git**）
+**关键字段**：`work_id` / `genre` / `tone` / `world_structure{summary, major_regions[]}` / `power_system{summary, levels[]}` / `major_factions[]` / `world_lines[]` / `core_rules[]`
+**消费方**：Phase 2 baseline 把它作为世界 foundation 起点。
+**生成时机**：Phase 1 by `automation/prompt_templates/analysis.md`，单次 LLM 调用。
+**形态**：`additionalProperties: true` 顶层（per-work 可扩展）。
+
+---
+
+### analysis/stage_plan.schema.json
+
+**用途**：Phase 1 stage 切分计划。下游 Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择都依赖此文件。
+**位置**：`works/{work_id}/analysis/stage_plan.json`（**入 git**）
+**关键字段**：`work_id` / `default_stage_size` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^\d{4}-\d{4}$` / `chapter_count` 5-15 hard / `boundary_reason` / `key_events_expected[]`）
+**生成时机**：Phase 1 by `automation/prompt_templates/analysis.md`。
+**契约**：`chapter_count` 5-15 由 schema 强制（与 prompt 自检 + orchestrator `_check_stage_plan_limits` 一致；schema 是权威）。
+
+---
+
+### analysis/candidate_characters.schema.json
+
+**用途**：Phase 1 候选角色识别结果。同一角色不同名称合并到一个 candidate（aliases 承载化名 / 代称等）。
+**位置**：`works/{work_id}/analysis/candidate_characters.json`（**入 git**）
+**关键字段**：`work_id` / `candidates[]`（每条 `character_id` / `aliases[]` / `description` / `frequency` 高/中/低 / `importance` 主角/重要配角/次要配角 / `recommended` boolean）；`aliases[].type` 走 10 项中文枚举（本名/化名/代称/称呼/昵称/绰号/封号/道号/武器名/其他）
+**消费方**：Phase 1.5 用户从 candidates 选确认建包对象，feed Phase 2 baseline。
+**生成时机**：Phase 1 by `automation/prompt_templates/analysis.md`。
 
 ---
 

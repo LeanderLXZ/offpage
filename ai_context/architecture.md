@@ -153,7 +153,7 @@ Phases (full detail → `automation/README.md` +
 `docs/architecture/extraction_workflow.md`):
 
 - **Phase 0** — chapter summarization, parallel chunks; 3-level JSON repair (L1 regex / L2 LLM / L3 full re-run max 1) **+ jsonschema gate against `schemas/analysis/chapter_summary_chunk.schema.json`** — schema fail routes to L3 with the failure injected as `prior_error` so the LLM gets the bound violation in the retry prompt; gate blocks Phase 1.
-- **Phase 1** — global analysis (identity merge → world overview → stage plan → candidates). Stage chapter-count exit validation (5–15).
+- **Phase 1** — global analysis (identity merge → world overview → stage plan → candidates). Three outputs (`world_overview.json` / `stage_plan.json` / `candidate_characters.json`) all gated by jsonschema (`schemas/analysis/{world_overview,stage_plan,candidate_characters}.schema.json`); schema fails + stage chapter-count violations (5–15) merge into `correction_feedback` and share `[phase1].exit_validation_max_retry` budget.
 - **Phase 1.5** — user confirms targets + stages.
 - **Phase 2** — baseline production (world foundation + character baselines, draft).
 - **Phase 3** — per-stage loop: (1) 1+2N extraction (1 world + N char_snapshot + N char_support) → (2) programmatic post-processing (digests + catalog; summaries 1:1 copy of source) → (3) `repair_agent` per file in parallel → (4) post-repair PP rerun **before** `transition(PASSED)` → (5) commit-ordering contract (commit first; non-empty SHA → `COMMITTED`; empty → `FAILED`). JSONL slice write-back merges by key so prior stages cannot be truncated. Extraction prompts do NOT read `baseline_merge.md`, digests, or catalog; char extraction does NOT read world snapshot.

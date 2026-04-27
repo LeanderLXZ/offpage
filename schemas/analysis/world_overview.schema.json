@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "offpage/analysis/world_overview.schema.json",
+  "title": "WorldOverview",
+  "description": "Phase 1 全书世界观概览。基于全部 chapter_summary chunks 由 LLM 一次产出（与 stage_plan / candidate_characters 同次调用）。Phase 2 baseline 把它作为世界 foundation 的起点。",
+  "type": "object",
+  "required": [
+    "work_id",
+    "genre",
+    "tone",
+    "world_structure",
+    "power_system",
+    "major_factions",
+    "world_lines",
+    "core_rules"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "work_id": {
+      "type": "string",
+      "description": "作品包命名空间键。"
+    },
+    "genre": {
+      "type": "string",
+      "maxLength": 30,
+      "description": "题材类型（<30 字，例如\"东方玄幻\" / \"都市修真\"）。"
+    },
+    "tone": {
+      "type": "string",
+      "maxLength": 30,
+      "description": "整体基调（<30 字）。"
+    },
+    "world_structure": {
+      "type": "object",
+      "required": ["summary", "major_regions"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "世界结构概述（<200 字）。"
+        },
+        "major_regions": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "type": "string", "maxLength": 30 },
+          "description": "主要区域名列表（≤20 项，每项 <30 字）。"
+        }
+      }
+    },
+    "power_system": {
+      "type": "object",
+      "required": ["summary", "levels"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "力量体系概述（<200 字）。"
+        },
+        "levels": {
+          "type": "array",
+          "maxItems": 30,
+          "items": { "type": "string", "maxLength": 30 },
+          "description": "等级 / 阶段名列表（≤30 项，每项 <30 字）。"
+        }
+      }
+    },
+    "major_factions": {
+      "type": "array",
+      "maxItems": 30,
+      "description": "主要势力（≤30 项）。",
+      "items": {
+        "type": "object",
+        "required": ["name", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "maxLength": 30 },
+          "description": { "type": "string", "maxLength": 200 }
+        }
+      }
+    },
+    "world_lines": {
+      "type": "array",
+      "maxItems": 50,
+      "description": "大世界线 / 篇章划分（≤50 项）。",
+      "items": {
+        "type": "object",
+        "required": ["name", "chapter_range", "core_conflict", "setting_features"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "maxLength": 30 },
+          "chapter_range": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{4}$",
+            "description": "章节范围（4 位零填充 + 连字符 + 4 位零填充）。"
+          },
+          "core_conflict": { "type": "string", "maxLength": 200 },
+          "setting_features": { "type": "string", "maxLength": 200 }
+        }
+      }
+    },
+    "core_rules": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "maxLength": 100 },
+      "description": "影响剧情走向的关键世界规则（≤20 条，每条 <100 字）。"
+    }
+  }
+}

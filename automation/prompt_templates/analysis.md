@@ -68,6 +68,7 @@
 - **核心设定规则**：影响剧情走向的关键世界规则（如转世机制、天道规则等）
 
 输出文件：`{work_dir}/analysis/world_overview.json`
+schema 契约 → `schemas/analysis/world_overview.schema.json`，长度上下限以 schema 为准。
 
 JSON 结构：
 
@@ -118,6 +119,7 @@ JSON 结构：
 - **自检**：完成 stage plan 后，逐一检查每个 stage 的 `chapter_count`。如有任何一个 ≤4 或 ≥16，必须调整切分点直到全部 stage 满足 5-15 章约束
 
 输出文件：`{work_dir}/analysis/stage_plan.json`
+schema 契约 → `schemas/analysis/stage_plan.schema.json`（chapter_count 5-15 hard、stage_id `^S\d{3}$` 等以 schema 为准）。
 
 JSON 结构：
 
@@ -154,9 +156,10 @@ JSON 结构：
 - 角色简介（2-3 句）
 - 预估出场频率（高/中/低）
 - 预估重要程度（主角/重要配角/次要配角）
-- 建议是否建包（是/否/待定）
+- 建议是否建包（boolean: true 或 false；不确定时取 false 让 Phase 1.5 用户最终决定）
 
 输出文件：`{work_dir}/analysis/candidate_characters.json`
+schema 契约 → `schemas/analysis/candidate_characters.schema.json`（aliases[].type / frequency / importance 三处 enum、recommended 为 boolean、长度上下限以 schema 为准）。
 
 JSON 结构：
 

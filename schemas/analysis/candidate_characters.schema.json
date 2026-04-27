@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "offpage/analysis/candidate_characters.schema.json",
+  "title": "CandidateCharacters",
+  "description": "Phase 1 候选角色识别结果。Phase 1 (analysis.md) 一次 LLM 调用产出（同次产 world_overview + stage_plan）。下游：Phase 1.5 用户从 candidates 选确认建包对象，feed Phase 2 baseline。同一角色不同名称必须合并到一个 candidate（aliases 承载化名 / 代称等）。",
+  "type": "object",
+  "required": ["work_id", "candidates"],
+  "additionalProperties": false,
+  "properties": {
+    "work_id": {
+      "type": "string",
+      "description": "作品包命名空间键。"
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "description": "候选角色列表，每条对应一个独立角色（已合并所有别名）。",
+      "items": {
+        "type": "object",
+        "required": [
+          "character_id",
+          "aliases",
+          "description",
+          "frequency",
+          "importance",
+          "recommended"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "character_id": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "角色 ID（最常用 / 最终的正式名，<30 字）。"
+          },
+          "aliases": {
+            "type": "array",
+            "maxItems": 30,
+            "description": "已知别名列表（≤30 项；不含 character_id 本身）。",
+            "items": {
+              "type": "object",
+              "required": ["name", "type", "first_appearance"],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "maxLength": 30,
+                  "description": "别名文本（<30 字）。"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["本名", "化名", "代称", "称呼", "昵称", "绰号", "封号", "道号", "武器名", "其他"],
+                  "description": "别名类型（10 项枚举）。"
+                },
+                "first_appearance": {
+                  "type": "string",
+                  "maxLength": 30,
+                  "description": "首次出现位置描述（<30 字，例如\"约第 0042 章\"）。"
+                }
+              }
+            }
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "角色简介（<200 字，2-3 句）。"
+          },
+          "frequency": {
+            "type": "string",
+            "enum": ["高", "中", "低"],
+            "description": "预估出场频率。"
+          },
+          "importance": {
+            "type": "string",
+            "enum": ["主角", "重要配角", "次要配角"],
+            "description": "预估重要程度。"
+          },
+          "recommended": {
+            "type": "boolean",
+            "description": "是否建议建包（true=建议，false=不建议或待定；Phase 1.5 用户会最终确认）。"
+          }
+        }
+      }
+    }
+  }
+}
