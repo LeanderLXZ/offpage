@@ -51,10 +51,12 @@ Manual repair scenarios → `prompts/review/*.md`.
 ### Extraction-branch artifact drift (resume gate)
 
 Before `--resume` on an existing `extraction/<work_id>` branch, read the
-**`## 立即执行` section of `docs/todo_list.md`** for active migration
-tasks against the current schemas. **Do NOT read the `## 下一步` or
-`## 讨论中` sections for this gate** — those are deferred / non-blocking
-and only waste tokens. The repair agent's L1 gate will trip on every
+**`## 正在执行` and `## 下一步` sections of `docs/todo_list.md`** for
+active or imminent migration tasks against the current schemas. **Do NOT
+read the `## 讨论中` section for this gate** — those are deferred /
+non-blocking and only waste tokens. Faster path: the top-of-file `## 索引`
+section already summarises both — read that and skip the bodies unless an
+ID looks relevant. The repair agent's L1 gate will trip on every
 pre-tightening file otherwise.
 
 ## What The User Cares About
