@@ -118,3 +118,22 @@
 
 - **Status**: DONE
 - **Finished**: 2026-04-26 21:19:37 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：5/5 计划项 + 5/5 验证标准 = 100%
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=0 / Low=1
+- Low：analysis.md prompt 主文未显式告知新增 minLength 100 bound（仅在文件链接处提"以 schema 为准"），可能浪费一次 L3 retry token；建议下轮 prompt 改动时一并加"长度 100-200 字"括注，与 chunk schema prompt 风格统一
+- Open Questions: 1 条（详见对话）
+
+## 复查时状态
+- **Reviewed**: 2026-04-26 22:35 EDT
+- **Status**: REVIEWED-PASS
+  - 理由：轨 1 全落实，轨 2 仅 1 条 Low（prompt token 效率优化），无 High / Medium
+- **Conversation ref**: 同会话内 /post-check 输出
