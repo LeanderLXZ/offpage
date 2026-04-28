@@ -1,94 +1,104 @@
-# Skills 配置（项目实例）
+# Skills Config (project instance)
 
-由 `.agents/skills/*` 在运行时按需读取。session start **不**默认加载本
-文件——只有具体 skill 跑到相关步骤时才读。
+Loaded on demand by `.agents/skills/*` at runtime. **Not** loaded by
+default at session start — only the specific skill that needs it reads it.
 
-每节按本项目实际填写。**节标题（## 开头那一行）必须存在**，缺失整节
-会被 skills 视为配置不完整、报错并停手。某节本项目没有此项时，内容
-写 `（无）` 或留空，skills 会跳过该节相关步骤。某节列了具体路径但
-路径不存在 → skills fail loudly 提示该节漂移。
+Each section below is filled with this project's actual values.
+**Section headers (the `## …` lines) MUST exist** — a missing header
+means the config is structurally incomplete; skills will fail loudly and
+stop. If this project has no value for a section, write `(none)` or
+leave the body empty — skills will skip the related step. If a section
+lists concrete paths but those paths don't exist on disk, skills will
+fail loudly and report the drift.
 
-跨项目移植时改这一份即可，不动 `.agents/skills/*` 正文。
+When porting to another project, edit only this file — skill bodies
+under `.agents/skills/*` stay untouched.
 
-## 后台进程
+## Background processes
 
-skills 用它判断"分支 / 工作树是否有运行中的后台工作"，避免误干扰
-（如 `/commit` Step 4 forward、`/go` Step 0 自动锁定、`/monitor` 进程盘点）。
+Used by skills to detect "is there an in-flight long-running job on this
+branch / worktree?", so they don't disturb it
+(e.g. `/commit` Step 5 forward, `/go` Step 1 worktree lock,
+`/monitor` process inventory).
 
-- pgrep 模式：
+- pgrep patterns:
   - `persona_extraction`
-- 进程产物：
+- Process artifacts:
   - `works/*/analysis/progress/*.pid`
   - `works/*/analysis/progress/*.json`
-- 进程日志：
+- Process logs:
   - `works/*/analysis/logs/`
 
-## 保护分支前缀
+## Protected branch prefixes
 
-skills 用它判断"哪些分支不应被自动 forward / merge 干扰"
-（如 `/commit` Step 4、`/go` Step 9 分支同步）。
+Used by skills to identify branches that must not be auto-forwarded /
+merged into without care (e.g. `/commit` Step 5, `/go` Step 10 branch sync).
 
-- 前缀：
+- Prefixes:
   - `extraction/`
 
-## 主分支策略
+## Main branch policy
 
-变更如何流向主分支（`/go` 工作位置自动锁定 / Step 9 同步逻辑的依据）。
+Drives `/go` worktree-lock decision and Step 10 sync direction.
 
-- 主分支：`main`
-- 规则：代码 / schema / prompt / docs / ai_context / skill 变更先进 main，
-  其他分支通过 `git merge main` 前向同步
+- Main branch: `main`
+- Rule: changes to code / schema / prompt / docs / ai_context / skill
+  land on `main` first; other branches sync forward via `git merge main`.
 
-## 禁提路径
+## Do-not-commit paths
 
-commit 扫描时禁止入库的项目专属路径补充——`.gitignore` +
-`ai_context/conventions.md` 之外的项目专属清单（`/commit` Step 2、
-`/go` Step 8）。
+Project-specific paths that must never be committed, on top of
+`.gitignore` + `ai_context/conventions.md` (used by `/commit` Step 3,
+`/go` Step 9).
 
-- `sources/`（原文）
+- `sources/` (raw source material)
 - `*.sqlite*`
 - `embeddings/`
 - `caches/`
-- `works/`（产物）
-- `users/`（真实 user packages）
+- `works/` (extraction artifacts)
+- `users/` (real user packages)
 
-## 源码目录
+## Source directories
 
-skills 用它做"实现线"扫描（`/full-review` 工作方式 / `/post-check`
-轨 2 实现线）。
+Used by `/full-review` "implementation track" and `/post-check` Track 2
+implementation track for code-level scans.
 
 - `automation/`
 - `simulation/`
 
-## 示例产物目录
+## Example artifact directories
 
-skills 用它做"产物 / 模板线"扫描（`/full-review` 工作方式 /
-`/post-check` 轨 2 产物结构线）。如示例输出 / 用户模板 / fixture 数据等。
+Used by `/full-review` "artifact track" and `/post-check` Track 2
+artifact-and-structure track. E.g. example outputs, user templates,
+fixture data.
 
 - `works/`
 - `users/_template/`
 
-## 核心组件关键词
+## Core component keywords
 
-skills 用它定位关键架构组件做对齐审计（`/full-review` 重点检查项
-"orchestrator / validator / consistency checker / post-processing
-是否真的兑现文档中的门控与校验承诺"）。
+Used by `/full-review` to locate key architectural components for
+alignment audits ("does the orchestrator / validator / consistency
+checker / post-processing actually enforce the gates the docs claim?").
 
 - `orchestrator`
 - `validator`
 - `consistency checker`
 - `post-processing`
 
-## 敏感内容占位规则
+## Sensitive content placeholder rules
 
-写 docs / prompts / ai_context 时禁止出现的真实内容；用占位符代替
-（`/go` Step 2 / Step 6、`/post-check` 轨 2 残留检查）。
+Real-world content that must NOT appear in docs / prompts / ai_context;
+must be replaced by structural placeholders (used by `/go` Step 3 / Step 7,
+`/post-check` Track 2 residual scan).
 
-- 真实业务实体名（如：书名 / 人物 / 客户名 / 私域数据 / 真实用户邮箱）
+- Real business entity names (e.g. book / character / customer /
+  private-domain data / real user emails)
 
-## 时区
+## Timezone
 
-时间戳生成的时区设定（`/go` Step 1 PRE log / Step 7 POST log、
-`/full-review` 归档文件名、`/monitor` 单轮 Timestamp）。
+Drives timestamp generation across skills (`/go` Step 2 PRE log /
+Step 8 POST log, `/full-review` archived report filename, `/monitor`
+per-cycle Timestamp).
 
-- 命令模板：`TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'`
+- Command template: `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'`
