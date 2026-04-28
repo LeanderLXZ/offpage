@@ -146,7 +146,7 @@
 - `timeline_anchor` / `location_anchor` — 阶段级时间 / 地点锚点（≤15 字短语），required；post_processing 复制到 `world_event_digest.time` / `location`
 - `snapshot_summary` — 阶段的世界状态概述
 - `foundation_corrections` — 对基础设定的修正
-- `stage_events` — 本阶段事件（**唯一事件清单**，每条一句话；**仅收录世界公共层事件**，角色私事/内心决定应写入该角色 memory_timeline；既是快照内容又是 `world_event_digest.jsonl` 的直接来源，1:1 复制）
+- `stage_events` — 本阶段事件（**唯一事件清单**，每条一句话；**仅收录世界公共层事件**——势力变迁、大 boss 复活 / 出关 / 陨落、天灾、地震、灵脉断裂、奇观、跨角色公共战役 / 典礼 / 危机、世界规则首次揭示等。角色私事 / 私下对话 / 内心决定 / 个人经济活动应写入该角色 memory_timeline 或 character `stage_events`；既是快照内容又是 `world_event_digest.jsonl` 的直接来源，1:1 复制）
 - `current_world_state` — 当前阶段的世界总体状态
 - `relationship_shifts` — 关注的人物关系转变
 - `location_changes`, `map_changes` — 地理变化
@@ -313,7 +313,7 @@ key_relationships 提供关系的全局演变轨迹。
 | `concealments` | 角色主动隐瞒的事情（content / reason） |
 | `stage_delta` | 从上一阶段的变化摘要（信息性） |
 | `character_arc` | 角色从阶段 1 到当前的整体弧线概述（单一字符串） |
-| `stage_events` | 本阶段发生的事件（每条一句话，不累积历史） |
+| `stage_events` | **该角色相关**的本阶段事件（每条一句话，不累积历史）。仅写本角色亲历 / 亲为 / 在场 / 直接影响其处境的事件；他人私事不写。世界级公共事件（boss 复活、奇观、地震等）由 world `stage_events` 承载；本角色亲历世界事件时以**角色视角**重写一条，不直接复制 |
 
 **自包含契约（schema 硬门控）**：`required` 除元信息外还包含
 `timeline_anchor` / `snapshot_summary` / `active_aliases` /

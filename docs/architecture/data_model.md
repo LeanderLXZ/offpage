@@ -212,8 +212,11 @@ works/{work_id}/world/
   程序化写出）
 - `stage_catalog.json` — `schemas/world/world_stage_catalog.schema.json`
 - `stage_snapshots/{stage_id}.json` — 世界当前阶段状态；`stage_events`
-  **只记录该阶段的世界公共层事件**（每条一句话，长度由 schema 硬门控），
-  不累积历史，不收录角色私人场景/内心决定（后者属于角色 memory_timeline）。
+  **只记录该阶段的世界公共层事件**（每条一句话，长度由 schema 硬门控）：
+  势力变迁、大 boss 复活 / 出关 / 陨落、天灾、地震、灵脉断裂、奇观、
+  跨角色公共战役 / 典礼 / 危机、世界规则首次揭示等。**不收录**角色私下
+  对话 / 设局 / 交易、单角色内心决定 / 情绪起伏、个人经济活动（这些归
+  对应角色的 memory_timeline 或 character `stage_events`）。不累积历史。
   跨阶段事件时间线由 `world_event_digest.jsonl` 承担（1:1 复制 stage_events）。
 - `foundation/foundation.json` — Phase 2 产出的统一基础设定
   （`schemas/world/foundation.schema.json`；未来可拆分为 setting.json、
@@ -317,9 +320,13 @@ works/{work_id}/characters/{character_id}/
 - `canon/failure_modes.json`
 - `canon/stage_catalog.json` — `schemas/character/stage_catalog.schema.json`
 - `canon/stage_snapshots/{stage_id}.json` — **自包含**，运行时核心；
-  `stage_events` **仅记录该阶段发生的事件**（每条一句话，长度由 schema 硬门控），
-  不累积历史。跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
-  `world_event_digest.jsonl` 承担。
+  `stage_events` **仅记录该角色相关的本阶段事件**（每条一句话，长度由
+  schema 硬门控）。归属判定：本角色亲历 / 亲为 / 在场 / 直接影响其处境
+  的事件才写；他人私事、与本角色无关的世界变迁不写；世界级公共事件
+  （boss 复活、奇观、地震等）由 world `stage_events` 承载，本角色亲历
+  时以**角色视角**重写一条，不直接复制世界层文本。不累积历史。跨阶段
+  历史由 `memory_timeline` + `memory_digest.jsonl` + `world_event_digest.jsonl`
+  承担。
 - `canon/memory_timeline/{stage_id}.json`
 - `canon/memory_digest.jsonl` — 压缩摘要索引，stage 1..N 过滤加载
 
