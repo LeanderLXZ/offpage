@@ -13,45 +13,45 @@ description: 快速确认并提交当前改动 — 校验 working tree 有效性
 
 1. **sync 触发词**（不区分大小写）：`同步` / `sync` / `auto-sync` / `--sync`。
    出现任意一个（作为独立词或单独 token）→ 进入 **auto-sync 模式**：跳过
-   Step 4 的询问，直接把本次 commit forward 到所有未同步、当前没有运行
+   Step 5 的询问，直接把本次 commit forward 到所有未同步、当前没有运行
    进程、且非 dirty 的本地分支
-2. **其余文本**：作为 commit message 的提示 / 主题（参见 Step 3）
+2. **其余文本**：作为 commit message 的提示 / 主题（参见 Step 4）
 
 解析时把 sync 触发词从原始 `$ARGUMENTS` 中**剥离**，剩余部分才是消息提示。
 都没有时（`$ARGUMENTS` 为空）→ 普通模式 + 由 diff 自动归纳消息。
 
-## 0a. 加载配置
+## 0. Load skills config
 
 `Read` `ai_context/skills_config.md`。
 
 - 文件不存在 / 某节标题缺失 → fail loudly：打印缺失项 + 提示按 plugin 模板补全，停手
-- 某节内容 `（无）` 或留空 → 跳过该节相关步骤（视为本项目无此项）
+- 某节内容 `(none)` 或留空 → 跳过该节相关步骤（视为本项目无此项）
 - 某节列了具体路径但路径不存在 → fail loudly：提示该节漂移到不存在路径，停手等用户修
 
 后续步骤出现 "skills_config.md `## XX`" 时引用本配置。本 skill 用到：
-`## 禁提路径`（Step 2）、`## 后台进程`（Step 4 forward 进程检测）、
-`## 保护分支前缀`（Step 4 区分长跑分支）。
+`## Do-not-commit paths`（Step 3）、`## Background processes`（Step 5
+forward 进程检测）、`## Protected branch prefixes`（Step 5 区分长跑分支）。
 
-## 0. 改动有效性
+## 1. 改动有效性
 
 - `git status` + `git diff --stat` 看 working tree 与 index
 - 若完全没有改动：打印"无改动"并停手
 - 扫改动列表，判断是否值得独立 commit（不是空白 / 误保存 / 临时 debug 打印）；有可疑 → 先问用户
 
-## 1. 分支正确性
+## 2. 分支正确性
 
 - `git branch --show-current` 打印当前分支
-- 按项目硬规则：代码 / schema / prompt / docs / ai_context 改动应在 main；功能实验 / 长跑进程在对应 feature 分支
+- 按 skills_config.md `## Main branch policy` 判断当前分支与改动性质是否匹配（一般规则：可作为真相基线的变更——代码 / schema / prompt / docs / ai_context / skill ——应落在主分支；功能实验 / 长跑任务在对应 feature 分支）
 - 当前分支与改动性质不匹配 → 先停手报告，等用户决定（切分支、worktree、或坚持当前分支）
 
-## 2. 追踪状态
+## 3. 追踪状态
 
-- 扫禁提路径：按 skills_config.md `## 禁提路径` 列表 +（`.gitignore` + `ai_context/conventions.md`）兜底
+- 扫禁提路径：按 skills_config.md `## Do-not-commit paths` 列表 +（`.gitignore` + `ai_context/conventions.md`）兜底
 - `git ls-files --others --exclude-standard` 看未跟踪文件，判断是否应该一并加入 / 加入 .gitignore / 留着
 - 大文件（>1MB）或二进制单独列出，请用户确认是否入库
 - 任一项可疑 → 停手问用户，不要擅自 `git add -A`
 
-## 3. Commit
+## 4. Commit
 
 - 按逻辑单元分 commit（若单次改动跨多个独立主题）；一次别塞太多
 - message 风格对照 `git log --oneline -10`，保持仓库惯例（中英文 / prefix / 动词时态）
@@ -59,10 +59,10 @@ description: 快速确认并提交当前改动 — 校验 working tree 有效性
 - 执行 `git add <具体文件>` + `git commit`（**不用 `git add -A` / `git add .`**，避免误入敏感文件）
 - commit 后 `git status` 确认干净
 
-## 4. Forward / Merge
+## 5. Forward / Merge
 
 - `git branch --format='%(refname:short)'` 列出所有本地分支
-- 对每个非当前分支，用 `git merge-base --is-ancestor <当前分支> <branch>` 判断是否已含本次 commit；并按 skills_config.md `## 后台进程` 探测该分支是否有运行中进程（pgrep 模式 + 进程产物路径）/ 是否 dirty（`git -C <path> status` 等价手段）。`## 后台进程` 留空时视为"无进程"
+- 对每个非当前分支，用 `git merge-base --is-ancestor <当前分支> <branch>` 判断是否已含本次 commit；并按 skills_config.md `## Background processes` 探测该分支是否有运行中进程（pgrep 模式 + 进程产物路径）/ 是否 dirty（`git -C <path> status` 等价手段）。`## Background processes` 留空时视为"无进程"
 - 输出一个简表：`{branch} | 已同步 / 未同步 | 状态（有进程 / 干净 / dirty）`
 
 **普通模式**（默认）：
@@ -74,7 +74,7 @@ description: 快速确认并提交当前改动 — 校验 working tree 有效性
 
 - **跳过询问**，直接把本次 commit 同步到所有满足以下全部条件的分支：
   - 未同步（`git merge-base --is-ancestor` 返回非 0）
-  - 没有运行中进程（按 skills_config.md `## 后台进程` 检测；`## 保护分支前缀` 列出的分支额外谨慎判断）
+  - 没有运行中进程（按 skills_config.md `## Background processes` 检测；`## Protected branch prefixes` 列出的分支额外谨慎判断）
   - 工作树干净
 - 对每个候选分支：`git checkout <branch> && git merge <原分支>`；合并完成后继续下一个；末尾回到原分支
 - 跳过的分支（有进程 / dirty / 合并冲突）→ 各自打一行说明，**不停手问**，继续处理后续分支

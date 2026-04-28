@@ -7,17 +7,19 @@ description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/
 
 对整个仓库做一次"规范对齐 + 实现风险"的全量 review。`$ARGUMENTS` 存在则作为本轮重点或额外关注点。
 
-## 0a. 加载配置
+## 0. Load skills config
 
 `Read` `ai_context/skills_config.md`。
 
 - 文件不存在 / 某节标题缺失 → fail loudly：打印缺失项 + 提示按 plugin 模板补全，停手
-- 某节内容 `（无）` 或留空 → 跳过该节相关步骤（视为本项目无此项）
+- 某节内容 `(none)` 或留空 → 跳过该节相关步骤（视为本项目无此项）
 - 某节列了具体路径但路径不存在 → fail loudly：提示该节漂移到不存在路径，停手等用户修
 
 后续步骤出现 "skills_config.md `## XX`" 时引用本配置。本 skill 用到：
-`## 源码目录`（实现线扫描范围）、`## 示例产物目录`（产物线扫描范围）、
-`## 核心组件关键词`（重点检查项）、`## 时区`（结果归档时间戳）。
+`## Source directories`（实现线扫描范围）、
+`## Example artifact directories`（产物线扫描范围）、
+`## Core component keywords`（重点检查项）、
+`## Timezone`（结果归档时间戳）。
 
 ## 目标
 
@@ -36,14 +38,14 @@ description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/
 - 再读 `docs/requirements.md` 和 `docs/architecture/`
 - 不要默认去读 `logs/change_logs/`，除非已发现冲突、必须追溯历史决策
 - 然后扫描整个仓库，包括但不限于：
-  - skills_config.md `## 源码目录` 列出的目录
+  - skills_config.md `## Source directories` 列出的目录
   - `schemas/`、`prompts/`
-  - skills_config.md `## 示例产物目录` 列出的目录
+  - skills_config.md `## Example artifact directories` 列出的目录
   - `README.md`、`.gitignore`
 - 如果能力支持并行，并行跑至少三条审计线：
   1. **规范线（必跑）**：`ai_context/`、`docs/`、`schemas/`、`prompts/`
-  2. **实现线**：扫 skills_config.md `## 源码目录` 列出的目录 + 脚本 / 状态机 / 校验 / 重试 / 回滚逻辑。该节 `（无）` / 留空时退化为"项目根下所有非 ai_context / docs / logs / schemas / prompts / .git 的子目录"
-  3. **样例产物线**：扫 skills_config.md `## 示例产物目录` 列出的目录，看已提交的 progress / artifact 是否与规范一致。该节 `（无）` / 留空时跳过本线并打印"未声明示例产物目录，跳过产物线"
+  2. **实现线**：扫 skills_config.md `## Source directories` 列出的目录 + 脚本 / 状态机 / 校验 / 重试 / 回滚逻辑。该节 `(none)` / 留空时退化为"项目根下所有非 ai_context / docs / logs / schemas / prompts / .git 的子目录"
+  3. **样例产物线**：扫 skills_config.md `## Example artifact directories` 列出的目录，看已提交的 progress / artifact 是否与规范一致。该节 `(none)` / 留空时跳过本线并打印"未声明示例产物目录，跳过产物线"
 
 ## 重点检查项
 
@@ -51,13 +53,13 @@ description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/
 - `docs/requirements.md` 与 `docs/architecture/*` 是否一致
 - `schemas` 是否覆盖文档承诺的核心数据结构
 - prompt 模板是否仍引用过时字段、旧流程、已废弃文件
-- skills_config.md `## 核心组件关键词` 列出的组件是否真的兑现文档中的门控与校验承诺（该节 `（无）` / 留空时跳过本项）
+- skills_config.md `## Core component keywords` 列出的组件是否真的兑现文档中的门控与校验承诺（该节 `(none)` / 留空时跳过本项）
 - Phase / 状态机 / 恢复 / 回滚 / 重试 / commit gate 是否有缺口
 - 是否有"文档宣称会阻断，但代码实际不会阻断"的问题
 - 是否有字段名漂移、schema 字段与代码字段不一致的问题
 - 是否有程序化检查实际上失效、漏检、空检的问题
 - `.gitignore`、本地产物、已跟踪文件之间是否矛盾
-- skills_config.md `## 示例产物目录` 下已提交样例是否与 `ai_context/current_status.md`、README、docs 描述一致
+- skills_config.md `## Example artifact directories` 下已提交样例是否与 `ai_context/current_status.md`、README、docs 描述一致
 - 是否有对外宣称"已完成 / 已验证"的内容，其实仓库现状并不支持
 
 ## 审计要求
@@ -97,7 +99,7 @@ Alignment Summary、Residual Risks、建议落地顺序）写到：
 logs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
 ```
 
-- **时间戳**：按 skills_config.md `## 时区` 的命令模板执行（该节缺失则 fallback 到 `date '+%Y-%m-%d_%H%M%S'` 系统时区）
+- **时间戳**：按 skills_config.md `## Timezone` 的命令模板执行（该节缺失则 fallback 到 `date '+%Y-%m-%d_%H%M%S'` 系统时区）
 - **`{model}`**：执行本轮 review 的模型 slug，小写、用 `-` 连接。例：
   `opus-4-7`、`sonnet-4-6`、`haiku-4-5`、`gpt-5`、`codex`。禁用空格、
   下划线、厂商前缀（不要写 `claude-opus-4-7`，直接 `opus-4-7` 即可）
@@ -109,7 +111,7 @@ logs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
 - `logs/review_reports/` 仅存 review 结果快照；与 `logs/change_logs/`（历史决策
   记录）、`docs/todo_list.md`（待办）职责互不重叠
 
-写完后**立即 commit 这一份 review report 文件**——不要留作脏工作区，否则下一轮 `/go` 的 Step 0 自动锁定逻辑会把这份残留误判为"dirty 工作区"而强制走 worktree 路径。
+写完后**立即 commit 这一份 review report 文件**——不要留作脏工作区，否则下一轮 `/go` 的 Step 1 自动锁定逻辑会把这份残留误判为"dirty 工作区"而强制走 worktree 路径。
 
 - commit 在**当前分支**即可（`/full-review` 通常在用户当前所在分支跑，无需切换）
 - 仅 `git add` 这一份 review report 文件——不要顺手把其他无关 dirty 文件带进 commit

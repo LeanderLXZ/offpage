@@ -2,28 +2,28 @@
 
 ---
 
-## 索引（自动生成，勿手改）
+## Index (auto-generated; do not hand-edit)
 
-> 本段是三张子表的渲染缓存，由维护本文件的人（包括 Claude）在**每次对正文条目增 / 改 / 移段 / 完成 / 废弃后**顺手刷新——具体规则见下方"## 文件说明 → 如何维护索引"。`/todo` skill 不解析正文，只读这一段，所以这里的内容必须与正文同步；不同步会让 `/todo` 给出错误结论。
+> 本段是三张子表的渲染缓存，由维护本文件的人（包括 Claude）在**每次对正文条目增 / 改 / 移段 / 完成 / 废弃后**顺手刷新——具体规则见下方"## File guide → Index maintenance"。`/todo` skill 不解析正文，只读这一段，所以这里的内容必须与正文同步；不同步会让 `/todo` 给出错误结论。
 
-### 🟢 正在执行（0 条）
+### 🟢 In Progress (0)
 
-| ID | 标题 | 开始时间 | 当前状态 |
+| ID | Title | Start time | Status |
 |---|---|---|---|
-| _（无）_ | | | |
+| _(none)_ | | | |
 
-### 🟡 下一步（4 条）
+### 🟡 Next (4)
 
-| ID | 简介 | 重要 | 立即可做 | 改动规模 | 依赖 |
+| ID | Brief | Importance | Ready | Scope | Deps |
 |---|---|---|---|---|---|
-| `T-PHASE35-IMPORTANCE-AWARE` | [consistency_checker.py:96-117](../automation/persona_extraction/consistency_checker.py#L96-L117) 已构造 importance_map 但只 _check_target_map_counts 用上；其他 8 个 _check_* 一刀切，对次要配角的 field_completeness / relationship_continuity 过度报错。decisions.md #15 已定 bound 因 importance 而异。 | 🟢 中低 | 💬 需先讨论 | 🟡 中量 | 无（触发自 2026-04-27 opus-4-7 review L-3） |
-| `T-REPAIR-T3-LIFECYCLE-RESET` | T3 触发后开新 repair lifecycle，单文件最多 2 个 lifecycle。第一轮 T3 prompt 带 prior_attempt_context（已修+未修摘要 ~200 token），跑完直接进第二轮（不做 Post-T3 check / 不走第一轮 L3 gate）。第二轮全新 Phase A→B→C，禁用 T3，升 T3 即 T3_EXHAUSTED。Triage 两轮独立 cap=5。 | 🔴 高 | ✅ 可做 | 🟡 中量 | 无 |
-| `T-CHAR-SNAPSHOT-T3-REGEN-PATH` | char_snapshot T3 重生成走 3 sub-lane 并行 + 程序汇总（β 路径），保持「单一生成路径」原则。T-REPAIR-T3-LIFECYCLE-RESET 已定型 → T3 单文件最多 1 次 → β 的 token 成本上限 = ×3，可接受。 | 🟡 中 | 💬 需先讨论 | 🟡 中量 | char_snapshot 3 sub-lane 并行方案本身要先落地（未单独立条） |
-| `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 中低 | ✅ 可做 | 🟢 小量 | 无 |
+| `T-PHASE35-IMPORTANCE-AWARE` | [consistency_checker.py:96-117](../automation/persona_extraction/consistency_checker.py#L96-L117) 已构造 importance_map 但只 _check_target_map_counts 用上；其他 8 个 _check_* 一刀切，对次要配角的 field_completeness / relationship_continuity 过度报错。decisions.md #15 已定 bound 因 importance 而异。 | 🟢 Med-Low | 💬 Discuss first | 🟡 Medium | 无（触发自 2026-04-27 opus-4-7 review L-3） |
+| `T-REPAIR-T3-LIFECYCLE-RESET` | T3 触发后开新 repair lifecycle，单文件最多 2 个 lifecycle。第一轮 T3 prompt 带 prior_attempt_context（已修+未修摘要 ~200 token），跑完直接进第二轮（不做 Post-T3 check / 不走第一轮 L3 gate）。第二轮全新 Phase A→B→C，禁用 T3，升 T3 即 T3_EXHAUSTED。Triage 两轮独立 cap=5。 | 🔴 High | ✅ Ready | 🟡 Medium | 无 |
+| `T-CHAR-SNAPSHOT-T3-REGEN-PATH` | char_snapshot T3 重生成走 3 sub-lane 并行 + 程序汇总（β 路径），保持「单一生成路径」原则。T-REPAIR-T3-LIFECYCLE-RESET 已定型 → T3 单文件最多 1 次 → β 的 token 成本上限 = ×3，可接受。 | 🟡 Medium | 💬 Discuss first | 🟡 Medium | char_snapshot 3 sub-lane 并行方案本身要先落地（未单独立条） |
+| `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | 无 |
 
-### ⚪ 讨论中（7 条）
+### ⚪ Discussing (7)
 
-| ID | 简介 | 待决策项数 | 阻塞依赖 |
+| ID | Brief | Open decisions | Blocked by |
 |---|---|---|---|
 | `T-REPAIR-EVENT-DRIVEN` | E2 方案：每 lane 完成立刻触发 repair，与后续 lane extract 重叠。2026-04-22 测算只比 E1 省 4min/stage（49 stage 共 ~3h），双线程池 + peak 9 并发撞 rate limit 复杂度跳一档，暂不做。等 E1 真实耗时数据出来再重评。 | 0 | T-REPAIR-PARALLEL 先落地 |
 | `T-CODEX-STDIN` | ClaudeBackend 已改 stdin 临时文件绕过 argv 128KiB 上限；CodexBackend.run 仍走 positional argv，切 `--backend codex` 时大 prompt 会复现 Argument list too long。已加注释未改代码——本机无 codex CLI 实测。 | 2 | 有 codex CLI 的机器 / 订阅 |
@@ -33,150 +33,150 @@
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
 | `T-LOAD-STRATEGY-WORLD-EVENTS-BOUND` | [load_strategy.md:17](../simulation/retrieval/load_strategy.md#L17) world `stage_events` summary 写的 `50–80 chars`，但 schema 与 decisions 27h 实际是 `50–100`。stage_events 边界强化扫描时发现的旧值漂移，独立小修。 | 0 | 无 |
 
-**汇总**：共 11 条 — 🟢 正在执行 0 ｜ 🟡 下一步 4 ｜ ⚪ 讨论中 7
+**Total**: 11 — 🟢 In Progress 0 ｜ 🟡 Next 4 ｜ ⚪ Discussing 7
 
 ---
 
-## 文件说明
+## File guide
 
-### 用途
+### Purpose
 
 记录**计划完成但尚未完成**的具体工程任务。区别于：
 - `ai_context/next_steps.md`：**架构方向**和高层 roadmap（用英文）
 - `ai_context/current_status.md`：**当前项目状态快照**
 - `logs/change_logs/`：**历史记录**（时间戳，只追加不修改）
 - `docs/architecture/`：**正式架构文档**
-- `docs/todo_list_archived.md`：**已完成 / 废弃**任务的瘦身归档（瘦身条目，原文细节去 git history / change_logs）
+- `docs/todo_list_archived.md`：**Completed / Abandoned** 任务的瘦身归档（瘦身条目，原文细节去 git history / change_logs）
 
 本文件是**工程级**的待办队列，含文件路径、行号、改动清单、验证步骤。
 
-### 任务流转
+### Task flow
 
 ```
-讨论中 ──(定案)──▶ 下一步 ──(/go 启动)──▶ 正在执行 ──(commit 完)──▶ archived ## 已完成
-                                                                ▲
-任何节点 ─────────────(废弃)──────────────────────────────────── archived ## 废弃
+Discussing ──(decided)──▶ Next ──(/go starts)──▶ In Progress ──(commit done)──▶ archived ## Completed
+                                                                                ▲
+any node ─────────────────(abandoned)──────────────────────────────── archived ## Abandoned
 ```
 
 三个段落的语义：
 
-- **正在执行**（单槽位）：`/go` 已启动、尚未 commit 完成的任务。同时**只能 1 条**——目的是中途 ctrl-c / 用户暂停 / 切换会话时，能立刻从这里看到"正在做什么"，不用翻 git status / progress 文件
-- **下一步**：依赖与设计已基本就绪、随时可以 `/go` 启动的任务队列。条目按用户优先级排序，第一条就是下一个该启动的
-- **讨论中**：有未决策项 / 有外部依赖 / 方案未拍板的任务；不要 `/go` 启动它们，先收敛决策
+- **In Progress**（单槽位）：`/go` 已启动、尚未 commit 完成的任务。同时**只能 1 条**——目的是中途 ctrl-c / 用户暂停 / 切换会话时，能立刻从这里看到"正在做什么"，不用翻 git status / progress 文件
+- **Next**：依赖与设计已基本就绪、随时可以 `/go` 启动的任务队列。条目按用户优先级排序，第一条就是下一个该启动的
+- **Discussing**：有未决策项 / 有外部依赖 / 方案未拍板的任务；不要 `/go` 启动它们，先收敛决策
 
-### 记录什么
+### What to record
 
 ✓ 具体到文件 / 函数级的改动任务
-✓ 每条任务必须包含：**上下文**（动机 + 现状 + 触发链）、**改动清单**（含文件路径和行号；讨论中可暂缺）、**完成标准**、**依赖**
-✓ 视情况补：**待决策项**（讨论中段必有）、**预估**、**未落地原因**、**暂不做的事**
-✓ 讨论中尚未定案的方案及其权衡
+✓ 每条任务必须包含：**上下文**（动机 + 现状 + 触发链）、**改动清单**（含文件路径和行号；Discussing 段可暂缺）、**完成标准**、**依赖**
+✓ 视情况补：**待决策项**（Discussing 段必有）、**预估**、**未落地原因**、**暂不做的事**
+✓ Discussing 段尚未定案的方案及其权衡
 
-### 不记录什么
+### What NOT to record
 
 ✗ 架构方向 / 高层 roadmap → 写进 `ai_context/next_steps.md`
-✗ 已完成 / 废弃任务 → 移到 `docs/todo_list_archived.md`（瘦身），不留在本文件
+✗ Completed / Abandoned 任务 → 移到 `docs/todo_list_archived.md`（瘦身），不留在本文件
 ✗ 临时调试笔记 / 中间思考 → 对话上下文或 plan，不持久化
-✗ 当前运行状态 / 进度 → 写进 `works/*/analysis/progress/`
+✗ 当前运行状态 / 进度 → 写进运行时进度产物（按 skills_config.md `## Background processes` 的进程产物路径）
 
-### 如何更新条目
+### How to update entries
 
-**添加任务**：放进合适的分节（下一步 / 讨论中）。新任务必须有上方"记录什么"列出的字段。**不要直接添加到"正在执行"**——那个段位仅由 `/go` 启动动作填入。
+**添加任务**：放进合适的分节（Next / Discussing）。新任务必须有上方"What to record"列出的字段。**不要直接添加到"In Progress"**——那个段位仅由 `/go` 启动动作填入。
 
 **任务进入执行（/go 启动）**：
-1. 把整条从"下一步"移到"正在执行"
-2. 在条目里追加 `**开始时间**`（YYYY-MM-DD HH:MM EDT）和 `**当前状态**`（进行中 / 等用户决策 / 暂停）字段
-3. **正在执行段位单槽**——若已有占用，先把当前那条 commit 完成或显式暂停回退到"下一步"再启动新任务
-4. 同步刷新索引段（见"如何维护索引"）
+1. 把整条从 "Next" 移到 "In Progress"
+2. 在条目里追加 `**开始时间**`（YYYY-MM-DD HH:MM 时区缩写——按 skills_config.md `## Timezone`）和 `**当前状态**`（进行中 / 等用户决策 / 暂停）字段
+3. **In Progress 段位单槽**——若已有占用，先把当前那条 commit 完成或显式暂停回退到 "Next" 再启动新任务
+4. 同步刷新索引段（见 "Index maintenance"）
 
 **任务完成（commit 完成 + 验证通过）**：
-1. 把整条**移到** `docs/todo_list_archived.md` 的 `## 已完成` 段，按归档格式瘦身（标题 + 完成形式 + 1 行摘要 + log 链接），原条目从本文件删除
+1. 把整条**移到** `docs/todo_list_archived.md` 的 `## Completed` 段，按归档格式瘦身（标题 + 完成形式 + 1 行摘要 + log 链接），原条目从本文件删除
 2. 若该任务产生了值得沉淀的结论 / 新架构决策 / 可复用经验，写一条 `logs/change_logs/{YYYY-MM-DD}_{HHMMSS}_{slug}.md`
 3. 若完成涉及 `ai_context/` 的持久事实变化（current_status / decisions / next_steps 等），同步更新
-4. **从"下一步"首条提升一条到"正在执行"**——只在用户立刻 `/go` 下一条时做；非紧凑流程则保持"正在执行"为空，等下次 `/go` 启动时再移
+4. **从 "Next" 首条提升一条到 "In Progress"**——只在用户立刻 `/go` 下一条时做；非紧凑流程则保持 "In Progress" 为空，等下次 `/go` 启动时再移
 5. 同步刷新索引段
 
-**任务废弃**：写一条 `logs/change_logs/` 记录废弃原因后，把整条**移到** `docs/todo_list_archived.md` 的 `## 废弃` 段（同样瘦身：标题 + 废弃原因 + log 链接）。同步刷新索引段。
+**任务废弃**：写一条 `logs/change_logs/` 记录废弃原因后，把整条**移到** `docs/todo_list_archived.md` 的 `## Abandoned` 段（同样瘦身：标题 + 废弃原因 + log 链接）。同步刷新索引段。
 
-**讨论转落地**：讨论中章节产生结论时，无论整体定案还是阶段性结论，都要立即把结果反映到对应章节——
-- **整体定案**：把条目从"讨论中"整条移到"下一步"，补全成完整任务（上下文 / 改动清单 / 完成标准 / 依赖）。同步刷新索引段
-- **部分定案**：把已定案的子任务单独拆出迁移到"下一步"（作为独立任务条目），未定案部分继续留在"讨论中"并更新上下文说明已拆分出去的部分。同步刷新索引段
-- **结论颠覆原假设**：若讨论结果反而证明某已在"下一步 / 正在执行"的任务不再必要，按"任务废弃"流程处理
+**讨论转落地**：Discussing 章节产生结论时，无论整体定案还是阶段性结论，都要立即把结果反映到对应章节——
+- **整体定案**：把条目从 "Discussing" 整条移到 "Next"，补全成完整任务（上下文 / 改动清单 / 完成标准 / 依赖）。同步刷新索引段
+- **部分定案**：把已定案的子任务单独拆出迁移到 "Next"（作为独立任务条目），未定案部分继续留在 "Discussing" 并更新上下文说明已拆分出去的部分。同步刷新索引段
+- **结论颠覆原假设**：若讨论结果反而证明某已在 "Next / In Progress" 的任务不再必要，按"任务废弃"流程处理
 
-### 如何维护索引
+### Index maintenance
 
-文件顶部 `## 索引（自动生成，勿手改）` 段是三张子表的缓存。**每次对正文条目增 / 改 / 移段 / 完成 / 废弃**后必须刷新这一段；`/todo` skill 不解析正文，只读这一段。
+文件顶部 `## Index (auto-generated; do not hand-edit)` 段是三张子表的缓存。**每次对正文条目增 / 改 / 移段 / 完成 / 废弃**后必须刷新这一段；`/todo` skill 不解析正文，只读这一段。
 
 **触发时机**：以下任一发生时刷新：
 
 - 添加新任务条目
 - 修改现有条目的：标题、上下文摘要、依赖、待决策项、改动清单文件数、是否触及 schema / 架构 / 多 phase
-- 任务移段：讨论中 → 下一步、下一步 → 正在执行、正在执行 → 归档、任意 → 废弃归档
-- 任务在"正在执行"段内的"当前状态"变化（进行中 / 等用户决策 / 暂停）
+- 任务移段：Discussing → Next、Next → In Progress、In Progress → archived、任意 → archived（abandoned）
+- 任务在 "In Progress" 段内的"当前状态"变化（进行中 / 等用户决策 / 暂停）
 
 **三张子表的列定义**：
 
-**正在执行**
+**In Progress**
 
 | 列 | 取值 |
 |---|---|
 | ID | 反引号包裹的 T-XXX slug |
-| 标题 | 方括号后的中文短语 |
-| 开始时间 | 条目里的 `**开始时间**` 字段，YYYY-MM-DD HH:MM EDT |
-| 当前状态 | 条目里的 `**当前状态**` 字段：进行中 / 等用户决策 / 暂停 |
+| Title | 方括号后的中文短语 |
+| Start time | 条目里的 `**开始时间**` 字段，YYYY-MM-DD HH:MM 时区缩写 |
+| Status | 条目里的 `**当前状态**` 字段：进行中 / 等用户决策 / 暂停 |
 
-**下一步**
-
-| 列 | 取值 |
-|---|---|
-| ID | 反引号包裹的 T-XXX slug |
-| 简介 | 上下文段首句 + 1-2 句关键背景，**总长 ≤ 150 字**；去掉 markdown 链接的反引号让表格不破，但保留 `[text](url)` 形式 |
-| 重要 | 🔴 高 / 🟢 中低（推断规则见下） |
-| 立即可做 | ✅ 可 /go / 💬 需先讨论 / ⏸ 被阻塞（推断规则见下） |
-| 改动规模 | 🟢 少量 / 🟡 中量 / 🔴 大量·架构级 / —（推断规则见下） |
-| 依赖 | 条目"**依赖**"段首句 |
-
-**讨论中**
+**Next**
 
 | 列 | 取值 |
 |---|---|
 | ID | 反引号包裹的 T-XXX slug |
-| 简介 | 同上，≤ 150 字 |
-| 待决策项数 | 数 `**待决策项**` 段下的列表条目数；缺该段 → 0 |
-| 阻塞依赖 | "**依赖**"段首句 |
+| Brief | 上下文段首句 + 1-2 句关键背景，**总长 ≤ 150 字**；去掉 markdown 链接的反引号让表格不破，但保留 `[text](url)` 形式 |
+| Importance | 🔴 High / 🟢 Med-Low / 🟡 Medium（推断规则见下） |
+| Ready | ✅ Ready / 💬 Discuss first / ⏸ Blocked（推断规则见下） |
+| Scope | 🟢 Small / 🟡 Medium / 🔴 Large·Arch / —（推断规则见下） |
+| Deps | 条目"**依赖**"段首句 |
+
+**Discussing**
+
+| 列 | 取值 |
+|---|---|
+| ID | 反引号包裹的 T-XXX slug |
+| Brief | 同上，≤ 150 字 |
+| Open decisions | 数 `**待决策项**` 段下的列表条目数；缺该段 → 0 |
+| Blocked by | "**依赖**"段首句 |
 
 **字段推断规则**（确定性，不要灵活发挥）：
 
-**重要等级**（仅用于"下一步"段；正在执行段不显示，讨论中段不显示）
+**Importance**（仅用于 "Next" 段；In Progress 段不显示，Discussing 段不显示）
 
 | 等级 | 触发条件 |
 |---|---|
-| 🔴 高 | 段落 = 下一步 且 用户曾标注高优先 / 阻塞其他任务 |
-| 🟢 中低 | 段落 = 下一步 且（依赖 blocked 或 待决策项 ≥ 2 或 用户未明确高优先） |
+| 🔴 High | 段落 = Next 且 用户曾标注高优先 / 阻塞其他任务 |
+| 🟢 Med-Low | 段落 = Next 且（依赖 blocked 或 待决策项 ≥ 2 或 用户未明确高优先） |
 
-**立即可做性**
+**Ready**
 
 | 标签 | 触发条件 |
 |---|---|
-| ✅ 可 /go | 依赖 ready 且 待决策项 = 0 |
-| 💬 需先讨论 | 待决策项 ≥ 1 |
-| ⏸ 被阻塞 | 依赖中含具体阻塞名（外部 CLI、未实装模块、未发生事件 等） |
+| ✅ Ready | 依赖 ready 且 待决策项 = 0 |
+| 💬 Discuss first | 待决策项 ≥ 1 |
+| ⏸ Blocked | 依赖中含具体阻塞名（外部 CLI、未实装模块、未发生事件 等） |
 
 优先级：⏸ > 💬 > ✅。同时满足"待决策 ≥ 1"和"被阻塞"时取 ⏸。
 
-**改动规模**
+**Scope**
 
 | 规模 | 触发条件 |
 |---|---|
-| 🟢 少量 | 改动清单 ≤ 2 文件 且 不动 schema / 不动接口 / 单点修复 |
-| 🟡 中量 | 改动清单 3–6 文件 或 涉及多函数协作 / 单模块内重构；不触发架构层调整 |
-| 🔴 大量·架构级 | 改动清单 ≥ 7 文件 或 触及任一：新增 Phase / 改 schema 字段 / 改核心接口 / 跨模块协议变更 / 引入新依赖 / 影响多 work 流程 |
-| — | 缺「改动清单」段（多见于"讨论中"未拆解的条目）；备注"未拆解，规模待评估" |
+| 🟢 Small | 改动清单 ≤ 2 文件 且 不动 schema / 不动接口 / 单点修复 |
+| 🟡 Medium | 改动清单 3–6 文件 或 涉及多函数协作 / 单模块内重构；不触发架构层调整 |
+| 🔴 Large·Arch | 改动清单 ≥ 7 文件 或 触及任一：新增 Phase / 改 schema 字段 / 改核心接口 / 跨模块协议变更 / 引入新依赖 / 影响多 work 流程 |
+| — | 缺「改动清单」段（多见于 "Discussing" 未拆解的条目）；备注"未拆解，规模待评估" |
 
 **简介撰写要求**：首句必含核心信息；再补 1–2 句关键背景（痛点 / 关键文件 / 实测数据 / 触发原因之一），让用户不点开正文也知道这是个什么事、为什么值得做。**总长 ≤ 150 字**——超过宁可砍背景也要保住首句。
 
-**汇总行**：三张表后打印一行：`共 N 条 — 🟢 正在执行 a ｜ 🟡 下一步 b ｜ ⚪ 讨论中 c`。
+**汇总行**：三张表后打印一行：`Total: N — 🟢 In Progress a ｜ 🟡 Next b ｜ ⚪ Discussing c`。
 
-### 读取时机
+### When to read
 
 - 用户问及待办 / 即将做什么 / 接下来该做什么 → `/todo` skill（只读索引段）
 - 开始任意改动前 **先查一次**，避免重复规划
@@ -185,13 +185,13 @@
 
 ---
 
-## 正在执行
+## In Progress
 
-_（空——`/go` 启动任务时会从"下一步"段移入。同时只能 1 条。）_
+_(empty — `/go` will move an entry here from "Next" when starting. Single slot.)_
 
 ---
 
-## 下一步
+## Next
 
 ### [T-PHASE35-IMPORTANCE-AWARE] Phase 3.5 一致性检查按 importance 调门槛
 
@@ -401,7 +401,7 @@ validation + repair_agent），当 repair_agent 走到 T3 全文件 LLM regen
 
 **完成标准**
 
-- README 存在，9 节字段全覆盖，含每节"完整填值 / `（无）` / 缺失"
+- README 存在，9 节字段全覆盖，含每节"完整填值 / `(none)` / 缺失"
   三态在各 skill 中的具体行为表
 - 拿一个新项目模拟接入：跟着 README 填 skills_config.md → 跑 `/commit`
   / `/full-review` 都能正常降级或运行
@@ -410,7 +410,7 @@ validation + repair_agent），当 repair_agent 走到 T3 全文件 LLM regen
 
 ---
 
-## 讨论中（未定案）
+## Discussing (Undecided)
 
 ### [T-REPAIR-EVENT-DRIVEN] Repair 事件驱动 · extract→repair overlap（E2）
 

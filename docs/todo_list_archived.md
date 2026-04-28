@@ -2,14 +2,14 @@
 
 ---
 
-## 文件说明
+## File guide
 
-### 用途
+### Purpose
 
 接收从 `docs/todo_list.md` 移走的两类任务条目：
 
-- **已完成**：包括完整完成、部分完成、改方案后完成
-- **废弃**：包括方案被颠覆、外部前提消失、合并到其他任务等
+- **Completed**：包括完整完成、部分完成、改方案后完成
+- **Abandoned**：包括方案被颠覆、外部前提消失、合并到其他任务等
 
 `docs/todo_list.md` 是**正在做和将来做**的事，本文件是**已经做完和决定不做**的事。两者互不重叠，原 todo 条目移过来后从源文件删除。
 
@@ -26,7 +26,7 @@
 
 ### 条目格式
 
-#### 已完成段
+#### Completed 段
 
 ```markdown
 ### [T-XXX] 中文标题 · 完成于 YYYY-MM-DD · {完整 / 部分 / 改方案后} 完成
@@ -42,7 +42,7 @@
 - **部分完成**：核心达成、留下次要尾巴；尾巴**必须作为新 todo 条目**重新登记到 `todo_list.md`，本归档行的摘要里标"尾巴去 T-YYY"
 - **改方案后完成**：方案与原 todo 不同（更优 / 受新约束影响 / 实测后调整），但目的达成；摘要里 1 句话说清"原方案 vs 实际方案"
 
-#### 废弃段
+#### Abandoned 段
 
 ```markdown
 ### [T-YYY] 中文标题 · 废弃于 YYYY-MM-DD
@@ -66,12 +66,12 @@
 ### 读取时机
 
 - 用户问"X 这件事我们之前做过 / 讨论过吗？" → 先在本文件 grep ID / 关键词
-- 用户问"为什么不做 Y？" → 在"废弃"段查 → 引到对应 change_log
+- 用户问"为什么不做 Y？" → 在 Abandoned 段查 → 引到对应 change_log
 - 默认不主动加载（不进入 session 启动序列）
 
 ---
 
-## 已完成
+## Completed
 
 ### [T-CHAR-SNAPSHOT-13-DIM-VERIFY] 角色 stage_snapshot "13 必填维度" 表述核对 · 完成于 2026-04-27 · 改方案后完成
 
@@ -80,6 +80,6 @@
 
 ---
 
-## 废弃
+## Abandoned
 
-_（暂无条目。第一个废弃的任务从 `todo_list.md` 移过来时按上方"废弃段"格式追加到本节顶部。）_
+_(empty — first abandoned entry moved from `todo_list.md` should follow the Abandoned-段 format and prepend to this section.)_

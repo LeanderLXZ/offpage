@@ -1,8 +1,8 @@
 # /todo-list — todo_list 索引展示（别名 `/todo`）
 
-直接读 `docs/todo_list.md` 顶部 `## 索引（自动生成，勿手改）` 段并原样渲染给用户，末尾问一句"想看哪条？"。**只读**——不解析正文、不重新分档、不生成建议、不改 todo_list、不改代码、不 commit。`$ARGUMENTS` 可选作为 ID 关键字过滤（如 `schema` 只显示 ID 含 schema 的条目）；不传则全展示。
+直接读 `docs/todo_list.md` 顶部 `## Index (auto-generated; do not hand-edit)` 段并原样渲染给用户，末尾问一句"想看哪条？"。**只读**——不解析正文、不重新分档、不生成建议、不改 todo_list、不改代码、不 commit。`$ARGUMENTS` 可选作为 ID 关键字过滤（如 `schema` 只显示 ID 含 schema 的条目）；不传则全展示。
 
-索引段是确定性缓存，由维护 `docs/todo_list.md` 的人在改条目时同步刷新（规则在 todo_list.md 顶部的"如何维护索引"段）。`/todo-list` 信任索引、不重新解析。
+索引段是确定性缓存，由维护 `docs/todo_list.md` 的人在改条目时同步刷新（规则在 todo_list.md 顶部的 "Index maintenance" 段）。`/todo-list` 信任索引、不重新解析。
 
 `/todo` 是本 skill 的别名，等价于 `/todo-list`，输入任意一个都触发同一行为。
 
@@ -10,15 +10,15 @@
 
 ### 1. 读索引
 
-`Read` `docs/todo_list.md`，提取 `## 索引（自动生成，勿手改）` 段——从该标题起到下一个二级标题（`## 文件说明`）之前的全部内容。
+`Read` `docs/todo_list.md`，提取 `## Index (auto-generated; do not hand-edit)` 段——从该标题起到下一个二级标题（`## File guide`）之前的全部内容。
 
 文件不存在 → 打印"⚠️ docs/todo_list.md 缺失"并停手。
-索引段缺失（找不到该标题） → 打印"⚠️ docs/todo_list.md 顶部缺索引段；请先按 todo_list.md「如何维护索引」段补齐再调 /todo-list"并停手。
-索引段存在但三张子表都标"_（无）_" → 仍正常渲染，只是显示"暂无任何任务"。
+索引段缺失（找不到该标题） → 打印"⚠️ docs/todo_list.md 顶部缺索引段；请先按 todo_list.md 「Index maintenance」段补齐再调 /todo-list"并停手。
+索引段存在但三张子表都标 "_(none)_" → 仍正常渲染，只是显示"暂无任何任务"。
 
 ### 2. 过滤（可选）
 
-若 `$ARGUMENTS` 传入：在三张子表中保留 ID 含该关键字（不区分大小写）的行；其他行删除。过滤后某段为空时保留段标题但写"_（无匹配条目）_"。
+若 `$ARGUMENTS` 传入：在三张子表中保留 ID 含该关键字（不区分大小写）的行；其他行删除。过滤后某段为空时保留段标题但写 "_(no matching entries)_"。
 
 不传 `$ARGUMENTS` → 全展示。
 
@@ -26,7 +26,7 @@
 
 把索引段内容直接打印给用户。markdown 表格保留原样，不重排、不重判、不补建议。
 
-`$ARGUMENTS` 过滤过的话，在汇总行末尾加一行 `（已按关键词 "<keyword>" 过滤）`。
+`$ARGUMENTS` 过滤过的话，在汇总行末尾加一行 `(filtered by keyword "<keyword>")`。
 
 ### 4. 提问 + 停手
 
@@ -42,7 +42,7 @@
 
 - **只读**：不改任何文件、不 commit、不 push
 - **不解析正文**：信任索引段。索引若与正文不一致，那是上一次改 todo_list 的人没刷新索引——这是写入端的责任，不是 `/todo-list` 的责任
-- **不重新分档**：不重新推断"重要 / 立即可做 / 改动规模"。这些标签由维护索引的规则决定，规则在 `docs/todo_list.md` 的"如何维护索引"段
+- **不重新分档**：不重新推断 "Importance / Ready / Scope"。这些标签由维护索引的规则决定，规则在 `docs/todo_list.md` 的 "Index maintenance" 段
 - **不生成建议**：之前版本会给"建议 1: 直接 /go XXX、建议 2: 讨论 YYY、建议 3: 聊聊别的"——现在删掉。用户看完索引自己决定即可
 - **逃生口仍在**：第 4 步的提问明确"或者说点别的"，让用户随时跳出 todo_list
 - **`$ARGUMENTS` 仅作过滤**：不接受"展开 T-XXX 详情"等指令；要看详情用户会自己 Read todo_list.md 或说"展开 T-XXX"，那是另一轮交互
