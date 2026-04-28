@@ -1,11 +1,24 @@
 ---
 name: commit
-description: 快速确认并提交当前改动 — 校验 working tree 有效性、分支正确性、追踪状态（禁提路径/大文件/未跟踪文件），按逻辑单元分 commit，message 风格对齐仓库惯例；commit 后列出所有本地分支同步状态，询问是否 forward/merge 到其他分支（不擅自展开）。不做 ai_context/docs 对齐（那是 /go 范围），不 push / 不 force / 不 amend。用户说"commit 一下"、"提交当前改动"、"/commit" 时触发。
+description: 快速确认并提交当前改动 — 校验 working tree 有效性、分支正确性、追踪状态（禁提路径/大文件/未跟踪文件），按逻辑单元分 commit，message 风格对齐仓库惯例。$ARGUMENTS 同时承担两个角色：含 sync 触发词（同步 / sync / auto-sync / --sync）→ 进入 auto-sync 模式（跳过询问，直接 forward 到所有未同步、无进程、非 dirty 的本地分支，跳过有进程/dirty/冲突分支）；剩余文本作为 commit message 主题。无触发词时是普通模式（询问用户再 forward）。不做 ai_context/docs 对齐（那是 /go 范围），不 push / 不 force / 不 amend。用户说"commit 一下"、"提交当前改动"、"commit 同步"、"commit sync"、"/commit" 时触发。
 ---
 
 # /commit — 快速确认并提交当前改动
 
-对当前 working tree 做一次轻量校验，确认改动有效、分支正确、追踪状态无误后 commit；完成后询问是否把改动 forward / merge 到其他分支。**不做全仓 review、不动 ai_context / docs 对齐**（那是 `/go` 的事）。`$ARGUMENTS` 存在则作为 commit message 的提示 / 主题。
+对当前 working tree 做一次轻量校验，确认改动有效、分支正确、追踪状态无误后 commit；完成后询问是否把改动 forward / merge 到其他分支。**不做全仓 review、不动 ai_context / docs 对齐**（那是 `/go` 的事）。
+
+## `$ARGUMENTS` 解析
+
+`$ARGUMENTS` 同时承担两个角色，按以下规则解析：
+
+1. **sync 触发词**（不区分大小写）：`同步` / `sync` / `auto-sync` / `--sync`。
+   出现任意一个（作为独立词或单独 token）→ 进入 **auto-sync 模式**：跳过
+   Step 4 的询问，直接把本次 commit forward 到所有未同步、当前没有运行
+   进程、且非 dirty 的本地分支
+2. **其余文本**：作为 commit message 的提示 / 主题（参见 Step 3）
+
+解析时把 sync 触发词从原始 `$ARGUMENTS` 中**剥离**，剩余部分才是消息提示。
+都没有时（`$ARGUMENTS` 为空）→ 普通模式 + 由 diff 自动归纳消息。
 
 ## 0. 改动有效性
 
@@ -30,17 +43,32 @@ description: 快速确认并提交当前改动 — 校验 working tree 有效性
 
 - 按逻辑单元分 commit（若单次改动跨多个独立主题）；一次别塞太多
 - message 风格对照 `git log --oneline -10`，保持仓库惯例（中英文 / prefix / 动词时态）
-- `$ARGUMENTS` 存在则以此为主题扩写；否则根据 diff 归纳
+- 解析后剩余的 `$ARGUMENTS` 文本（已剥离 sync 触发词）存在则以此为主题扩写；否则根据 diff 归纳
 - 执行 `git add <具体文件>` + `git commit`（**不用 `git add -A` / `git add .`**，避免误入敏感文件）
 - commit 后 `git status` 确认干净
 
-## 4. Forward / Merge 询问
+## 4. Forward / Merge
 
 - `git branch --format='%(refname:short)'` 列出所有本地分支
-- 对每个非当前分支，用 `git merge-base --is-ancestor <当前分支> <branch>` 判断是否已含本次 commit
-- 输出一个简表：`{branch} | 已同步 / 未同步 | 状态（有进程 / 干净）`
+- 对每个非当前分支，用 `git merge-base --is-ancestor <当前分支> <branch>` 判断是否已含本次 commit；并探测该分支是否有运行中进程（`pgrep -af persona_extraction` / 看 `works/*/analysis/progress/*.pid`）/ 是否 dirty（`git -C <path> status` 等价手段）
+- 输出一个简表：`{branch} | 已同步 / 未同步 | 状态（有进程 / 干净 / dirty）`
+
+**普通模式**（默认）：
+
 - **问用户**：是否需要把本次 commit forward / merge 到未同步的分支？列出候选分支，等回答；不要擅自切分支合并
 - 用户指定要同步的分支后：`git checkout <branch> && git merge <原分支>`；冲突先停手，让用户决定；合并完回原分支
+
+**auto-sync 模式**（`$ARGUMENTS` 含 sync 触发词）：
+
+- **跳过询问**，直接把本次 commit 同步到所有满足以下全部条件的分支：
+  - 未同步（`git merge-base --is-ancestor` 返回非 0）
+  - 没有运行中进程（如 `extraction/*` lane 当前没在跑）
+  - 工作树干净
+- 对每个候选分支：`git checkout <branch> && git merge <原分支>`；合并完成后继续下一个；末尾回到原分支
+- 跳过的分支（有进程 / dirty / 合并冲突）→ 各自打一行说明，**不停手问**，继续处理后续分支
+- 合并冲突仍是唯一允许停手的情况——冲突分支需要用户人工介入，但其他干净分支应已先合完
+
+打印同步结果表：每个非当前分支（已同步 / 已合并 / 跳过原因 / 冲突待处理）+ 当前 HEAD 所在分支。
 
 ## 约束
 
@@ -48,7 +76,8 @@ description: 快速确认并提交当前改动 — 校验 working tree 有效性
 - 不 `git push`、不 `--force`、不 `--amend`（除非用户明确要求）
 - 不 `git add -A`；逐文件加
 - 发现可疑（禁提路径、巨型 diff、分支不对、有未解决冲突）→ 停手问，不绕过
-- forward / merge 必须经用户确认，不擅自展开
+- forward / merge 在普通模式下必须经用户确认；**auto-sync 模式**（`$ARGUMENTS` 含 `同步` / `sync` / `auto-sync` / `--sync`）才允许跳过询问直接同步，仍跳过有进程 / dirty / 冲突的分支
+- auto-sync 仅作用于本地分支；**永不 push**
 
 ---
 
