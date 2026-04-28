@@ -34,6 +34,8 @@
 
 读 `ai_context/conventions.md` 的 Cross-File Alignment 表；对照本次触及的每个维度（需求 / schema / prompt / code / 架构 / ai_context / README / 目录结构），列出**本应一起被改**的文件集合。这份集合同时喂给轨 1（对账 Missed Updates）和轨 2（扩散起点）。
 
+该表不存在时：跳过本步的对账输入，轨 1 仅用 PRE 计划清单 + 实际 diff 对账（Missed Updates 退化为"PRE 列了但没改"的子集），轨 2 扩散起点仅用本次 diff 触及文件 + 上下游引用。
+
 ## 3. 并行 sub-agent 双轨审计线
 
 改动面小就单线跑；跨模块或跨层时并行派 sub-agent，三条线各自同时承担双轨：

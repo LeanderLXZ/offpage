@@ -75,7 +75,7 @@ PRE 段必须包含：
 更新相关节，含流程图 / 示例。**新增流程图 / 示例仅当现有内容无法覆盖新逻辑时**，避免冗余。**按 skills_config.md `## Sensitive content placeholder rules` 用占位符替换真实内容**（该节留空则跳过该项扫描）；描述只写当前设计，不写"旧 / legacy / 已废弃 / 原为"。同步 `ai_context/requirements.md` + `decisions.md`。
 
 ## 4. 核心实现
-按讨论改 schema、prompt template、架构代码、配置。对照 `ai_context/conventions.md` 的 Cross-File Alignment 表列出连带文件。
+按讨论改 schema、prompt template、架构代码、配置。对照 `ai_context/conventions.md` 的 Cross-File Alignment 表列出连带文件（该表不存在则跳过本项，仅按本次改动直觉判断）。
 
 ## 5. 轻量测试（仅有代码 / schema 变更时）
 Import 检查 + 关键函数 smoke test；schema 改动跑 `jsonschema` 校验。有错立即修。
