@@ -134,7 +134,7 @@
     },
     "stage_events": {
       "type": "array",
-      "description": "仅本阶段发生的关键事件清单（不累积历史），每条为 50–80 字的一句话摘要。历史跨阶段视图由 world_event_digest / memory_timeline 提供。",
+      "description": "**该角色相关的本阶段关键事件**清单（不累积历史），每条为 50–80 字的一句话摘要。归属判定：① 该角色亲历 / 亲为 / 在场 / 直接影响其处境或认知的事件才写入；② 其他角色之间的私事、与该角色无关的对话或经济活动一律不写入；③ 世界级公共事件（势力变迁、boss 复活、天灾、奇观等）由 world `stage_events` 承载，**不要直接复制世界层文本**——仅当该角色亲历该世界事件时，才以**角色视角**重写一条进入此清单（角色看到 / 经历 / 应对的是什么）。历史跨阶段视图由 memory_timeline / memory_digest / world_event_digest 提供。",
       "maxItems": 15,
       "items": { "type": "string", "minLength": 50, "maxLength": 80 }
     },

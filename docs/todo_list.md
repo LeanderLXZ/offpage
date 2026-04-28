@@ -18,7 +18,7 @@
 |---|---|---|---|---|---|
 | `T-PHASE35-IMPORTANCE-AWARE` | [consistency_checker.py:96-117](../automation/persona_extraction/consistency_checker.py#L96-L117) 已构造 importance_map 但只 _check_target_map_counts 用上；其他 8 个 _check_* 一刀切，对次要配角的 field_completeness / relationship_continuity 过度报错。decisions.md #15 已定 bound 因 importance 而异。 | 🟢 中低 | 💬 需先讨论 | 🟡 中量 | 无（触发自 2026-04-27 opus-4-7 review L-3） |
 
-### ⚪ 讨论中（6 条）
+### ⚪ 讨论中（7 条）
 
 | ID | 简介 | 待决策项数 | 阻塞依赖 |
 |---|---|---|---|
@@ -28,8 +28,9 @@
 | `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
+| `T-LOAD-STRATEGY-WORLD-EVENTS-BOUND` | [load_strategy.md:17](../simulation/retrieval/load_strategy.md#L17) world `stage_events` summary 写的 `50–80 chars`，但 schema 与 decisions 27h 实际是 `50–100`。stage_events 边界强化扫描时发现的旧值漂移，独立小修。 | 0 | 无 |
 
-**汇总**：共 7 条 — 🟢 正在执行 0 ｜ 🟡 下一步 1 ｜ ⚪ 讨论中 6
+**汇总**：共 8 条 — 🟢 正在执行 0 ｜ 🟡 下一步 1 ｜ ⚪ 讨论中 7
 
 ---
 
@@ -467,5 +468,40 @@ T-LOG 已落地：[llm_backend.py:565-680](../automation/persona_extraction/llm_
 - 不提前补 schema，避免与后续 loader 字段收敛方案冲突
 
 **依赖**：simulation runtime loader 选型 / 设计定稿
+
+---
+
+### [T-LOAD-STRATEGY-WORLD-EVENTS-BOUND] load_strategy.md world stage_events 长度旧值漂移
+
+**上下文**
+
+`stage_events` 边界强化扫描（2026-04-27）时发现：
+[simulation/retrieval/load_strategy.md:17](../simulation/retrieval/load_strategy.md#L17)
+描述 world `stage_events` summary 时写的是 `50–80 chars, hard schema gate`，
+但实际 schema [`world_stage_snapshot.schema.json` `stage_events.items`](../schemas/world/world_stage_snapshot.schema.json) 是
+`minLength: 50, maxLength: 100`，对应 ai_context [decisions.md
+§27h](../ai_context/decisions.md) 明文记录："stage_events widened from
+50–80 to 50–100 CJK chars"。
+
+不影响实际抽取（schema 才是权威 enforcement）；但 load_strategy.md 是
+runtime 加载策略的描述性文档，被引用为「Tier 0 大小估算」依据时会让
+读者误算上限。
+
+**改动清单**
+
+- [simulation/retrieval/load_strategy.md:17](../simulation/retrieval/load_strategy.md#L17)
+  `50–80 chars` → `50–100 chars`
+
+**完成标准**
+
+- 该行字面值改成 `50–100 chars`
+- `grep -rn "50–80" simulation/ docs/` 复查 world `stage_events` 上下文
+  无其他遗漏
+
+**待决策项**
+
+无（事实性修正，无方案选择）
+
+**依赖**：无
 
 ---
