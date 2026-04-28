@@ -212,3 +212,27 @@ plan / check-review / CLAUDE.md / AGENTS.md / instructions.md。
 
 - **Status**: DONE
 - **Finished**: 2026-04-28 18:34:44 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：11/11 计划项 + 9/9 验证标准
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=0 / Low=0
+- Open Questions: 0 条
+
+## 复查时状态
+- **Reviewed**: 2026-04-28 18:46:24 EDT
+- **Status**: REVIEWED-PASS
+  - 轨 1 全落实（PRE 计划项 + 9/9 验证标准）；轨 2 无 H/M/L Findings
+- **Conversation ref**: 同会话内 /post-check 输出
+
+Residual Risks（仅 cosmetic，不阻塞）：
+- conventions.md L48 把 9 个 skills_config 节压成 8 个 anchor 短语
+  （source + example-artifact 合并）；语义完整，仅 plugin 用户字面
+  数节时可能少 1
+- todo_list.md L7 索引段说明的叙述行仍含中文动词；PRE 明示保留
