@@ -4,6 +4,18 @@
 
 这不是全仓 review（那是 `/full-review`），只针对这次 `/go` 触及的细节。`$ARGUMENTS` 存在则作为本轮 log 文件 slug 精确匹配；否则取 `logs/change_logs/` 按 filename 时间戳最新的一份作为 intent 基线。
 
+## 0a. 加载配置
+
+`Read` `ai_context/skills_config.md`。
+
+- 文件不存在 / 某节标题缺失 → fail loudly：打印缺失项 + 提示按 plugin 模板补全，停手
+- 某节内容 `（无）` 或留空 → 跳过该节相关步骤（视为本项目无此项）
+- 某节列了具体路径但路径不存在 → fail loudly：提示该节漂移到不存在路径，停手等用户修
+
+后续步骤出现 "skills_config.md `## XX`" 时引用本配置。本 skill 用到：
+`## 示例产物目录`（轨 2 产物结构线）、`## 敏感内容占位规则`（轨 2 残留检查）、
+`## 保护分支前缀`（Step 4 commit 分支提示）。
+
 ## 0. 界定本次改动范围
 
 - `git log --oneline -n 10` + `git status` 判断 `/go` 产出的 commit 区间（一般是最近 1–N 个）；改动若未提交则用 working tree 快照
@@ -27,7 +39,7 @@
 
 1. **规范线**：`docs/requirements.md` / `docs/architecture/` / `ai_context/` / `schemas/` / `prompts/` —— 描述 vs. 本次改动是否一致，有无残留旧描述 / 旧字段 / 旧流程
 2. **实现线**：本次改过的代码 + 其上下游（调用方 / 被调用方 / 导入方）—— 字段名 / 参数 / 返回值 / 状态机 / 门控 / 异常路径是否连贯，import 是否还能跑
-3. **产物与结构线**：本次是否影响 `works/` / `users/_template/` 的样例、相关 README 展示、目录结构；若改了目录或文件名，追查所有引用点
+3. **产物与结构线**：本次是否影响 skills_config.md `## 示例产物目录` 列出的目录里的样例、相关 README 展示、目录结构；若改了目录或文件名，追查所有引用点。该节 `（无）` / 留空时跳过本线
 
 > **派出的每个 sub agent 都必须先重读 intent 基线 PRE log**：把 Step 0.5 读到的 log 路径塞进它的 prompt，并**明示要求它开工前先读完 PRE 的"结论与决策 / 计划动作清单 / 验证标准 / 执行偏差"**，再按本条线的范围扫描。sub agent 是独立 context，不强制它读 PRE 就只会按 prompt 里的 brief 空转，容易脱离本次 intent；对账与扩散判断都必须扎根在 PRE log 上。
 
@@ -38,7 +50,7 @@
 - **跨文件不一致**：同一字段 / 概念在 schema / 代码 / 文档 / prompt 里命名与定义是否一致
 - **歧义**：需求 / 架构描述里对新行为是否存在两种读法
 - **冲突**："文档说 A，代码做 B，样例又是 C" 是否出现
-- **残留旧逻辑 / legacy 措辞**：有无描述旧流程的段落、被替换的字段、失效的 import、死分支；顺查本次触及的 docs / prompts / ai_context 有没有混入真实书名 / 角色 / 剧情 或 `旧 / legacy / 已废弃 / 原为` 字样
+- **残留旧逻辑 / legacy 措辞**：有无描述旧流程的段落、被替换的字段、失效的 import、死分支；顺查本次触及的 docs / prompts / ai_context 有没有违反 skills_config.md `## 敏感内容占位规则` 的真实内容，或 `旧 / legacy / 已废弃 / 原为` 字样
 - **bug / 行为风险**：新代码在边界条件、空值、异常路径下会不会崩；状态机 / 门控 / 重试 / 回滚是否有漏口
 - **README / 目录结构**：新增 / 删除 / 改名的文件是否同步到相关 README 与目录说明
 - **ai_context 漂移**：本次的 durable 决策是否已落 `ai_context/decisions.md` / `current_status.md` / `next_steps.md`；handoff 是否需要更新
@@ -75,7 +87,7 @@ log 缺失时：打印"⚠️ 无 log 可回写，复查结论仅在对话中保
 
 回写完成后**立即 commit 这一份 log 文件**——不要留作脏工作区，否则下一轮 `/go` 的 Step 0 自动锁定逻辑会把这份残留误判为"dirty 工作区"而强制走 worktree 路径，形成"上轮 log 回写在干扰下一轮开发"的副作用。
 
-- commit 在**当前分支**即可（`/post-check` 通常运行于 extraction 分支或 main，无需切换）
+- commit 在**当前分支**即可（`/post-check` 通常运行于主分支或 skills_config.md `## 保护分支前缀` 列出的长跑分支，无需切换）
 - 仅 `git add` 这一份 log 文件——不要顺手把其他无关 dirty 文件带进 commit
 - commit message 风格对齐既有先例：`log({slug}): /post-check 复查结论回写 REVIEWED-PASS|PARTIAL|FAIL`
 - 不 push，不切分支；commit 后立刻进入 Step 5

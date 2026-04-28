@@ -45,6 +45,7 @@ When a concept changes, update every file in its row:
 | Runtime prompts | `simulation/prompt_templates/`, `simulation/` |
 | Any durable decision | `ai_context/decisions.md` |
 | `/go` or `/post-check` run | `logs/change_logs/` PRE / POST / REVIEW segments all present |
+| Project-specific anchors used by skills (background processes, protected branch prefix, main-branch policy, do-not-commit paths, source / example-artifact directories, core-component keywords, sensitive-content rules, timezone) | `ai_context/skills_config.md` corresponding section |
 
 After any change, grep for the old phrasing to catch stale references.
 

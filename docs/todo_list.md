@@ -12,13 +12,14 @@
 |---|---|---|---|
 | _（无）_ | | | |
 
-### 🟡 下一步（3 条）
+### 🟡 下一步（4 条）
 
 | ID | 简介 | 重要 | 立即可做 | 改动规模 | 依赖 |
 |---|---|---|---|---|---|
 | `T-PHASE35-IMPORTANCE-AWARE` | [consistency_checker.py:96-117](../automation/persona_extraction/consistency_checker.py#L96-L117) 已构造 importance_map 但只 _check_target_map_counts 用上；其他 8 个 _check_* 一刀切，对次要配角的 field_completeness / relationship_continuity 过度报错。decisions.md #15 已定 bound 因 importance 而异。 | 🟢 中低 | 💬 需先讨论 | 🟡 中量 | 无（触发自 2026-04-27 opus-4-7 review L-3） |
 | `T-REPAIR-T3-LIFECYCLE-RESET` | T3 触发后开新 repair lifecycle，单文件最多 2 个 lifecycle。第一轮 T3 prompt 带 prior_attempt_context（已修+未修摘要 ~200 token），跑完直接进第二轮（不做 Post-T3 check / 不走第一轮 L3 gate）。第二轮全新 Phase A→B→C，禁用 T3，升 T3 即 T3_EXHAUSTED。Triage 两轮独立 cap=5。 | 🔴 高 | ✅ 可做 | 🟡 中量 | 无 |
 | `T-CHAR-SNAPSHOT-T3-REGEN-PATH` | char_snapshot T3 重生成走 3 sub-lane 并行 + 程序汇总（β 路径），保持「单一生成路径」原则。T-REPAIR-T3-LIFECYCLE-RESET 已定型 → T3 单文件最多 1 次 → β 的 token 成本上限 = ×3，可接受。 | 🟡 中 | 💬 需先讨论 | 🟡 中量 | char_snapshot 3 sub-lane 并行方案本身要先落地（未单独立条） |
+| `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 中低 | ✅ 可做 | 🟢 小量 | 无 |
 
 ### ⚪ 讨论中（7 条）
 
@@ -32,7 +33,7 @@
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
 | `T-LOAD-STRATEGY-WORLD-EVENTS-BOUND` | [load_strategy.md:17](../simulation/retrieval/load_strategy.md#L17) world `stage_events` summary 写的 `50–80 chars`，但 schema 与 decisions 27h 实际是 `50–100`。stage_events 边界强化扫描时发现的旧值漂移，独立小修。 | 0 | 无 |
 
-**汇总**：共 10 条 — 🟢 正在执行 0 ｜ 🟡 下一步 3 ｜ ⚪ 讨论中 7
+**汇总**：共 11 条 — 🟢 正在执行 0 ｜ 🟡 下一步 4 ｜ ⚪ 讨论中 7
 
 ---
 
@@ -374,6 +375,38 @@ validation + repair_agent），当 repair_agent 走到 T3 全文件 LLM regen
 - char_snapshot 3 sub-lane 并行方案本身要先落地（目前未单独立条；
   本条可与之合并为一个 epic）
 - T-REPAIR-T3-LIFECYCLE-RESET 方案已定型（无阻塞）
+
+---
+
+### [T-PLUGIN-README] 写 .agents/skills 的 plugin README
+
+**上下文**
+
+2026-04-28 把 6 个 skill（commit/go/full-review/post-check/monitor/check-review）
+里的项目专属 hardcode 抽到 `ai_context/skills_config.md`，新项目接 plugin
+只需复制 `.agents/skills/` + `.claude/commands/` + 在 ai_context 下填一份
+`skills_config.md` 即可跑。但目前 plugin 装上去后，新项目不知道去哪读
+"每节怎么填 / 缺失行为 / 模板"——这些信息散落在 skills_config.md 注释
+和各 skill 的 0a 段里，没有单一入口文档。
+
+**改动清单**
+
+- file: `.agents/skills/README.md`（新增）→ 列出 plugin 装上去后的 setup 流程：
+  1) 在目标项目 `ai_context/` 下创建 `skills_config.md` + 9 节模板
+  2) 每节字段语义、可空值约定、缺失行为
+  3) 每节由哪些 skill 用、怎么用
+  4) Cross-File Alignment 提醒
+- file: `ai_context/skills_config.md`（offpage 实例）→ 顶部加一行链接
+  "字段语义 / 模板 / 缺失行为详见 .agents/skills/README.md"
+
+**完成标准**
+
+- README 存在，9 节字段全覆盖，含每节"完整填值 / `（无）` / 缺失"
+  三态在各 skill 中的具体行为表
+- 拿一个新项目模拟接入：跟着 README 填 skills_config.md → 跑 `/commit`
+  / `/full-review` 都能正常降级或运行
+
+**依赖**：无（skills_config.md 已落地、6 skill 改造已完成）
 
 ---
 
