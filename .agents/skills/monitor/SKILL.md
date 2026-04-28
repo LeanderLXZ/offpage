@@ -1,18 +1,30 @@
 ---
 name: monitor
-description: 后台进程进度监控 — 以固定间隔（默认 5min，argument 可指定如 3min/10min）定期汇报 persona_extraction / simulation / 批量脚本的 PID、进度、错误、吞吐、ETA、异常。只读不改：发现问题先查清原因给信息+建议，不 kill、不重启、不改配置，等用户决定后再让 /go 执行。支持带场景说明（如 "phase 3 提取目标角色 X/Y"）定位关注点。用户说"监控一下"、"monitor 5min ..." 时触发。
+description: 后台进程进度监控 — 以固定间隔（默认 5min，argument 可指定如 3min/10min）定期汇报由 ai_context/skills_config.md `## 后台进程` 声明的进程（PID、进度、错误、吞吐、ETA、异常）。只读不改：发现问题先查清原因给信息+建议，不 kill、不重启、不改配置，等用户决定后再让 /go 执行。支持带场景说明定位关注点。`## 后台进程` 留空且 $ARGUMENTS 未指定临时目标 → 提示无可监控对象并停手。用户说"监控一下"、"monitor 5min ..." 时触发。
 ---
 
 # /monitor — 后台进程进度监控
 
-以固定间隔监控正在运行的后台任务（通常是 `persona_extraction` / simulation / 批量脚本），定期向用户汇报进度、错误、效率、预估完成时间。**只读不改**：发现问题先查清原因，向用户提供信息与建议，不着急动手。
+以固定间隔监控正在运行的后台任务，定期向用户汇报进度、错误、效率、预估完成时间。**只读不改**：发现问题先查清原因，向用户提供信息与建议，不着急动手。
 
 `$ARGUMENTS`：刷新间隔 + 可选场景说明。例：
 - `/monitor` → 默认 5 分钟
 - `/monitor 3min` → 3 分钟
-- `/monitor 5min 现在从 phase 3 开始跑提取，目标角色 X、Y，后台并行默认` → 5 分钟 + 场景上下文
+- `/monitor 5min 现在从某 phase 开始跑批量任务，目标 N 个，后台并行默认` → 5 分钟 + 场景上下文
+- `/monitor 5min pid=12345 logs=path/to/log` → 临时指定监控目标（skills_config.md `## 后台进程` 留空时用）
 
-解析规则：首个 token 形如 `{N}min` / `{N}s` / `{N}m` / 纯数字（按分钟） → 间隔；其余为场景描述。缺省 5 分钟。
+解析规则：首个 token 形如 `{N}min` / `{N}s` / `{N}m` / 纯数字（按分钟） → 间隔；其余为场景描述（含可能的临时 PID / 日志路径覆盖）。缺省 5 分钟。
+
+## 0a. 加载配置
+
+`Read` `ai_context/skills_config.md`。
+
+- 文件不存在 / 某节标题缺失 → fail loudly：打印缺失项 + 提示按 plugin 模板补全，停手
+- `## 后台进程` 内容 `（无）` 或留空：检查 `$ARGUMENTS` 是否提供临时 PID / 进程模式 / 日志路径；都没有则打印"本项目 skills_config.md `## 后台进程` 未声明、$ARGUMENTS 也未指定监控目标，monitor 无可监控对象，停手"并退出
+- 某节列了具体路径但路径不存在 → fail loudly：提示该节漂移到不存在路径，停手等用户修
+
+后续步骤出现 "skills_config.md `## XX`" 时引用本配置。本 skill 用到：
+`## 后台进程`（Step 1 进程盘点）、`## 时区`（Step 2 单轮 Timestamp）。
 
 ## 0. 场景登记
 
@@ -24,17 +36,16 @@ description: 后台进程进度监控 — 以固定间隔（默认 5min，argume
 
 首轮先盘点，之后每轮都刷一遍：
 
-- `pgrep -af persona_extraction`（或场景提到的其他脚本）列出 PID + 命令行
-- `works/*/analysis/progress/*.pid` / `works/*/analysis/progress/*.json` 看进度文件
-- `works/*/analysis/logs/` 最新一份日志 tail 若干行
-- simulation 场景加扫 `users/*/sessions/` / simulation 相关目录
+- 按 skills_config.md `## 后台进程` 的 pgrep 模式列出 PID + 命令行（叠加场景中提到的其他脚本 / `$ARGUMENTS` 临时指定）
+- 按 skills_config.md `## 后台进程` 的进程产物路径看 `.pid` / `.json` 进度文件
+- 按 skills_config.md `## 后台进程` 的进程日志路径取最新一份日志 tail 若干行
 - 用户指定的自定义路径优先
 
 ## 2. 单轮汇报内容
 
 每轮输出一个紧凑汇报块，字段固定：
 
-1. **Timestamp**：`TZ='America/New_York' date '+%H:%M:%S'`
+1. **Timestamp**：按 skills_config.md `## 时区` 的命令模板执行（仅取 HH:MM:SS 部分；该节缺失则 fallback 到 `date '+%H:%M:%S'` 系统时区）
 2. **Processes**：PID + 命令摘要 + 运行时长（`ps -o etime= -p <PID>`）；若某 PID 消失 → 标红 "gone"
 3. **Progress**：每个 work / 目标的当前阶段 / 完成比例（从 progress 文件或日志解析）
 4. **Errors**：近一轮日志里有没有 `ERROR` / `Traceback` / `failed` / `retry exhausted`；有则摘录关键行 + 文件路径 + 行号

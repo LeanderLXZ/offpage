@@ -20,6 +20,18 @@ description: 快速确认并提交当前改动 — 校验 working tree 有效性
 解析时把 sync 触发词从原始 `$ARGUMENTS` 中**剥离**，剩余部分才是消息提示。
 都没有时（`$ARGUMENTS` 为空）→ 普通模式 + 由 diff 自动归纳消息。
 
+## 0a. 加载配置
+
+`Read` `ai_context/skills_config.md`。
+
+- 文件不存在 / 某节标题缺失 → fail loudly：打印缺失项 + 提示按 plugin 模板补全，停手
+- 某节内容 `（无）` 或留空 → 跳过该节相关步骤（视为本项目无此项）
+- 某节列了具体路径但路径不存在 → fail loudly：提示该节漂移到不存在路径，停手等用户修
+
+后续步骤出现 "skills_config.md `## XX`" 时引用本配置。本 skill 用到：
+`## 禁提路径`（Step 2）、`## 后台进程`（Step 4 forward 进程检测）、
+`## 保护分支前缀`（Step 4 区分长跑分支）。
+
 ## 0. 改动有效性
 
 - `git status` + `git diff --stat` 看 working tree 与 index
@@ -34,7 +46,7 @@ description: 快速确认并提交当前改动 — 校验 working tree 有效性
 
 ## 2. 追踪状态
 
-- 扫禁提路径：`sources/` 原文、数据库文件、`.sqlite*`、embeddings、caches、真实 user packages（对照 `.gitignore` + `ai_context/conventions.md`）
+- 扫禁提路径：按 skills_config.md `## 禁提路径` 列表 +（`.gitignore` + `ai_context/conventions.md`）兜底
 - `git ls-files --others --exclude-standard` 看未跟踪文件，判断是否应该一并加入 / 加入 .gitignore / 留着
 - 大文件（>1MB）或二进制单独列出，请用户确认是否入库
 - 任一项可疑 → 停手问用户，不要擅自 `git add -A`
@@ -50,7 +62,7 @@ description: 快速确认并提交当前改动 — 校验 working tree 有效性
 ## 4. Forward / Merge
 
 - `git branch --format='%(refname:short)'` 列出所有本地分支
-- 对每个非当前分支，用 `git merge-base --is-ancestor <当前分支> <branch>` 判断是否已含本次 commit；并探测该分支是否有运行中进程（`pgrep -af persona_extraction` / 看 `works/*/analysis/progress/*.pid`）/ 是否 dirty（`git -C <path> status` 等价手段）
+- 对每个非当前分支，用 `git merge-base --is-ancestor <当前分支> <branch>` 判断是否已含本次 commit；并按 skills_config.md `## 后台进程` 探测该分支是否有运行中进程（pgrep 模式 + 进程产物路径）/ 是否 dirty（`git -C <path> status` 等价手段）。`## 后台进程` 留空时视为"无进程"
 - 输出一个简表：`{branch} | 已同步 / 未同步 | 状态（有进程 / 干净 / dirty）`
 
 **普通模式**（默认）：
@@ -62,7 +74,7 @@ description: 快速确认并提交当前改动 — 校验 working tree 有效性
 
 - **跳过询问**，直接把本次 commit 同步到所有满足以下全部条件的分支：
   - 未同步（`git merge-base --is-ancestor` 返回非 0）
-  - 没有运行中进程（如 `extraction/*` lane 当前没在跑）
+  - 没有运行中进程（按 skills_config.md `## 后台进程` 检测；`## 保护分支前缀` 列出的分支额外谨慎判断）
   - 工作树干净
 - 对每个候选分支：`git checkout <branch> && git merge <原分支>`；合并完成后继续下一个；末尾回到原分支
 - 跳过的分支（有进程 / dirty / 合并冲突）→ 各自打一行说明，**不停手问**，继续处理后续分支

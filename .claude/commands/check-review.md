@@ -24,7 +24,7 @@
 
 ## 2. 加载真相来源
 
-- `ai_context/`（conventions / requirements / current_status / architecture / decisions）
+- `ai_context/` 核心文件：conventions / requirements / current_status / architecture / decisions（如本项目 `ai_context/` 结构不同，则读所有 `.md` 文件作为兜底）
 - `docs/requirements.md`、`docs/architecture/`
 - 报告中引用的代码文件 + 行号：直接读当前代码，不要依赖报告里的节选
 - 若报告时间戳较早、期间有 commit：`git log --since={报告时间戳} --oneline` 快速扫一眼，识别可能已修复的条目
@@ -40,7 +40,7 @@
   - 改哪个文件 / 函数 / 文档节 / schema 字段 / prompt 段
   - 改动边界（**不要顺带重构 / 扩范围**）
   - 风险点与回退方式
-  - 跨文件连带更新：对照 `ai_context/conventions.md` Cross-File Alignment 表列出
+  - 跨文件连带更新：对照 `ai_context/conventions.md` 的 "Cross-File Alignment" 段列出（该段不存在则跳过本项）
 - **依赖顺序**：与其他 finding 的方案之间是否有依赖、是否可合并成一个 commit
 - **推迟 / 驳回**：明说"本轮不做"并写理由（登记 `docs/todo_list.md` 是下一步 /go 的事，这里只标记）
 
@@ -67,4 +67,4 @@
 
 ---
 
-**镜像约束**：本文件和 `.agents/skills/check-review/SKILL.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。`.agents/skills/check-review/SKILL.md` 额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /check-review` 起往下）与本文件**逐字一致**。
+**镜像约束**：本文件和 `.claude/commands/check-review.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。本文件额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /check-review` 起往下）与 `.claude/commands/check-review.md` **逐字一致**。
