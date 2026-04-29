@@ -29,7 +29,7 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 4. **程序化后处理**：生成 memory_digest + 生成 world_event_digest + 更新 stage_catalog
 5. **Repair Agent**（统一检测+修复，详见 `docs/requirements.md §11.4`）：
    - Phase A：四层检查（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
-   - Phase B：修复循环，按 tier 逐层升级（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成，T3 全局每文件最多 1 次）。每轮末嵌 **L3 gate** 对"本轮改过的语义问题文件"再跑一次 L3，防止谎报
+   - Phase B：修复循环，按 tier 逐层升级（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成，单文件至多在 lifecycle 1 触发一次；lifecycle 2 禁用 T3，升 T3 即 `T3_EXHAUSTED`）。每轮末嵌 **L3 gate** 对"本轮改过的语义问题文件"再跑一次 L3，防止谎报
    - Phase C：最终确认——优先复用最后一次 gate 的结果（无新增 LLM 调用）
    - 安全阀：回归保护、收敛检测、总轮次限制
    - 全部通过 → git commit；有 error 级别问题未解决 → stage ERROR
@@ -63,7 +63,7 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
 - `[phase1]` stage_plan 出口验证重试上限
 - `[phase3]` 提取 / 审校超时、`max_turns`
 - `[phase4]` 章节并发、短路熔断阈值
-- `[repair_agent]` 各 tier 重试次数、T3 全局上限、triage 接受上限、总轮数、per-file 并发度（`repair_concurrency`，默认 10）
+- `[repair_agent]` 各 tier 重试次数、lifecycle 上限、triage 接受上限、总轮数、per-file 并发度（`repair_concurrency`，默认 10）
 - `[backoff]` 快速空失败退避序列
 - `[rate_limit]` Token 限额暂停策略（reset 缓冲、DST 感知时区解析、
   解析失败 fallback、周限额上限/动作、probe leader 选举 TTL、probe
