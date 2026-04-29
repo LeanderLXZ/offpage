@@ -129,15 +129,26 @@ def migrate_one_canon(canon_dir: Path, timestamp: str, *, apply: bool) -> dict:
     inlined: list[Path] = []
     if fm_path.exists():
         payload = extract_failure_modes_payload(fm_path)
-        if payload:
-            inlined = inline_failure_modes_into_snapshots(
-                canon_dir, payload, apply=apply)
-            for p in inlined:
-                tag = "[would inline]" if not apply else "[inlined]"
-                print(f"  {tag} failure_modes → "
-                      f"{p.relative_to(canon_dir)}")
-        else:
-            print("  [skip] failure_modes.json has no migratable subfields")
+        if payload is None:
+            print("  [skip] failure_modes.json has no migratable subfields"
+                  " — falling back to empty placeholder")
+            payload = {}
+    else:
+        # No baseline failure_modes file → still need to put a placeholder
+        # into every existing stage_snapshot so the new schema's required
+        # `failure_modes` field is satisfied. Subsequent re-extraction can
+        # populate it properly.
+        print("  [info] no failure_modes.json baseline; inserting empty"
+              " placeholder into existing stage_snapshots")
+        payload = {}
+
+    inlined = inline_failure_modes_into_snapshots(
+        canon_dir, payload, apply=apply)
+    for p in inlined:
+        tag = "[would inline]" if not apply else "[inlined]"
+        suffix = " (empty placeholder)" if not payload else ""
+        print(f"  {tag} failure_modes → "
+              f"{p.relative_to(canon_dir)}{suffix}")
 
     moved = archive_deprecated_files(canon_dir, timestamp, apply=apply)
     for p in moved:
@@ -188,6 +199,12 @@ def main() -> int:
         summary.append(migrate_one_canon(canon, timestamp, apply=apply))
 
     print(f"\nProcessed {len(summary)} canon dir(s).")
+    if apply:
+        print("\n[hint] If you ran this on an extraction/* branch where"
+              " works/ is tracked, consider adding"
+              " `works/*/characters/*/canon/.archive/` to that branch's"
+              " .gitignore before `git add` to avoid committing the"
+              " archived baseline blobs.")
     if not apply:
         print("Re-run with --apply to commit the changes shown above.")
     return 0

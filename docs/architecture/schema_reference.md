@@ -261,7 +261,7 @@ key_relationships 提供关系的全局演变轨迹。
 | `voice_state` | 语气基调、语言习惯、用词偏好、口头禅、禁忌用语、情绪语气矩阵（emotional_voice_map）、对象语气矩阵（target_voice_map，按具体角色区分，每 target 至少 3-5 条对话示例）、典型对话示例（dialogue_examples 无 evidence_ref） |
 | `behavior_state` | **core_goals**（理性目标）、**obsessions**（执念）、决策风格、情绪触发器、情绪反应矩阵（emotional_reaction_map）、对象行为矩阵（target_behavior_map，与 target_voice_map 平行对齐，每 target 至少 3-5 条行为示例；action_examples 无 evidence_ref）、习惯性行为、压力应对 |
 | `boundary_state` | `hard_boundaries` / `soft_boundaries` / `common_misconceptions` |
-| `failure_modes` | 4 子类（`common_failures` / `tone_traps` / `relationship_traps` / `knowledge_leaks`），全量记录本阶段 active 的崩坏防护清单（继承未消除 + 新增；已消除的不写）。子类 maxItems 与历史 baseline failure_modes.schema.json 一致 |
+| `failure_modes` | 4 子类（`common_failures` / `tone_traps` / `relationship_traps` / `knowledge_leaks`），全量记录本阶段 active 的崩坏防护清单（继承未消除 + 新增；已消除的不写）。子类 maxItems 与字段含义见 `schemas/character/stage_snapshot.schema.json` |
 | `relationships` | 对每个重要角色的完整关系状态（态度、信任、亲密度、语气变化、行为变化、驱动事件、`relationship_history_summary`） |
 | `misunderstandings` | 角色持有的误解（content / truth / cause） |
 | `concealments` | 角色主动隐瞒的事情（content / reason） |

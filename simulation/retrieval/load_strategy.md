@@ -21,11 +21,12 @@ Load before the first reply:
   loader filters via regex
 - target character identity (`identity.json`, loaded fully — field-level
   caps live in `identity.schema.json`, so Tier 0 size is bounded at
-  extraction time, no loader-side filtering required)
-- target character failure modes (`failure_modes.json`)
-- target character hard boundaries (`boundaries.json` → `hard_boundaries` only)
+  extraction time, no loader-side filtering required). This is the only
+  character-level constant file; voice / behavior / boundary / failure_modes
+  are inlined into the stage snapshot below.
 - target character selected-stage snapshot (self-contained: voice, behavior,
-  boundaries, relationships, personality, mood, knowledge — no baseline merge).
+  boundaries, failure_modes, relationships, personality, mood, knowledge —
+  identity + stage snapshot is the complete runtime state).
   **Filtered loading**: `target_voice_map` and `target_behavior_map` are loaded
   only for entries matching the user's role — canon character = exact match on
   `target_type`; OC character = match by closest relationship type from role

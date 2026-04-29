@@ -565,7 +565,7 @@
     "failure_modes": {
       "type": "object",
       "additionalProperties": false,
-      "description": "本阶段的角色崩坏预警——AI 扮演该角色时最容易犯的错误和写崩的点。每 stage 全量记录（继承未消除 + 新增；已消除的不列）；运行时与当前 stage_snapshot 一起加载，无需向前 trace 多个文件。子类 maxItems 与历史 baseline failure_modes.schema.json 一致；触发上限时按 character_snapshot_extraction.md 的 maxItems 裁剪规则保留最重要、最符合当前 stage 需要的条目。",
+      "description": "本阶段的角色崩坏预警——AI 扮演该角色时最容易犯的错误和写崩的点。每 stage 全量记录（继承未消除 + 新增；已消除的不列）；运行时只读当前 stage 即可，无需向前 trace 多个文件。触发 maxItems 上限时按 character_snapshot_extraction.md 的 maxItems 裁剪规则保留最重要、最符合当前 stage 需要的条目。",
       "properties": {
         "common_failures": {
           "type": "array",

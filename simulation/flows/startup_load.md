@@ -19,7 +19,9 @@ Compile the minimum useful packet for the first reply.
 6b. Read `works/{work_id}/world/foundation/fixed_relationships.json`.
 7. Read `works/{work_id}/world/world_event_digest.jsonl` filtered to
    stage 1..N (N = user-selected stage).
-8. Read target character baseline.
+8. Read target character `identity.json` (the only character-level
+   constant file; voice / behavior / boundary / failure_modes are inlined
+   into the stage snapshot in step 9).
 9. Read target character selected-stage snapshot.
 10. Read target character memory_timeline: recent 2 stages (N + N-1) full.
 10b. Read target character `memory_digest.jsonl` filtered to stage 1..N

@@ -958,8 +958,8 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 - `boundary_state`：本阶段硬边界（hard_boundaries）、软边界
   （soft_boundaries）、容易被误判的点（common_misconceptions）
 - `failure_modes`：本阶段全量崩坏防护清单（4 子类 common_failures /
-  knowledge_leaks / tone_traps / relationship_traps；schema 上下限
-  与历史 baseline failure_modes.schema.json 一致）
+  knowledge_leaks / tone_traps / relationship_traps；具体上下限见
+  `schemas/character/stage_snapshot.schema.json`）
 - `relationships`：对每个重要角色的完整关系状态——态度、信任度、
   亲密度、戒备度、语气变化、行为变化、驱动事件、认知中的对方状态、
   从阶段 1 到当前的关系演变概述。不包含边缘的不重要角色
