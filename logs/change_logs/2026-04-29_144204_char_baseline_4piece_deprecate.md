@@ -252,3 +252,20 @@ schema_reference、schemas/README、conventions、ai_context/requirements 等
   静态验证作用域；runtime 验证 + 真实 work 迁移留作后续 /go 在
   extraction 分支执行）
 - **Finished**: 2026-04-29 15:08:17 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：14/14 项计划 + 8/8 项验证（100%）
+- Missed updates: 3 条（详见对话）—— 全部集中在 simulation/ 子树（baseline_merge.md / load_strategy.md / startup_load.md），属 conventions.md Cross-File Alignment 表「Loading strategy」行下应同步但被遗漏的文件
+
+### 轨 2 — 影响扩散
+- Findings: High=2 / Medium=4 / Low=2
+- Open Questions: 2 条（详见对话）
+
+## 复查时状态
+- **Reviewed**: 2026-04-29 15:22:52 EDT
+- **Status**: REVIEWED-FAIL（轨 2 有 2 项 High：simulation/contracts/baseline_merge.md 整文件已废 + simulation/retrieval/load_strategy.md L25-26 直接引用已删除文件）
+- **Conversation ref**: 同会话内 /post-check 输出
