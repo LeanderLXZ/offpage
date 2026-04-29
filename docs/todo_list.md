@@ -12,13 +12,15 @@
 |---|---|---|---|
 | _(none)_ | | | |
 
-### 🟡 Next (3)
+### 🟡 Next (5)
 
 | ID | Brief | Importance | Ready | Scope | Deps |
 |---|---|---|---|---|---|
 | `T-PHASE35-IMPORTANCE-AWARE` | [consistency_checker.py:96-117](../automation/persona_extraction/consistency_checker.py#L96-L117) 已构造 importance_map 但只 _check_target_map_counts 用上；其他 8 个 _check_* 一刀切，对次要配角的 field_completeness / relationship_continuity 过度报错。decisions.md #15 已定 bound 因 importance 而异。 | 🟢 Med-Low | 💬 Discuss first | 🟡 Medium | 无（触发自 2026-04-27 opus-4-7 review L-3） |
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | 无 |
-| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行抽取 + 程序合并 + repair lifecycle（rate-limit / 掉线兼容 R1/R2/R3）；schema / world / char_support / 其他 phase 不动；toml `[phase3].char_snapshot_sub_lanes`（默认 true）+ CLI 双向 flag；fallback `--no-char-snapshot-sub-lanes` 等价现行单 lane | 🟢 High | ✅ Ready | 🟡 Medium | 无（target list 策略另议，program-only 占位起步） |
+| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行抽取 + 程序合并 + repair lifecycle（rate-limit / 掉线兼容 R1/R2/R3）；schema / world / char_support / 其他 phase 不动；toml `[phase3].char_snapshot_sub_lanes`（默认 true）+ CLI 双向 flag；fallback `--no-char-snapshot-sub-lanes` 等价现行单 lane；prompt 共用单文件 + lane_scope 占位 | 🟢 High | ✅ Ready | 🟡 Medium | 无（target list 策略另议，program-only 占位起步） |
+| `T-BASELINE-DEPRECATE` | 废弃 4 件套：voice_rules / behavior_rules / boundaries / failure_modes（内容并入 stage_snapshot 演变链）；identity 重定位为 character-level 恒定 + 模拟时加载；manifest 从 char_snapshot read list 移除；stage_snapshot 加 failure_modes 字段（每 stage 全量、原 schema 上下限照搬）；prompt 加 maxItems-aware 裁剪规则。simulation runtime 未实装是改动最便宜窗口。 | 🔴 High | ✅ Ready | 🔴 Large·Arch | 与 T-CHAR-SNAPSHOT-PER-STAGE 部分解耦（仅 prompt 文件改动重叠）；建议先于 T-CHAR-SNAPSHOT-SUB-LANES |
+| `T-CHAR-SNAPSHOT-PER-STAGE` | 废弃 baseline 后 stage_snapshot 成唯一权威，prompt 加 prev_stage 四态规则（A 继承 / B 重写 / C 无变化 / D 删除）+ per-stage 推演原则；stage_delta 升级为结构化字段（changed/removed/added），schema 同步改动。3 子段 vs 4 子段未定。 | 🟢 Med-Low | 💬 Discuss first | 🟡 Medium | 与 T-BASELINE-DEPRECATE 配套（schema 同步改动）；建议合并 commit |
 
 ### ⚪ Discussing (7)
 
@@ -32,7 +34,7 @@
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
 | `T-CHAR-SNAPSHOT-TARGET-LIST` | target_char_list 生成策略（program / llm-light / hybrid，主方案先 program-only 占位）+ fallback 模式（`--no-char-snapshot-sub-lanes`）下单 lane 是否真能保证三方 target 一致；先 0 token 验证 S001/S002 历史输出 | 3 | 0 token 验证可立刻；策略调整待主方案跑通 1–2 stage |
 
-**Total**: 10 — 🟢 In Progress 0 ｜ 🟡 Next 3 ｜ ⚪ Discussing 7
+**Total**: 12 — 🟢 In Progress 0 ｜ 🟡 Next 5 ｜ ⚪ Discussing 7
 
 ---
 
@@ -263,8 +265,10 @@ _(empty — `/go` will move an entry here from "Next" when starting. Single slot
 Phase 3 单 stage 的 char_snapshot lane 是当前 wall-time 最长的瓶颈
 （粗估 T，49 stage 累加显著）。讨论后定方案：把单个 char_snapshot lane
 拆成 3 个并行 sub-lane（按字段聚类），每 sub-lane 输入完整源材料 +
-上阶段 snapshot + identity.json + memory_timeline + 程序预算的 active
-target 列表；3 份 partial JSON 由程序合并成完整 stage_snapshot.json，
+上阶段 snapshot + character baseline 全套（identity / voice_rules /
+behavior_rules / boundaries / failure_modes / manifest）+ 程序预算的
+active target 列表（**不**包含上阶段 memory_timeline——状态聚合不需要
+事件流水）；3 份 partial JSON 由程序合并成完整 stage_snapshot.json，
 再走 repair_agent 整文件 repair（最多 2 life-cycle，T3 触发时改为
 3 sub-lane 并行重抽 → re-merge → re-validate）。schema 不动、世界 lane
 和 char_support lane 不动、其他 phase 不动。
@@ -309,9 +313,13 @@ sub_lanes = false（fallback 到现行行为）：
   / 必填齐 / 注入结构性字段
 
 修改：
-- `automation/prompt_templates/character_snapshot_extraction.md` — 拆成 3
-  份（`character_snapshot_expression.md` / `_decision.md` / `_cognition.md`）+
-  共享头部约束（target_char_list 参数、字段归属边界、本 lane 仅写哪些字段）
+- `automation/prompt_templates/character_snapshot_extraction.md` — **保留
+  单一文件（不拆 3 份）**。加 `{lane_scope}` 占位（取值 `ALL` /
+  `char_expression` / `char_decision` / `char_cognition`）+
+  `{target_char_list}` 占位；prompt 头部按 lane_scope 注入"本次仅写以下
+  字段"约束。字段归属表移到代码（同一来源给 sub-lane 调度 + merge 用，
+  避免 prompt 与 merge 字段集合漂移），fallback 模式 `lane_scope=ALL`
+  等价现行单 lane
 - `automation/persona_extraction/orchestrator.py` — sub-lane 调度
   + hard-stop 时 `executor.shutdown(cancel_futures=True)` + .partial 清理；
   分支 `if config.phase3.char_snapshot_sub_lanes` 包住 Step 0/2/T3-sub-lane 路径，
@@ -371,6 +379,10 @@ sub_lanes = false（fallback 到现行行为）：
 - 无硬依赖。target_char_list 实现策略可先用 program-only 占位，由
   T-CHAR-SNAPSHOT-TARGET-LIST 后续决议替换
 - 跟 T-CHAR-SNAPSHOT-TARGET-LIST 并行讨论：fallback 模式是否也跑 step 0
+- **建议先执行 T-BASELINE-DEPRECATE**：若先做废弃，sub-lane 输入清单
+  自动简化为 `identity + 上阶段 snapshot + 章节 + target_char_list`
+  （三件套已删 / manifest 已移除 / failure_modes 是 character-level
+  不进 prompt）；若后做，sub-lane 实现需按本任务上下文段的 6 件套读取
 
 **暂不做的事**
 
@@ -380,6 +392,225 @@ sub_lanes = false（fallback 到现行行为）：
 - 不动 world lane / char_support lane / 其他 phase
 - 当前 work package 切到新模型的时序问题不在本任务内（按用户原则
   「不过度工程，整 lane 重跑」处理）
+
+---
+
+### [T-BASELINE-DEPRECATE] 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载
+
+**上下文**
+
+现行 character/canon/ 下 6 个 baseline 文件中（schema 详见 schemas/character/）：
+- **voice_rules.json / behavior_rules.json / boundaries.json**：顶层
+  字段与 stage_snapshot 字段几乎一一对应（target_voice_map / core_goals
+  / hard_boundaries 等），是结构性冗余。运行时不加载（[character_snapshot_extraction.md:52-55](../automation/prompt_templates/character_snapshot_extraction.md) 明文）
+- **failure_modes.json**：角色级诊断手册（common_failures /
+  knowledge_leaks / tone_traps / relationship_traps）。本质同样是
+  "演变会发生但被强行做成恒定层"——某些 mode 在 stage 间会消除 / 新增
+- **identity.json**：角色基础事实（aliases / canonical_name / gender /
+  species / appearance / background / core_wounds 等），永不变化，
+  不与 stage_snapshot 字段重合
+- **character_manifest.json**：元数据（paths / created_at / role_labels），
+  与 prompt 内容生成无关
+
+讨论后定方案：
+
+1. **废弃 4 件套**（voice_rules / behavior_rules / boundaries /
+   failure_modes）：内容归入 stage_snapshot 演变链；S001 是基线种子
+   （从原文 + identity 推演），S002+ 从 prev 演变
+2. **identity 重定位** 为 character-level 恒定文件 + 未来 simulation
+   runtime 加载（"最 common、永不变、模拟时加载"原则）
+3. **manifest** 从 char_snapshot prompt 的 files_to_read 移除（元数据，
+   对内容生成零价值）
+4. **stage_snapshot 加 failure_modes 字段**（每 stage 全量；schema 直接
+   搬用原 failure_modes 文件 schema：4 子类 common_failures /
+   knowledge_leaks / tone_traps / relationship_traps，子类上下限完全
+   照旧）。模拟时只读当前 stage 即可，无需向前 trace 多个文件
+5. **stage_delta 不动**：保留现行自由文本方案，不升级结构化（避免一次
+   改动撞两个 schema 决策）；voice_state / behavior_state /
+   boundary_state 等字段维持现行 full-state（每 stage 完整重抽，无变化
+   也照抄）
+6. **prompt 加 maxItems-aware 裁剪规则**（统一规则，对所有带 maxItems
+   上限的字段生效，不限于新增的 failure_modes 4 子类）：触发上限时由
+   LLM 在抽取阶段就按"最重要、最符合当前 stage 需要"先排序后截断，
+   而非交给 schema validation 报错
+
+**时机优势**：simulation runtime 尚未实装（[T-SIMULATION-MODE-MARKER]
+仍在 Discussing），当前没有任何运行时代码依赖 4 件套——废弃决策不破坏
+任何已运行的东西，是边际成本最低的时刻。
+
+**改动清单**
+
+新增 / schema 改动：
+- `schemas/character/stage_snapshot.schema.json` 加 `failure_modes`
+  对象字段（4 子类 common_failures / knowledge_leaks / tone_traps /
+  relationship_traps；子类上下限直接照搬现行
+  `schemas/character/failure_modes.schema.json`）
+- 数据迁移脚本（一次性，新增）：扫描 `works/*/characters/*/canon/`，
+  把现有 voice_rules / behavior_rules / boundaries 内容合并进 S001
+  stage_snapshot 种子；现有 failure_modes 内容并入 S001
+  stage_snapshot.failure_modes；废弃文件移到
+  `works/*/characters/*/.archive/baseline_{ts}/`；在 `logs/change_logs/`
+  写迁移日志
+
+废弃 / 删除：
+- `schemas/character/voice_rules.schema.json` /
+  `behavior_rules.schema.json` / `boundaries.schema.json` /
+  `failure_modes.schema.json` 删除
+
+修改：
+- `automation/persona_extraction/prompt_builder.py`
+  `_build_char_snapshot_read_list`（[行 436-480](../automation/persona_extraction/prompt_builder.py#L436-L480)）：
+  移除 voice_rules / behavior_rules / boundaries / failure_modes /
+  manifest（5 文件）；保留 identity / 上阶段 snapshot / schema / 章节
+- `automation/prompt_templates/character_snapshot_extraction.md`
+  - 加「baseline 文件的角色定位」段：identity 是角色基础事实层
+    （权威），4 件套已废弃不读取
+  - 第 50-57 行「自包含快照」修订：明确 stage_snapshot 是角色状态唯一
+    权威；模拟时**会加载** identity（character-level 恒定文件），但
+    **不**加载已废弃的 4 件套
+  - is_first_stage = true 分支：S001 必须基于本阶段原文 + identity
+    直接推演出基线状态全字段（voice_state / behavior_state /
+    boundary_state / failure_modes 等），不再依赖 baseline 4 件套
+  - 新增 `failure_modes` 字段说明（每 stage 全量；4 子类上下限同原
+    failure_modes schema）
+  - 新增「maxItems 裁剪规则」段（**对所有带 maxItems 字段统一生效**，
+    含 failure_modes 4 子类、target_voice_map / target_behavior_map /
+    relationships 等）：触发上限时 LLM 在抽取阶段按"最重要、最符合
+    当前 stage 需要"先排序后截断；判定锚点的细化（"最重要"基准 /
+    子类是否独立计上限 / 跨字段是否有整体优先级）写 prompt 时与具体
+    字段一起敲定
+- phase 1/2 prompt 模板（待 grep 确定具体文件）：删除产出 4 件套指令；
+  identity 仍然产出
+- `ai_context/architecture.md` § Character canon：更新文件清单
+- `ai_context/decisions.md`：新增决策（废弃 4 件套 + failure_modes 并入
+  stage_snapshot full-state + identity 重定位 + maxItems 裁剪统一规则）
+- `ai_context/data_model.md`（如有）：更新角色 canon 数据模型
+- `ai_context/current_status.md`：状态变更说明
+- `docs/architecture/extraction_workflow.md`：phase 1/2/3 产出更新
+- `docs/requirements.md`：同步 character canon 描述
+
+**完成标准**
+
+- 4 件套 schema 文件删除，stage_snapshot.schema.json 加 failure_modes
+- 至少一个现有 work 完成迁移：原 4 件套内容合入 S001 stage_snapshot；
+  废弃文件保留在 .archive/
+- phase 1/2 不再产出 4 件套（跑一次验证）
+- phase 3 char_snapshot read list 不再含 4 件套 / manifest（跑 1-2 stage
+  验证 stage_snapshot.failure_modes 字段产出正确 + 命中 maxItems 时
+  裁剪生效）
+- ai_context / docs 同步更新
+
+**预估**
+
+- 较大改动（schema 增删 + phase 1/2/3 prompt + 迁移脚本 + 多处
+  ai_context / docs 更新）
+- 实施 ~2-3 个工作日；首次跑 1-2 stage 验证 + 现有 work 迁移
+
+**依赖**
+
+- 无硬依赖
+- 与 T-CHAR-SNAPSHOT-PER-STAGE 部分解耦：本 todo 不再触动 stage_delta
+  结构；PER-STAGE 仅在 character_snapshot_extraction.md prompt 文件上
+  有改动重叠，可选择合并 commit 或分开
+- 建议先于 T-CHAR-SNAPSHOT-SUB-LANES 执行（sub-lane 输入清单将在此
+  todo 落地后简化）
+
+**暂不做的事**
+
+- 不改 simulation runtime 加载机制（runtime 尚未实装；本 todo 仅完成
+  数据侧准备，加载机制随 [T-SIMULATION-MODE-MARKER] 实装时配套实施）
+- 不改 character_arc 字段（其设计仍为累积型）
+- 不改 stage_delta 结构（保留现行自由文本，避免一次改动撞两个 schema
+  决策）
+- 不动 char_support / world / 其他 phase
+
+---
+
+### [T-CHAR-SNAPSHOT-PER-STAGE] character_snapshot prompt 强化 per-stage 真实性 + prev_stage 四态使用规则 + stage_delta 结构化
+
+**上下文**
+
+终极目标是 stage_snapshot 反映**本阶段实际状态**，而不是笼统的"全阶段
+概括"。但现行 [character_snapshot_extraction.md](../automation/prompt_templates/character_snapshot_extraction.md)
+只有 stage_events 强制 per-stage（第 67 行明文"仅本阶段"）；voice_state /
+behavior_state / boundary_state / target_voice_map / target_behavior_map /
+relationships / knowledge_scope 的 per-stage 性靠隐含语义，无显式约束。
+prev_stage 使用规则只覆盖 (A)「未出场原样继承」（第 75 行），缺
+(B)「出场且变化」、(C)「出场且无变化」、(D)「主动删除 / 裁剪」三种
+情况的处理叙述。后果：LLM 处理 target / emotion / relationship 在
+阶段间变化的场景时无显式指引，默认偷懒整体继承；stage_delta 容易被
+写成"无明显变化"敷衍过 schema。character_arc 是累积型设计（第 69 行
+"从阶段 1 到当前阶段的整体弧线"），不在 per-stage 化范围。
+
+T-BASELINE-DEPRECATE 一旦落地，stage_snapshot 成为角色状态的**唯一
+权威**——演变链必须可审计：不能无效叠加（每 stage 把 prev 整体 copy
++ 加几条），也不能静默删除（重要 target 长期未出场被误判删除），还要
+可追溯（裁剪了什么、为什么）。stage_delta 从描述性自由文本升级为
+结构化字段，是配套 schema 改动。
+
+**改动清单**
+
+- `automation/prompt_templates/character_snapshot_extraction.md` 在
+  「核心规则」加新条目：
+
+  ```
+  X. **prev_stage_snapshot 四态使用规则**：
+
+     (A) 本阶段未出场（target / 角色 / emotion）→ **原样继承** prev 条目
+        （现行第 75 行规则保留）；不允许"长期未出场所以删除"
+     (B) 本阶段出场且状态有变化 → 以本阶段原文为准**重写**该条目；prev
+        仅作对照；变化点列入 stage_delta.changed
+     (C) 本阶段出场且状态无变化 → 保留 prev 内容；未在 stage_delta 中
+        显式列出的字段视为 unchanged（无需逐项列举）
+     (D) 主动删除 / 裁剪 → 在 stage_delta.removed 写明：哪条、为什么删
+        （仅当：① 该项已在原文 / 前阶段被显式 resolved/revealed；
+                ② schema maxItems 触发硬裁剪——按现行第 64 行裁剪策略）
+
+  Y. **per-stage 推演原则**：除 character_arc（累积型）和 (A) 类继承外，
+     所有字段值必须基于本阶段原文 + prev_snapshot **推演得出**，不可
+     静默照搬 prev_snapshot；schema 通过不等于推演到位。
+  ```
+
+- `schemas/character/stage_snapshot.schema.json` stage_delta 字段从
+  描述性字符串升级为结构化对象：
+  ```
+  stage_delta: {
+    changed: array<{ field, prev, current, reason }>  // (B) 类
+    removed: array<{ field, item, reason }>           // (D) 类
+    added:   array<{ field, item }>                   // 新增项
+  }
+  ```
+- `character_snapshot_extraction.md` 第 68 行 stage_delta 字段说明
+  同步更新为结构化版本
+
+**待决策项**
+
+- stage_delta 是否需要 unchanged 子段（4 子段方案）：
+  - **选项 1（推荐）**：3 子段（changed / removed / added），未列入字段
+    默认 unchanged；增量小、LLM 推断负担轻；缺点是依赖 LLM 自觉对照
+  - 选项 2：4 子段（+ unchanged audit 文字段），强制 LLM 在前三段全空
+    时写一段"对照了哪些字段"叙述；审计强、增量略涨
+
+**完成标准**
+
+- prompt 四态规则（A/B/C/D）+ per-stage 推演原则
+- stage_snapshot.schema.json stage_delta 字段结构化（待决策项定后
+  定最终子段数）
+- 跑 1-2 stage 后人工抽查：
+  - stage_delta.changed / removed / added 不出现"无明显变化"敷衍
+  - target / emotion / relationship 在阶段间的演变能在 stage_delta
+    被明确捕捉
+
+**依赖**
+
+- 与 T-BASELINE-DEPRECATE 配套（同一次 schema 改动 / prompt 修订）；
+  建议合并 commit
+- 与 T-CHAR-SNAPSHOT-SUB-LANES 共同 prompt 头部，无冲突
+
+**暂不做的事**
+
+- 不改 character_arc（其设计就是累积型，不该 per-stage 化）
+- 不动 char_support / world / 其他 phase
 
 ---
 
