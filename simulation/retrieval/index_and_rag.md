@@ -42,13 +42,11 @@
 ### memory_timeline（角色主观记忆线）
 
 每条条目是角色第一人称主观视角的归纳（不是原文复制），包含
-`memory_id`（`M-S###-##`）、`time` / `location`（≤15 字短语，required）、
-`event_description`（150–200 字客观描述，schema 硬门控）、`digest_summary`
-（30–50 字独立撰写的精简摘要，schema 硬门控；是 memory_digest 的 1:1
-来源）、`subjective_experience`（100–200 字）、`emotional_impact`、
-`memory_importance` 等字段。
-
-详见 `schemas/character/memory_timeline_entry.schema.json`。
+`memory_id`（`M-S###-##`）、`time` / `location`（短语锚点，required）、
+`event_description`（客观描述）、`digest_summary`（独立撰写的精简摘要；
+是 memory_digest 的 1:1 来源）、`subjective_experience`、
+`emotional_impact`、`memory_importance` 等字段。字段长度上限以
+`schemas/character/memory_timeline_entry.schema.json` 为准。
 
 ### 专有名词表
 
@@ -219,10 +217,10 @@ CREATE TABLE memory_timeline (
     memory_id TEXT PRIMARY KEY,  -- M-S{stage:03d}-{seq:02d}
     character_id TEXT NOT NULL,
     stage_id TEXT NOT NULL,      -- redundant with memory_id prefix; kept for SQL filtering
-    time TEXT,                   -- 故事内时间（≤15 字）
-    location TEXT,               -- 事件地点（≤15 字）
-    event_description TEXT,      -- 150–200 chars 客观描述
-    digest_summary TEXT,         -- 30–50 chars 精简摘要（memory_digest 的来源）
+    time TEXT,                   -- 故事内时间（短语锚点）
+    location TEXT,               -- 事件地点（短语锚点）
+    event_description TEXT,      -- 客观描述（长度上限见 memory_timeline_entry.schema.json）
+    digest_summary TEXT,         -- 精简摘要（memory_digest 的来源；长度上限见 schema）
     subjective_experience TEXT,
     memory_importance TEXT,      -- 5 levels: trivial/minor/significant/critical/defining
     summary_embedding BLOB       -- 可选，embedding 向量
