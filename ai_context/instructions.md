@@ -4,7 +4,7 @@ This file is an index for fast project follow-up, not a detailed manual.
 1. Write "what / where to find"; link to authoritative sources (code paths, docs/*.md, schemas, logs).
 2. Prefer deletion over addition; check if a new item merges into an existing one before adding.
 3. Describe the current design only — no "legacy / deprecated / formerly / renamed from".
-4. No real book / character / plot names — use placeholders (`<work_id>`, `角色A`, `S001`).
+4. No real book / character / plot names — use placeholders (`<work_id>`, `Character A`, `S001`).
 Shorter is better than longer; push detail into the linked source rather than growing this file.
 -->
 
@@ -57,14 +57,15 @@ own the format; do not duplicate it here.
 
 ## TODO List
 
-`docs/todo_list.md` — Chinese working queue of planned-but-unfinished
-tasks (segments: `## 正在执行` / `## 下一步` / `## 讨论中`). Top of file
-has a `## 索引` section that caches all entries as three sub-tables; the
-`/todo` skill reads only that. Completed / abandoned tasks move out to
+`docs/todo_list.md` — working queue of planned-but-unfinished tasks
+(segments: `## In Progress` / `## Next` / `## Discussing (Undecided)`).
+Top of file has a `## Index (auto-generated; do not hand-edit)` section
+that caches all entries as three sub-tables; the `/todo` skill reads
+only that. Completed / abandoned tasks move out to
 `docs/todo_list_archived.md` (slim entries; details live in `git log` +
 `logs/change_logs/`). Both files are read-on-demand, **not** part of the
 session-start reading order. Usage rules live inside the source file's
-`## 文件说明` section.
+`## File guide` section.
 
 ## Project Focus
 

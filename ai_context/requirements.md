@@ -4,7 +4,7 @@ This file is an index for fast project follow-up, not a detailed manual.
 1. Write "what / where to find"; link to authoritative sources (code paths, docs/*.md, schemas, logs).
 2. Prefer deletion over addition; check if a new item merges into an existing one before adding.
 3. Describe the current design only — no "legacy / deprecated / formerly / renamed from".
-4. No real book / character / plot names — use placeholders (`<work_id>`, `角色A`, `S001`).
+4. No real book / character / plot names — use placeholders (`<work_id>`, `Character A`, `S001`).
 Shorter is better than longer; push detail into the linked source rather than growing this file.
 -->
 
@@ -44,8 +44,9 @@ characters, stage-based state, multi-terminal.
 
 ### §3.1 Identity / Name Tracking
 
-Multi-name tracking (alias type 本名/化名/代称/称呼/封号/道号, stage
-range, source) under a stable `character_id`. **Cross-chunk identity
+Multi-name tracking (alias types: real name / alias / appellation /
+form of address / honorific title / Daoist title — across stage range
+and source) under a stable `character_id`. **Cross-chunk identity
 merging** in the analysis phase is mandatory.
 → `docs/requirements.md` §3.1 + `schemas/character/identity.schema.json`.
 
