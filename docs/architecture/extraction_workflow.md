@@ -97,14 +97,15 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 - `world/foundation/foundation.json` — 世界基础设定初稿
 - `world/foundation/fixed_relationships.json` — 世界级固定关系骨架
 - `characters/{character_id}/canon/identity.json` — 角色身份初稿
+  （角色级唯一恒定文件）
 - `characters/{character_id}/manifest.json` — 角色包 manifest
-- `characters/{character_id}/canon/voice_rules.json` — 基线语言风格骨架
-- `characters/{character_id}/canon/behavior_rules.json` — 基线行为模式骨架
-- `characters/{character_id}/canon/boundaries.json` — 角色底线禁忌骨架
-- `characters/{character_id}/canon/failure_modes.json` — 角色易崩模式骨架
 
-这些 baseline 记录**跨阶段稳定的角色基底**，作为后续 stage 的修正与补充
-锚点。阶段性变化由 stage_snapshot 覆盖。
+identity 是 character-level 唯一恒定文件，记录角色基础事实
+（aliases / core_wounds / key_relationships 等），作为后续 stage 的
+修正锚点。voice / behavior / boundary / failure_modes 不在 Phase 2
+产出——由 Phase 3 char_snapshot lane 在每个 stage_snapshot 中直接
+生成（S001 从原文 + identity 推演基线种子，S002+ 从前一 stage_snapshot
+演变）。
 
 Phase 2 baseline 完成后，orchestrator 程序化写出
 `works/{work_id}/world/manifest.json`（schema：
@@ -113,16 +114,15 @@ Phase 2 baseline 完成后，orchestrator 程序化写出
 
 **出口验证**：Phase 2 完成后运行 `validate_baseline()`，校验所有
 baseline 文件的 schema 合规性。works manifest / world manifest /
-identity / 角色 manifest / foundation / fixed_relationships 为必须
-（error），voice_rules/behavior_rules/boundaries/failure_modes 为建议
-（warning）。验证失败阻断 Phase 3。
+identity / 角色 manifest / foundation / fixed_relationships 全部为
+必须（error）。验证失败阻断 Phase 3。
 
 ### 6. 1+2N 并行阶段提取
 
 每个阶段采用 1+2N 并行架构：世界提取（1 次调用）+ 各角色快照提取（N 次调用）+ 各角色支持层提取（N 次调用），**同一 stage 内全并行执行**，无先后依赖。
 
-- **char_snapshot** 进程：产出 `stage_snapshots/{stage_id}.json`，接收前一阶段快照作为 delta/风格参照
-- **char_support** 进程：产出 `memory_timeline/{stage_id}.json` + baseline 修正，**不接收**前一阶段快照
+- **char_snapshot** 进程：产出 `stage_snapshots/{stage_id}.json`（含本阶段全量 voice / behavior / boundary / failure_modes 字段），接收 identity + 前一阶段快照作为 delta/风格参照
+- **char_support** 进程：产出 `memory_timeline/{stage_id}.json` + identity 修正（按需），**不接收**前一阶段快照
 
 每次调用只传最近一个相关产物（不传全部历史），减少输入规模。提取超时 3600s。
 
@@ -141,7 +141,7 @@ identity / 角色 manifest / foundation / fixed_relationships 为必须
 
 - `characters/{character_id}/canon/stage_snapshots/{stage_id}.json` —
   **自包含快照**，包含该阶段的完整 voice_state、behavior_state、
-  boundary_state、relationships、personality、mood、knowledge
+  boundary_state、failure_modes、relationships、personality、mood、knowledge
 
 **对应提示词**：`automation/prompt_templates/character_snapshot_extraction.md`
 
@@ -149,13 +149,9 @@ identity / 角色 manifest / foundation / fixed_relationships 为必须
 
 每阶段产出或更新：
 
-**Baseline 文件**（每个 stage 都可修正和补充，不限 stage 1）：
+**identity 修正**（每个 stage 都可修正补充，不限 stage 1）：
 
 - `characters/{character_id}/canon/identity.json`
-- `characters/{character_id}/canon/voice_rules.json`
-- `characters/{character_id}/canon/behavior_rules.json`
-- `characters/{character_id}/canon/boundaries.json`
-- `characters/{character_id}/canon/failure_modes.json`
 
 **阶段文件**（LLM 产出）：
 
@@ -179,9 +175,9 @@ identity / 角色 manifest / foundation / fixed_relationships 为必须
 
 **自包含快照的生成规则**：
 
-- 阶段 1 快照 ≈ baseline 内容 + 阶段特有字段（事件、心情、关系等）
-- 阶段 N 快照以 baseline + 前一阶段快照 + 前一阶段 memory_timeline 为参照，产出完整的当前阶段状态
-- **未变化的内容也必须包含在快照中**——快照是自包含的，运行时不依赖 baseline
+- 阶段 1 快照：基于本阶段原文 + identity 直接推演基线状态全字段（voice_state / behavior_state / boundary_state / failure_modes 等），不再依赖 4 件套 baseline
+- 阶段 N 快照以 identity + 前一阶段快照为参照，产出完整的当前阶段状态
+- **未变化的内容也必须包含在快照中**——快照是自包含的；运行时与 identity 配套加载即可
 - `stage_delta` 记录从上一阶段的变化（信息性，便于理解演变弧线）
 
 **长度硬门控**：所有字段级长度限制由对应 schema 的 `minLength` /
@@ -191,7 +187,7 @@ identity / 角色 manifest / foundation / fixed_relationships 为必须
 数值以 schema 文件为准。
 
 **对应提示词**：步骤 6 按 1+2N 拆分为 `character_snapshot_extraction.md`
-（角色快照）与 `character_support_extraction.md`（memory_timeline + baseline
+（角色快照）与 `character_support_extraction.md`（memory_timeline + identity
 校正）两个独立提示词，各角色并行调用。详见上文步骤 6a / 6b。
 
 #### 6.4 Lane 级失败诊断
@@ -252,12 +248,12 @@ log，失败诊断所需的内存 / elapsed 曲线不丢失。间隔仍由
    complete 但文件丢失/不可解析的条目立即 reset
 3. 若对账后仍有 complete 标记（`is_partial_resume=True`），preflight 的
    `ignore_patterns` 扩展 `expected_lane_dirty_paths`——覆盖 1+2N 每 lane
-   的产物路径 + 每角色 5 个 baseline 文件
+   的产物路径 + 每角色的 identity.json
 4. `missing_lanes(target_characters)` 给出待跑列表，`ThreadPoolExecutor`
    只提交这些 lane
 5. 待跑列表中每个 `support:{c}` 在子进程启动前调用
-   `reset_paths(project_root, baseline_paths(work_root, c))`，把 5 个
-   baseline 文件恢复到 HEAD，抹掉上一次半写入的残留
+   `reset_paths(project_root, baseline_paths(work_root, c))`，把
+   identity.json 恢复到 HEAD，抹掉上一次半写入的残留
 6. 主线程 `as_completed` 循环：lane 成功 → `mark_lane_complete` +
    立即 `phase3.save`；失败累计到 `extraction_errors`
 7. 循环结束后若 `all_lanes_complete == False` → stage → ERROR，
@@ -377,21 +373,23 @@ CLI：`--start-phase 4` 可独立运行 Phase 4
 
 ## Baseline 文件的角色
 
-Baseline 文件记录**跨阶段稳定的角色基底**（本性风格、本性行为、底线禁忌、
-易崩模式等），在提取流程中有两个用途：
+`identity.json` 是**唯一**的角色级 baseline 文件，记录跨阶段稳定的
+角色基础事实（aliases / core_wounds / key_relationships 等）：
 
-1. **提取参照锚点**：Phase 2 产出全书视野骨架，后续 stage 据此修正和补充
-2. **跨阶段稳定参照**：提取者用 baseline 判断"角色的本性是什么"，阶段性
-   变化写入 stage_snapshot，不写入 baseline
+1. **提取参照锚点**：Phase 2 产出全书视野骨架，后续 stage 由
+   char_support 据此修正和补充
+2. **运行时加载**：与所选阶段的自包含 stage_snapshot 配套加载
 
-**运行时加载**：identity.json、failure_modes.json、hard_boundaries + 所选
-阶段的自包含快照。voice_rules.json 和 behavior_rules.json 不在运行时加载
-（voice 和 behavior 状态在 stage_snapshot 中自包含）。
+voice / behavior / boundary / failure_modes 的状态由 stage_snapshot
+演变链承载——每个 stage_snapshot 含本阶段全量字段，无独立 baseline
+文件，运行时也无需合并。
 
 ## 阶段间的增量规则
 
-- 每个阶段可以修订任何已有资产（不仅限于当前阶段）
-- 如果本阶段原文推翻了之前的结论，应更新 baseline 和受影响的阶段快照
+- 每个阶段可以修订 identity（不仅限于当前阶段）；voice / behavior /
+  boundary / failure_modes 的演变直接体现在每阶段新产出的
+  stage_snapshot 中
+- 如果本阶段原文推翻了之前的 identity 结论，char_support 直接更新
 - 进度追踪：`works/{work_id}/analysis/progress/`（pipeline.json + phase3_stages.json）
 
 ## 自动化编排
@@ -447,7 +445,7 @@ orchestrator (Python)
 
 - 每个 stage 拆分为 1+2N 次独立 `claude -p` 调用（1 world + N char_snapshot + N char_support），**同一 stage 内全并行**，不共享 session 内存
 - 阶段间上下文通过文件系统传递；char_snapshot 只传最近一个 snapshot；char_support 只传最近一个 memory_timeline（不传全部历史）
-- 每个 stage 都可修正和补充 baseline（通过 char_support 提取）
+- 每个 stage 都可修正和补充 identity（通过 char_support 提取）
 - **Repair 按文件并发**：`orchestrator` 在每个 stage 的 Repair 步骤
   用 `ThreadPoolExecutor(max_workers=[repair_agent].repair_concurrency)`
   （默认 10）对每个待修文件独立调用 `coordinator.run(files=[single])`。

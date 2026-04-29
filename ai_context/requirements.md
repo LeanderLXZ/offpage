@@ -35,9 +35,9 @@ characters, stage-based state, multi-terminal.
 ## §3 Three Deep-Roleplay Goals
 
 1. Structured character data (identity with `core_wounds` +
-   `key_relationships`, personality, triggers, goals vs obsessions,
-   relationships, memory, voice, boundaries, failure modes,
-   `character_arc`).
+   `key_relationships` as character-level constant; per-stage snapshot
+   with personality, triggers, goals vs obsessions, relationships,
+   voice, boundaries, failure modes, `character_arc`).
 2. Character-perspective memory (subjective, not plot summary).
 3. Stable voice + behavior per emotion / target / situation.
 - → `docs/requirements.md` §3.
@@ -75,12 +75,13 @@ content-language consistency. Hard schema gates in `conventions.md`
 
 ## §7 Information Layering
 
-Five layers: immutable (identity + hard_boundaries + failure_modes) /
-self-contained stage snapshot / historical memory (timeline + digests +
-FTS5) / session-mutable (per-turn context state) / cross-session
-(long_term_profile + relationship_core, merge-only). Baseline files =
-extraction anchors, not runtime. Load tiers: startup core → structured
-on-demand → transcript recall → raw source.
+Five layers: immutable (identity only — character-level constant) /
+self-contained stage snapshot (carries inline failure_modes /
+voice_state / behavior_state / boundary_state) / historical memory
+(timeline + digests + FTS5) / session-mutable (per-turn context state) /
+cross-session (long_term_profile + relationship_core, merge-only).
+Load tiers: startup core → structured on-demand → transcript recall →
+raw source.
 → `docs/requirements.md` §7 + `architecture.md` §Runtime Load Formula.
 
 ## §8 Source Ingestion

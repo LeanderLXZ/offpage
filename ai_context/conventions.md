@@ -77,12 +77,12 @@ Exempt (history is the point): `logs/change_logs/`, `logs/review_reports/`,
 ## Data Separation — Hard Schema Gates
 
 - User data under `users/`; never write canon from user context.
-- Baseline files = extraction anchors only — not runtime-loaded.
-- Stage snapshots are **self-contained** — never merged with baseline at runtime.
+- `identity.json` is the **only** character-level constant baseline; voice / behavior / boundary / failure_modes live inline in `stage_snapshot` and evolve per stage.
+- Stage snapshots are **self-contained** — runtime loads identity + current stage_snapshot; no baseline merge.
 - **Bounds only in schema.** All `maxLength` / `minLength` / `maxItems` / `required` live in `schemas/**.schema.json`; no duplicates anywhere else. Exact values → schema file. Index → `docs/architecture/schema_reference.md`.
 - **Bounds are caps, not targets.** Every extraction prompt template must explicitly tell the LLM that `maxLength` / `maxItems` are **hard ceilings, not quotas** — write what's actually in the source, do not pad / inflate / invent items to fill the cap. Without this, models default to writing exactly N items per array because "the schema says ≤N".
-- **No chapter anchors on snapshots.** No schema (world / character baselines / `stage_snapshot` / `memory_timeline`) carries `evidence_refs` / `source_type` / `scene_refs`; no per-item `evidence_ref` in `dialogue_examples` / `action_examples`. Anchoring uses `timeline_anchor` (+ `location_anchor` for world) and `memory_timeline`.
-- **Unified vocabulary**: `behavior_rules` uses `target_behavior_map` / `target_type` (same as stage `behavior_state`).
+- **maxItems-aware truncation.** When a field exceeds its `maxItems` cap, the LLM ranks + truncates during extraction (not afterwards via schema fail). Priority anchors: current-stage relevance → identity-anchor relation → coverage breadth → cross-stage stability (for full-state evolving fields like `failure_modes`). Sub-classes count maxItems independently. → `automation/prompt_templates/character_snapshot_extraction.md` §maxItems 触顶时的裁剪规则.
+- **No chapter anchors on snapshots.** No schema (world / character / `stage_snapshot` / `memory_timeline`) carries `evidence_refs` / `source_type` / `scene_refs`; no per-item `evidence_ref` in `dialogue_examples` / `action_examples`. Anchoring uses `timeline_anchor` (+ `location_anchor` for world) and `memory_timeline`.
 - **`stage_catalog`** at `schemas/{world,character}/stage_catalog.schema.json`; bootstrap-only, not runtime-loaded; sort by `stage_id` lex (no `order` field).
 
 ## Git

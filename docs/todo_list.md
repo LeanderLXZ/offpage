@@ -6,20 +6,19 @@
 
 > 本段是三张子表的渲染缓存，由维护本文件的人（包括 Claude）在**每次对正文条目增 / 改 / 移段 / 完成 / 废弃后**顺手刷新——具体规则见下方"## File guide → Index maintenance"。`/todo` skill 不解析正文，只读这一段，所以这里的内容必须与正文同步；不同步会让 `/todo` 给出错误结论。
 
-### 🟢 In Progress (0)
+### 🟢 In Progress (1)
 
 | ID | Title | Start time | Status |
 |---|---|---|---|
-| _(none)_ | | | |
+| `T-BASELINE-DEPRECATE` | 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载 | 2026-04-29 14:42 EDT | 代码完成、runtime 验证待跑 |
 
-### 🟡 Next (5)
+### 🟡 Next (4)
 
 | ID | Brief | Importance | Ready | Scope | Deps |
 |---|---|---|---|---|---|
 | `T-PHASE35-IMPORTANCE-AWARE` | [consistency_checker.py:96-117](../automation/persona_extraction/consistency_checker.py#L96-L117) 已构造 importance_map 但只 _check_target_map_counts 用上；其他 8 个 _check_* 一刀切，对次要配角的 field_completeness / relationship_continuity 过度报错。decisions.md #15 已定 bound 因 importance 而异。 | 🟢 Med-Low | 💬 Discuss first | 🟡 Medium | 无（触发自 2026-04-27 opus-4-7 review L-3） |
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | 无 |
 | `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行抽取 + 程序合并 + repair lifecycle（rate-limit / 掉线兼容 R1/R2/R3）；schema / world / char_support / 其他 phase 不动；toml `[phase3].char_snapshot_sub_lanes`（默认 true）+ CLI 双向 flag；fallback `--no-char-snapshot-sub-lanes` 等价现行单 lane；prompt 共用单文件 + lane_scope 占位 | 🟢 High | ✅ Ready | 🟡 Medium | 无（target list 策略另议，program-only 占位起步） |
-| `T-BASELINE-DEPRECATE` | 废弃 4 件套：voice_rules / behavior_rules / boundaries / failure_modes（内容并入 stage_snapshot 演变链）；identity 重定位为 character-level 恒定 + 模拟时加载；manifest 从 char_snapshot read list 移除；stage_snapshot 加 failure_modes 字段（每 stage 全量、原 schema 上下限照搬）；prompt 加 maxItems-aware 裁剪规则。simulation runtime 未实装是改动最便宜窗口。 | 🔴 High | ✅ Ready | 🔴 Large·Arch | 与 T-CHAR-SNAPSHOT-PER-STAGE 部分解耦（仅 prompt 文件改动重叠）；建议先于 T-CHAR-SNAPSHOT-SUB-LANES |
 | `T-CHAR-SNAPSHOT-PER-STAGE` | 废弃 baseline 后 stage_snapshot 成唯一权威，prompt 加 prev_stage 四态规则（A 继承 / B 重写 / C 无变化 / D 删除）+ per-stage 推演原则；stage_delta 升级为结构化字段（changed/removed/added），schema 同步改动。3 子段 vs 4 子段未定。 | 🟢 Med-Low | 💬 Discuss first | 🟡 Medium | 与 T-BASELINE-DEPRECATE 配套（schema 同步改动）；建议合并 commit |
 
 ### ⚪ Discussing (7)
@@ -34,7 +33,7 @@
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
 | `T-CHAR-SNAPSHOT-TARGET-LIST` | target_char_list 生成策略（program / llm-light / hybrid，主方案先 program-only 占位）+ fallback 模式（`--no-char-snapshot-sub-lanes`）下单 lane 是否真能保证三方 target 一致；先 0 token 验证 S001/S002 历史输出 | 3 | 0 token 验证可立刻；策略调整待主方案跑通 1–2 stage |
 
-**Total**: 12 — 🟢 In Progress 0 ｜ 🟡 Next 5 ｜ ⚪ Discussing 7
+**Total**: 12 — 🟢 In Progress 1 ｜ 🟡 Next 4 ｜ ⚪ Discussing 7
 
 ---
 
@@ -188,7 +187,138 @@ any node ─────────────────(abandoned)───
 
 ## In Progress
 
-_(empty — `/go` will move an entry here from "Next" when starting. Single slot.)_
+### [T-BASELINE-DEPRECATE] 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载
+
+**开始时间**：2026-04-29 14:42 EDT
+
+**当前状态**：代码完成、runtime 验证待跑（schema / 代码 / prompt / docs / 迁移脚本均已落地，jsonschema + import 静态验证通过；下一步需在 extraction 分支跑迁移脚本 `--apply` + 重抽 1-2 stage 验证 stage_snapshot.failure_modes 产出 + 命中 maxItems 时裁剪生效）
+
+**上下文**
+
+现行 character/canon/ 下 6 个 baseline 文件中（schema 详见 schemas/character/）：
+- **voice_rules.json / behavior_rules.json / boundaries.json**：顶层
+  字段与 stage_snapshot 字段几乎一一对应（target_voice_map / core_goals
+  / hard_boundaries 等），是结构性冗余。运行时不加载（[character_snapshot_extraction.md:52-55](../automation/prompt_templates/character_snapshot_extraction.md) 明文）
+- **failure_modes.json**：角色级诊断手册（common_failures /
+  knowledge_leaks / tone_traps / relationship_traps）。本质同样是
+  "演变会发生但被强行做成恒定层"——某些 mode 在 stage 间会消除 / 新增
+- **identity.json**：角色基础事实（aliases / canonical_name / gender /
+  species / appearance / background / core_wounds 等），永不变化，
+  不与 stage_snapshot 字段重合
+- **character_manifest.json**：元数据（paths / created_at / role_labels），
+  与 prompt 内容生成无关
+
+讨论后定方案：
+
+1. **废弃 4 件套**（voice_rules / behavior_rules / boundaries /
+   failure_modes）：内容归入 stage_snapshot 演变链；S001 是基线种子
+   （从原文 + identity 推演），S002+ 从 prev 演变
+2. **identity 重定位** 为 character-level 恒定文件 + 未来 simulation
+   runtime 加载（"最 common、永不变、模拟时加载"原则）
+3. **manifest** 从 char_snapshot prompt 的 files_to_read 移除（元数据，
+   对内容生成零价值）
+4. **stage_snapshot 加 failure_modes 字段**（每 stage 全量；schema 直接
+   搬用原 failure_modes 文件 schema：4 子类 common_failures /
+   knowledge_leaks / tone_traps / relationship_traps，子类上下限完全
+   照旧）。模拟时只读当前 stage 即可，无需向前 trace 多个文件
+5. **stage_delta 不动**：保留现行自由文本方案，不升级结构化（避免一次
+   改动撞两个 schema 决策）；voice_state / behavior_state /
+   boundary_state 等字段维持现行 full-state（每 stage 完整重抽，无变化
+   也照抄）
+6. **prompt 加 maxItems-aware 裁剪规则**（统一规则，对所有带 maxItems
+   上限的字段生效，不限于新增的 failure_modes 4 子类）：触发上限时由
+   LLM 在抽取阶段就按"最重要、最符合当前 stage 需要"先排序后截断，
+   而非交给 schema validation 报错
+
+**时机优势**：simulation runtime 尚未实装（[T-SIMULATION-MODE-MARKER]
+仍在 Discussing），当前没有任何运行时代码依赖 4 件套——废弃决策不破坏
+任何已运行的东西，是边际成本最低的时刻。
+
+**改动清单**
+
+新增 / schema 改动：
+- `schemas/character/stage_snapshot.schema.json` 加 `failure_modes`
+  对象字段（4 子类 common_failures / knowledge_leaks / tone_traps /
+  relationship_traps；子类上下限直接照搬现行
+  `schemas/character/failure_modes.schema.json`）
+- 数据迁移脚本（一次性，新增）：扫描 `works/*/characters/*/canon/`，
+  把现有 voice_rules / behavior_rules / boundaries 内容合并进 S001
+  stage_snapshot 种子；现有 failure_modes 内容并入 S001
+  stage_snapshot.failure_modes；废弃文件移到
+  `works/*/characters/*/.archive/baseline_{ts}/`；在 `logs/change_logs/`
+  写迁移日志
+
+废弃 / 删除：
+- `schemas/character/voice_rules.schema.json` /
+  `behavior_rules.schema.json` / `boundaries.schema.json` /
+  `failure_modes.schema.json` 删除
+
+修改：
+- `automation/persona_extraction/prompt_builder.py`
+  `_build_char_snapshot_read_list`（[行 436-480](../automation/persona_extraction/prompt_builder.py#L436-L480)）：
+  移除 voice_rules / behavior_rules / boundaries / failure_modes /
+  manifest（5 文件）；保留 identity / 上阶段 snapshot / schema / 章节
+- `automation/prompt_templates/character_snapshot_extraction.md`
+  - 加「baseline 文件的角色定位」段：identity 是角色基础事实层
+    （权威），4 件套已废弃不读取
+  - 第 50-57 行「自包含快照」修订：明确 stage_snapshot 是角色状态唯一
+    权威；模拟时**会加载** identity（character-level 恒定文件），但
+    **不**加载已废弃的 4 件套
+  - is_first_stage = true 分支：S001 必须基于本阶段原文 + identity
+    直接推演出基线状态全字段（voice_state / behavior_state /
+    boundary_state / failure_modes 等），不再依赖 baseline 4 件套
+  - 新增 `failure_modes` 字段说明（每 stage 全量；4 子类上下限同原
+    failure_modes schema）
+  - 新增「maxItems 裁剪规则」段（**对所有带 maxItems 字段统一生效**，
+    含 failure_modes 4 子类、target_voice_map / target_behavior_map /
+    relationships 等）：触发上限时 LLM 在抽取阶段按"最重要、最符合
+    当前 stage 需要"先排序后截断；判定锚点的细化（"最重要"基准 /
+    子类是否独立计上限 / 跨字段是否有整体优先级）写 prompt 时与具体
+    字段一起敲定
+- phase 1/2 prompt 模板（待 grep 确定具体文件）：删除产出 4 件套指令；
+  identity 仍然产出
+- `ai_context/architecture.md` § Character canon：更新文件清单
+- `ai_context/decisions.md`：新增决策（废弃 4 件套 + failure_modes 并入
+  stage_snapshot full-state + identity 重定位 + maxItems 裁剪统一规则）
+- `ai_context/data_model.md`（如有）：更新角色 canon 数据模型
+- `ai_context/current_status.md`：状态变更说明
+- `docs/architecture/extraction_workflow.md`：phase 1/2/3 产出更新
+- `docs/requirements.md`：同步 character canon 描述
+
+**完成标准**
+
+- 4 件套 schema 文件删除，stage_snapshot.schema.json 加 failure_modes
+- 至少一个现有 work 完成迁移：原 4 件套内容合入 S001 stage_snapshot；
+  废弃文件保留在 .archive/
+- phase 1/2 不再产出 4 件套（跑一次验证）
+- phase 3 char_snapshot read list 不再含 4 件套 / manifest（跑 1-2 stage
+  验证 stage_snapshot.failure_modes 字段产出正确 + 命中 maxItems 时
+  裁剪生效）
+- ai_context / docs 同步更新
+
+**预估**
+
+- 较大改动（schema 增删 + phase 1/2/3 prompt + 迁移脚本 + 多处
+  ai_context / docs 更新）
+- 实施 ~2-3 个工作日；首次跑 1-2 stage 验证 + 现有 work 迁移
+
+**依赖**
+
+- 无硬依赖
+- 与 T-CHAR-SNAPSHOT-PER-STAGE 部分解耦：本 todo 不再触动 stage_delta
+  结构；PER-STAGE 仅在 character_snapshot_extraction.md prompt 文件上
+  有改动重叠，可选择合并 commit 或分开
+- 建议先于 T-CHAR-SNAPSHOT-SUB-LANES 执行（sub-lane 输入清单将在此
+  todo 落地后简化）
+
+**暂不做的事**
+
+- 不改 simulation runtime 加载机制（runtime 尚未实装；本 todo 仅完成
+  数据侧准备，加载机制随 [T-SIMULATION-MODE-MARKER] 实装时配套实施）
+- 不改 character_arc 字段（其设计仍为累积型）
+- 不改 stage_delta 结构（保留现行自由文本，避免一次改动撞两个 schema
+  决策）
+- 不动 char_support / world / 其他 phase
 
 ---
 
@@ -392,137 +522,6 @@ sub_lanes = false（fallback 到现行行为）：
 - 不动 world lane / char_support lane / 其他 phase
 - 当前 work package 切到新模型的时序问题不在本任务内（按用户原则
   「不过度工程，整 lane 重跑」处理）
-
----
-
-### [T-BASELINE-DEPRECATE] 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载
-
-**上下文**
-
-现行 character/canon/ 下 6 个 baseline 文件中（schema 详见 schemas/character/）：
-- **voice_rules.json / behavior_rules.json / boundaries.json**：顶层
-  字段与 stage_snapshot 字段几乎一一对应（target_voice_map / core_goals
-  / hard_boundaries 等），是结构性冗余。运行时不加载（[character_snapshot_extraction.md:52-55](../automation/prompt_templates/character_snapshot_extraction.md) 明文）
-- **failure_modes.json**：角色级诊断手册（common_failures /
-  knowledge_leaks / tone_traps / relationship_traps）。本质同样是
-  "演变会发生但被强行做成恒定层"——某些 mode 在 stage 间会消除 / 新增
-- **identity.json**：角色基础事实（aliases / canonical_name / gender /
-  species / appearance / background / core_wounds 等），永不变化，
-  不与 stage_snapshot 字段重合
-- **character_manifest.json**：元数据（paths / created_at / role_labels），
-  与 prompt 内容生成无关
-
-讨论后定方案：
-
-1. **废弃 4 件套**（voice_rules / behavior_rules / boundaries /
-   failure_modes）：内容归入 stage_snapshot 演变链；S001 是基线种子
-   （从原文 + identity 推演），S002+ 从 prev 演变
-2. **identity 重定位** 为 character-level 恒定文件 + 未来 simulation
-   runtime 加载（"最 common、永不变、模拟时加载"原则）
-3. **manifest** 从 char_snapshot prompt 的 files_to_read 移除（元数据，
-   对内容生成零价值）
-4. **stage_snapshot 加 failure_modes 字段**（每 stage 全量；schema 直接
-   搬用原 failure_modes 文件 schema：4 子类 common_failures /
-   knowledge_leaks / tone_traps / relationship_traps，子类上下限完全
-   照旧）。模拟时只读当前 stage 即可，无需向前 trace 多个文件
-5. **stage_delta 不动**：保留现行自由文本方案，不升级结构化（避免一次
-   改动撞两个 schema 决策）；voice_state / behavior_state /
-   boundary_state 等字段维持现行 full-state（每 stage 完整重抽，无变化
-   也照抄）
-6. **prompt 加 maxItems-aware 裁剪规则**（统一规则，对所有带 maxItems
-   上限的字段生效，不限于新增的 failure_modes 4 子类）：触发上限时由
-   LLM 在抽取阶段就按"最重要、最符合当前 stage 需要"先排序后截断，
-   而非交给 schema validation 报错
-
-**时机优势**：simulation runtime 尚未实装（[T-SIMULATION-MODE-MARKER]
-仍在 Discussing），当前没有任何运行时代码依赖 4 件套——废弃决策不破坏
-任何已运行的东西，是边际成本最低的时刻。
-
-**改动清单**
-
-新增 / schema 改动：
-- `schemas/character/stage_snapshot.schema.json` 加 `failure_modes`
-  对象字段（4 子类 common_failures / knowledge_leaks / tone_traps /
-  relationship_traps；子类上下限直接照搬现行
-  `schemas/character/failure_modes.schema.json`）
-- 数据迁移脚本（一次性，新增）：扫描 `works/*/characters/*/canon/`，
-  把现有 voice_rules / behavior_rules / boundaries 内容合并进 S001
-  stage_snapshot 种子；现有 failure_modes 内容并入 S001
-  stage_snapshot.failure_modes；废弃文件移到
-  `works/*/characters/*/.archive/baseline_{ts}/`；在 `logs/change_logs/`
-  写迁移日志
-
-废弃 / 删除：
-- `schemas/character/voice_rules.schema.json` /
-  `behavior_rules.schema.json` / `boundaries.schema.json` /
-  `failure_modes.schema.json` 删除
-
-修改：
-- `automation/persona_extraction/prompt_builder.py`
-  `_build_char_snapshot_read_list`（[行 436-480](../automation/persona_extraction/prompt_builder.py#L436-L480)）：
-  移除 voice_rules / behavior_rules / boundaries / failure_modes /
-  manifest（5 文件）；保留 identity / 上阶段 snapshot / schema / 章节
-- `automation/prompt_templates/character_snapshot_extraction.md`
-  - 加「baseline 文件的角色定位」段：identity 是角色基础事实层
-    （权威），4 件套已废弃不读取
-  - 第 50-57 行「自包含快照」修订：明确 stage_snapshot 是角色状态唯一
-    权威；模拟时**会加载** identity（character-level 恒定文件），但
-    **不**加载已废弃的 4 件套
-  - is_first_stage = true 分支：S001 必须基于本阶段原文 + identity
-    直接推演出基线状态全字段（voice_state / behavior_state /
-    boundary_state / failure_modes 等），不再依赖 baseline 4 件套
-  - 新增 `failure_modes` 字段说明（每 stage 全量；4 子类上下限同原
-    failure_modes schema）
-  - 新增「maxItems 裁剪规则」段（**对所有带 maxItems 字段统一生效**，
-    含 failure_modes 4 子类、target_voice_map / target_behavior_map /
-    relationships 等）：触发上限时 LLM 在抽取阶段按"最重要、最符合
-    当前 stage 需要"先排序后截断；判定锚点的细化（"最重要"基准 /
-    子类是否独立计上限 / 跨字段是否有整体优先级）写 prompt 时与具体
-    字段一起敲定
-- phase 1/2 prompt 模板（待 grep 确定具体文件）：删除产出 4 件套指令；
-  identity 仍然产出
-- `ai_context/architecture.md` § Character canon：更新文件清单
-- `ai_context/decisions.md`：新增决策（废弃 4 件套 + failure_modes 并入
-  stage_snapshot full-state + identity 重定位 + maxItems 裁剪统一规则）
-- `ai_context/data_model.md`（如有）：更新角色 canon 数据模型
-- `ai_context/current_status.md`：状态变更说明
-- `docs/architecture/extraction_workflow.md`：phase 1/2/3 产出更新
-- `docs/requirements.md`：同步 character canon 描述
-
-**完成标准**
-
-- 4 件套 schema 文件删除，stage_snapshot.schema.json 加 failure_modes
-- 至少一个现有 work 完成迁移：原 4 件套内容合入 S001 stage_snapshot；
-  废弃文件保留在 .archive/
-- phase 1/2 不再产出 4 件套（跑一次验证）
-- phase 3 char_snapshot read list 不再含 4 件套 / manifest（跑 1-2 stage
-  验证 stage_snapshot.failure_modes 字段产出正确 + 命中 maxItems 时
-  裁剪生效）
-- ai_context / docs 同步更新
-
-**预估**
-
-- 较大改动（schema 增删 + phase 1/2/3 prompt + 迁移脚本 + 多处
-  ai_context / docs 更新）
-- 实施 ~2-3 个工作日；首次跑 1-2 stage 验证 + 现有 work 迁移
-
-**依赖**
-
-- 无硬依赖
-- 与 T-CHAR-SNAPSHOT-PER-STAGE 部分解耦：本 todo 不再触动 stage_delta
-  结构；PER-STAGE 仅在 character_snapshot_extraction.md prompt 文件上
-  有改动重叠，可选择合并 commit 或分开
-- 建议先于 T-CHAR-SNAPSHOT-SUB-LANES 执行（sub-lane 输入清单将在此
-  todo 落地后简化）
-
-**暂不做的事**
-
-- 不改 simulation runtime 加载机制（runtime 尚未实装；本 todo 仅完成
-  数据侧准备，加载机制随 [T-SIMULATION-MODE-MARKER] 实装时配套实施）
-- 不改 character_arc 字段（其设计仍为累积型）
-- 不改 stage_delta 结构（保留现行自由文本，避免一次改动撞两个 schema
-  决策）
-- 不动 char_support / world / 其他 phase
 
 ---
 

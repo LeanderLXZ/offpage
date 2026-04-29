@@ -313,13 +313,11 @@ works/{work_id}/characters/{character_id}/
 推荐内容：
 
 - `manifest.json`
-- `canon/identity.json` — 含 core_wounds（核心创伤）、key_relationships（核心人物关系弧线）
-- `canon/voice_rules.json` — 提取锚点，不在运行时加载
-- `canon/behavior_rules.json` — 提取锚点，不在运行时加载；包含 `core_goals` 与 `obsessions` 两个字段
-- `canon/boundaries.json` — 提取锚点（hard_boundaries 运行时加载）
-- `canon/failure_modes.json`
+- `canon/identity.json` — 含 core_wounds（核心创伤）、key_relationships（核心人物关系弧线）；character-level 唯一恒定文件，运行时与当前 stage_snapshot 配套加载
 - `canon/stage_catalog.json` — `schemas/character/stage_catalog.schema.json`
 - `canon/stage_snapshots/{stage_id}.json` — **自包含**，运行时核心；
+  含本阶段全量 `voice_state` / `behavior_state` / `boundary_state` /
+  `failure_modes`（4 子类崩坏防护，全量记录本 stage active 的清单）。
   `stage_events` **仅记录该角色相关的本阶段事件**（每条一句话，长度由
   schema 硬门控）。归属判定：本角色亲历 / 亲为 / 在场 / 直接影响其处境
   的事件才写；他人私事、与本角色无关的世界变迁不写；世界级公共事件

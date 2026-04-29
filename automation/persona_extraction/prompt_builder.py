@@ -177,13 +177,9 @@ def build_baseline_prompt(
     files: list[str] = []
 
     # Schemas needed — includes the two stage_catalog schemas the
-    # baseline must produce empty instances of (产出 3 in the prompt).
+    # baseline must produce empty instances of.
     for schema in ("character/identity.schema.json",
                    "character/character_manifest.schema.json",
-                   "character/voice_rules.schema.json",
-                   "character/behavior_rules.schema.json",
-                   "character/boundaries.schema.json",
-                   "character/failure_modes.schema.json",
                    "world/fixed_relationships.schema.json",
                    "world/world_stage_catalog.schema.json",
                    "character/stage_catalog.schema.json"):
@@ -442,8 +438,8 @@ def _build_char_snapshot_read_list(
 ) -> list[str]:
     """Pre-compute file list for character snapshot extraction.
 
-    Includes previous stage_snapshot (for delta/style), baseline files,
-    and source chapters. Does NOT include memory_timeline.
+    Includes identity (character-level constant), previous stage_snapshot
+    (for delta/style), and source chapters. Does NOT include memory_timeline.
     """
     files: list[str] = []
     work_dir = project_root / "works" / work_id
@@ -452,17 +448,11 @@ def _build_char_snapshot_read_list(
 
     files.append("schemas/character/stage_snapshot.schema.json")
 
-    # Character baseline files (identity.json first for alias cross-ref)
+    # identity.json — character-level constant, also used for alias cross-ref
     if char_dir.exists():
         identity = char_dir / "identity.json"
         if identity.exists():
             files.append(str(identity.relative_to(project_root)))
-        for name in ("voice_rules.json", "behavior_rules.json",
-                     "boundaries.json", "failure_modes.json",
-                     "manifest.json"):
-            p = char_dir / name
-            if p.exists():
-                files.append(str(p.relative_to(project_root)))
 
     # Previous stage_snapshot for delta calculation and style reference
     if prev_stage and char_dir.exists():
@@ -489,8 +479,8 @@ def _build_char_support_read_list(
 ) -> list[str]:
     """Pre-compute file list for character support extraction.
 
-    Includes previous memory_timeline (for continuation), baseline files,
-    and source chapters. Does NOT include stage_snapshot.
+    Includes identity (character-level constant), previous memory_timeline
+    (for continuation), and source chapters. Does NOT include stage_snapshot.
     """
     files: list[str] = []
     work_dir = project_root / "works" / work_id
@@ -499,17 +489,11 @@ def _build_char_support_read_list(
 
     files.append("schemas/character/memory_timeline_entry.schema.json")
 
-    # Character baseline files (identity.json first for alias cross-ref)
+    # identity.json — character-level constant, also used for alias cross-ref
     if char_dir.exists():
         identity = char_dir / "identity.json"
         if identity.exists():
             files.append(str(identity.relative_to(project_root)))
-        for name in ("voice_rules.json", "behavior_rules.json",
-                     "boundaries.json", "failure_modes.json",
-                     "manifest.json"):
-            p = char_dir / name
-            if p.exists():
-                files.append(str(p.relative_to(project_root)))
 
     # Previous memory_timeline for continuation
     if prev_stage and char_dir.exists():
