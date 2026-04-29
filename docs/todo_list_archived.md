@@ -73,6 +73,11 @@
 
 ## Completed
 
+### [T-CHAR-SNAPSHOT-PER-STAGE] character_snapshot prompt 补 prev_stage 出场字段三态规则 · 完成于 2026-04-29 · 改方案后完成
+
+- 1 行摘要：原方案 = prompt 三态 + schema stage_delta 结构化（changed/removed/added），但被 T-BASELINE-DEPRECATE 拍板的"stage_delta 维持自由文本"否决；改方案 = 仅 prompt 改动。`character_snapshot_extraction.md` 在已有 (A) 未出场继承 后追加：(B) 出场且有变化 → 重写 + stage_delta 点出 / (C) 出场且无变化 → 保留 prev 但 required 必填 / (D) resolved-revealed-消除 → 在 stage_delta 写明消除原因（与 maxItems 裁剪两件事）；per-stage 推演原则；stage_delta 字段说明禁"无明显变化"敷衍。`ai_context/decisions.md` 加 11f。
+- 关联 log: [logs/change_logs/2026-04-29_155949_char_snapshot_per_stage_three_state.md](../logs/change_logs/2026-04-29_155949_char_snapshot_per_stage_three_state.md)
+
 ### [T-REPAIR-T3-LIFECYCLE-RESET] T3 触发后开新 repair lifecycle，单文件最多 2 个 lifecycle · 完成于 2026-04-29 · 完整完成
 
 - 1 行摘要：`max_lifecycles_per_file=2`（取代旧 `t3_max_per_file=1`）；coordinator 抽 `_run_one_lifecycle`，外层 lifecycle 循环；lifecycle 1 触发 T3 即返回（无 Post-T3 corruption 检查 / 无当轮 L3 gate / 无 Phase C），状态机重置后进入 lifecycle 2，禁用 T3 + 升 T3 即 `T3_EXHAUSTED`；T3 prompt 携带 `prior_attempt_context`（resolved+remaining 摘要 ≤600 char）；triage cap 改为 per-lifecycle，磁盘 jsonl append-only，lifecycle 2 启动前读已 accept fingerprint 过滤；recorder 事件加 `cycle` 字段；`T3_CORRUPTED` 路径完整删除。Smoke 三场景（A 单 lifecycle PASS / B lifecycle 1 T3→lifecycle 2 PASS / C 持续失败→T3_EXHAUSTED）+ 6 triage 场景全过。

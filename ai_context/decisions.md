@@ -65,6 +65,21 @@ source. Long discussion chains live in `logs/change_logs/`.
      independently; no cross-field global cap. Spec → 
      `automation/prompt_templates/character_snapshot_extraction.md`
      §maxItems 触顶时的裁剪规则.
+11f. **prev_stage four-state extraction rule.** Char snapshot prompt
+     enforces four explicit states for handling prev_snapshot during
+     extraction: (A) absent → inherit verbatim; (B) present + changed →
+     rewrite from current source, note key changes in stage_delta;
+     (C) present + unchanged → keep prev (must still fill required
+     fields, "no change" ≠ "skip"); (D) resolved / revealed / overcome
+     (for misunderstandings / concealments / failure_modes etc.) →
+     drop the entry and write the resolution reason in stage_delta.
+     Distinct from maxItems truncation: truncation is "no room"
+     (not in stage_delta); resolution is "semantic closure" (must be
+     in stage_delta). `stage_delta` stays free-text (per #11d) but is
+     expected to capture (B) and (D); the "无明显变化" cop-out is
+     explicitly forbidden. Spec →
+     `automation/prompt_templates/character_snapshot_extraction.md`
+     §核心规则 #2 (B/C/D 三态规则 + per-stage 推演原则).
      → `schemas/character/` + `docs/architecture/schema_reference.md`.
 
 ## Extraction Model
