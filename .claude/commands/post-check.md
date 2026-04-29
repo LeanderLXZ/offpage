@@ -58,6 +58,7 @@
 - **change_log / docs 内链断链**：本次 log 或修改过的 docs 里引用 `decisions.md #25` / `[xxx](path)` / `详见 logs/change_logs/.../X.md` 等，核对编号未漂移、相对路径存在、anchor 锚点真实
 - **todo_list 漂移**：本次改动若实质完成了某 todo 条目（PRE log「完成标准」段含「本 todo 条目移到 archived」、或 diff 等价于某条 Next/Discussing 条目的「改动清单」），核对 `docs/todo_list.md` 该条目是否已整条移到 `docs/todo_list_archived.md` `## Completed` + Index 段是否同步刷新。漏移 → 列入 Missed Updates
 - **bug / 行为风险**：新代码在边界条件、空值、异常路径下会不会崩；状态机 / 门控 / 重试 / 回滚是否有漏口
+- **root cause vs symptoms**：本次若是 bug fix / error 修复，核对改动是攻击根因还是只压制了表象（例如吞 exception、降 assert、try/except 不分类、绕过校验）。表象修复 → 列入 Residual Risks
 - **README / 目录结构**：新增 / 删除 / 改名的文件是否同步到相关 README 与目录说明
 - **ai_context 漂移**：本次的 durable 决策是否已落 `ai_context/decisions.md` / `current_status.md` / `next_steps.md`；handoff 是否需要更新
 - **commit message vs diff 匹配度**：commit body 描述 vs `git diff --stat` 实际改动 是否互相覆盖——body 列了 N 处但 diff 只动 M 处，或 diff 改了文件 body 没提
