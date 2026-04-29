@@ -32,6 +32,8 @@ description: 直接读 docs/todo_list.md 顶部 ## Index (auto-generated; do not
 
 把索引段内容直接打印给用户。markdown 表格保留原样，不重排、不重判、不补建议。
 
+**跳过紧跟 `## Index ...` 标题的那段 blockquote**（连续以 `>` 开头的行——那是写给 todo_list 维护者的元说明，对 `/todo` 用户是噪声）。blockquote 之后的子表 / 汇总行正常渲染。
+
 `$ARGUMENTS` 过滤过的话，在汇总行末尾加一行 `(filtered by keyword "<keyword>")`。
 
 ### 4. 提问 + 停手
