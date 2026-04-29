@@ -73,6 +73,11 @@
 
 ## Completed
 
+### [T-LOAD-STRATEGY-WORLD-EVENTS-BOUND] load_strategy.md 删除复述 schema 的具体 bound · 完成于 2026-04-28 · 改方案后完成
+
+- 1 行摘要：原方案"L17 把 50–80 改成 50–100"；实际方案升级为通用清理——`simulation/retrieval/load_strategy.md` 三处复述 schema 数值（L17 world event_digest summary `50–80 chars, hard schema gate`、L22-23 identity `≤ 200 chars` / `≤ 10 entries`、L41 memory_digest summary `30–50 chars, hard schema gate`）全部删除，只留"length capped at extraction time by … schema"指针；loader 自身行为参数（recent 2 stages 窗口、stage 1..N filter、token 预算估算）原样保留。判定准则："数字改了之后跟谁走"——跟 schema 走 → 删；跟 loader 代码走 → 留。
+- 关联 log: [logs/change_logs/2026-04-28_234002_load-strategy-drop-schema-bounds.md](../logs/change_logs/2026-04-28_234002_load-strategy-drop-schema-bounds.md)
+
 ### [T-CHAR-SNAPSHOT-13-DIM-VERIFY] 角色 stage_snapshot "13 必填维度" 表述核对 · 完成于 2026-04-27 · 改方案后完成
 
 - 1 行摘要：原方案候选"字面 17 条" vs 实际方案"指针式"；`docs/architecture/extraction_workflow.md:277` 与 `docs/requirements.md:2139` 改为"以 `schemas/character/stage_snapshot.schema.json` 的 `required` 列表为准"，去掉具体数字与字段示例，避免下次 schema 增减字段时再次漂移。

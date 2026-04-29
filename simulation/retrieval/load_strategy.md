@@ -14,14 +14,14 @@ Load before the first reply:
 - selected world stage snapshot
 - world foundation (`foundation.json` + `fixed_relationships.json`)
 - `world_event_digest.jsonl` stage 1..N filtered (N = user-selected stage).
-  Each entry is `{event_id, summary (50–80 chars, hard schema gate),
-  importance, involved_characters?, time?, location?}` — summary is a
-  1:1 copy of the world stage_snapshot `stage_events` entry; stage is
-  encoded in `event_id` prefix `E-S###`; loader filters via regex
+  Each entry is `{event_id, summary, importance, involved_characters?,
+  time?, location?}` — summary is a 1:1 copy of the world stage_snapshot
+  `stage_events` entry (length capped at extraction time by the world
+  stage_snapshot schema); stage is encoded in `event_id` prefix `E-S###`;
+  loader filters via regex
 - target character identity (`identity.json`, loaded fully — field-level
-  caps live in `identity.schema.json` (e.g. `background_summary` ≤ 200 chars,
-  `key_relationships` ≤ 10 entries), so Tier 0 size is bounded at extraction
-  time, no loader-side filtering required)
+  caps live in `identity.schema.json`, so Tier 0 size is bounded at
+  extraction time, no loader-side filtering required)
 - target character failure modes (`failure_modes.json`)
 - target character hard boundaries (`boundaries.json` → `hard_boundaries` only)
 - target character selected-stage snapshot (self-contained: voice, behavior,
@@ -38,12 +38,12 @@ Load before the first reply:
 - target character memory timeline: recent 2 stages (N + N-1) full text
 - target character `memory_digest.jsonl`: compressed index, stage 1..N
   filtered (N = user-selected stage) for distant-history awareness.
-  Each entry is `{memory_id, summary (30–50 chars, hard schema gate),
-  importance, time?, location?}` — summary is a 1:1 copy of the
-  memory_timeline `digest_summary`; stage is encoded in the `memory_id`
-  prefix `M-S###`, so
-  the loader filters via regex (no redundant `stage_id` field). Target
-  ~30-40 tokens per entry; 49 stages × ~15 entries ≈ 22-29K tokens.
+  Each entry is `{memory_id, summary, importance, time?, location?}` —
+  summary is a 1:1 copy of the memory_timeline `digest_summary` (length
+  capped at extraction time by the memory_timeline schema); stage is
+  encoded in the `memory_id` prefix `M-S###`, so the loader filters via
+  regex (no redundant `stage_id` field). Target ~30-40 tokens per entry;
+  49 stages × ~15 entries ≈ 22-29K tokens.
 - user profile summary
 - active persona summary when used
 - user role binding
