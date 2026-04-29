@@ -14,7 +14,7 @@
 
 文件不存在 → 打印"⚠️ docs/todo_list.md 缺失"并停手。
 索引段缺失（找不到该标题） → 打印"⚠️ docs/todo_list.md 顶部缺索引段；请先按 todo_list.md 「Index maintenance」段补齐再调 /todo-list"并停手。
-读到 100 行仍未见 `## File guide`（说明索引段已涨过 100 行截断） → 打印"⚠️ 索引段已超 100 行，回收条目或调高 /todo-list 的 Read limit"并停手。
+读到 100 行仍未见 `## File guide`（说明索引段已涨过 100 行截断） → 重新 `Read` `docs/todo_list.md` **不带 `limit`** 取全文，再从全文中提取该段；不要停手。
 索引段存在但三张子表都标 "_(none)_" → 仍正常渲染，只是显示"暂无任何任务"。
 
 ### 2. 过滤（可选）
