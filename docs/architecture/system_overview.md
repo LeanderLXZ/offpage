@@ -134,9 +134,9 @@
    (`identity.json`, `manifest.json`)。这些是初稿，后续阶段可修正
 4. **阶段 3 — 1+2N 分层阶段提取**：逐 stage 读原文，采用 1+2N 架构：1 次
    世界提取 + N 次角色快照提取 + N 次角色支撑提取并行。每次调用只传最近
-   一个 snapshot/memory，不传全部历史。首阶段额外创建 `voice_rules.json`、
-   `behavior_rules.json`、`boundaries.json`、`failure_modes.json`。任何阶段
-   可修正任何已写入的 baseline
+   一个 snapshot/memory + identity，不传全部历史。`stage_snapshot` 含本
+   stage 全量 voice / behavior / boundary / failure_modes 字段（演变链
+   承载，无独立 baseline 文件）；任何阶段 char_support 可修正 identity
 5. **阶段 3.5 — 跨阶段一致性检查**：Phase 3 全部 stage 提交后，运行程序化
    跨阶段一致性检查（零 token），可选 LLM 裁定标记项。有 error 时阻断 Phase 4
 6. **阶段 4 — 场景切分**：Phase 3.5 通过后，逐 stage 范围读原文，按自然场景
@@ -316,8 +316,8 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
 - 启动必需：
   - 世界 foundation（`foundation.json` + `fixed_relationships.json`）+ 选定的世界阶段快照
   - `world_event_digest.jsonl`：stage 1..N 过滤加载（世界事件时间线）
-  - 角色不变层：identity.json、failure_modes.json、hard_boundaries
-  - 选定阶段的**自包含** stage_snapshot（voice/behavior/boundary/relationships 全含）
+  - 角色不变层：identity.json（character-level 唯一恒定文件）
+  - 选定阶段的**自包含** stage_snapshot（含本 stage 全量 voice / behavior / boundary / failure_modes / relationships）
   - memory_timeline：近期 2 阶段（N + N-1）全量
   - memory_digest.jsonl：stage 1..N 过滤加载（压缩索引，远期感知）
   - scene_archive：最近 `scene_fulltext_window` 条 full_text（默认 10，

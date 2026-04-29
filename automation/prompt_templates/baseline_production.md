@@ -8,8 +8,12 @@
 `{work_id}` 产出 **世界 foundation baseline**（含固定关系网络）和
 **角色 identity baseline**。
 
-这些 baseline 是非阶段性的基础信息，后续逐 stage 提取时会作为参照并在
-必要时修正。
+identity 是 character-level 唯一恒定文件，记录角色基础事实（aliases /
+core_wounds / key_relationships 等），永不变化；运行时与当前
+stage_snapshot 配套加载。voice / behavior / boundary / failure_modes
+不在 Phase 2 产出——由 Phase 3 char_snapshot lane 在每个 stage_snapshot
+中直接生成（S001 从原文 + identity 推演基线种子，S002+ 从前一
+stage_snapshot 演变）。
 
 ## 作品信息
 
@@ -145,67 +149,6 @@
 core_wounds 和 key_relationships 基于全书摘要可以产出较准确的初稿——全书
 视野有利于识别贯穿故事的创伤和关系弧线。
 
-### voice_rules.json
-
-位置：`{work_dir}/characters/{{char_id}}/canon/voice_rules.json`
-
-必须遵循 `schemas/character/voice_rules.schema.json`。
-
-这是角色**跨阶段稳定的基线语言风格**，记录角色的本性风格，而非某一阶段的
-语气变化。阶段性的语气转变由 stage_snapshot 覆盖。
-
-基于全书摘要产出骨架初稿：
-- `baseline_tone`：基线语气基调
-- `speech_patterns`：标志性语言模式（如口头禅、句式特点）
-- `register_range`：语域范围
-- `target_voice_map`：对不同角色的语气差异（如果摘要中能判断）
-
-初稿基于全书摘要产出。后续 stage 提取读到原文对话后修正和补充更具体的例句。
-
-### behavior_rules.json
-
-位置：`{work_dir}/characters/{{char_id}}/canon/behavior_rules.json`
-
-必须遵循 `schemas/character/behavior_rules.schema.json`。
-
-这是角色**跨阶段稳定的基线行为模式**，记录角色的本性行为，而非某一阶段的
-行为偏移。阶段性的行为变化由 stage_snapshot 覆盖。
-
-基于全书摘要产出骨架初稿：
-- `core_goals`：核心驱动目标
-- `obsessions`：执念
-- `target_behavior_map`：对不同对象类型的行为模式
-
-初稿基于全书摘要产出，后续 stage 修正和补充。
-
-### boundaries.json
-
-位置：`{work_dir}/characters/{{char_id}}/canon/boundaries.json`
-
-必须遵循 `schemas/character/boundaries.schema.json`。
-
-这是角色的**底线禁忌**——可能在极端剧情中被突破，但本质上稳定。
-
-基于全书摘要产出骨架初稿：
-- `hard_boundaries`：绝对底线（运行时加载）
-- `soft_boundaries`：可变边界
-
-初稿基于全书摘要产出，后续 stage 修正和补充。
-
-### failure_modes.json
-
-位置：`{work_dir}/characters/{{char_id}}/canon/failure_modes.json`
-
-必须遵循 `schemas/character/failure_modes.schema.json`。
-
-这是角色的**易崩模式**——根源性弱点，跨阶段稳定（运行时加载）。
-
-基于全书摘要产出骨架初稿：
-- `common_failures`：常见的角色崩坏模式
-- `trigger_patterns`：触发条件
-
-初稿基于全书摘要产出，后续 stage 修正和补充。
-
 ### manifest.json
 
 位置：`{work_dir}/characters/{{char_id}}/manifest.json`
@@ -257,8 +200,8 @@ baseline 阶段**不需要**创建任何占位文件：
 - `{work_dir}/characters/{{char_id}}/canon/memory_digest.jsonl` — 从角色
   memory_timeline 生成；同样由首阶段 post-processing 首次创建。
 
-baseline 阶段只需完成上文列出的 foundation / identity / voice / behavior /
-boundaries / failure_modes / manifest / 空 stage_catalog。
+baseline 阶段只需完成上文列出的 foundation / fixed_relationships /
+identity / manifest / 空 stage_catalog。
 
 ## 规则
 

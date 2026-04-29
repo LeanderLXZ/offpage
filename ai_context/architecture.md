@@ -51,7 +51,7 @@ Compressed summary. Authoritative sources:
 Startup order:
 
 1. World foundation (`foundation.json` + `fixed_relationships.json`) + selected world-stage snapshot
-2. Target character `identity.json` (incl. `core_wounds`, `key_relationships`) + `failure_modes.json` + self-contained stage snapshot
+2. Target character `identity.json` (incl. `core_wounds`, `key_relationships`) + self-contained stage snapshot (carries inline `failure_modes` / `voice_state` / `behavior_state` / `boundary_state`)
 3. `memory_timeline` recent 2 stages full; `memory_digest.jsonl` + `world_event_digest.jsonl` stage 1..N filtered
 4. `scene_archive` most recent `scene_fulltext_window` `full_text` scenes (default 10; summaries via FTS5 only)
 5. Vocab dict → jieba
@@ -83,11 +83,12 @@ append-first (never destructive overwrite).
 
 Each `stage_snapshots/{stage_id}.json` carries full character state
 (voice_state, behavior_state with `core_goals` / `obsessions`,
-boundary_state, relationships, personality, mood, knowledge,
-`character_arc`). Runtime loads a single snapshot — no baseline merge.
+boundary_state, `failure_modes` (inline 4 sub-classes), relationships,
+personality, mood, knowledge, `character_arc`). Runtime loads a single
+snapshot — no baseline merge required.
 
-- Baseline files (`voice_rules.json`, `behavior_rules.json`, `boundaries.json`) = extraction anchors only, not runtime-loaded.
-- Only `identity.json`, `failure_modes.json`, `hard_boundaries` load alongside the stage snapshot.
+- `identity.json` is the only character-level constant — loads alongside the stage snapshot.
+- voice / behavior / boundary / failure_modes have **no separate baseline files**; their state is carried by the stage_snapshot evolution chain (S001 derives a baseline seed from source + identity; S002+ evolves from prev snapshot).
 - `target_voice_map` / `target_behavior_map` filtered by user role; fallback = backward scan through previous snapshots (pure code I/O).
 
 Contract → `simulation/contracts/baseline_merge.md`.

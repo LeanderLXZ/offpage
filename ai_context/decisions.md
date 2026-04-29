@@ -38,9 +38,33 @@ source. Long discussion chains live in `logs/change_logs/`.
 
 ## Character Depth
 
-11a. `identity.json` carries `core_wounds` (root traumas + behavioral impact) + `key_relationships` (relationship arcs with initial state / evolution / turning points). Loaded with the stage snapshot.
+11a. `identity.json` carries `core_wounds` (root traumas + behavioral impact) + `key_relationships` (relationship arcs with initial state / evolution / turning points). Loaded with the stage snapshot. **Only character-level constant file** — voice / behavior / boundary / failure_modes are inlined into stage_snapshot (#11d).
 11b. `behavior_state` separates `core_goals` (rational, re-prioritizable) from `obsessions` (irrational, trauma- / emotion-tied, not cost-benefit). `emotional_baseline` mirrors with `active_goals` + `active_obsessions`.
 11c. `character_arc` in `stage_snapshot` = bird's-eye stage 1 → current. Complements `stage_delta` (last step only).
+11d. **4-piece character baseline deprecated.** `voice_rules.json` /
+     `behavior_rules.json` / `boundaries.json` / `failure_modes.json`
+     removed. voice / behavior / boundary state already lived in
+     `stage_snapshot.{voice_state,behavior_state,boundary_state}`;
+     `failure_modes` is inlined as a new top-level field on `stage_snapshot`
+     (4 sub-classes `common_failures` / `tone_traps` / `relationship_traps`
+     / `knowledge_leaks`; sub-class maxItems carried over from the
+     historical baseline schema). Each stage records the full active
+     failure-mode set (carried-over + newly active; resolved drops out)
+     so runtime reads only the current snapshot. S001 derives a baseline
+     seed from source + identity; S002+ evolves from prev snapshot.
+     `stage_delta` stays free-text (no structural changed/removed/added
+     upgrade in this round). `identity` is the only character-level
+     constant; runtime loads identity + current stage_snapshot.
+11e. **maxItems-aware truncation rule (universal).** All extraction
+     prompts must instruct the LLM to sort + truncate at the
+     `maxItems` cap during extraction (rather than overflow + schema
+     fail), with priority anchors: current-stage relevance →
+     identity-anchor relation (core_wounds / key_relationships) →
+     coverage breadth → cross-stage stability (for full-state evolving
+     fields like `failure_modes`). Sub-classes count maxItems
+     independently; no cross-field global cap. Spec → 
+     `automation/prompt_templates/character_snapshot_extraction.md`
+     §maxItems 触顶时的裁剪规则.
      → `schemas/character/` + `docs/architecture/schema_reference.md`.
 
 ## Extraction Model
@@ -48,10 +72,13 @@ source. Long discussion chains live in `logs/change_logs/`.
 12. stage (extraction) = stage (runtime), 1:1. Natural story boundaries
     (target 10, min 5, max 15). Cumulative 1..N. `stage_id` = `S###`;
     sibling `stage_title` (short label; cap in schema).
-13. Phase 2 produces world foundation + character baseline drafts
-    from full-book context. Phase 3 does 1+2N split extraction per stage
-    (1 world + N char_snapshot + N char_support); any stage may correct
-    any existing baseline (via char_support) or asset across the work package.
+13. Phase 2 produces world foundation + character `identity.json`
+    drafts from full-book context (no separate voice / behavior /
+    boundary / failure_modes baseline files — those live inside
+    `stage_snapshot`). Phase 3 does 1+2N split extraction per stage
+    (1 world + N char_snapshot + N char_support); any stage may
+    correct identity (via char_support) or any other asset across
+    the work package.
 14. No per-stage report files; progress in-place.
 15. `target_voice_map` / `target_behavior_map` use specific names for
     main / important chars (≥3–5 examples); generic types brief or
@@ -87,7 +114,7 @@ source. Long discussion chains live in `logs/change_logs/`.
 27d. Digest + memory time-location: required short anchors copied from world snapshot's `timeline_anchor` / `location_anchor`. `memory_timeline.scene_refs` removed (FTS5 on `scene_archive`).
 27e. `foundation` / `fixed_relationships` / `stage_catalog` bound-collapsed. `fixed_relationships.{source_type,evidence_refs}` removed; `stage_catalog.order` removed (lex sort by `stage_id`); character catalog at `schemas/character/stage_catalog.schema.json`; placeholder `*_summary` fields deleted.
 27f. Character `stage_snapshot` full-body bound-collapsed: required `timeline_anchor` + `snapshot_summary` added; `boundary_state.hard_boundaries` added (peer of baseline).
-27g. `stage_snapshot` structural prunes: `character_arc` is a short string (was object); top-level `memory_refs` / `evidence_refs` removed; per-item `evidence_ref` removed from every `dialogue_examples` / `action_examples`. `behavior_rules.relationship_behavior_map` / `relationship_type` renamed to `target_behavior_map` / `target_type` — baseline ↔ stage unified.
+27g. `stage_snapshot` structural prunes: `character_arc` is a short string (was object); top-level `memory_refs` / `evidence_refs` removed; per-item `evidence_ref` removed from every `dialogue_examples` / `action_examples`.
 27h. `world_stage_snapshot` structural prunes: `character_status_changes` removed (per-character status changes belong on character `stage_snapshot` / `memory_timeline`; world snapshot keeps only the public-world layer); `evidence_refs` removed (no schema keeps chapter anchors). Field-level `maxItems` / `maxLength` tightened in schema; `stage_events` widened from 50–80 to 50–100 CJK chars.
 27i. **schema-gate-as-retry-trigger pattern.** L1 `jsonschema` validation acts as another retry trigger for LLM output failure (peer with JSON-parse failure, stage-limit violation, etc.); the first failure is injected into the next retry's prompt: Phase 0 / Phase 4 via `{retry_note}` placeholder + `prior_error` argument; Phase 1 via `correction_feedback` code-side append (reusing the existing stage-limit retry channel, schema fails are merged into it). Covers 5 schemas: `schemas/analysis/{chapter_summary_chunk,scene_split,world_overview,stage_plan,candidate_characters}.schema.json`. Plumbing → `automation/persona_extraction/orchestrator.py:_summarize_chunk + run_analysis`, `scene_archive.py:validate_scene_split`, `prompt_builder.py:build_summarization_prompt(prior_error) + build_scene_split_prompt(prior_error) + build_analysis_prompt(correction_feedback)`. Pairs with #27b (Bounds-only-in-schema): bounds defined in schema, enforcement applied in the pipeline through the existing retry path.
 

@@ -3,7 +3,7 @@
 The Phase 3 extraction pipeline runs 1+2N parallel lanes per stage
 (1 ``world`` + N ``snapshot:{char_id}`` + N ``support:{char_id}``). Each
 lane writes its own per-stage JSON product; ``support`` additionally
-modifies five cumulative baseline files that are not lane-specific.
+modifies the cumulative ``identity.json`` baseline file.
 
 Lane-level resume (see requirements.md §11.5) only trusts a lane as
 complete when both conditions hold:
@@ -25,16 +25,12 @@ WORLD_LANE = "world"
 SNAPSHOT_PREFIX = "snapshot:"
 SUPPORT_PREFIX = "support:"
 
-# char_support lane's cumulative baseline files. These live under
-# works/{wid}/characters/{char_id}/canon/ and are NOT per-stage; we
-# restore them from HEAD before re-running an incomplete support lane
+# char_support lane's cumulative baseline file. Lives under
+# works/{wid}/characters/{char_id}/canon/ and is NOT per-stage; we
+# restore it from HEAD before re-running an incomplete support lane
 # so a prior partial write cannot bleed into the retry.
 BASELINE_FILENAMES = (
     "identity.json",
-    "voice_rules.json",
-    "behavior_rules.json",
-    "boundaries.json",
-    "failure_modes.json",
 )
 
 
@@ -67,7 +63,7 @@ def lane_product_path(work_root: Path, stage_id: str, lane_name: str) -> Path:
 
 
 def baseline_paths(work_root: Path, char_id: str) -> list[Path]:
-    """5 cumulative baseline files a support lane may have edited."""
+    """Cumulative baseline files a support lane may have edited."""
     canon = work_root / "characters" / char_id / "canon"
     return [canon / name for name in BASELINE_FILENAMES]
 
@@ -102,8 +98,8 @@ def expected_lane_dirty_paths(work_root: Path, stage_id: str,
 
     Returns repo-relative strings suitable for preflight_check's
     substring-match ignore_patterns. Covers every lane's per-stage
-    product file plus each character's 5 baseline files, since an
-    incomplete support lane may have partially written those.
+    product file plus each character's identity.json baseline file,
+    since an incomplete support lane may have partially written it.
     """
     patterns: list[str] = []
     for name in expected_lane_names(target_characters):

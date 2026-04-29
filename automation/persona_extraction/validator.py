@@ -259,29 +259,6 @@ def validate_baseline(
                     schema_dir / "character" / "character_manifest.schema.json",
                     str(manifest_path)))
 
-        # Skeleton baseline files (warn only — non-critical)
-        _baseline_schemas = {
-            "voice_rules.json": "character/voice_rules.schema.json",
-            "behavior_rules.json": "character/behavior_rules.schema.json",
-            "boundaries.json": "character/boundaries.schema.json",
-            "failure_modes.json": "character/failure_modes.schema.json",
-        }
-        for fname, schema_name in _baseline_schemas.items():
-            fpath = char_dir / fname
-            if not fpath.exists():
-                issues.append(ValidationIssue(
-                    "warning", str(fpath),
-                    f"{fname} not produced (Phase 2 should create)"))
-            else:
-                try_repair_json_file(fpath)
-                data = _load_json(fpath)
-                if data is None:
-                    issues.append(ValidationIssue(
-                        "error", str(fpath), "Invalid JSON"))
-                else:
-                    issues.extend(_validate_schema(
-                        data, schema_dir / schema_name, str(fpath)))
-
     passed = not any(i.severity == "error" for i in issues)
     return ValidationReport(passed=passed, issues=issues)
 

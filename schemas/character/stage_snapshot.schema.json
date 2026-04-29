@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/character/stage_snapshot.schema.json",
   "title": "阶段快照",
-  "description": "自包含的角色阶段快照。每个快照包含该阶段的完整角色状态，运行时直接加载无需与 baseline 合并。baseline 文件（voice_rules、behavior_rules、boundaries）仅在提取阶段作为参照锚点使用。",
+  "description": "自包含的角色阶段快照。每个快照包含该阶段的完整角色状态——voice / behavior / boundary / failure_modes 全部内联，运行时与 identity.json 一起加载即可，不再有独立的 voice_rules / behavior_rules / boundaries / failure_modes baseline 文件。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -20,6 +20,7 @@
     "voice_state",
     "behavior_state",
     "boundary_state",
+    "failure_modes",
     "relationships",
     "stage_events",
     "character_arc"
@@ -217,7 +218,7 @@
 
     "voice_state": {
       "type": "object",
-      "description": "当前阶段的完整语言风格状态。自包含，无需与 baseline voice_rules 合并。",
+      "description": "当前阶段的完整语言风格状态。自包含——voice 状态由 stage_snapshot 演变链承载，无独立 baseline。",
       "additionalProperties": false,
       "properties": {
         "tone_summary": {
@@ -352,7 +353,7 @@
 
     "behavior_state": {
       "type": "object",
-      "description": "当前阶段的完整行为规则状态。自包含，无需与 baseline behavior_rules 合并。",
+      "description": "当前阶段的完整行为规则状态。自包含——behavior 状态由 stage_snapshot 演变链承载，无独立 baseline。",
       "additionalProperties": false,
       "properties": {
         "core_goals": {
@@ -500,7 +501,7 @@
 
     "boundary_state": {
       "type": "object",
-      "description": "当前阶段的完整边界状态。hard_boundaries 对应 baseline boundaries.json 的硬约束（阶段内通常不变）；soft_boundaries 为当前阶段的有效状态。",
+      "description": "当前阶段的完整边界状态。hard_boundaries 是本阶段绝对不会做的事（阶段内通常不变，由演变链承载，无独立 baseline）；soft_boundaries 为当前阶段的有效软边界。",
       "additionalProperties": false,
       "properties": {
         "hard_boundaries": {
@@ -555,6 +556,126 @@
             "properties": {
               "misconception": { "type": "string", "maxLength": 50 },
               "reality": { "type": "string", "maxLength": 100 }
+            }
+          }
+        }
+      }
+    },
+
+    "failure_modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "本阶段的角色崩坏预警——AI 扮演该角色时最容易犯的错误和写崩的点。每 stage 全量记录（继承未消除 + 新增；已消除的不列）；运行时与当前 stage_snapshot 一起加载，无需向前 trace 多个文件。子类 maxItems 与历史 baseline failure_modes.schema.json 一致；触发上限时按 character_snapshot_extraction.md 的 maxItems 裁剪规则保留最重要、最符合当前 stage 需要的条目。",
+      "properties": {
+        "common_failures": {
+          "type": "array",
+          "maxItems": 15,
+          "description": "AI 扮演该角色时最常见的错误模式。最多 15 条。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["description", "correct_behavior"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "崩坏模式唯一标识。例如：FM-JHX-01。"
+              },
+              "name": {
+                "type": "string",
+                "description": "崩坏模式简称。例如：过早软化、话痨化。"
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "常见错误描述。例如：容易把傲娇写成真的讨厌对方、容易让角色过于主动表白。上限 50 字。"
+              },
+              "why_it_happens": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "为什么 AI 容易犯这个错误。上限 50 字。"
+              },
+              "correct_behavior": {
+                "type": "string",
+                "maxLength": 100,
+                "description": "正确的行为应该是什么。上限 100 字。"
+              },
+              "common_triggers": {
+                "type": "array",
+                "maxItems": 10,
+                "description": "容易触发此崩坏模式的常见场景。最多 10 条。",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "tone_traps": {
+          "type": "array",
+          "maxItems": 10,
+          "description": "语气上容易犯的错误。最多 10 条。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["trap", "correction"],
+            "properties": {
+              "trap": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "容易掉入的语气陷阱。上限 50 字。"
+              },
+              "correction": {
+                "type": "string",
+                "maxLength": 100,
+                "description": "正确的语气应该是什么。上限 100 字。"
+              }
+            }
+          }
+        },
+        "relationship_traps": {
+          "type": "array",
+          "maxItems": 10,
+          "description": "关系互动上容易犯的错误。最多 10 条。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["trap", "correction"],
+            "properties": {
+              "trap": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "容易掉入的关系互动陷阱。上限 50 字。"
+              },
+              "correction": {
+                "type": "string",
+                "maxLength": 100,
+                "description": "正确的关系互动应该是什么。上限 100 字。"
+              }
+            }
+          }
+        },
+        "knowledge_leaks": {
+          "type": "array",
+          "maxItems": 15,
+          "description": "知识泄漏风险——角色不该知道但 AI 容易让角色说出来的信息。最多 15 条。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["leak_risk", "correct_knowledge_state"],
+            "properties": {
+              "leak_risk": {
+                "type": "string",
+                "maxLength": 50,
+                "description": "泄漏风险描述。上限 50 字。"
+              },
+              "correct_knowledge_state": {
+                "type": "string",
+                "maxLength": 100,
+                "description": "角色在对应阶段实际应该知道什么。上限 100 字。"
+              },
+              "relevant_stages": {
+                "type": "array",
+                "description": "这个风险在哪些阶段尤其需要注意。",
+                "items": { "type": "string" }
+              }
             }
           }
         }

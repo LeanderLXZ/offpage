@@ -17,6 +17,14 @@ Phase 0/1/1.5/2/4 complete; Phase 3 in progress — S001 + S002 committed,
 S003 in ERROR awaiting `--resume`, S004–S049 pending. Phase 3.5 pending
 (blocked on all-stages-COMMITTED). No runtime code yet.
 
+Recent schema change (2026-04-29): 4-piece character baseline
+(`voice_rules` / `behavior_rules` / `boundaries` / `failure_modes`)
+deprecated — `failure_modes` inlined into `stage_snapshot`; voice /
+behavior / boundary state already lived per-stage. Existing committed
+S001 / S002 snapshots predate the new `failure_modes` required field
+and need migration via `automation/persona_extraction/migrate_baseline_to_stage_snapshot.py`
+(or re-extraction) before Phase 3 resumes.
+
 ## What Exists
 
 - Full directory scaffold + formal architecture docs (`docs/architecture/`)

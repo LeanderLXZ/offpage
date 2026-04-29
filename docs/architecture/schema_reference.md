@@ -13,7 +13,7 @@
 | `schemas/analysis/` | Phase 0 / Phase 1 / Phase 4 LLM 产物（Phase 1 三件套入 git，其余不入运行时） | 5 |
 | `schemas/work/` | 作品入库、目录、阶段目录、per-work 加载配置 | 6 |
 | `schemas/world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | 6 |
-| `schemas/character/` | 角色 baseline + 阶段快照 + 记忆 | 9 |
+| `schemas/character/` | 角色 baseline + 阶段快照 + 记忆 | 5 |
 | `schemas/user/` | 用户根画像、绑定、长期档案、关系核心、钉选记忆条目 | 5 |
 | `schemas/runtime/` | Context / Session / 请求载荷 / 场景归档条目 | 5 |
 | `schemas/shared/` | 跨域共享（extraction_notes 等） | 1 |
@@ -235,53 +235,6 @@ key_relationships 提供关系的全局演变轨迹。
 
 ---
 
-### character/voice_rules.schema.json
-
-**用途**：角色语言风格的提取锚点（baseline）。
-**位置**：`characters/{character_id}/canon/voice_rules.json`
-**运行时**：**不加载**。运行时使用 stage_snapshot 中的 `voice_state`。
-
-**关键字段**：`baseline_tone` / `speech_patterns` /
-`vocabulary_preferences` / `signature_phrases` / `taboo_patterns` /
-`emotional_voice_map` / `target_voice_map` / `dialogue_examples`（顶层
-+ `emotional_voice_map` + `target_voice_map` 三处对齐结构，均无
-`evidence_ref`）。
-
----
-
-### character/behavior_rules.schema.json
-
-**用途**：角色行为规则的提取锚点（baseline）。
-**位置**：`characters/{character_id}/canon/behavior_rules.json`
-**运行时**：**不加载**。运行时使用 stage_snapshot 中的 `behavior_state`。
-
-**目标与执念分离**：`core_goals`（理性目标，可权衡调整）与
-`obsessions`（非理性心结，不受权衡控制）是两个独立字段。stage_snapshot
-中的 `behavior_state` 同样维护 `core_goals` / `obsessions`，
-`emotional_baseline` 维护 `active_goals` / `active_obsessions`。
-
-**关键字段**：`core_goals` / `obsessions` / `decision_making_style` /
-`emotional_triggers` / `emotional_reaction_map` / `target_behavior_map`
-（与 stage 侧同名）/ `habitual_behaviors` / `stress_response`。
-
----
-
-### character/boundaries.schema.json
-
-**用途**：角色行为边界（硬边界 + 软边界）的提取锚点。
-**位置**：`characters/{character_id}/canon/boundaries.json`
-**运行时**：hard_boundaries 始终加载；soft_boundaries 由 stage_snapshot 的 `boundary_state` 提供。
-
----
-
-### character/failure_modes.schema.json
-
-**用途**：AI 扮演该角色时容易犯的错误清单。
-**位置**：`characters/{character_id}/canon/failure_modes.json`
-**运行时**：始终加载。
-
----
-
 ### character/stage_snapshot.schema.json
 
 **用途**：角色阶段快照——**自包含**的完整角色状态。
@@ -290,8 +243,8 @@ key_relationships 提供关系的全局演变轨迹。
 
 **核心原则**：
 - 每个快照必须自包含，包含完整的状态（即使与上一阶段无变化）
-- 运行时直接加载，不需要与 baseline 合并
-- Baseline 文件是提取锚点，不在运行时加载
+- 运行时与 `identity.json` 配套加载即可，无独立 baseline 文件需要合并
+- voice / behavior / boundary / failure_modes 全部内联，由 stage_snapshot 演变链承载
 - `target_voice_map` 和 `target_behavior_map` 按用户扮演角色**过滤加载**
   （只加载匹配条目）；如果当前快照缺少匹配条目，引擎向前扫描最近包含
   该条目的快照（fallback，纯代码 I/O，不产生额外 LLM 调用）
@@ -308,6 +261,7 @@ key_relationships 提供关系的全局演变轨迹。
 | `voice_state` | 语气基调、语言习惯、用词偏好、口头禅、禁忌用语、情绪语气矩阵（emotional_voice_map）、对象语气矩阵（target_voice_map，按具体角色区分，每 target 至少 3-5 条对话示例）、典型对话示例（dialogue_examples 无 evidence_ref） |
 | `behavior_state` | **core_goals**（理性目标）、**obsessions**（执念）、决策风格、情绪触发器、情绪反应矩阵（emotional_reaction_map）、对象行为矩阵（target_behavior_map，与 target_voice_map 平行对齐，每 target 至少 3-5 条行为示例；action_examples 无 evidence_ref）、习惯性行为、压力应对 |
 | `boundary_state` | `hard_boundaries` / `soft_boundaries` / `common_misconceptions` |
+| `failure_modes` | 4 子类（`common_failures` / `tone_traps` / `relationship_traps` / `knowledge_leaks`），全量记录本阶段 active 的崩坏防护清单（继承未消除 + 新增；已消除的不写）。子类 maxItems 与历史 baseline failure_modes.schema.json 一致 |
 | `relationships` | 对每个重要角色的完整关系状态（态度、信任、亲密度、语气变化、行为变化、驱动事件、`relationship_history_summary`） |
 | `misunderstandings` | 角色持有的误解（content / truth / cause） |
 | `concealments` | 角色主动隐瞒的事情（content / reason） |
@@ -318,8 +272,8 @@ key_relationships 提供关系的全局演变轨迹。
 **自包含契约（schema 硬门控）**：`required` 除元信息外还包含
 `timeline_anchor` / `snapshot_summary` / `active_aliases` /
 `current_personality` / `current_mood` / `knowledge_scope` /
-`voice_state` / `behavior_state` / `boundary_state` / `relationships` /
-`stage_events` / `character_arc`。L1 schema 层即强制所有自包含维度存在
+`voice_state` / `behavior_state` / `boundary_state` / `failure_modes` /
+`relationships` / `stage_events` / `character_arc`。L1 schema 层即强制所有自包含维度存在
 （`stage_delta` 可省略，stage 1 没有上阶段参考）。由 schema gate
 承担 self-contained 契约，而非仅靠 prompt + L2/L3 兜底。角色阶段快照
 **不携带** 章节级回溯字段（`memory_refs` / `evidence_refs` /
@@ -493,12 +447,8 @@ permanence_reason?, pinned_at?
 
 | 文件 | 提取时 | 运行时 |
 |------|--------|--------|
-| identity.json | 首阶段创建，后续修订 | **加载** |
-| failure_modes.json | 首阶段创建，后续修订 | **加载** |
-| voice_rules.json | 提取锚点 | **不加载** |
-| behavior_rules.json | 提取锚点 | **不加载** |
-| boundaries.json | 提取锚点（hard_boundaries 加载） | hard_boundaries **加载** |
-| stage_snapshot | 每阶段产出 | **加载**（核心） |
+| identity.json | 首阶段创建（Phase 2），后续 char_support lane 修订 | **加载** |
+| stage_snapshot（含内联 failure_modes / voice_state / behavior_state / boundary_state / hard_boundaries / soft_boundaries 全字段） | 每阶段产出 | **加载**（核心；与 identity 配套即可） |
 | memory_timeline | 每阶段产出 | 近期 2 阶段全量 + memory_digest 1..N 过滤 + FTS5 按需 |
 
 ---
