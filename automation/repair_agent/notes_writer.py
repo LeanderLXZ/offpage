@@ -64,6 +64,34 @@ class NotesWriter:
         self._seq_cache[(str(self._entity_root(file_path)), stage_id)] = seq + 1
         return note_id
 
+    def load_existing_fingerprints(
+        self, file_path: str, stage_id: str,
+    ) -> set[str]:
+        """Read fingerprints of already-accepted notes for (entity, stage).
+
+        Used by lifecycle 2 startup to filter out issues that were
+        already accepted in lifecycle 1, so the same fingerprint isn't
+        written twice to the JSONL.
+        """
+        path = self.notes_path_for(file_path, stage_id)
+        fps: set[str] = set()
+        if not path.exists():
+            return fps
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                obj = json.loads(line)
+                fp = obj.get("issue_fingerprint")
+                if isinstance(fp, str) and fp:
+                    fps.add(fp)
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "notes_writer: could not read fingerprints from %s: %s",
+                path, exc)
+        return fps
+
     def append(self, notes: list[SourceNote]) -> list[Path]:
         """Append notes, atomic per target file. Returns written paths."""
         if not notes:

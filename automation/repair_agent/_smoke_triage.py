@@ -141,7 +141,7 @@ def scenario_a_pre_t3_accept() -> None:
         max_rounds=2, run_semantic=True, l3_gate_enabled=True,
         triage_enabled=True, accept_cap_per_file=3,
         retry_policy=RetryPolicy(
-            t0_max=1, t1_max=1, t2_max=1, t3_max=1, t3_max_per_file=1,
+            t0_max=1, t1_max=1, t2_max=1, t3_max=1,
             max_total_rounds=2),
     )
 
@@ -183,7 +183,7 @@ def scenario_b_bad_quote_rejected() -> None:
         max_rounds=1, run_semantic=True, l3_gate_enabled=True,
         triage_enabled=True, accept_cap_per_file=3,
         retry_policy=RetryPolicy(
-            t0_max=1, t1_max=1, t2_max=1, t3_max=1, t3_max_per_file=1,
+            t0_max=1, t1_max=1, t2_max=1, t3_max=1,
             max_total_rounds=1),
     )
 
@@ -245,7 +245,7 @@ def scenario_c_cap_enforced() -> None:
         max_rounds=1, run_semantic=True, l3_gate_enabled=True,
         triage_enabled=True, accept_cap_per_file=2,
         retry_policy=RetryPolicy(
-            t0_max=1, t1_max=1, t2_max=1, t3_max=1, t3_max_per_file=1,
+            t0_max=1, t1_max=1, t2_max=1, t3_max=1,
             max_total_rounds=1),
     )
 
@@ -260,13 +260,22 @@ def scenario_c_cap_enforced() -> None:
     else:
         lines = []
 
+    # Cap is per-lifecycle (independent counters per cycle); disk JSONL
+    # is append-only across lifecycles. With cap=2 and the default
+    # max_lifecycles_per_file=2, lifecycle 1 may accept 2 and lifecycle 2
+    # may accept up to 2 more before hitting cap again — total ≤ 4 lines
+    # on disk. The PER-CYCLE invariant is the one being enforced.
+    cycles = cfg.max_lifecycles_per_file
+    cap = cfg.accept_cap_per_file
     print(f"[C] passed={result.passed}  notes={len(result.accepted_notes)}  "
           f"persisted_lines={len(lines)}")
-    assert len(result.accepted_notes) <= 2, (
-        f"accept cap breached: {len(result.accepted_notes)} > 2")
+    assert len(result.accepted_notes) <= cycles * cap, (
+        f"per-lifecycle cap × {cycles} cycles breached: "
+        f"{len(result.accepted_notes)} > {cycles * cap}")
     assert len(lines) == len(result.accepted_notes)
 
-    print("[C] OK — accept_cap_per_file enforced")
+    print(f"[C] OK — per-lifecycle accept_cap_per_file enforced "
+          f"(cap={cap}, cycles={cycles}, total notes={len(result.accepted_notes)})")
 
 
 def scenario_d_non_semantic_rejected() -> None:
@@ -431,7 +440,7 @@ def scenario_e_t3_self_report_tracked() -> None:
         max_rounds=2, run_semantic=True, l3_gate_enabled=True,
         triage_enabled=True, accept_cap_per_file=3,
         retry_policy=RetryPolicy(
-            t0_max=1, t1_max=1, t2_max=1, t3_max=1, t3_max_per_file=1,
+            t0_max=1, t1_max=1, t2_max=1, t3_max=1,
             max_total_rounds=2),
     )
 
@@ -538,7 +547,7 @@ def scenario_f_coverage_shortage_accepted() -> None:
         max_rounds=2, run_semantic=False, l3_gate_enabled=True,
         triage_enabled=True, accept_cap_per_file=5,
         retry_policy=RetryPolicy(
-            t0_max=1, t1_max=1, t2_max=1, t3_max=1, t3_max_per_file=1,
+            t0_max=1, t1_max=1, t2_max=1, t3_max=1,
             max_total_rounds=2),
     )
 

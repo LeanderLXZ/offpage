@@ -97,9 +97,10 @@ t1_retry = 3     # T1 局部 patch（快、便宜）
 t2_retry = 3     # T2 source_patch（带原文上下文）
 t3_retry = 1     # T3 全文件 regen（昂贵）
 
-# 单文件 T3 全局上限（跨整次运行）。T3 第二次重生成几乎不会成功，
-# 反而浪费 token；调高需谨慎。
-t3_max_per_file = 1
+# 单文件最多走的完整 lifecycle 数（一个 lifecycle = 一次完整 Phase A→B→C）。
+# Lifecycle 1 触发 T3 后状态机重置进入 lifecycle 2；lifecycle 2 禁用 T3，
+# 任何升到 T3 的 issue 立即 T3_EXHAUSTED 退出。
+max_lifecycles_per_file = 2
 
 # Phase B 修复循环最大轮数。一轮 = 一次完整 fix + scoped recheck。
 total_round_limit = 5

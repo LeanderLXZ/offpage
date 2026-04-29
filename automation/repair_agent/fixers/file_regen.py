@@ -77,6 +77,7 @@ class FileRegenFixer(BaseFixer):
         source_context: SourceContext | None = None,
         attempt_num: int = 0,
         max_attempts: int = 1,
+        prior_attempt_context: dict | None = None,
     ) -> FixResult:
         if self._llm_call is None:
             return FixResult()
@@ -105,7 +106,8 @@ class FileRegenFixer(BaseFixer):
                     source_context)
 
             prompt = self._build_prompt(
-                file_path, content, file_issues, chapter_text)
+                file_path, content, file_issues, chapter_text,
+                prior_attempt_context=prior_attempt_context)
 
             try:
                 response = self._llm_call(prompt, timeout=900)
@@ -137,7 +139,8 @@ class FileRegenFixer(BaseFixer):
         )
 
     def _build_prompt(self, file_path: str, content: Any,
-                      issues: list[Issue], chapter_text: str) -> str:
+                      issues: list[Issue], chapter_text: str,
+                      *, prior_attempt_context: dict | None = None) -> str:
         parts = [REGEN_SYSTEM]
 
         parts.append(f"\n--- FILE: {file_path} ---")
@@ -151,11 +154,43 @@ class FileRegenFixer(BaseFixer):
             parts.append(f"  [{issue.severity}] {issue.json_path}: "
                          f"[{issue.rule}] {issue.message}")
 
+        if prior_attempt_context:
+            parts.append(_format_prior_attempt_context(prior_attempt_context))
+
         if chapter_text:
             parts.append(
                 f"\n--- SOURCE TEXT (original chapters) ---\n{chapter_text}")
 
         return "\n".join(parts)
+
+
+_PRIOR_CONTEXT_CHAR_BUDGET = 600  # ~200 token CJK
+
+
+def _format_prior_attempt_context(ctx: dict) -> str:
+    """Render a compact summary of the previous lifecycle's attempts.
+
+    Expected keys:
+      ``resolved`` — list of "path: rule" strings (already-fixed issues)
+      ``remaining`` — list of "path: rule (message)" strings (still failing)
+
+    Truncated to ~200 token (`_PRIOR_CONTEXT_CHAR_BUDGET` chars total).
+    """
+    lines = ["\n--- PRIOR LIFECYCLE ATTEMPT ---"]
+    resolved = ctx.get("resolved") or []
+    remaining = ctx.get("remaining") or []
+    if resolved:
+        lines.append(f"Previously resolved ({len(resolved)}):")
+        for s in resolved:
+            lines.append(f"  + {s}")
+    if remaining:
+        lines.append(f"Still failing ({len(remaining)}):")
+        for s in remaining:
+            lines.append(f"  - {s}")
+    text = "\n".join(lines)
+    if len(text) > _PRIOR_CONTEXT_CHAR_BUDGET:
+        text = text[:_PRIOR_CONTEXT_CHAR_BUDGET] + "\n... (truncated)"
+    return text
 
 
 def _extract_file_self_reports(

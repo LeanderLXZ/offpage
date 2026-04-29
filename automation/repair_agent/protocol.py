@@ -57,12 +57,11 @@ class SourceContext:
 
 @dataclass
 class RetryPolicy:
-    """Per-tier retry limits."""
+    """Per-tier retry limits (within a single lifecycle)."""
     t0_max: int = 1
     t1_max: int = 3
     t2_max: int = 3
     t3_max: int = 1
-    t3_max_per_file: int = 1  # global cap per file across entire run
     max_total_rounds: int = 5
 
 
@@ -74,9 +73,17 @@ class RepairConfig:
     run_semantic: bool = True
     l3_gate_enabled: bool = True
     triage_enabled: bool = True          # source-discrepancy triage on L3
-    accept_cap_per_file: int = 5         # max SourceNotes per file
-                                         # (shared by L3 source_inherent +
-                                         # L2 coverage_shortage)
+    accept_cap_per_file: int = 5         # max SourceNotes per file per
+                                         # lifecycle (shared by L3
+                                         # source_inherent + L2
+                                         # coverage_shortage; resets per
+                                         # lifecycle, accumulates on disk)
+    max_lifecycles_per_file: int = 2     # one file walks at most this
+                                         # many full check→fix→verify
+                                         # lifecycles. Lifecycle 1 may
+                                         # trigger T3; lifecycle 2 disables
+                                         # T3 (any escalation to T3 →
+                                         # T3_EXHAUSTED).
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
 
 

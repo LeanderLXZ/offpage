@@ -74,7 +74,7 @@ class RepairAgentConfig:
     t1_retry: int = 3
     t2_retry: int = 3
     t3_retry: int = 1
-    t3_max_per_file: int = 1
+    max_lifecycles_per_file: int = 2
     total_round_limit: int = 5
     triage_enabled: bool = True
     triage_accept_cap_per_file: int = 5

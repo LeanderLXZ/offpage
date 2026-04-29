@@ -303,7 +303,7 @@ Phase 3 的文件校验和修复由独立的 `repair_agent` 模块负责。
 | T0 | programmatic | 0 token | 正则修 JSON、类型转换、ID 格式、缺失字段 |
 | T1 | local_patch | 少量 token | 字段级 LLM 修复（不读原文） |
 | T2 | source_patch | 中等 token | 字段级 LLM 修复（带原文章节） |
-| T3 | file_regen | 大量 token | 全文件 LLM 重生成（最后手段，**全局每文件最多触发 1 次** `t3_max_per_file=1`） |
+| T3 | file_regen | 大量 token | 全文件 LLM 重生成（最后手段，**单文件至多在 lifecycle 1 触发一次** — 受 `max_lifecycles_per_file=2` 约束，lifecycle 2 禁用 T3，升 T3 即 `T3_EXHAUSTED`） |
 
 **三阶段运行**：Phase A 全量检查 → Phase B 修复循环（内嵌 **L3 gate**）
 → Phase C 最终确认。Phase B 每轮在 L0–L2 scoped recheck 之后，会对
@@ -316,7 +316,9 @@ Phase 3 的文件校验和修复由独立的 `repair_agent` 模块负责。
 **源文件问题 triage**（`triage_enabled=True`，默认开启）：某些 L3 残留其实是
 源小说本身的 bug（作者矛盾、typo、名称/代称混用、世界规则冲突等），或者
 L2 结构层发现字段条数不足且原文确实素材不够。两条 accept_with_notes 通道共用
-单文件上限 `accept_cap_per_file=5`。
+单文件每个 lifecycle 上限 `accept_cap_per_file=5`；磁盘 jsonl append-only 跨
+lifecycle 累积，lifecycle 2 启动前从磁盘读已 accept 的 fingerprint 过滤
+Phase A，避免重复写盘。
 
 **Path A — L3 `source_inherent`（LLM）触发点**：
 - **pre-T3**：若 `_run_fixer_with_escalation` 即将升级到 T3，先做一次 triage；
@@ -333,7 +335,7 @@ L2 `min_examples` 规则把 issue 降级为 `severity=warning + coverage_shortag
 接受的硬条件（程序校验，非 LLM 自述）：(1) issue 必须是 `semantic`（Path A）
 或 `structural` + `coverage_shortage` flag（Path B）；(2) 引用 `chapter_number
 + line_range + 逐字 quote`，程序用 `chapter_text.find(quote) >= 0` 校验；
-(3) 每文件接受上限 `accept_cap_per_file=5`（两条通道共用）；(4)
+(3) 每文件每个 lifecycle 接受上限 `accept_cap_per_file=5`（两条通道共用）；(4)
 `discrepancy_type` 必须是闭集中之一（author_contradiction / typo /
 name_mixup / pronoun_confusion / title_drift / time_shift / space_conflict
 / duplicated_passage / world_rule_conflict / death_state_conflict / logic_jump
@@ -343,9 +345,10 @@ name_mixup / pronoun_confusion / title_drift / time_shift / space_conflict
 note_id 格式 `SN-S{stage:03d}-{seq:02d}`；stage 保持 COMMITTED，不新增状态。
 **Runtime 不消费 extraction_notes/，仅审计。**
 
-**T3_CORRUPTED 硬停**：T3 跑完后立即对被重写文件做 scoped L0–L2 检查；
-发现任何 L0–L2 错误即中止 Phase B 并 FAIL，**不走 triage**——机械损坏
-不可能是"源文件的错"。
+**Lifecycle 重置**：T3 跑完后**不做即时 corruption 检查** — T3 输出
+直接进入 lifecycle 2 的 Phase A，全量重扫（L0/L1/L2/L3）会自动捕获任何
+机械损坏并按正常 fixer 链处理；新 error 升 T3 即 `T3_EXHAUSTED`（lifecycle 2
+禁用 T3）。这把 corruption 止损合并进了 lifecycle 2 Phase A 的全量重扫。
 
 代码：`repair_agent/`
 

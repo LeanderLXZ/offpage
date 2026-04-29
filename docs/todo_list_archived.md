@@ -73,6 +73,11 @@
 
 ## Completed
 
+### [T-REPAIR-T3-LIFECYCLE-RESET] T3 触发后开新 repair lifecycle，单文件最多 2 个 lifecycle · 完成于 2026-04-29 · 完整完成
+
+- 1 行摘要：`max_lifecycles_per_file=2`（取代旧 `t3_max_per_file=1`）；coordinator 抽 `_run_one_lifecycle`，外层 lifecycle 循环；lifecycle 1 触发 T3 即返回（无 Post-T3 corruption 检查 / 无当轮 L3 gate / 无 Phase C），状态机重置后进入 lifecycle 2，禁用 T3 + 升 T3 即 `T3_EXHAUSTED`；T3 prompt 携带 `prior_attempt_context`（resolved+remaining 摘要 ≤600 char）；triage cap 改为 per-lifecycle，磁盘 jsonl append-only，lifecycle 2 启动前读已 accept fingerprint 过滤；recorder 事件加 `cycle` 字段；`T3_CORRUPTED` 路径完整删除。Smoke 三场景（A 单 lifecycle PASS / B lifecycle 1 T3→lifecycle 2 PASS / C 持续失败→T3_EXHAUSTED）+ 6 triage 场景全过。
+- 关联 log: [logs/change_logs/2026-04-29_030118_repair-t3-lifecycle-reset.md](../logs/change_logs/2026-04-29_030118_repair-t3-lifecycle-reset.md)
+
 ### [T-LOAD-STRATEGY-WORLD-EVENTS-BOUND] load_strategy.md 删除复述 schema 的具体 bound · 完成于 2026-04-28 · 改方案后完成
 
 - 1 行摘要：原方案"L17 把 50–80 改成 50–100"；实际方案升级为通用清理——`simulation/retrieval/load_strategy.md` 三处复述 schema 数值（L17 world event_digest summary `50–80 chars, hard schema gate`、L22-23 identity `≤ 200 chars` / `≤ 10 entries`、L41 memory_digest summary `30–50 chars, hard schema gate`）全部删除，只留"length capped at extraction time by … schema"指针；loader 自身行为参数（recent 2 stages 窗口、stage 1..N filter、token 预算估算）原样保留。判定准则："数字改了之后跟谁走"——跟 schema 走 → 删；跟 loader 代码走 → 留。

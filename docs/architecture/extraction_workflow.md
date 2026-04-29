@@ -415,12 +415,18 @@ orchestrator (Python)
     │       ├── 程序化后处理 (digest/catalog, 0 token, idempotent upsert)
     │       ├── repair_agent per-file 并发 (ThreadPoolExecutor, 默认 10):
     │       │       └── 对每个待修文件独立跑 coordinator.run(files=[single]):
-    │       │               ├── Phase A: L0–L3 全量检查
-    │       │               ├── Phase B: 修复循环 (T0→T1→T2→T3 逐层升级
-    │       │               │       + 每轮末 L3 gate
-    │       │               │       + 源文件问题 triage: pre-T3 & post-gate
-    │       │               │       + T3_CORRUPTED 硬停: T3 后 L0–L2 扫描)
-    │       │               └── Phase C: 最终确认 (复用最后一次 L3 gate 结果)
+    │       │               ├── Lifecycle 1 (Phase A→B→C, T3 enabled)
+    │       │               │       ├── Phase A: L0–L3 全量检查
+    │       │               │       ├── Phase B: 修复循环 (T0→T1→T2→T3 逐层升级
+    │       │               │       │       + 每轮末 L3 gate
+    │       │               │       │       + 源文件问题 triage: pre-T3 & post-gate)
+    │       │               │       │       T3 一旦触发 → 立即返回 (跳 L3 gate / Phase C)
+    │       │               │       │       → 状态机重置 → lifecycle 2
+    │       │               │       └── Phase C: 最终确认 (T3 未触发时, 复用最后一次 gate)
+    │       │               └── Lifecycle 2 (T3 disabled, 仅在 lifecycle 1 触发 T3 后进入)
+    │       │                       ├── Phase A: 重扫 (滤掉已 accept 的 fingerprint)
+    │       │                       ├── Phase B: 同 lifecycle 1 但禁用 T3, 升 T3 即 T3_EXHAUSTED
+    │       │                       └── Phase C: 同 lifecycle 1
     │       ├── 程序化后处理重跑 (digest/catalog, 0 token, idempotent)
     │       │       └── 在 transition(PASSED) 之前无条件重跑
     │       │           PASSED 语义 = repair 通过 ∧ PP 已同步
@@ -454,23 +460,28 @@ orchestrator (Python)
   `works/{work_id}/analysis/progress/repair_logs/repair_{stage_id}_{slug(file)}.jsonl`。
   `slug(file)` = 路径末两段 + 8 位 md5 摘要，避免中文路径 ASCII 折叠后
   冲突。coordinator 在每个 phase 起止、每条 blocking issue、每轮
-  fix、L3 gate 结果、T3_CORRUPTED、最终结论处 append 一条 JSON 事件
+  fix、L3 gate 结果、lifecycle 信号、最终结论处 append 一条 JSON 事件
   （含 fingerprint / file / json_path / rule / severity / message /
-  start_tier 等字段）。文件随 `progress/` 一并 `.gitignore`；事后可
+  start_tier / cycle 等字段；`cycle` 0/1 区分两个 lifecycle）。文件随
+  `progress/` 一并 `.gitignore`；事后可
   用 `jq` 或脚本复盘"S001 里某个文件的第 3 个 issue 是什么 / 在哪个
   tier 被修"。
 - **Repair Agent（统一检测+修复）**：独立模块 `automation/repair_agent/`，
   各 phase 通过统一接口调用。四层检查器（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
   与四层修复器（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成）**正交**——
   任何层的 issue 都可能需要任何 tier 的修复。修复从最低可用 tier 开始逐层升级，
-  每个 tier 有独立重试次数（T0=1, T1=3, T2=3, T3=1），T3 还受 `t3_max_per_file=1` 的全局每文件上限约束。
+  每个 tier 有独立重试次数（T0=1, T1=3, T2=3, T3=1）。T3 触发受 `max_lifecycles_per_file=2`
+  约束：lifecycle 1 触发 T3 后状态机重置进入 lifecycle 2，lifecycle 2 禁用 T3，
+  升 T3 即 `T3_EXHAUSTED`。Lifecycle 1 的 T3 prompt 携带 `prior_attempt_context`
+  （已修+未修指纹摘要 ~200 token）。
   Phase B 每轮在 L0–L2 scoped recheck 后，对"本轮被修改 + Phase A 有过 L3 问题"的
   文件集合跑一次 **L3 gate**，把语义层的失败回灌进下一轮 issue 队列——关闭
   "T3 谎报语义已修但 Phase C 才发现" 的窗口。Phase C 优先复用最后一次 gate 的结果。
   字段级精确修补（json_path 定位），不整文件回滚。
   安全阀：回归保护（introduced ≥ resolved → 停机）、收敛检测（持续集不变 → 升级）、
   **L3 gate 反复**（连续两轮 gate 返回相同 blocking 集合 → 语义层不收敛 → 出 Phase C 报错）、
-  总轮次限制（默认 5 轮）
+  Lifecycle 上限（默认 2，lifecycle 2 升 T3 即 T3_EXHAUSTED）、
+  总轮次限制（每 lifecycle 默认 5 轮）
 - **源文件问题 triage**（`triage_enabled`）：两条 accept_with_notes 通道，
   共用单文件上限 `accept_cap_per_file=5`。
   （A）**L3 `source_inherent`（LLM）**——某些 L3 残留不是提取错误，而是源小说
@@ -494,9 +505,12 @@ orchestrator (Python)
   痕迹和未来 fixer 的线索；**runtime 不消费这些 notes**（仅审计）。Phase 3.5
   一致性检查遇到 min_examples 不足时，若有匹配 json_path 的 coverage_shortage
   SourceNote 则视为已达标、不报 warning。
-- **T3_CORRUPTED 硬停**：T3 跑完后立即对被重写文件做一次 scoped L0–L2 检查；
-  一旦发现任何 L0–L2 错误（JSON 语法/schema/结构被破坏），Phase B 直接以
-  `T3_CORRUPTED` 中止并 FAIL，**不走 triage**——机械损坏不可能是"源文件的错"。
+- **Lifecycle 重置**：T3 跑完后**不做即时 corruption 检查**；T3 输出
+  直接作为 lifecycle 2 的输入。Lifecycle 2 的 Phase A 会重扫所有 checker
+  层（L0/L1/L2/L3）——若 T3 真把文件结构破坏了，L0/L1/L2 会在 lifecycle 2
+  Phase A 立即报 error，仍走正常 fixer 链；若新 error 升到 T3 即
+  `T3_EXHAUSTED`（lifecycle 2 禁用 T3）。这相当于 corruption 止损被合并
+  进了 lifecycle 2 Phase A 的全量重扫，不再需要单独的 Post-T3 scoped 检查。
 - 提取在独立 git 分支（`extraction/{work_id}`）进行，每 stage 单独 commit
   （精确回滚）；全部完成后 squash merge 到 `library` 分支（默认目标，可由
   `[git].squash_merge_target` 配置），**不回流 `main`**——`main` 只承载
