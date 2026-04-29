@@ -15,10 +15,11 @@ description: 直接读 docs/todo_list.md 顶部 ## Index (auto-generated; do not
 
 ### 1. 读索引
 
-`Read` `docs/todo_list.md`，提取 `## Index (auto-generated; do not hand-edit)` 段——从该标题起到下一个二级标题（`## File guide`）之前的全部内容。
+`Read` `docs/todo_list.md` **必须带 `limit=100`**——索引段在文件顶部，整文 ~700 行全读会大幅拖慢响应、浪费 context。从读到的内容里提取 `## Index (auto-generated; do not hand-edit)` 段——从该标题起到下一个二级标题（`## File guide`）之前的全部内容。
 
 文件不存在 → 打印"⚠️ docs/todo_list.md 缺失"并停手。
 索引段缺失（找不到该标题） → 打印"⚠️ docs/todo_list.md 顶部缺索引段；请先按 todo_list.md 「Index maintenance」段补齐再调 /todo-list"并停手。
+读到 100 行仍未见 `## File guide`（说明索引段已涨过 100 行截断） → 打印"⚠️ 索引段已超 100 行，回收条目或调高 /todo-list 的 Read limit"并停手。
 索引段存在但三张子表都标 "_(none)_" → 仍正常渲染，只是显示"暂无任何任务"。
 
 ### 2. 过滤（可选）
