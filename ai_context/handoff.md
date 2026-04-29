@@ -4,7 +4,7 @@ This file is an index for fast project follow-up, not a detailed manual.
 1. Write "what / where to find"; link to authoritative sources (code paths, docs/*.md, schemas, logs).
 2. Prefer deletion over addition; check if a new item merges into an existing one before adding.
 3. Describe the current design only — no "legacy / deprecated / formerly / renamed from".
-4. No real book / character / plot names — use placeholders (`<work_id>`, `角色A`, `S001`).
+4. No real book / character / plot names — use placeholders (`<work_id>`, `Character A`, `S001`).
 Shorter is better than longer; push detail into the linked source rather than growing this file.
 -->
 
@@ -51,13 +51,14 @@ Manual repair scenarios → `prompts/review/*.md`.
 ### Extraction-branch artifact drift (resume gate)
 
 Before `--resume` on an existing `extraction/<work_id>` branch, read the
-**`## 正在执行` and `## 下一步` sections of `docs/todo_list.md`** for
+**`## In Progress` and `## Next` sections of `docs/todo_list.md`** for
 active or imminent migration tasks against the current schemas. **Do NOT
-read the `## 讨论中` section for this gate** — those are deferred /
-non-blocking and only waste tokens. Faster path: the top-of-file `## 索引`
-section already summarises both — read that and skip the bodies unless an
-ID looks relevant. The repair agent's L1 gate will trip on every
-pre-tightening file otherwise.
+read the `## Discussing (Undecided)` section for this gate** — those are
+deferred / non-blocking and only waste tokens. Faster path: the
+top-of-file `## Index (auto-generated; do not hand-edit)` section already
+summarises both — read that and skip the bodies unless an ID looks
+relevant. The repair agent's L1 gate will trip on every pre-tightening
+file otherwise.
 
 ## What The User Cares About
 
@@ -70,7 +71,7 @@ pre-tightening file otherwise.
 - No raw text pasted into logs / docs / answers
 - **No real book / character / chapter / plot names** in docs,
   requirements, README, prompt templates, schemas, or `ai_context/`.
-  Use generic placeholders (`角色A`, `<work_id>`, `S001`). Only
+  Use generic placeholders (`Character A`, `<work_id>`, `S001`). Only
   `works/`, `sources/`, and `logs/change_logs/` may carry work-specific
   references.
 
