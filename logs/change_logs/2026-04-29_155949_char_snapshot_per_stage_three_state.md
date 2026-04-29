@@ -103,3 +103,24 @@ PRE 列了 4 项动作；实际 5 项（多了 T-BASELINE-DEPRECATE 依赖段过
 
 - **Status**: DONE
 - **Finished**: 2026-04-29 16:10:58 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：4/4 项计划 + 6/6 项验证（100%）；执行偏差段记录的额外
+  T-BASELINE-DEPRECATE 依赖段更新已落地
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=2 / Low=1
+- Open Questions: 0 条
+
+## 复查时状态
+- **Reviewed**: 2026-04-29 16:22:24 EDT
+- **Status**: REVIEWED-PARTIAL（轨 2 有 2 项 Medium：requirements.md §9.4
+  生成规则 + extraction_workflow.md §6.2 自包含快照规则缺 (B/C/D)
+  指针；requirements.md L980 stage_delta 描述仍是"信息性"措辞，未
+  反映新加的"禁敷衍 + 必须捕捉 (B)/(D)"约束）
+- **Conversation ref**: 同会话内 /post-check 输出
