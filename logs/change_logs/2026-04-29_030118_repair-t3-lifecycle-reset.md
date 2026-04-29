@@ -183,3 +183,21 @@ todo 条目 `discussion 已收敛 / 待决策项=0`，可直接 /go 落地。
 
 - **Status**: DONE
 - **Finished**: 2026-04-29 03:35:10 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：16/16 项计划 + 7/7 项验证全过
+- Missed updates: 3 条（automation/README.md:32 / :66 + docs/requirements.md:2399 boilerplate 中沿用旧"T3 全局每文件最多 1 次 / T3 全局上限"措辞，未与新 lifecycle 语义同步；详见对话）
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=2 / Low=5
+- Open Questions: 0 条（所有 Medium 经手动复核均为"设计意图正确，仅命名/文档清晰度可改进"，无功能性 bug）
+
+## 复查时状态
+- **Reviewed**: 2026-04-29 03:47:32 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 主要 16 项落实但 3 条 boilerplate 未同步（Missed Updates）；轨 2 无 High，仅 Medium 设计澄清。下一轮 /go 可吸收 3 条 Missed Updates 即可转 PASS
+- **Conversation ref**: 同会话内 /post-check 输出
