@@ -12,9 +12,11 @@ class IssueTracker:
     def __init__(self) -> None:
         self._history: dict[str, list[RepairAttempt]] = {}
         self._prev_fingerprints: dict[str, Issue] = {}
-        # Global per-file tier-usage counters. Currently read by the
-        # coordinator to enforce `RetryPolicy.t3_max_per_file`, but the
-        # shape is general (tier -> count) so other tiers can opt in.
+        # Global per-file tier-usage counters. Recorded for diagnostics
+        # (e.g. how many T3 regens happened on a file across the run);
+        # the lifecycle gate itself lives in the coordinator's outer
+        # ``max_lifecycles_per_file`` loop. Shape is general
+        # (tier -> count) so other tiers can opt in.
         self._tier_uses_per_file: dict[str, dict[int, int]] = {}
         # Ordered log of L3 gate blocking-fingerprint sets, one entry per
         # gate invocation. Used by is_l3_gate_reemerge() to detect when

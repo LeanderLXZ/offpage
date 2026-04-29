@@ -12,12 +12,11 @@
 |---|---|---|---|
 | _(none)_ | | | |
 
-### 🟡 Next (4)
+### 🟡 Next (3)
 
 | ID | Brief | Importance | Ready | Scope | Deps |
 |---|---|---|---|---|---|
 | `T-PHASE35-IMPORTANCE-AWARE` | [consistency_checker.py:96-117](../automation/persona_extraction/consistency_checker.py#L96-L117) 已构造 importance_map 但只 _check_target_map_counts 用上；其他 8 个 _check_* 一刀切，对次要配角的 field_completeness / relationship_continuity 过度报错。decisions.md #15 已定 bound 因 importance 而异。 | 🟢 Med-Low | 💬 Discuss first | 🟡 Medium | 无（触发自 2026-04-27 opus-4-7 review L-3） |
-| `T-REPAIR-T3-LIFECYCLE-RESET` | T3 触发后开新 repair lifecycle，单文件最多 2 个 lifecycle。第一轮 T3 prompt 带 prior_attempt_context（已修+未修摘要 ~200 token），跑完直接进第二轮（不做 Post-T3 check / 不走第一轮 L3 gate）。第二轮全新 Phase A→B→C，禁用 T3，升 T3 即 T3_EXHAUSTED。Triage 两轮独立 cap=5。 | 🔴 High | ✅ Ready | 🟡 Medium | 无 |
 | `T-CHAR-SNAPSHOT-T3-REGEN-PATH` | char_snapshot T3 重生成走 3 sub-lane 并行 + 程序汇总（β 路径），保持「单一生成路径」原则。T-REPAIR-T3-LIFECYCLE-RESET 已定型 → T3 单文件最多 1 次 → β 的 token 成本上限 = ×3，可接受。 | 🟡 Medium | 💬 Discuss first | 🟡 Medium | char_snapshot 3 sub-lane 并行方案本身要先落地（未单独立条） |
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | 无 |
 
@@ -32,7 +31,7 @@
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
 
-**Total**: 10 — 🟢 In Progress 0 ｜ 🟡 Next 4 ｜ ⚪ Discussing 6
+**Total**: 9 — 🟢 In Progress 0 ｜ 🟡 Next 3 ｜ ⚪ Discussing 6
 
 ---
 
@@ -221,99 +220,6 @@ _(empty — `/go` will move an entry here from "Next" when starting. Single slot
 **预估**：S（30 分钟 - 1 小时）
 
 **依赖**：无；触发自 2026-04-27 opus-4-7 review L-3 finding。
-
----
-
-### [T-REPAIR-T3-LIFECYCLE-RESET] T3 触发后开新 repair lifecycle，单文件最多 2 个 lifecycle
-
-**上下文**
-
-现状（[ai_context/decisions.md](../ai_context/decisions.md) #25 / #25a +
-[automation/repair_agent/coordinator.py](../automation/repair_agent/coordinator.py)）：
-repair_agent 内 `t3_max_per_file=1`；T3 完成后只跑 Post-T3 scoped L0–L2
-门禁，不通过判 `T3_CORRUPTED` 终止；**没有「T3 后重跑完整 lifecycle」
-的机会**。
-
-期望语义：
-
-- 一个文件最多走 **2 个完整 lifecycle**
-- 第一轮 lifecycle：T0/T1/T2 跑完仍残留 → 触发 T3。**T3 prompt 带
-  `prior_attempt_context`**（含本轮 T0–T2 已修 + 未修两类 issue 摘要，
-  ~200 token），LLM 整文件重生成。T3 跑完后**不做 Post-T3 scoped
-  check**，**不走第一轮 L3 gate / Phase C**，状态机完整重置 → 进入
-  第二轮
-- 第二轮 lifecycle：全新一轮 Phase A→B→C，**禁用 T3**。Phase A 重扫
-  发现的 issue 走 T0/T1/T2（默认 retry 上限，跟第一轮一样）。任何
-  issue 升到 T3 → 立即 `T3_EXHAUSTED` 退出
-- 第二轮 T3 分支顺序：**Pre-T3 triage 优先**（triage 把残留 accept 掉
-  则不触发终止），triage 后仍残留才走 `T3_EXHAUSTED`
-- Triage 两轮都启用，`accept_cap_per_file=5` 内存独立各 5 条；磁盘
-  `extraction_notes/{stage_id}.jsonl` append-only 累积
-- 第二轮启动前**读已有 SourceNote fingerprint** 过滤掉，避免同一 issue
-  在 jsonl 写两条记录
-- 状态机完整重置（tracker / accepted_notes / notes_per_file /
-  l3_file_set / gate state 全新）；磁盘文件内容保留（第一轮 T3 写出的
-  内容是第二轮的输入）
-- `RepairRecorder` JSONL 跨轮保留，事件加 `cycle=0/1` 字段；每次 lane
-  run 独立 JSONL（沿用现有行为）
-- 删除 `T3_CORRUPTED` 状态（新机制下不再产生）；保留 `T3_EXHAUSTED`
-  作为新的终止状态
-- 与现有 rate_limit / retry 机制**完全兼容**：rate_limit 在 LLM call
-  层处理，repair_agent 不感知；硬停 exit 2 + `--resume` 后 lane 重跑，
-  T3 预算跟着 lane 重置（lane-level resume 的固有行为）
-
-**改动清单**
-
-1. [automation/repair_agent/protocol.py:65](../automation/repair_agent/protocol.py#L65)
-   `t3_max_per_file` 重命名为 **`max_lifecycles_per_file`**（默认 2），
-   语义从「T3 调用次数 cap」改为「一个文件最多走的 lifecycle 数」
-2. [automation/repair_agent/coordinator.py](../automation/repair_agent/coordinator.py)
-   `run()` 函数体抽成 `_run_one_lifecycle(cycle: int) -> RepairResult`；
-   外层 `run()` 加 `for cycle in range(max_lifecycles_per_file)` 循环；
-   第二轮（cycle==1）的 `_run_fixer_with_escalation` 在 `tier == 3`
-   分支顶部：先跑 Pre-T3 triage，残留为空 break；仍有残留 → 立即
-   `T3_EXHAUSTED` 返回（不调 LLM）
-3. [automation/repair_agent/coordinator.py:271-298](../automation/repair_agent/coordinator.py#L271-L298)
-   第一轮 T3 跑完后**不走 L3 gate / Phase C**：T3 触发记号设上后，
-   `_run_one_lifecycle` 立即返回 `terminated_by="T3_TRIGGERED"` 信号；
-   外层进入第二轮
-4. [automation/repair_agent/coordinator.py:584-604](../automation/repair_agent/coordinator.py#L584-L604)
-   删除 `Post-T3 scoped L0–L2 check` + `T3_CORRUPTED` 路径
-5. [automation/repair_agent/fixers/file_regen.py](../automation/repair_agent/fixers/file_regen.py)
-   `FileRegenFixer.fix()` 新增 `prior_attempt_context: dict | None`
-   参数；prompt builder 注入「已修 issue 列表 + 未修 issue 列表」精简
-   摘要（~200 token 上限）。数据来源：tracker.history（resolved
-   attempts）+ remaining issues
-6. [automation/repair_agent/coordinator.py](../automation/repair_agent/coordinator.py)
-   第二轮 lifecycle 启动前从磁盘 `extraction_notes/{stage_id}.jsonl`
-   读取已 accept 的 fingerprint 集合，第二轮 Phase A 之后立即过滤
-7. [automation/config.toml:102](../automation/config.toml#L102)
-   `t3_max_per_file = 1` → `max_lifecycles_per_file = 2`，更新注释
-8. [ai_context/decisions.md](../ai_context/decisions.md) #25 / #25a
-   描述同步（描述当前设计，无 legacy 字样）
-9. [docs/requirements.md](../docs/requirements.md) §11.4 同步
-10. 单测：覆盖路径——单 lifecycle 通过 / 第一轮 T3 触发 → 第二轮 PASS
-    / 第一轮 T3 触发 → 第二轮 T1-T2 修不好升 T3 → `T3_EXHAUSTED` /
-    第一轮 triage round 1 全 accept → 不进 T3 → 第一轮 PASS
-
-**待决策项**
-
-无（discussion 已收敛）
-
-**完成标准**
-
-- 单文件最多触发 2 个 lifecycle；第二轮 T3 = `T3_EXHAUSTED` 立即退出
-- 第一轮 T3 prompt 含 `prior_attempt_context`（已修 + 未修摘要）
-- Triage 两轮独立各 5 条 cap;磁盘 jsonl 同 fingerprint 不重复写
-- `T3_CORRUPTED` 路径删除；`T3_EXHAUSTED` 取代之
-- 与 rate_limit / `--resume` 机制兼容（无需新工程）
-- 单测三条主要路径全过
-- decisions.md / requirements.md / config.toml 同步
-- 本 todo 条目移到 archived
-
-**预估**：M（1–1.5 天）
-
-**依赖**：无
 
 ---
 

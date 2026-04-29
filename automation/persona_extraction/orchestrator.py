@@ -1796,12 +1796,12 @@ class ExtractionOrchestrator:
                     run_semantic=True,
                     triage_enabled=ra_cfg.triage_enabled,
                     accept_cap_per_file=ra_cfg.triage_accept_cap_per_file,
+                    max_lifecycles_per_file=ra_cfg.max_lifecycles_per_file,
                     retry_policy=RetryPolicy(
                         t0_max=ra_cfg.t0_retry,
                         t1_max=ra_cfg.t1_retry,
                         t2_max=ra_cfg.t2_retry,
                         t3_max=ra_cfg.t3_retry,
-                        t3_max_per_file=ra_cfg.t3_max_per_file,
                         max_total_rounds=ra_cfg.total_round_limit,
                     ),
                 )
