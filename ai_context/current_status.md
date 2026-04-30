@@ -12,18 +12,10 @@ Shorter is better than longer; push detail into the linked source rather than gr
 
 ## Project Stage
 
-Architecture scaffold done. One work package under automated extraction.
-Phase 0/1/1.5/2/4 complete; Phase 3 in progress — S001 + S002 committed,
-S003 in ERROR awaiting `--resume`, S004–S049 pending. Phase 3.5 pending
-(blocked on all-stages-COMMITTED). No runtime code yet.
-
-Recent schema change (2026-04-29): 4-piece character baseline
-(`voice_rules` / `behavior_rules` / `boundaries` / `failure_modes`)
-deprecated — `failure_modes` inlined into `stage_snapshot`; voice /
-behavior / boundary state already lived per-stage. Existing committed
-S001 / S002 snapshots predate the new `failure_modes` required field
-and need migration via `automation/persona_extraction/migrate_baseline_to_stage_snapshot.py`
-(or re-extraction) before Phase 3 resumes.
+Architecture scaffold done; schemas + extraction pipeline + simulation
+design landed. No runtime code yet. Per-work extraction state lives in
+`works/{work_id}/analysis/progress/`, not here — `ai_context/` tracks
+framework-level engineering progress only.
 
 ## What Exists
 
@@ -33,22 +25,10 @@ and need migration via `automation/persona_extraction/migrate_baseline_to_stage_
 - Manual-scenario prompts — `prompts/` (ingest, review, supplement, cold start)
 - Automated extraction orchestrator — `automation/persona_extraction/` + CLI `persona-extract`; pipeline detail in `architecture.md` §Automated Extraction Pipeline + `automation/README.md`
 - User package template at `users/_template/` (no real user package)
-- One first work package in progress (Chinese web novel, 500+ chapters)
-
-## First Work Package — Phase 3 State
-
-- 2 target characters confirmed
-- S001 committed (sha `991c09f`, 2026-04-23)
-- S002 committed (sha `7639c8b`, 2026-04-23)
-- S003 ERROR (`char_support` lane — `error_max_turns`); awaiting `--resume`
-- S004–S049 pending
-- Phase 3.5 pending — blocked on all stages `COMMITTED`
-
-Resume command → `handoff.md` §Current Work Continuation.
 
 ## Current Gaps
 
-- No finished character package yet (Phase 3 in progress)
+- Extraction pipeline not yet exercised end-to-end (no character package completed)
 - No real user package (only template)
 - No simulation-engine service implementation
 - No terminal adapter implementation

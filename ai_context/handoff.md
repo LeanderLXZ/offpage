@@ -12,9 +12,9 @@ Shorter is better than longer; push detail into the linked source rather than gr
 
 ## Mental Model
 
-Architecture agreed, scaffolding + schemas done, first work package
-under stage extraction. No finished character package yet, no real
-user package, no runtime code.
+Architecture agreed, scaffolding + schemas + extraction pipeline done.
+No character package completed end-to-end yet, no real user package,
+no runtime code.
 
 ## Quick Start
 
@@ -26,9 +26,11 @@ user package, no runtime code.
    `simulation/retrieval/`, `simulation/prompt_templates/`.
 5. Extraction pipeline → `automation/README.md`.
 
-## Current Work Continuation
+## Running Extraction
 
-Real `work_id` lives under `works/` + `sources/works/`.
+CLI usage (per-work artefacts live under `works/<work_id>/` +
+`sources/works/<work_id>/`; status / progress in `works/<work_id>/
+analysis/progress/`):
 
 ```bash
 # Foreground
