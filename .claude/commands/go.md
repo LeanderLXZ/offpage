@@ -4,7 +4,19 @@
 
 ## Progress reporting
 
-下方流程分为 `## Step 0:` ~ `## Step 10:`。每进入一个 step，**先打印一行进度**：`[/go] Step N: <子段标题>`，让用户实时看到当前位置；最后一步执行结束打印 `[/go] done`。跳过某 step 时打印 `[/go] Step N: 跳过（理由：…）` 而不是静默略过。
+下方流程分为 `## Step 0:` ~ `## Step 10:`。
+
+**进入 Step 0 之前**：调用 **TodoWrite 工具**把 Step 0 ~ Step 10 全部预登记（每个 step 一条 todo，`content` 用 `Step N: <子段标题>`，`status` 全为 `pending`）。这是硬性要求，**不调 TodoWrite 不许往下走**。
+
+每进入一个 step：
+
+1. 调 **TodoWrite** 把当前 step 改为 `in_progress`（同一次调用里把上一个 step 标 `completed`）
+2. 打印一行 `[/go] Step N: <子段标题>` 到对话
+3. step 实际工作做完再继续；**step 跨越时不要漏调 TodoWrite**
+
+跳过某 step：调 **TodoWrite** 把对应 todo 直接标 `completed`，并打印 `[/go] Step N: 跳过（理由：…）`，**不要静默略过、不要不更新 TodoWrite**。
+
+最后一步完成：调 **TodoWrite** 把最后一条标 `completed`，再打印 `[/go] done`。
 
 ## Step 0: Load skills config
 
