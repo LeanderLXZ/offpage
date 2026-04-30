@@ -205,8 +205,14 @@ def commit_stage(project_root: Path, stage_id: str,
     # outside that work's directory. Catches the case where another
     # caller pre-staged unrelated paths before invoking commit_stage.
     if work_id:
+        # `-c core.quotePath=false` keeps non-ASCII paths (e.g. Chinese
+        # work_id) raw — without it git octal-escapes + quotes them
+        # (`"works/\344\270\255\346\226\207/..."`), and the
+        # `startswith(scope_prefix)` check below would always fail,
+        # turning every legitimate commit into a false scope leak.
         staged = _git(
-            ["diff", "--cached", "--name-only"], project_root)
+            ["-c", "core.quotePath=false",
+             "diff", "--cached", "--name-only"], project_root)
         scope_prefix = f"works/{work_id}/"
         out_of_scope = [
             line for line in staged.stdout.splitlines()
