@@ -255,14 +255,23 @@ phase 3 各 stage 只读不写。
   更精确中文短词，需在 `description` 字段说明差异）+ `tier` ∈ {核心 /
   重要 / 次要 / 普通}（站在本角色视角对该 target 的相对重要性；与
   relationship_type 正交）+ `description`（≤100 字关系描述）
-- `targets` 数组容量上限通过 `schemas/_shared/targets_cap.schema.json`
-  $ref 共享继承（单源；下游 stage_snapshot.{target_voice_map,
-  target_behavior_map, relationships} 通过同一份 $ref 同步），调整数字
-  只改这一处
+- `targets` 数组容量上限通过 `schemas/character/targets_cap.schema.json`
+  $ref 共享继承（单源；下游 stage_snapshot.{voice_state.target_voice_map,
+  behavior_state.target_behavior_map, 顶层 relationships} 通过同一份
+  $ref 同步），调整数字只改这一处。三结构的 entry 都按
+  `target_character_id` keying（与 baseline 对齐；voice_map / behavior_map
+  保留 `target_type` 作 sibling 元数据）
 
-**Phase 3 硬约束**：phase 3 stage_snapshot 中 `target_voice_map` /
-`target_behavior_map` / `relationships` 的 keys 必须严格 ⊆
-`targets[].target_character_id`（cross-file hard fail，无 escape hatch）。
+**Phase 3 硬约束（双向相等）**：phase 3 stage_snapshot 三结构（
+`voice_state.target_voice_map` / `behavior_state.target_behavior_map` /
+顶层 `relationships`）的 keys 必须**双向相等**于
+`targets[].target_character_id`——`set(三结构 keys) == set(targets[].target_character_id)`，
+多/少都 cross-file hard fail（无 escape hatch）。三态由"内容是否填充"
+承载（已登场→正常填、已见过此 stage 未登场→继承 prev、从未登场→字段
+空）；fixed_relationship 例外可在 relationships 条目预填关系字段。校验
+在 phase 3 单 stage validate 层执行（与 schema validate 同层），违规
+走 file-level repair lifecycle（L1 json_repair → L2 repair_agent
+cross-file checker `targets_keys_eq_baseline` → L3 re-extract）。
 若 phase 2 漏判某 target，phase 3 不会自动补救——需要人工编辑 baseline
 后重抽对应 stage。所以 phase 2 产出时**宁可多列、不可漏列**：任何在
 全书摘要里出现过、与本角色有过互动 / 涉及关系演变 / 即使只是泛弱关联
@@ -488,7 +497,7 @@ permanence_reason?, pinned_at?
 | 文件 | 提取时 | 运行时 |
 |------|--------|--------|
 | identity.json | 首阶段创建（Phase 2），后续 char_support lane 修订 | **加载** |
-| target_baseline.json | Phase 2 一次性产出（全书视野），phase 3 全程只读不写 | **加载**（与 identity 并列的 character-level 恒定文件；phase 3 stage_snapshot target keys ⊆ baseline 硬约束）|
+| target_baseline.json | Phase 2 一次性产出（全书视野），phase 3 全程只读不写 | **加载**（与 identity 并列的 character-level 恒定文件；phase 3 stage_snapshot 三结构 keys == baseline.targets 双向硬约束，phase 3 单 stage validate 层执行）|
 | stage_snapshot（含内联 failure_modes / voice_state / behavior_state / boundary_state / hard_boundaries / soft_boundaries 全字段） | 每阶段产出 | **加载**（核心；与 identity + target_baseline 配套即可）|
 | memory_timeline | 每阶段产出 | 近期 2 阶段全量 + memory_digest 1..N 过滤 + FTS5 按需 |
 

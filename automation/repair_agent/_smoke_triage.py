@@ -492,7 +492,7 @@ def scenario_f_coverage_shortage_accepted() -> None:
     target.write_text(json.dumps({
         "voice_state": {
             "target_voice_map": [{
-                "target_type": "A001",
+                "target_character_id": "A001",
                 "dialogue_examples": ["only example"],
             }],
         },

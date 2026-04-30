@@ -89,14 +89,17 @@ _IMPORTANCE_RANK = {"主角": 3, "重要配角": 2}
 def importance_for_target(
     target: str, importance_map: dict[str, str],
 ) -> str:
-    """Resolve a ``target_type`` label to its canonical importance.
+    """Resolve a target identifier to its canonical importance.
 
-    Matches each ``character_id`` in ``importance_map`` as a substring of
-    ``target`` so that annotated labels (``<character_a>（<phase_alias>）``) still
-    map back to the base character. Among matches, picks the most
-    important importance; ties broken by longer ``character_id`` so that
-    a specific id wins over one that happens to be a substring of another
-    (e.g. ``张三丰`` over ``张三`` when both would match).
+    With the post-D4 character_id keying, ``target`` is normally a
+    ``target_character_id`` and matches an entry in ``importance_map``
+    directly. The substring match remains a defensive fallback for
+    legacy / annotated labels (``<character_a>（<phase_alias>）`` or the
+    occasional ``target_type`` sibling string) so the importance lookup
+    still works while data is being migrated. Among matches, picks the
+    most important importance; ties broken by longer ``character_id`` so
+    that a specific id wins over one that happens to be a substring of
+    another (e.g. ``张三丰`` over ``张三`` when both would match).
     """
     if not isinstance(target, str) or not target or not importance_map:
         return "其他"
@@ -261,8 +264,11 @@ def validate_baseline(
                     str(manifest_path)))
 
         # target_baseline.json — required Phase 2 output, anchors phase 3
-        # stage_snapshot target keys (target_voice_map / target_behavior_map
-        # / relationships keys ⊆ targets[].target_character_id).
+        # stage_snapshot target keys (set(三结构 keys) ==
+        # set(targets[].target_character_id), enforced cross-file at the
+        # phase 3 single-stage validate layer by repair_agent's
+        # TargetsKeysEqBaselineChecker; violations route into the
+        # file-level repair lifecycle).
         tb_path = char_dir / "target_baseline.json"
         if not tb_path.exists():
             issues.append(ValidationIssue(

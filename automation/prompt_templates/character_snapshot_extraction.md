@@ -95,7 +95,7 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
 
    **prev_stage 处理规则（必读，下方 stage_delta 字段说明会引用 (B)/(D) 标签）**：
 
-   - **(A) 未出场角色的继承规则**：本阶段中某个重要角色未出场，但前一阶段快照中有该角色的 target_voice_map、target_behavior_map、relationships 条目时，必须从前一阶段 **原样继承** 到本阶段快照中。不可因为"本阶段没出现"就删除。没有新原文时不加新例句，但已有条目完整保留。
+   - **(A) 未出场角色的继承规则**：本阶段中某个 baseline target 未出场，但**之前任一 stage** 已有该 target 的 target_voice_map / target_behavior_map / relationships 条目（即"已见过"）时，必须从前一阶段 **原样继承** 到本阶段快照中。不可因为"本阶段没出现"就删除。没有新原文时不加新例句，但已有条目完整保留。**从未登场的 baseline target**（cumulative 都没出现）单独走 D4 状态 3 规则——entry 必须存在以满足 set-equal 约束，但所有字段保持空（fixed_relationship 例外见 D4）。
    - **(B) 出场且有变化** → 以本阶段原文为准 **重写** 该字段；prev 仅作对照；在 stage_delta 自由文本中点出关键变化（如"X 角色对 Y 的态度从戒备转为信任"），不必逐字段列举
    - **(C) 出场且无变化** → 保留 prev 内容；不要因为"没变化所以不写"而漏字段，schema required 字段一律完整填充
    - **(D) resolved / revealed / 消除** → 适用于 misunderstandings（已 resolve）、concealments（已 revealed）、failure_modes（角色已显著克服该崩坏模式）等"语义被解决"的条目。**判断标准**：本阶段或前阶段原文里有显式的解决 / 揭露 / 长期克服证据，而不是"本阶段没体现"。在 stage_delta 自由文本中写明消除原因。**这与 maxItems 裁剪是两件不同的事**——裁剪是空间不够（不写进 stage_delta），消除是语义被解决（要写）
@@ -119,7 +119,7 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
    - `behavior_state`：**core_goals**（理性目标——可权衡调整的）、**obsessions**（执念——非理性的心结，与创伤或强烈情感相关，不受理性权衡控制；区别于 core_goals）、决策风格、情绪触发器、**情绪反应矩阵**、**对象行为矩阵**（target_behavior_map，与 target_voice_map 对齐，见下方详细要求）、习惯性行为、压力应对。**所有数组上限以 schema 为准**
    - `boundary_state`：**hard_boundaries**（硬边界）、**soft_boundaries**（软边界）、容易被误判的点（common_misconceptions）。**所有数组上限以 schema 为准**
    - `failure_modes`：本阶段全量崩坏防护清单（4 子类）——`common_failures` / `tone_traps` / `relationship_traps` / `knowledge_leaks`，各子类 maxItems 以 schema 为准。**S001**：从原文 + identity 推演基线种子。**S002+**：从前一 stage 的 failure_modes 演变（继承未消除 + 本阶段新增；已消除的不写）。**全量记录本阶段 active 的 failure modes**——不是"自上次以来变化"，而是"本 stage 当前完整有效的崩坏防护清单"
-   - `relationships`：对每个重要角色的完整关系（态度、信任、亲密度、戒备度、语气/行为变化、驱动事件、关系演变概述）。不含边缘不重要角色。**容量上限通过 `schemas/_shared/targets_cap.schema.json` 与 target_baseline.targets 共享继承**（schema 单源，调整数字只改一处）；keys 必须 ⊆ baseline.targets[].target_character_id（cross-file 硬约束，详见 D4）
+   - `relationships`：对每个 baseline target 的完整关系状态（态度、信任、亲密度、戒备度、语气/行为变化、驱动事件、关系演变概述）。每条目以 `target_character_id` 为唯一身份键。**容量上限通过 `schemas/character/targets_cap.schema.json` 与 target_baseline.targets 共享继承**（schema 单源，调整数字只改一处）；详见下方 D4。
    - `knowledge_scope`：知道什么、不知道什么、不确定什么。**条数上限**与每条字符上限**以 schema 为准**（schema 硬门控，超限直接 FAIL）。**裁剪策略**（超限时）：优先保留 ① 影响当前阶段决策或扮演的条目、② 与 `core_wounds` / `active_obsessions` / 活跃 `relationships` 相关的条目；优先丢弃 ① 日常常识类条目、② 早期阶段已无触发点的细节、③ 已在 `memory_timeline` 中完整承载的条目。**禁止敷衍填充**（贴近上限但语义稀薄、堆砌形容词）
    - `misunderstandings`（已 resolved 的移除）、`concealments`（已 revealed 的移除）。**数组上限以 schema 为准**
    - `emotional_baseline`（含 **active_goals** 理性目标、**active_obsessions** 执念、active_fears、active_wounds）、`current_personality`、`current_mood`、`current_status`。**所有数组上限以 schema 为准**
@@ -129,12 +129,41 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
    - `timeline_anchor`：阶段时间锚点短描述（≤ 50 字），必填
    - `snapshot_summary`：当前阶段一段式摘要，100–200 字，必填
 
-   **D4 硬约束（target keys ⊆ baseline）**：`target_voice_map` /
-   `target_behavior_map` / `relationships` 三处的 keys（角色名）必须严格
-   ⊆ phase 2 产出的 `target_baseline.targets[].target_character_id`。
-   不允许写出 baseline 之外的对方角色——若原文出现 baseline 未覆盖的
-   target，**不要写入** stage_snapshot；该情况记到 `stage_delta` 自由
-   文本说明，由 phase 3 之后的人工流程决定是否补 baseline 重抽。详见
+   **D4 硬约束（target keys == baseline，双向相等 + 三态由内容承载）**：
+
+   `voice_state.target_voice_map` / `behavior_state.target_behavior_map`
+   / 顶层 `relationships` 三结构的每条 entry 以 `target_character_id`
+   为唯一身份键，必须**双向相等**于 phase 2 产出的
+   `target_baseline.targets[].target_character_id`：
+
+   - `set(三结构 keys) == set(baseline.targets[].target_character_id)`
+   - 多（写出 baseline 之外的角色）/ 少（漏写 baseline 列出的角色）都
+     hard fail。校验在 phase 3 单 stage validate 层执行（与 schema
+     validate 同层），违规走 file-level repair lifecycle。
+
+   **三态由"内容是否填充"承载**（不由"key 是否出现"承载）：
+
+   - **(状态 1) 已登场（cumulative，含本 stage 与之前任一 stage）**：
+     entry 在；按本 stage 原文必要时增删 / 更新对应字段（沿用 prev 为
+     起点，每 target 的 dialogue_examples / action_examples 维持下方
+     "详细度要求"的最低条数）
+   - **(状态 2) 已见过 + 此 stage 未登场**：entry 在；从前一阶段
+     **原样继承**（已有条目完整保留，本 stage 没新原文不加新例句）
+   - **(状态 3) 从未登场（baseline 列了但 cumulative 都没出现）**：
+     entry 在（key 占位），其余字段保持空（空数组 / 空字符串）；
+     不可省略 entry，否则违反 == 约束
+   - **fixed_relationship 例外（仅顶层 relationships）**：若 target
+     与本角色之间存在 `world/foundation/fixed_relationships.json` 登记
+     的固定关系（即全书贯穿不变的结构性关系，如血缘 / 自始即有的
+     师承），即使从未登场也可预填本条目的关系字段（如 target_label
+     / summary / attitude / relationship_history_summary）；voice_map
+     / behavior_map 仍保持空字段。**注意**：故事中才结成的师承 /
+     加入的门派 / 收养 / 结义 / 结婚 / 决裂 等不是 fixed_relationship，
+     按状态 1/2/3 的常规规则处理。
+
+   **越界处置**：原文出现 baseline 未覆盖的 target，**不要写入**
+   stage_snapshot；该情况记到 `stage_delta` 自由文本说明，由 phase 3
+   之后的人工流程决定是否补 baseline 重抽。详见
    `ai_context/decisions.md` #13。
 
 3. **标识命名**：中文作品的 `work_id`、`character_id` 和路径段使用中文；`stage_id` 使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`）
@@ -187,7 +216,7 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
 
 - `stage_snapshot` 必须包含 `stage_events`（≤ 15 条，每条 50–80 字）
 - `stage_snapshot` 非首阶段必须包含 `character_arc`（单一字符串 ≤ 200 字的弧线概述）
-- `stage_snapshot.behavior_state` 使用 `target_behavior_map`（baseline 与 stage 快照统一同名）；其内层 target 类型字段名为 `target_type`
+- `stage_snapshot.behavior_state` 使用 `target_behavior_map`（baseline 与 stage 快照统一同名）；其内层身份键字段名为 `target_character_id`（与 baseline.targets[].target_character_id 对齐），`target_type` 是 sibling 元数据字段，仅供标注 target 关系定位用，不参与 cross-file 校验
 
 ### 边界禁令
 
@@ -212,24 +241,33 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
 
 ### target_voice_map 要求
 
-- 使用具体角色名，每个 target 的 dialogue_examples 数量**不少于上表的最低值**，
+- 每条 entry 的 `target_character_id` 用 baseline 列出的具体 character_id
+  （sibling `target_type` 字段记定位标签，不替代 character_id keying）；
+  每个**已登场** target 的 dialogue_examples 数量**不少于上表的最低值**，
   覆盖该对象下的多种情绪和场景
 - **voice_shift 要具体**：不要写"语气变温柔"，要写具体描述
-- **typical_expressions 下限**：主角 target 至少 5 条，重要配角至少 3 条
+- **typical_expressions 下限**（仅对已登场 target）：主角 target 至少 5 条，
+  重要配角至少 3 条
 - **typical_expressions 上限 10 条（schema 硬门控）**：原文有多少就写多少，
   不必刻意凑满；**超过 10 时保留最贴合当前 stage 语境的表达**（优先当前
   情绪/关系阶段、当前对象、当前核心冲突下的典型短句；丢弃跨 stage 通用
   或已被 dialogue_examples 覆盖的条目）
 - **该上限与截断策略同样适用于 `emotional_voice_map[*].typical_expressions`**
   （每个情绪项下的典型表达）；语境维度变为当前情绪下的典型短句
+- **从未登场的 baseline target**（D4 状态 3）：entry 必须存在以满足
+  set-equal 约束，但 voice_shift / typical_expressions / dialogue_examples
+  保持空（空字符串 / 空数组）
 
 ### target_behavior_map 要求
 
-与 target_voice_map 平行结构，侧重行为而非语言：
+与 target_voice_map 平行结构（同 `target_character_id` keying + 同三态规
+则），侧重行为而非语言：
 
-- 每个 target 的 action_examples 数量**不少于上表的最低值**
+- 每个**已登场** target 的 action_examples 数量**不少于上表的最低值**
 - **behavior_shift 要具体**：不要写"行为更谨慎"，要写具体描述
-- **typical_actions 要丰富**：主角 target 至少 5 条，重要配角至少 3 条
+- **typical_actions 要丰富**（仅对已登场 target）：主角 target 至少 5 条，
+  重要配角至少 3 条
+- **从未登场的 baseline target**：entry 必须存在，其余字段保持空
 
 ## 本阶段输出清单
 

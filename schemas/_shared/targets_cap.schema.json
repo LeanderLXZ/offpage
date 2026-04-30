@@ -1,7 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "offpage/_shared/targets_cap.schema.json",
-  "title": "Targets array cap (shared)",
-  "description": "全角色 target 数组容量上限的单源约束。本文件被 target_baseline.targets 与 stage_snapshot.{target_voice_map, target_behavior_map, relationships} 通过 $ref 共享继承——调整 maxItems 数值只改这一处，所有引用方自动同步（项目约定 #27b 的 schema 单源原则）。stage_snapshot 三 map 的实际数量还受 cross-file 硬约束 keys ⊆ target_baseline.targets[].target_character_id 进一步收紧。",
-  "maxItems": 15
-}

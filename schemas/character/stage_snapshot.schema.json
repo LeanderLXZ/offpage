@@ -308,19 +308,24 @@
         },
         "target_voice_map": {
           "type": "array",
-          "description": "当前阶段下面对不同对象的语气变化。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条对话示例），泛化类型简要描述即可。容量上限通过 _shared/targets_cap.schema.json 共享继承，与 target_baseline.targets 同源；keys 必须 ⊆ target_baseline.targets[].target_character_id（cross-file 硬约束）。",
+          "description": "当前阶段下面对不同对象的语气变化。运行时按用户角色过滤加载。每条目按 target_character_id keying（与 baseline 对齐）；详细程度按重要性分层——主要角色和重要配角必须详细记录（每 target ≥3-5 条对话示例），次要 / 普通角色 / 从未登场的 baseline 角色字段保持空。容量上限通过 schemas/character/targets_cap.schema.json 共享继承，与 target_baseline.targets 同源；set(keys) == set(target_baseline.targets[].target_character_id) 双向硬约束（多/少都 hard fail），phase 3 单 stage validate 层执行，越界走 file-level repair lifecycle。",
           "allOf": [
-            { "$ref": "../_shared/targets_cap.schema.json" }
+            { "$ref": "targets_cap.schema.json" }
           ],
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["target_type"],
+            "required": ["target_character_id"],
             "properties": {
+              "target_character_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "目标角色 ID（与 baseline.targets[].target_character_id 对齐；中文作品直接用中文）。本 entry 在数组中的唯一身份键，cross-file 校验比对此字段。"
+              },
               "target_type": {
                 "type": "string",
                 "maxLength": 15,
-                "description": "对象类型或具体角色。例如：角色A（真面目）、角色B、系统、村民、小孩。对重要角色使用具体名称而非泛化类型。上限 15 字。"
+                "description": "Sibling 元数据：目标角色定位 / 类型标签（如 至亲 / 恋人 / 师长 / 对手 / 路人 等）。仅供 LLM 标注 target 关系定位用，不参与 cross-file keying。上限 15 字。"
               },
               "voice_shift": {
                 "type": "string",
@@ -434,19 +439,24 @@
         },
         "target_behavior_map": {
           "type": "array",
-          "description": "当前阶段下面对不同对象的具体行为模式。与 voice_state.target_voice_map 平行且对齐，侧重肢体反应、距离感、习惯性动作、回避模式等行为差异。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条行为示例），泛化类型简要描述即可。容量上限通过 _shared/targets_cap.schema.json 共享继承，与 target_baseline.targets 同源；keys 必须 ⊆ target_baseline.targets[].target_character_id（cross-file 硬约束）。",
+          "description": "当前阶段下面对不同对象的具体行为模式。与 voice_state.target_voice_map 平行且对齐，侧重肢体反应、距离感、习惯性动作、回避模式等行为差异。每条目按 target_character_id keying；详细程度按重要性分层——主要角色和重要配角必须详细记录（每 target ≥3-5 条行为示例），次要 / 普通角色 / 从未登场的 baseline 角色字段保持空。容量上限通过 schemas/character/targets_cap.schema.json 共享继承，与 target_baseline.targets 同源；set(keys) == set(target_baseline.targets[].target_character_id) 双向硬约束（多/少都 hard fail），phase 3 单 stage validate 层执行，越界走 file-level repair lifecycle。",
           "allOf": [
-            { "$ref": "../_shared/targets_cap.schema.json" }
+            { "$ref": "targets_cap.schema.json" }
           ],
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["target_type"],
+            "required": ["target_character_id"],
             "properties": {
+              "target_character_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "目标角色 ID（与 baseline.targets[].target_character_id 对齐；中文作品直接用中文）。本 entry 在数组中的唯一身份键，cross-file 校验比对此字段。"
+              },
               "target_type": {
                 "type": "string",
                 "maxLength": 15,
-                "description": "对象类型或具体角色。例如：角色A（真面目）、角色B、系统、村民。上限 15 字。"
+                "description": "Sibling 元数据：目标角色定位 / 类型标签（如 至亲 / 恋人 / 师长 / 对手 / 路人 等）。仅供 LLM 标注 target 关系定位用，不参与 cross-file keying。上限 15 字。"
               },
               "behavior_shift": {
                 "type": "string",
@@ -693,14 +703,15 @@
     },
     "relationships": {
       "type": "array",
-      "description": "当前阶段角色对每个重要角色的完整关系状态。不包含边缘的不重要角色。容量上限通过 _shared/targets_cap.schema.json 共享继承，与 target_baseline.targets 同源；target_character_id 必须 ⊆ target_baseline.targets[].target_character_id（cross-file 硬约束）。",
+      "description": "当前阶段角色对每个 baseline target 的完整关系状态。每条目按 target_character_id keying。容量上限通过 schemas/character/targets_cap.schema.json 共享继承，与 target_baseline.targets 同源；set(target_character_id 列表) == set(target_baseline.targets[].target_character_id) 双向硬约束（多/少都 hard fail），phase 3 单 stage validate 层执行，越界走 file-level repair lifecycle。三态由内容是否填充承载——已登场→正常填、已见过此 stage 未登场→继承 prev、从未登场→其他字段空。**fixed_relationship 例外**：目标若绑定 world/foundation/fixed_relationships.json 条目（即全书贯穿不变的结构性关系，如血缘 / 师承（须自始即有，故事中才建立的师承不算）/ 门派归属（同上）），从未登场也可预填本条目的 target_label / summary / attitude / relationship_history_summary 等关系字段（其他结构如 voice_map / behavior_map 仍空）。",
       "allOf": [
-        { "$ref": "../_shared/targets_cap.schema.json" }
+        { "$ref": "targets_cap.schema.json" }
       ],
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "target_character_id",
           "target_label",
           "summary",
           "attitude"
