@@ -58,6 +58,10 @@
           "type": "string",
           "description": "阶段快照根路径。该根路径下每个快照文件名形如 {stage_id}.json，stage_id 使用紧凑英文代号 S###。"
         },
+        "target_baseline_path": {
+          "type": "string",
+          "description": "角色 target baseline 文件相对路径（通常为 canon/target_baseline.json）。Phase 2 产出，character-level 恒定文件，phase 3 stage_snapshot 三方 keys ⊆ baseline.targets[].target_character_id 是硬约束。"
+        },
         "evidence_root": {
           "type": "string"
         }

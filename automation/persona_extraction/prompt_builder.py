@@ -180,6 +180,7 @@ def build_baseline_prompt(
     # baseline must produce empty instances of.
     for schema in ("character/identity.schema.json",
                    "character/character_manifest.schema.json",
+                   "character/target_baseline.schema.json",
                    "world/fixed_relationships.schema.json",
                    "world/world_stage_catalog.schema.json",
                    "character/stage_catalog.schema.json"):

@@ -21,9 +21,14 @@ Load before the first reply:
   loader filters via regex
 - target character identity (`identity.json`, loaded fully — field-level
   caps live in `identity.schema.json`, so Tier 0 size is bounded at
-  extraction time, no loader-side filtering required). This is the only
-  character-level constant file; voice / behavior / boundary / failure_modes
-  are inlined into the stage snapshot below.
+  extraction time, no loader-side filtering required) and
+  `target_baseline.json` (full-book roster of every target with `tier` /
+  `relationship_type` / ≤100-char description; phase 3 stage_snapshot
+  target keys are constrained to be ⊆ `targets[].target_character_id`,
+  so the loader can use this list as the upper bound when prefetching
+  target-related entries). These are the two character-level constant
+  files; voice / behavior / boundary / failure_modes are inlined into the
+  stage snapshot below.
 - target character selected-stage snapshot (self-contained: voice, behavior,
   boundaries, failure_modes, relationships, personality, mood, knowledge —
   identity + stage snapshot is the complete runtime state).

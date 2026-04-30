@@ -97,15 +97,25 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 - `world/foundation/foundation.json` — 世界基础设定初稿
 - `world/foundation/fixed_relationships.json` — 世界级固定关系骨架
 - `characters/{character_id}/canon/identity.json` — 角色身份初稿
-  （角色级唯一恒定文件）
-- `characters/{character_id}/manifest.json` — 角色包 manifest
+- `characters/{character_id}/canon/target_baseline.json` — 角色 target
+  baseline（per-character，全书视野下的目标关系全集）
+- `characters/{character_id}/manifest.json` — 角色包 manifest（`paths`
+  对象含 `target_baseline_path` 指向上条文件）
 
-identity 是 character-level 唯一恒定文件，记录角色基础事实
-（aliases / core_wounds / key_relationships 等），作为后续 stage 的
-修正锚点。voice / behavior / boundary / failure_modes 不在 Phase 2
-产出——由 Phase 3 char_snapshot lane 在每个 stage_snapshot 中直接
-生成（S001 从原文 + identity 推演基线种子，S002+ 从前一 stage_snapshot
-演变）。
+identity 与 target_baseline 都是 character-level 恒定文件——identity 记录
+角色基础事实（aliases / core_wounds / key_relationships 等），target_baseline
+记录该角色与其它角色之间的全部 target 关系（含 `tier` ∈ {核心 / 重要 /
+次要 / 路人} + `relationship_type` 枚举 + ≤100 字描述）。两者都是后续
+stage 的修正锚点；voice / behavior / boundary / failure_modes 不在 Phase 2
+产出——由 Phase 3 char_snapshot lane 在每个 stage_snapshot 中直接生成
+（S001 从原文 + identity 推演基线种子，S002+ 从前一 stage_snapshot 演变）。
+
+**target_baseline 的 phase 3 硬约束**：phase 3 stage_snapshot 中
+`target_voice_map` / `target_behavior_map` / `relationships` 的 keys 必须
+严格 ⊆ `target_baseline.targets[].target_character_id`。这是 cross-file
+hard 校验（违规 fail 而非 warning），由 phase 3.5 / consistency_checker
+执行。target_baseline 在 phase 3 全程只读不写——若 phase 2 漏判某 target，
+通过人工编辑 baseline + 重抽对应 stage 解决，不引入 escape hatch。
 
 Phase 2 baseline 完成后，orchestrator 程序化写出
 `works/{work_id}/world/manifest.json`（schema：
@@ -114,8 +124,9 @@ Phase 2 baseline 完成后，orchestrator 程序化写出
 
 **出口验证**：Phase 2 完成后运行 `validate_baseline()`，校验所有
 baseline 文件的 schema 合规性。works manifest / world manifest /
-identity / 角色 manifest / foundation / fixed_relationships 全部为
-必须（error）。验证失败阻断 Phase 3。
+identity / 角色 manifest / target_baseline / foundation /
+fixed_relationships 全部为必须（error）。target_baseline 缺失 / schema
+违规 / `character_id` 与目录名不一致均阻断 Phase 3。
 
 ### 6. 1+2N 并行阶段提取
 
@@ -374,12 +385,22 @@ CLI：`--start-phase 4` 可独立运行 Phase 4
 
 ## Baseline 文件的角色
 
-`identity.json` 是**唯一**的角色级 baseline 文件，记录跨阶段稳定的
-角色基础事实（aliases / core_wounds / key_relationships 等）：
+Phase 2 产出**两个**角色级 baseline 文件：
+
+- `identity.json` — 记录跨阶段稳定的角色基础事实（aliases /
+  core_wounds / key_relationships 等）
+- `target_baseline.json` — 全书视野下该角色与其它角色之间的全部 target
+  关系（含 `tier` + `relationship_type` + ≤100 字描述）
+
+两者共同的作用：
 
 1. **提取参照锚点**：Phase 2 产出全书视野骨架，后续 stage 由
-   char_support 据此修正和补充
+   char_support 据此修正和补充（注：`target_baseline.json` 例外——
+   phase 3 全程只读不写，漏判走人工编辑 + stage 重抽）
 2. **运行时加载**：与所选阶段的自包含 stage_snapshot 配套加载
+3. **target_baseline 的 phase 3 硬约束**：stage_snapshot 三方 keys
+   （`target_voice_map` / `target_behavior_map` / `relationships`）必须
+   ⊆ `targets[].target_character_id`，违规 cross-file hard fail
 
 voice / behavior / boundary / failure_modes 的状态由 stage_snapshot
 演变链承载——每个 stage_snapshot 含本阶段全量字段，无独立 baseline

@@ -19,9 +19,12 @@ Compile the minimum useful packet for the first reply.
 6b. Read `works/{work_id}/world/foundation/fixed_relationships.json`.
 7. Read `works/{work_id}/world/world_event_digest.jsonl` filtered to
    stage 1..N (N = user-selected stage).
-8. Read target character `identity.json` (the only character-level
-   constant file; voice / behavior / boundary / failure_modes are inlined
-   into the stage snapshot in step 9).
+8. Read target character `identity.json` and `target_baseline.json` (the
+   two character-level constant files produced in phase 2; voice /
+   behavior / boundary / failure_modes are inlined into the stage
+   snapshot in step 9. `target_baseline` lists every target character
+   the subject ever interacts with — phase 3 stage_snapshot target keys
+   are constrained to be ⊆ `targets[].target_character_id`).
 9. Read target character selected-stage snapshot.
 10. Read target character memory_timeline: recent 2 stages (N + N-1) full.
 10b. Read target character `memory_digest.jsonl` filtered to stage 1..N

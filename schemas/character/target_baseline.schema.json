@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "offpage/character/target_baseline.schema.json",
+  "title": "角色 target baseline",
+  "description": "Phase 2 产出，全书视野一次性拍出该角色与其它角色之间的全部 target 关系。Per-character、character-level 恒定文件，phase 3 各 stage 只读不写。phase 3 stage_snapshot 中 target_voice_map / target_behavior_map / relationships 的 keys 必须严格 ⊆ targets[].target_character_id；漏判时走人工编辑 baseline + stage 重抽，不允许 stage 突破。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_id",
+    "character_id",
+    "targets"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "work_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "character_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "本 baseline 描述的角色 ID（与 identity.character_id 一致）。"
+    },
+    "targets": {
+      "type": "array",
+      "description": "本角色与其它角色之间的全部 target 关系（全书视野）。每条目对应一个对方角色。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target_character_id",
+          "relationship_type",
+          "tier",
+          "description"
+        ],
+        "properties": {
+          "target_character_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "对方角色的 identity.character_id。统一用 identity ID 而非 canonical_name / aliases，规避化名 / 隐藏身份导致的歧义。"
+          },
+          "relationship_type": {
+            "type": "string",
+            "enum": [
+              "close_kin",
+              "lover",
+              "close_friend",
+              "mentor",
+              "disciple",
+              "friend",
+              "ally",
+              "colleague",
+              "subordinate",
+              "superior",
+              "acquaintance",
+              "stranger",
+              "rival",
+              "enemy",
+              "nemesis",
+              "passerby",
+              "other"
+            ],
+            "description": "关系类型。覆盖亲密度 × 立场两维：close_kin 至亲血亲；lover 恋人 / 配偶；close_friend 挚友；mentor 师长 / 引路人；disciple 弟子；friend 朋友；ally 盟友；colleague 同僚 / 同事；subordinate 下属；superior 上司；acquaintance 泛交；stranger 陌生人；rival 竞争对手（非敌对）；enemy 敌人；nemesis 宿敌；passerby 路人 / 微弱关联；other 其他（罕用，需在 description 说明）。"
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["核心", "重要", "次要", "路人"],
+            "description": "重要程度（站在本角色视角对该 target 的相对重要性）：核心=亲密圈 / 关键宿敌；重要=对角色行为有显著影响；次要=偶有交互；路人=极弱关联但仍在 baseline 范围内。"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "关系描述（≤100 字）。"
+          }
+        }
+      }
+    }
+  }
+}
