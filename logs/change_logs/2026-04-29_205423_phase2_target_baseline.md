@@ -258,3 +258,31 @@ todo 范围（这是它的硬前置）。
     写为 identity + target_baseline 表达），属 BASELINE-DEPRECATE 残余
     与本次 alignment sweep 漏点的交集，不影响代码 / schema / 运行时
 - **Conversation ref**: 同会话内 /post-check 第 2 轮输出
+
+<!-- /post-check 第 3 轮（round-2 修补后再审）填写 -->
+
+## 复查结论 (3rd round, full T-PHASE2-TARGET-BASELINE scope)
+
+经第 2 轮 /post-check + round-2 修补 /go (ad03ba8) 后再审。本轮 scope =
+完整 todo 工作流（commits 2343e60..ad03ba8 含三轮迭代 + 三份 log）。
+
+### 轨 1 — 需求落实（含三轮）
+- 落实率：round-2 PRE 计划 7/7 项全部 PASS；6/6 验证标准全部通过
+  （4-piece grep / baseline_merge grep / target_baseline / TODO marker
+  / import / git diff 范围）
+- Missed updates: 0 条（首两轮全部漏点已闭合）
+
+### 轨 2 — 影响扩散（含三轮）
+- Findings: High=0 / Medium=0 / Low=1
+- 唯一 [L]：automation/persona_extraction/prompt_builder.py docstring
+  L442 / L452 / L483 / L493 的 "identity (character-level constant)"
+  单数措辞。严格描述现行 phase 3 read list（确实只有 identity，target_baseline
+  待 SUB-LANES 接入），不算 stale；但读者可能误读为「identity 是唯一」。
+  改动小、风险低，不进本轮修复
+- Open Questions: 0 条
+
+## 复查时状态 (3rd round)
+- **Reviewed**: 2026-04-30 00:02 EDT
+- **Status**: REVIEWED-PASS
+  - 触发：轨 1 全落实 + 轨 2 无 High / Medium，仅 1 处可选 [L]（不阻塞）
+- **Conversation ref**: 同会话内 /post-check 第 3 轮输出
