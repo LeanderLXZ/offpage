@@ -245,3 +245,23 @@ phase 3.5 `consistency_checker.py` 不再承担此规则。
 
 - **Status**: DONE
 - **Finished**: 2026-04-30 04:07:58 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：6/6 大块计划项核心达成 + 11/11 验证标准通过；但"F 文档对齐"扩展面有 7 处漏改（simulation/ 两份 + decisions.md #15 + requirements.md 两段 + system_overview / schema_reference 运行时段 + ai_context/architecture.md:92），均与 D4 keying 切换的"运行时端连带"未同步刷新有关
+- Missed updates: 7 条（simulation/retrieval/load_strategy.md / simulation/flows/startup_load.md / docs/requirements.md:1630-1632, 2784, 1585 / docs/architecture/system_overview.md:219-222 / docs/architecture/schema_reference.md:300-301 / ai_context/decisions.md #15 / ai_context/architecture.md:92——详见对话）
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=7 / Low=2
+- Open Questions: 2 条（decisions.md #15 是否要重写"specific names / generic types brief"；simulation/retrieval/load_strategy.md 的 canon 角色 loader 改 `target_character_id` 精确匹配 vs 双轨 character_id+target_type fallback——详见对话）
+
+## 复查时状态
+
+- **Reviewed**: 2026-04-30 04:15:18 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 大块全落实但"文档对齐"扩展面有 7 处运行时端连带漏改
+  - 轨 2 0 High / 7 Medium，无 bug / 行为风险，新 checker 端到端 smoke 已过
+- **Conversation ref**: 同会话内 /post-check 输出
