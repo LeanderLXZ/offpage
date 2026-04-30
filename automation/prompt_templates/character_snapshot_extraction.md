@@ -113,7 +113,16 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
    初始关系推 `relationship_traps` + 从原文已揭示的认知边界推
    `knowledge_leaks`。
 
-   每个 stage_snapshot 必须包含以下全部维度，即使某些字段相比上一阶段未变化：
+   每个 stage_snapshot 必须**考虑**以下全部维度，即使某些字段相比上一阶段未变化。schema 区分两层：
+
+   - **结构性骨架**（schema 顶层 `required`，缺一会被 L1 jsonschema gate 拒绝）：
+     `voice_state` / `behavior_state` / `boundary_state` / `failure_modes` / `relationships`
+     / `stage_events` / `character_arc` / `active_aliases` / `current_personality`
+     / `current_mood` / `knowledge_scope` / `timeline_anchor` / `snapshot_summary`
+   - **情境维度**（schema 不强制顶层 required；但 prompt 与 Phase 3.5 一致性审计仍要求逐项考虑）：
+     `emotional_baseline` / `current_status` / `misunderstandings` / `concealments` / `stage_delta`。
+     当本阶段原文里**确实没有**对应内容时（如本阶段没有任何新误解 / 没有任何新隐瞒 / 上一阶段已 resolve 全部 misunderstanding），允许字段以空数组 / 空对象 / 省略呈现，**但你必须在 `stage_delta` 中显式说明"对照了哪些维度、原文为什么不带来变化"**——禁止"无明显变化"敷衍。
+
    - `active_aliases`：当前活跃名称、隐藏身份、各角色称呼映射。**所有数组 / 映射上限以 schema 为准**
    - `voice_state`：语气基调、语言习惯、用词偏好、口头禅、禁忌用语、**情绪语气矩阵**（emotional_voice_map，覆盖主要情绪）、**对象语气矩阵**（target_voice_map，见下方详细要求）、典型对话示例（至少 2-3 条）。**所有数组上限以 schema 为准**（schemas/character/stage_snapshot.schema.json）
    - `behavior_state`：**core_goals**（理性目标——可权衡调整的）、**obsessions**（执念——非理性的心结，与创伤或强烈情感相关，不受理性权衡控制；区别于 core_goals）、决策风格、情绪触发器、**情绪反应矩阵**、**对象行为矩阵**（target_behavior_map，与 target_voice_map 对齐，见下方详细要求）、习惯性行为、压力应对。**所有数组上限以 schema 为准**

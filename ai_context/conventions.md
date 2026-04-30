@@ -83,7 +83,7 @@ Exempt (history is the point): `logs/change_logs/`, `logs/review_reports/`,
 - **Bounds are caps, not targets.** Every extraction prompt template must explicitly tell the LLM that `maxLength` / `maxItems` are **hard ceilings, not quotas** — write what's actually in the source, do not pad / inflate / invent items to fill the cap. Without this, models default to writing exactly N items per array because "the schema says ≤N".
 - **maxItems-aware truncation.** When a field exceeds its `maxItems` cap, the LLM ranks + truncates during extraction (not afterwards via schema fail). Priority anchors: current-stage relevance → identity-anchor relation → coverage breadth → cross-stage stability (for full-state evolving fields like `failure_modes`). Sub-classes count maxItems independently. → `automation/prompt_templates/character_snapshot_extraction.md` §maxItems 触顶时的裁剪规则.
 - **No chapter anchors on snapshots.** No schema (world / character / `stage_snapshot` / `memory_timeline`) carries `evidence_refs` / `source_type` / `scene_refs`; no per-item `evidence_ref` in `dialogue_examples` / `action_examples`. Anchoring uses `timeline_anchor` (+ `location_anchor` for world) and `memory_timeline`.
-- **`stage_catalog`** at `schemas/{world,character}/stage_catalog.schema.json`; bootstrap-only, not runtime-loaded; sort by `stage_id` lex (no `order` field).
+- **`stage_catalog`** — world catalog at `schemas/world/world_stage_catalog.schema.json`; character catalog at `schemas/character/stage_catalog.schema.json`. Both bootstrap-only, not runtime-loaded; sort by `stage_id` lex (no `order` field). `snapshot_path` differs: character → `canon/stage_snapshots/{stage_id}.json`; world → `world/stage_snapshots/{stage_id}.json`.
 
 ## Git
 

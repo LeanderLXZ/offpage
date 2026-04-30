@@ -47,7 +47,10 @@
 - **Schema gate**：每个 chunk 落盘后跑 jsonschema (`schemas/analysis/chapter_summary_chunk.schema.json`) 校验，
   字段 bound + `additionalProperties:false` 违反归入同一 fail 类型（具体数字以 schema 为准）；失败路由到 L3 全量重跑，
   把上次错误（schema 失败首条 / JSON 解析失败 desc）作为 `prior_error` 注入新 prompt 的 `{retry_note}` 段
-- 完成门控：全部 chunk 成功后才进入 Phase 1，有缺失则阻断并退出
+- 完成门控：每个 chunk 必须**文件存在 + JSON 解析通过 + jsonschema 通过 +
+  `len(summaries) == 章节数`** 四条全部满足才视为完成（`_chunk_passes_full_check`
+  单一判据，skip 路径 / 最终 gate / `reconcile_with_disk` 三处共用，避免
+  partial / stale 文件从任何一道关漏过）；有任意 chunk 不满足 → 阻断并 `sys.exit(1)`
 - 输出：`works/{work_id}/analysis/chapter_summaries/`
 
 ### 3. 全书分析（Phase 1）
@@ -67,19 +70,23 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 阶段规划是分析阶段**最核心的产出**——每个 stage 边界直接成为系统的 stage 边界，
 世界快照、角色快照、记忆时间线、运行时阶段选择全部建立在此切分之上。
 
-**出口验证（硬性门控）**：Phase 1 完成后跑两层校验，**共享同一 retry 预算**
+**出口验证（硬性门控）**：Phase 1 完成后跑三层校验，**共享同一 retry 预算**
 （`[phase1].exit_validation_max_retry`，默认 2 次）：
 
-1. **jsonschema 校验**：三件套各自跑 `Draft202012Validator.iter_errors`
+1. **三件套齐全**：`world_overview.json` / `stage_plan.json` /
+   `candidate_characters.json` 都必须存在；缺一即视作此阶段失败的
+   `missing_files` 类型（与 schema fail 共享 retry 预算）。
+2. **jsonschema 校验**：三件套各自跑 `Draft202012Validator.iter_errors`
    （`schemas/analysis/{world_overview,stage_plan,candidate_characters}.schema.json`），
    覆盖结构 / bound / enum / pattern。
-2. **stage `chapter_count` 5-15 限制**（`_check_stage_plan_limits`，与 schema
+3. **stage `chapter_count` 5-15 限制**（`_check_stage_plan_limits`，与 schema
    `chapter_count: minimum 5, maximum 15` 同义；belt-and-suspenders）。
 
-任一层失败 → 把首条 schema 错误 + stage 限制违规明细合并进
+任一层失败 → 把缺失文件清单 + 首条 schema 错误 + stage 限制违规明细合并进
 `correction_feedback`（按 `build_analysis_prompt(correction_feedback=...)`
 追加到 prompt 的"⚠️ 修正要求"段），删除失败的文件让 LLM 重生（通过校验的
-文件保留），重新跑 Phase 1。若重试耗尽仍 fail，流程终止（`sys.exit(1)`）。
+文件保留），重新跑 Phase 1。若重试耗尽仍 fail，流程终止（`sys.exit(1)`）；
+mark_done 之前还有 defense-in-depth 复检，三件套任一缺失也直接 `sys.exit(1)`。
 
 ### 4. 活跃角色确认（Phase 1.5）
 

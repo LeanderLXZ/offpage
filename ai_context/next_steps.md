@@ -13,8 +13,10 @@ Shorter is better than longer; push detail into the linked source rather than gr
 ## Highest Priority
 
 1. **Refine schemas into directly writable instance formats.**
-   - World package: timeline, events, locations, maps — foundation
-     schema still implicit in `automation/prompt_templates/baseline_production.md`.
+   - World package: timeline, events, locations, maps still need
+     directly writable schemas. `foundation` already has a permissive
+     schema at `schemas/world/foundation.schema.json` (see
+     `docs/architecture/schema_reference.md`).
 
 ## Medium Priority
 

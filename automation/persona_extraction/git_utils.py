@@ -181,20 +181,43 @@ def checkout_main(project_root: Path,
 
 
 def commit_stage(project_root: Path, stage_id: str,
-                 *, message: str | None = None,
+                 *, work_id: str | None = None,
+                 message: str | None = None,
                  files: list[str] | None = None) -> str | None:
     """Commit current changes for a stage. Returns commit SHA or None.
 
     ``stage_id`` is the compact English stage code (``S###``) or
-    ``baseline`` for pre-Phase-3 commits. When
-    ``message`` is omitted, a default template is used for extraction
-    commits.
+    ``baseline`` for pre-Phase-3 commits. ``work_id`` scopes the
+    default ``git add`` to ``works/{work_id}/``; without it, a
+    multi-work checkout could accidentally pull another work's dirty
+    files into this stage's commit. When ``message`` is omitted, a
+    default template is used for extraction commits.
     """
     if files:
         for f in files:
             _git(["add", f], project_root)
+    elif work_id:
+        _git(["add", "-A", f"works/{work_id}/"], project_root)
     else:
         _git(["add", "-A", "works/"], project_root)
+
+    # Scope guard: if work_id is given, refuse to commit anything staged
+    # outside that work's directory. Catches the case where another
+    # caller pre-staged unrelated paths before invoking commit_stage.
+    if work_id:
+        staged = _git(
+            ["diff", "--cached", "--name-only"], project_root)
+        scope_prefix = f"works/{work_id}/"
+        out_of_scope = [
+            line for line in staged.stdout.splitlines()
+            if line.strip() and not line.startswith(scope_prefix)
+        ]
+        if out_of_scope:
+            logger.error(
+                "commit_stage refusing scope leak for %s/%s: %d "
+                "out-of-scope path(s); first: %r",
+                work_id, stage_id, len(out_of_scope), out_of_scope[0])
+            return None
 
     status = _git(["status", "--porcelain"], project_root)
     if not status.stdout.strip():

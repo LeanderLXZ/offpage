@@ -178,7 +178,7 @@ source. Long discussion chains live in `logs/change_logs/`.
 ## Memory System
 
 28. Three-layer memory (`stage_snapshot` / `memory_timeline` / `scene_archive`). No separate dialogue corpus.
-29. ID convention `{TYPE}-S{stage:03d}-{seq:02d}` for `M-` / `E-` / `SC-`. 3-digit stage ≤999, 2-digit seq ≤99 per stage. Stage encoded in ID; digest / archive entries carry no separate `stage_id` field. Story-time field = `time` across all three.
+29. ID convention `{TYPE}-S{stage:03d}-{seq:02d}` for `M-` / `E-` / `SC-`. 3-digit stage ≤999, 2-digit seq ≤99 per stage. Stage encoded in ID. **Digest entries** (`memory_digest.jsonl` / `world_event_digest.jsonl`) carry no separate `stage_id` field — the stage is parsed from the ID prefix. **`scene_archive` entries DO carry `stage_id`** (sourced from `stage_plan.json`, see §11.x scene_archive 段) alongside the stage-coded `scene_id`, since runtime retrieval indexes by stage and re-parsing on every query is wasteful. Story-time field = `time` across all three.
 30. Simulating character A loads only scenes where A is in `characters_present` and A's own `memory_timeline`.
 31. `stage_events` is world-public only (50–100 CJK chars, hard gate). Personal / internal items belong in character `memory_timeline`, never in world.
 32. `world_event_digest.summary` = 1:1 copy of source `stage_events` (enforced at write time by prompt + repair agent). 5-level importance inferred by keyword; default significant.

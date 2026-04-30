@@ -68,7 +68,7 @@
           },
           "snapshot_path": {
             "type": "string",
-            "description": "该阶段对应的快照路径。由 upsert_stage_catalog 程序生成（程序保证）。"
+            "description": "该阶段对应的世界快照路径，通常为 world/stage_snapshots/{stage_id}.json。由 upsert_stage_catalog 程序生成（程序保证）。"
           }
         }
       }
