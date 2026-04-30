@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import tomllib
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 

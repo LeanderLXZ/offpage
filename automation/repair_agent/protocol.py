@@ -172,7 +172,8 @@ class Issue:
     """A problem found by any checker layer."""
     file: str
     json_path: str
-    category: Literal["json_syntax", "schema", "structural", "semantic"]
+    category: Literal[
+        "json_syntax", "schema", "structural", "semantic", "cross_file"]
     severity: Literal["error", "warning"]
     rule: str
     message: str
@@ -187,11 +188,16 @@ class Issue:
 
 
 # Mapping from issue category to the lowest fixer tier that can handle it.
+# `cross_file` (D4 targets-keys-eq-baseline) starts at L2: L1 json_repair is
+# scoped to the same file, T3 file-regen is too costly for what is usually
+# a small key-set drift; L2 reads sibling files so the cross-file checker
+# itself plus L2 fixers can resolve it.
 START_TIER: dict[str, int] = {
     "json_syntax": 0,
     "schema": 0,
     "structural": 0,
     "semantic": 1,
+    "cross_file": 2,
 }
 
 
