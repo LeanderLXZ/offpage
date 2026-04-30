@@ -149,3 +149,21 @@
 
 - **Status**: DONE
 - **Finished**: 2026-04-30 02:03:51 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：14/14 项计划文件改动 + 2/2 项新建文件 + 8/8 项验证标准
+- Missed updates: 1 条 — `schemas/README.md` 未加 `_shared/` 子目录行（Cross-File Alignment 表第 41 行规定 `schemas/**/*.schema.json` 改动需同步 schemas/README.md）
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=1（schemas/README.md 漏更新，与 `shared/` 命名近似有误读风险）/ Low=2（schema_loader._load_fragment lru_cache 进程内不 reload；character_snapshot_extraction.md 残留 5 处 #27b 硬数字 = 预先存在违规、本次确认不在 scope）
+- Open Questions: 0 条
+
+## 复查时状态
+- **Reviewed**: 2026-04-30 02:08:33 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 大体落实，但有 1 项 Missed Update（schemas/README.md）；轨 2 1 个 Medium，无 High → PARTIAL
+- **Conversation ref**: 同会话内 /post-check 输出
