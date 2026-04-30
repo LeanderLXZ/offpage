@@ -6,19 +6,19 @@
 
 > 本段是三张子表的渲染缓存，由维护本文件的人（包括 Claude）在**每次对正文条目增 / 改 / 移段 / 完成 / 废弃后**顺手刷新——具体规则见下方"## File guide → Index maintenance"。`/todo` skill 不解析正文，只读这一段，所以这里的内容必须与正文同步；不同步会让 `/todo` 给出错误结论。
 
-### 🟢 In Progress (1)
+### 🟢 In Progress (2)
 
 | ID | Title | Start time | Status |
 |---|---|---|---|
 | `T-BASELINE-DEPRECATE` | 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载 | 2026-04-29 14:42 EDT | 代码完成、runtime 验证待跑 |
+| `T-PHASE2-TARGET-BASELINE` | phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点 | 2026-04-29 20:54 EDT | 代码完成、runtime 验证待跑（与 BASELINE-DEPRECATE 同形态，可同批跑） |
 
-### 🟡 Next (4)
+### 🟡 Next (3)
 
 | ID | Brief | Importance | Ready | Scope | Deps |
 |---|---|---|---|---|---|
 | `T-PHASE35-IMPORTANCE-AWARE` | [consistency_checker.py:96-117](../automation/persona_extraction/consistency_checker.py#L96-L117) 已构造 importance_map 但只 _check_target_map_counts 用上；其他 8 个 _check_* 一刀切，对次要配角的 field_completeness / relationship_continuity 过度报错。decisions.md #15 已定 bound 因 importance 而异。 | 🟢 Med-Low | 💬 Discuss first | 🟡 Medium | 无（触发自 2026-04-27 opus-4-7 review L-3） |
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | 无 |
-| `T-PHASE2-TARGET-BASELINE` | phase 2 全书视野产 per-character target_baseline.json（含 tier + relationship_type），phase 3 全模式严格 ⊆ baseline 写 target keys，三方一致 by-construction，删除 sub-lane step 0 串行卡口。 | 🔴 High | ✅ Ready | 🔴 Large·Arch | T-BASELINE-DEPRECATE 已落地 |
 | `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys ⊆ baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | T-PHASE2-TARGET-BASELINE |
 
 ### ⚪ Discussing (6)
@@ -32,7 +32,7 @@
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
 
-**Total**: 11 — 🟢 In Progress 1 ｜ 🟡 Next 4 ｜ ⚪ Discussing 6
+**Total**: 11 — 🟢 In Progress 2 ｜ 🟡 Next 3 ｜ ⚪ Discussing 6
 
 ---
 
@@ -321,6 +321,94 @@ any node ─────────────────(abandoned)───
 
 ---
 
+### [T-PHASE2-TARGET-BASELINE] phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点
+
+**开始时间**：2026-04-29 20:54 EDT
+
+**当前状态**：代码完成、runtime 验证待跑（schema / 代码 / prompt / docs 全部落地，jsonschema + import + validate_baseline 静态验证通过；下一步需在 extraction 分支跑一遍 phase 2 验证 LLM 实际产出 target_baseline.json schema 合规 + 与 BASELINE-DEPRECATE 同批跑 runtime）
+
+**上下文**
+
+当前 phase 3 char_snapshot 由 LLM 在 stage-local 视角自主决定
+target_voice_map / target_behavior_map / relationships 的 keys。三个痛点：
+
+1. stage-local 视角看不到全书关系网络，可能漏判跨章节的隐性重要关系
+   （反派只前/后期出场但贯穿主线等）
+2. 单 lane 模式下三方 keys 名义上由同一 LLM 写入应一致，实际是否真的
+   对齐尚未 0 token 验证（被替代的 T-CHAR-SNAPSHOT-TARGET-LIST 决策项 2
+   提的疑点）
+3. T-CHAR-SNAPSHOT-SUB-LANES 拆 3 lane 后三方 keys 必须 ⊆ 同一基线才能
+   合并，否则需每 stage 额外算 active target list（原 step 0 LLM 调用，
+   占串行卡口）
+
+新方案：phase 2 全书视野一次性拍每角色 `target_baseline.json`，列全书所有
+重要 target（含 tier + 关系类型），后续 phase 3 各 stage 严格 ⊆ baseline
+写 keys。三方一致 by-construction，跟 identity / fixed_relationships 同源
+思路（结构性 + 跨 stage 不变 → phase 2 一次拍，后续 stage 只读不写）。
+
+**改动清单**
+
+新增：
+- `schemas/character/target_baseline.schema.json` — 字段：`schema_version`
+  / `work_id` / `character_id` / `targets[]`，每条 target =
+  `target_character_id`（用 identity.id，规避化名 / 隐藏身份歧义）+
+  `relationship_type`（17 候选枚举，覆盖亲密度 × 立场两维：close_kin /
+  lover / close_friend / mentor / disciple / friend / ally / colleague /
+  subordinate / superior / acquaintance / stranger / rival / enemy /
+  nemesis / passerby / other）+ `tier`（核心 / 重要 / 次要 / 路人）+
+  `description`（≤100 字）
+
+修改：
+- `automation/prompt_templates/baseline_production.md` — 新增「产出 3：
+  角色 Target Baseline」章节；manifest.json 段加 `target_baseline_path`
+  填写指引
+- `automation/persona_extraction/prompt_builder.py`
+  `build_baseline_prompt` — schemas 读列表加
+  `character/target_baseline.schema.json`
+- `schemas/character/character_manifest.schema.json` — `paths` 对象加
+  `target_baseline_path` 字段
+- `automation/persona_extraction/validator.py` `validate_baseline()` —
+  加 target_baseline.json 校验：必须存在 + schema 合规 + character_id
+  与目录名一致；缺失 / 违规 → error
+- `ai_context/decisions.md` #13 — 改写为含 target_baseline 产出 + D4 硬
+  约束（phase 3 keys ⊆ baseline，违规 hard fail）+ baseline 在 phase 3
+  全程只读不写
+- `ai_context/architecture.md` § Automated Extraction Pipeline — Phase 2
+  行补充 target_baseline 产出
+- `ai_context/requirements.md` § §7 Information Layering — immutable 层
+  补 target_baseline
+- `docs/architecture/extraction_workflow.md` § 5 Baseline 产出（Phase 2）
+  — 加 target_baseline 描述 + immutable 约束 + 出口验证补充
+- `docs/requirements.md` § 角色层 baseline — 加 target_baseline 条目 +
+  immutable 约束 + phase 2 宁可多列不可漏列原则
+
+**完成标准**
+
+- target_baseline.schema.json 落地 + jsonschema 校验通过 ✓ done
+- character_manifest 含 target_baseline_path ✓ done
+- validate_baseline() 把 target_baseline 列为必须文件，缺失 / 违规阻断
+  phase 3 ✓ done（smoke 验证通过：missing → error / mismatch → error /
+  schema 违规 → error）
+- ai_context / docs 同步更新 ✓ done
+- phase 2 跑通至少一个 work：每个 candidate character 产出
+  target_baseline.json，schema 合规 ⏳ 待 runtime（与 BASELINE-DEPRECATE
+  可同批跑）
+
+**预估**
+
+- 中量改动（新增 1 schema + phase 2 prompt 改造 + 几处 ai_context / docs
+  更新）
+- 代码实施已完成；首次跑 1 个 work 验证待用户在 extraction 分支触发
+
+**依赖**
+
+- T-BASELINE-DEPRECATE 已落地（runtime 验证通过后归档）
+- 无其他硬依赖
+- 是 T-CHAR-SNAPSHOT-SUB-LANES 的硬前置（sub-lane 三方 keys ⊆ baseline
+  的锚点）
+
+---
+
 ## Next
 
 ### [T-PHASE35-IMPORTANCE-AWARE] Phase 3.5 一致性检查按 importance 调门槛
@@ -384,84 +472,6 @@ any node ─────────────────(abandoned)───
   / `/full-review` 都能正常降级或运行
 
 **依赖**：无（skills_config.md 已落地、6 skill 改造已完成）
-
----
-
-### [T-PHASE2-TARGET-BASELINE] phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点
-
-**上下文**
-
-当前 phase 3 char_snapshot 由 LLM 在 stage-local 视角自主决定
-target_voice_map / target_behavior_map / relationships 的 keys。三个痛点：
-
-1. stage-local 视角看不到全书关系网络，可能漏判跨章节的隐性重要关系
-   （反派只前/后期出场但贯穿主线等）
-2. 单 lane 模式下三方 keys 名义上由同一 LLM 写入应一致，实际是否真的
-   对齐尚未 0 token 验证（被替代的 T-CHAR-SNAPSHOT-TARGET-LIST 决策项 2
-   提的疑点）
-3. T-CHAR-SNAPSHOT-SUB-LANES 拆 3 lane 后三方 keys 必须 ⊆ 同一基线才能
-   合并，否则需每 stage 额外算 active target list（原 step 0 LLM 调用，
-   占串行卡口）
-
-新方案：phase 2 全书视野一次性拍每角色 `target_baseline.json`，列全书所有
-重要 target（含 tier + 关系类型），后续 phase 3 各 stage 严格 ⊆ baseline
-写 keys。三方一致 by-construction，跟 identity / fixed_relationships 同源
-思路（结构性 + 跨 stage 不变 → phase 2 一次拍，后续 stage 只读不写）。
-
-**改动清单**
-
-新增：
-- `schemas/character/target_baseline.schema.json` — 字段：`schema_version`
-  / `work_id` / `character_id` / `targets[]`，每条 target =
-  `target_character_id`（用 identity.id，规避化名 / 隐藏身份歧义）+
-  `relationship_type`（多候选清单待 prompt 实施期敲，覆盖亲密度 × 立场
-  两维：close_kin / lover / close_friend / mentor / friend / ally /
-  colleague / acquaintance / rival / enemy / nemesis / passerby 等）+
-  `tier`（核心 / 重要 / 次要 / 路人）+ `description`（≤100 字）
-
-修改：
-- `automation/prompt_templates/` 下 phase 2 character baseline prompt —
-  加 target_baseline 产出指令；input 同现行（全书摘要 + candidate_characters
-  + identity）
-- `automation/persona_extraction/` phase 2 落盘流程 — 把 target_baseline.json
-  写到 `works/{work_id}/characters/{cid}/canon/target_baseline.json`
-- `schemas/character/character_manifest.schema.json` — 加
-  `target_baseline_path` 字段
-- `automation/persona_extraction/manifests.py` — 写 character_manifest 时
-  填 target_baseline_path
-- `automation/persona_extraction/validate_baseline.py`（或对应位置）—
-  `validate_baseline()` 加 target_baseline.json schema 校验，必须存在 +
-  合规，缺失 / 违规阻断 phase 3
-- `ai_context/decisions.md` — 新增决策：phase 2 产 target_baseline +
-  immutable + D4 硬约束（phase 3 keys ⊆ baseline，违规 hard fail）
-- `ai_context/architecture.md` § Character canon / Phase 2 — 文件清单加
-  target_baseline
-- `docs/architecture/extraction_workflow.md` § 5 Baseline 产出（Phase 2）
-  — 加 target_baseline 描述
-- `docs/requirements.md` — 同步 character canon 描述
-
-**完成标准**
-
-- target_baseline.schema.json 落地 + jsonschema 校验通过
-- phase 2 跑通至少一个 work：每个 candidate character 产出
-  target_baseline.json，schema 合规
-- character_manifest 含 target_baseline_path
-- validate_baseline() 把 target_baseline 列为必须文件，缺失 / 违规阻断
-  phase 3
-- ai_context / docs 同步更新
-
-**预估**
-
-- 中量改动（新增 1 schema + phase 2 prompt 改造 + 几处 ai_context / docs
-  更新）
-- 实施 ~1 个工作日 + 跑 1 个 work 验证
-
-**依赖**
-
-- T-BASELINE-DEPRECATE 已落地（runtime 验证通过后归档）
-- 无其他硬依赖
-- 是 T-CHAR-SNAPSHOT-SUB-LANES 的硬前置（sub-lane 三方 keys ⊆ baseline
-  的锚点）
 
 ---
 

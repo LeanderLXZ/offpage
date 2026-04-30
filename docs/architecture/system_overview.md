@@ -193,15 +193,17 @@
 
 每个资产包包含：
 
-- 角色 manifest
-- 角色圣经（character bible）
+- 角色 manifest（`paths.target_baseline_path` 指向下条文件）
+- `identity.json` — 角色基础事实（character-level 恒定文件之一）
+- `target_baseline.json` — 全书视野下与其它角色之间的全部 target 关系
+  （character-level 恒定文件之二，phase 3 全程只读不写）
 - 记忆时间线
-- 语音与行为规则（baseline，提取锚点，不在运行时加载）
 - 与作品时间线对应的阶段目录
-- 与作品级 `stage_id` 对应的**自包含阶段快照**（stage_snapshot）
+- 与作品级 `stage_id` 对应的**自包含阶段快照**（stage_snapshot；含本阶段
+  全量 voice / behavior / boundary / failure_modes 字段）
 
-阶段快照是运行时角色扮演的唯一状态来源（配合不变层 identity、failure_modes、
-hard_boundaries）。每个快照包含该阶段的完整状态：
+阶段快照是运行时角色扮演的唯一状态来源（配合不变层 identity +
+target_baseline）。每个快照包含该阶段的完整状态：
 
 - `voice_state`：语气基调、情绪语气矩阵（emotional_voice_map）、
   **对象语气矩阵**（target_voice_map，按具体角色区分的说话差异）
@@ -316,7 +318,7 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
 - 启动必需：
   - 世界 foundation（`foundation.json` + `fixed_relationships.json`）+ 选定的世界阶段快照
   - `world_event_digest.jsonl`：stage 1..N 过滤加载（世界事件时间线）
-  - 角色不变层：identity.json（character-level 唯一恒定文件）
+  - 角色不变层：identity.json + target_baseline.json（character-level 恒定文件，phase 2 产出）
   - 选定阶段的**自包含** stage_snapshot（含本 stage 全量 voice / behavior / boundary / failure_modes / relationships）
   - memory_timeline：近期 2 阶段（N + N-1）全量
   - memory_digest.jsonl：stage 1..N 过滤加载（压缩索引，远期感知）

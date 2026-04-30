@@ -53,8 +53,9 @@ source. Long discussion chains live in `logs/change_logs/`.
      so runtime reads only the current snapshot. S001 derives a baseline
      seed from source + identity; S002+ evolves from prev snapshot.
      `stage_delta` stays free-text (no structural changed/removed/added
-     upgrade in this round). `identity` is the only character-level
-     constant; runtime loads identity + current stage_snapshot.
+     upgrade in this round). `identity` and `target_baseline` are the
+     character-level constants (both produced in phase 2); runtime loads
+     identity + target_baseline + current stage_snapshot.
 11e. **maxItems-aware truncation rule (universal).** All extraction
      prompts must instruct the LLM to sort + truncate at the
      `maxItems` cap during extraction (rather than overflow + schema
@@ -87,13 +88,21 @@ source. Long discussion chains live in `logs/change_logs/`.
 12. stage (extraction) = stage (runtime), 1:1. Natural story boundaries
     (target 10, min 5, max 15). Cumulative 1..N. `stage_id` = `S###`;
     sibling `stage_title` (short label; cap in schema).
-13. Phase 2 produces world foundation + character `identity.json`
-    drafts from full-book context (no separate voice / behavior /
-    boundary / failure_modes baseline files — those live inside
-    `stage_snapshot`). Phase 3 does 1+2N split extraction per stage
-    (1 world + N char_snapshot + N char_support); any stage may
-    correct identity (via char_support) or any other asset across
-    the work package.
+13. Phase 2 produces world foundation + per-character `identity.json`
+    + per-character `target_baseline.json` drafts from full-book context
+    (no separate voice / behavior / boundary / failure_modes baseline
+    files — those live inside `stage_snapshot`). `target_baseline.json`
+    lists every target character (with `tier` ∈ {核心 / 重要 / 次要 /
+    路人} + `relationship_type` enum + ≤100-char description) the
+    subject character ever interacts with across the whole book; it is
+    immutable from phase 3 onward. **Phase 3 hard constraint**: every
+    `stage_snapshot.target_voice_map` / `target_behavior_map` /
+    `relationships` key MUST be ⊆ `target_baseline.targets[].target_character_id`
+    — violations are cross-file hard fail (no escape hatch; if phase 2
+    misses a target, fix the baseline by hand and re-run the affected
+    stages). Phase 3 does 1+2N split extraction per stage (1 world + N
+    char_snapshot + N char_support); any stage may correct identity (via
+    char_support) but **never** writes to target_baseline.
 14. No per-stage report files; progress in-place.
 15. `target_voice_map` / `target_behavior_map` use specific names for
     main / important chars (≥3–5 examples); generic types brief or

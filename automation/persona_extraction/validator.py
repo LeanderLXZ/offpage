@@ -259,6 +259,31 @@ def validate_baseline(
                     schema_dir / "character" / "character_manifest.schema.json",
                     str(manifest_path)))
 
+        # target_baseline.json — required Phase 2 output, anchors phase 3
+        # stage_snapshot target keys (target_voice_map / target_behavior_map
+        # / relationships keys ⊆ targets[].target_character_id).
+        tb_path = char_dir / "target_baseline.json"
+        if not tb_path.exists():
+            issues.append(ValidationIssue(
+                "error", str(tb_path),
+                "target_baseline.json missing (Phase 2 must produce)"))
+        else:
+            try_repair_json_file(tb_path)
+            tb_data = _load_json(tb_path)
+            if tb_data is None:
+                issues.append(ValidationIssue(
+                    "error", str(tb_path), "Invalid JSON"))
+            else:
+                issues.extend(_validate_schema(
+                    tb_data,
+                    schema_dir / "character" / "target_baseline.schema.json",
+                    str(tb_path)))
+                if tb_data.get("character_id") != char_id:
+                    issues.append(ValidationIssue(
+                        "error", str(tb_path),
+                        f"character_id={tb_data.get('character_id')!r} "
+                        f"does not match directory {char_id!r}"))
+
     passed = not any(i.severity == "error" for i in issues)
     return ValidationReport(passed=passed, issues=issues)
 
