@@ -97,6 +97,13 @@
 
 ## Abandoned
 
+### [T-MIGRATE-TARGET-BASELINE-ZH] 迁移现有 target_baseline.json：英文 enum → 中文柔性 string + tier 路人→普通 · 废弃于 2026-04-30
+
+- 废弃原因：前提失效，无可迁移对象。原 todo 假设"phase 2 已 commit baseline 全是英文值，新 schema 校验 fail"，但 `works/` 在 `## Do-not-commit paths` 内，target_baseline.json 从未入库（`git log --diff-filter=D` 全空）；本地当前 work 的 `analysis/` 也只剩空 progress/，无 baseline 文件。下次 phase 2 重跑直接用新中文 schema 生成，无需迁移工具。
+- 关联 log: [logs/change_logs/2026-04-30_024305_abandon_t_migrate_target_baseline_zh.md](../logs/change_logs/2026-04-30_024305_abandon_t_migrate_target_baseline_zh.md)
+
+---
+
 ### [T-CHAR-SNAPSHOT-TARGET-LIST] target_char_list 生成策略 + fallback 模式是否需要 · 废弃于 2026-04-29
 
 - 废弃原因：被 T-PHASE2-TARGET-BASELINE 方案吞掉。原 todo 围绕 sub-lane step 0 三选一策略（program-only / llm-light / hybrid）+ fallback 是否跑 step 0；新方案 phase 2 全书视野一次拍 per-character target_baseline.json，后续各 stage ⊆ baseline 写 keys，step 0 整个删除，两个决策项都不再需要。
