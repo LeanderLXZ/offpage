@@ -24,7 +24,8 @@ Compile the minimum useful packet for the first reply.
    behavior / boundary / failure_modes are inlined into the stage
    snapshot in step 9. `target_baseline` lists every target character
    the subject ever interacts with — phase 3 stage_snapshot target keys
-   are constrained to be ⊆ `targets[].target_character_id`).
+   are constrained to be **set-equal** to `targets[].target_character_id`
+   bidirectionally, with tri-state carried by content emptiness).
 9. Read target character selected-stage snapshot.
 10. Read target character memory_timeline: recent 2 stages (N + N-1) full.
 10b. Read target character `memory_digest.jsonl` filtered to stage 1..N

@@ -24,18 +24,23 @@ Load before the first reply:
   extraction time, no loader-side filtering required) and
   `target_baseline.json` (full-book roster of every target with `tier` /
   `relationship_type` / ≤100-char description; phase 3 stage_snapshot
-  target keys are constrained to be ⊆ `targets[].target_character_id`,
-  so the loader can use this list as the upper bound when prefetching
-  target-related entries). These are the two character-level constant
+  target keys are constrained to be **set-equal** to
+  `targets[].target_character_id` — bidirectional, with tri-state
+  carried by content emptiness — so the loader knows the exact roster
+  ahead of time when prefetching target-related entries). These are the two character-level constant
   files; voice / behavior / boundary / failure_modes are inlined into the
   stage snapshot below.
 - target character selected-stage snapshot (self-contained: voice, behavior,
   boundaries, failure_modes, relationships, personality, mood, knowledge —
   identity + stage snapshot is the complete runtime state).
-  **Filtered loading**: `target_voice_map` and `target_behavior_map` are loaded
-  only for entries matching the user's role — canon character = exact match on
-  `target_type`; OC character = match by closest relationship type from role
-  binding. Other target entries are omitted to save prompt budget.
+  **Filtered loading**: `target_voice_map` and `target_behavior_map` (every
+  entry keyed by `target_character_id` after D4) are loaded only for entries
+  matching the user's role — **canon character** (role_binding bound to a
+  baseline `character_id`) = exact match on `target_character_id`; **OC
+  character** (no baseline character_id) = fallback match via the entry's
+  sibling `target_type` label, picking the closest relationship type per
+  role_binding affinity. Other target entries are omitted to save prompt
+  budget.
   **Fallback for absent characters**: if the current stage snapshot does not
   contain a matching target entry (e.g. the character did not appear in recent
   stages and inheritance was missed), the engine scans backwards through

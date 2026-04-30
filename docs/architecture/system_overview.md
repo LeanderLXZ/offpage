@@ -216,12 +216,18 @@ target_baseline）。每个快照包含该阶段的完整状态：
   `concealments`、`stage_delta`
 - `character_arc`：角色从阶段 1 到当前的整体弧线概览
 
-target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细记录
-（每 target 至少 3-5 条原文示例）；泛化类型（陌生人、路人）简要描述即可。
+target_voice_map 和 target_behavior_map 每条 entry 以 `target_character_id`
+为身份键，覆盖 baseline.targets 全集；详细度按 `tier` 分层——核心 / 重要
+target 详细记录（每 target 至少 3-5 条原文示例），次要 / 普通 target
+简要记录；从未登场的 baseline target 字段保持空（D4 状态 3）。`target_type`
+sibling 字段记关系类型 / 角色定位，仅供 OC 路径 fallback 使用。
 
-**运行时过滤加载**：target_voice_map 和 target_behavior_map 按用户扮演角色
-过滤，只加载匹配条目。**Fallback**：如果当前 stage snapshot 缺少匹配条目
-（如该角色近期未出场），引擎向前扫描最近包含该条目的 stage snapshot。
+**运行时过滤加载**：target_voice_map 和 target_behavior_map 按用户扮演
+角色过滤——canon 角色（已绑定 baseline character_id）走 `target_character_id`
+精确匹配；OC 角色（无 baseline character_id）按 role_binding 设定特征
++ entry 的 sibling `target_type` 标签 fallback 匹配。**Fallback**：
+如果当前 stage snapshot 缺少匹配条目（如该角色近期未出场），引擎向前
+扫描最近包含该条目的 stage snapshot。
 
 角色构建通常应在初始的世界优先阶段处理建立了该作品的共享世界背景之后进行。
 

@@ -236,8 +236,11 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
 
 {quality_requirements}
 
-**未在上表中列出的泛化类型**（"村民"、"小孩"、"陌生人"等）：可选，简要描述
-即可，不需要大量例句。
+**未在上表中列出的 target**（baseline.targets 列了但属于 tier 次要 / 普通，
+sibling `target_type` 标签可能是"村民"、"小孩"、"陌生人"、"路人" 等弱关联
+角色）：仍需 entry 占位以满足 D4 set-equal，但 dialogue_examples /
+action_examples 简要描述即可，不需要大量例句；从未登场的 target 字段直接
+保持空。
 
 ### target_voice_map 要求
 

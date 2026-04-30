@@ -89,7 +89,7 @@ snapshot — no baseline merge required.
 
 - `identity.json` + `target_baseline.json` are the character-level constants (both Phase 2 outputs, immutable from Phase 3 onward) — load alongside the stage snapshot. `target_baseline` anchors phase 3 stage_snapshot target keys (cross-file hard fail; see #13).
 - voice / behavior / boundary / failure_modes have **no separate baseline files**; their state is carried by the stage_snapshot evolution chain (S001 derives a baseline seed from source + identity; S002+ evolves from prev snapshot).
-- `target_voice_map` / `target_behavior_map` filtered by user role; fallback = backward scan through previous snapshots (pure code I/O).
+- `target_voice_map` / `target_behavior_map` (all entries key by `target_character_id`, detail level varies by tier — 核心 / 重要 targets carry ≥3–5 examples, 次要 / 普通 / never-appeared targets stay terse / empty per D4 state 3) filtered by user role: canon role → exact `target_character_id` match; OC role → fallback via the entry's `target_type` sibling label per role_binding. Fallback for absent matches = backward scan through previous snapshots (pure code I/O).
 
 ## Three-Layer Memory
 
