@@ -252,7 +252,7 @@ baseline 阶段**不需要**创建任何占位文件：
   memory_timeline 生成；同样由首阶段 post-processing 首次创建。
 
 baseline 阶段只需完成上文列出的 foundation / fixed_relationships /
-identity / manifest / 空 stage_catalog。
+identity / target_baseline / manifest / 空 stage_catalog。
 
 ## 规则
 

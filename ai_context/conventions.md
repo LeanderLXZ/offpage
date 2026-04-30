@@ -77,7 +77,7 @@ Exempt (history is the point): `logs/change_logs/`, `logs/review_reports/`,
 ## Data Separation — Hard Schema Gates
 
 - User data under `users/`; never write canon from user context.
-- `identity.json` is the **only** character-level constant baseline; voice / behavior / boundary / failure_modes live inline in `stage_snapshot` and evolve per stage.
+- `identity.json` + `target_baseline.json` are the character-level constant baselines (Phase 2 produced, immutable from Phase 3 onward); voice / behavior / boundary / failure_modes live inline in `stage_snapshot` and evolve per stage. Phase 3 stage_snapshot `target_voice_map` / `target_behavior_map` / `relationships` keys MUST be ⊆ `target_baseline.targets[].target_character_id` (cross-file hard fail; fix the baseline by hand and re-run the affected stages on miss).
 - Stage snapshots are **self-contained** — runtime loads identity + current stage_snapshot; no baseline merge.
 - **Bounds only in schema.** All `maxLength` / `minLength` / `maxItems` / `required` live in `schemas/**.schema.json`; no duplicates anywhere else. Exact values → schema file. Index → `docs/architecture/schema_reference.md`.
 - **Bounds are caps, not targets.** Every extraction prompt template must explicitly tell the LLM that `maxLength` / `maxItems` are **hard ceilings, not quotas** — write what's actually in the source, do not pad / inflate / invent items to fill the cap. Without this, models default to writing exactly N items per array because "the schema says ≤N".
