@@ -100,15 +100,32 @@ source. Long discussion chains live in `logs/change_logs/`.
     14 fits — must explain the divergence in `description`; `tier` and
     `relationship_type` are orthogonal axes — tier 普通 ≠ relationship
     路人) + ≤100-char description. `targets` array capacity is bounded
-    by `schemas/_shared/targets_cap.schema.json` (single-source $ref;
+    by `schemas/character/targets_cap.schema.json` (single-source $ref;
     downstream stage_snapshot.{target_voice_map, target_behavior_map,
     relationships} share the same fragment so adjusting the cap touches
     one file only). The baseline is immutable from phase 3 onward.
-    **Phase 3 hard constraint**: every `stage_snapshot.target_voice_map`
-    / `target_behavior_map` / `relationships` key MUST be ⊆
-    `target_baseline.targets[].target_character_id` — violations are
-    cross-file hard fail (no escape hatch; if phase 2 misses a target,
-    fix the baseline by hand and re-run the affected stages). Phase 3
+    **Phase 3 hard constraint (bidirectional)**: the three structures
+    `stage_snapshot.{voice_state.target_voice_map,
+    behavior_state.target_behavior_map, relationships}` MUST have keys
+    **set-equal** to `target_baseline.targets[].target_character_id` —
+    missing or extra both hard fail. All three structures key by
+    `target_character_id` (voice_map / behavior_map moved from prior
+    `target_type` keying; `target_type` retained as sibling metadata).
+    Tri-state encoded in **content emptiness**, not in key presence:
+    appeared (cumulative) → key present, fields filled normally; seen
+    before but not in this stage → key present, inherits prev; never
+    appeared → key present, fields empty. **fixed_relationship
+    exception**: a `relationships[]` entry whose target is bound by a
+    `world/foundation/fixed_relationships.json` entry may pre-fill the
+    relationship fields even when the target has never appeared (other
+    structures like voice_map / behavior_map still empty). Validation
+    runs at the **phase 3 single-stage validate layer** (peer of
+    schema validate); violations route into the file-level repair
+    lifecycle (L1 json_repair → L2 repair_agent cross-file checker
+    `targets_keys_eq_baseline` → L3 re-extract). Phase 3.5
+    `consistency_checker.py` no longer carries this rule. No escape
+    hatch; if phase 2 misses a target, fix the baseline by hand and
+    re-run the affected stages. Phase 3
     does 1+2N split extraction per stage (1 world + N char_snapshot +
     N char_support); any stage may correct identity (via char_support)
     but **never** writes to target_baseline.
@@ -142,7 +159,7 @@ source. Long discussion chains live in `logs/change_logs/`.
 26a. Branch discipline enforced via orchestrator `try/finally: checkout_main(...)` + SessionStart hook (`.claude/hooks/session_branch_check.sh`). No PreToolUse commit wrapper. → `architecture.md` §Git Branch Model.
 27. Orchestrator pre-computes per-call read list (latest snapshot + memory_timeline only). Agents don't explore freely.
 27a. Manifests split by writer: `sources/*/manifest.json` hand-written (validator-gated); `works/*/manifest.json` + `works/*/world/manifest.json` programmatic. Live phase state in `analysis/progress/`, not manifests.
-27b. **Bounds-only-in-schema.** All `maxLength` / `minLength` / `maxItems` live in `schemas/**.schema.json` exclusively — no duplicates in `config.toml`, L2, docs, ai_context, or prompts. L2 keeps only checks schema can't express. Single program fallback (`StructuralChecker.relationship_history_summary_max_chars`) must track `stage_snapshot.schema.json`. Cross-schema sharing of a single bound number is done by `$ref` to a fragment under `schemas/_shared/` (e.g. `_shared/targets_cap.schema.json` shared by `target_baseline.targets` + stage_snapshot's three target maps); the inlining loader at `automation/persona_extraction/schema_loader.py` resolves these at load time so any draft validator (Draft7 in repair_agent + Draft202012 elsewhere) sees a self-contained schema. This is **not** a duplicate — still single-source.
+27b. **Bounds-only-in-schema.** All `maxLength` / `minLength` / `maxItems` live in `schemas/**.schema.json` exclusively — no duplicates in `config.toml`, L2, docs, ai_context, or prompts. L2 keeps only checks schema can't express. Single program fallback (`StructuralChecker.relationship_history_summary_max_chars`) must track `stage_snapshot.schema.json`. Cross-schema sharing of a single bound number is done by `$ref` to a shared fragment, located near the schemas it serves: cross-domain shares live under `schemas/_shared/`; **single-domain** shares live in that domain's directory (e.g. `schemas/character/targets_cap.schema.json` shared by `target_baseline.targets` + stage_snapshot's three target structures — both files live in `schemas/character/`, so a `_shared/` placement would over-generalise). The inlining loader at `automation/persona_extraction/schema_loader.py` resolves these at load time so any draft validator (Draft7 in repair_agent + Draft202012 elsewhere) sees a self-contained schema. This is **not** a duplicate — still single-source.
 27c. No schema (world / character baselines / `stage_snapshot` / `memory_timeline`) carries `evidence_refs` / `source_type` / `scene_refs`. Chapter back-tracing lives outside the schemas; runtime anchoring uses `timeline_anchor` (+ `location_anchor` on world) and `memory_timeline`.
 27d. Digest + memory time-location: required short anchors copied from world snapshot's `timeline_anchor` / `location_anchor`. `memory_timeline.scene_refs` removed (FTS5 on `scene_archive`).
 27e. `foundation` / `fixed_relationships` / `stage_catalog` bound-collapsed. `fixed_relationships.{source_type,evidence_refs}` removed; `stage_catalog.order` removed (lex sort by `stage_id`); character catalog at `schemas/character/stage_catalog.schema.json`; placeholder `*_summary` fields deleted.

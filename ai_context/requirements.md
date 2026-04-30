@@ -77,9 +77,11 @@ content-language consistency. Hard schema gates in `conventions.md`
 
 Five layers: immutable (identity + target_baseline — both character-level
 constants produced in phase 2; target_baseline anchors phase 3 target keys
-via cross-file hard ⊆ check; `targets` cap = 15 via shared
-`schemas/_shared/targets_cap.schema.json` $ref, also referenced by
-stage_snapshot's three target maps) / self-contained stage snapshot (carries
+via cross-file `set-equal` check at the phase 3 single-stage validate layer,
+violations route through the file-level repair lifecycle; `targets` cap =
+15 via shared `schemas/character/targets_cap.schema.json` $ref, also
+referenced by stage_snapshot's three target structures) / self-contained
+stage snapshot (carries
 inline failure_modes / voice_state / behavior_state / boundary_state) /
 historical memory (timeline + digests + FTS5) / session-mutable (per-turn
 context state) / cross-session (long_term_profile + relationship_core,

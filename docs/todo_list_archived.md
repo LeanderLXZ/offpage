@@ -73,6 +73,11 @@
 
 ## Completed
 
+### [T-CONSISTENCY-TARGETS-SUBSET] phase 3 stage_snapshot 三结构 keys == baseline.targets 强校验 + map 切 character_id keying + targets_cap 路径回滚 · 完成于 2026-04-30 · 完整完成
+
+- 1 行摘要：D4 由"prompt 软约束 + 文档承诺"升级到代码强校验：(1) snapshot `voice_state.target_voice_map` / `behavior_state.target_behavior_map` 切 `target_character_id` keying（保留 `target_type` 作 sibling 元数据），与顶层 `relationships` 统一；(2) 三结构 keys 必须**双向相等**于 `baseline.targets[].target_character_id`（多/少都 fail），三态由内容是否填充承载，fixed_relationship 例外可预填关系字段，"fixed = 全书贯穿不变"严控（故事中才建立 / 改变 / 解除的师承 / 门派 / 婚姻 / 收养 / 决裂 等都不算）；(3) 校验从 phase 3.5 末端搬到 phase 3 单 stage validate 层，新增 L2 cross-file checker `repair_agent/checkers/targets_keys_eq_baseline.py`，越界走 file-level repair lifecycle (L1/L2/L3)；(4) `targets_cap.schema.json` 从 `schemas/_shared/` 回滚到 `schemas/character/`（共享面只在 character 域内），$ref + decision #27b + README 同步。docs / ai_context / prompt 全链 ⊆ → == 同步刷新。
+- 关联 log: [logs/change_logs/2026-04-30_034614_targets_keys_eq_baseline.md](../logs/change_logs/2026-04-30_034614_targets_keys_eq_baseline.md)
+
 ### [T-CHAR-SNAPSHOT-PER-STAGE] character_snapshot prompt 补 prev_stage 出场字段三态规则 · 完成于 2026-04-29 · 改方案后完成
 
 - 1 行摘要：原方案 = prompt 三态 + schema stage_delta 结构化（changed/removed/added），但被 T-BASELINE-DEPRECATE 拍板的"stage_delta 维持自由文本"否决；改方案 = 仅 prompt 改动。`character_snapshot_extraction.md` 在已有 (A) 未出场继承 后追加：(B) 出场且有变化 → 重写 + stage_delta 点出 / (C) 出场且无变化 → 保留 prev 但 required 必填 / (D) resolved-revealed-消除 → 在 stage_delta 写明消除原因（与 maxItems 裁剪两件事）；per-stage 推演原则；stage_delta 字段说明禁"无明显变化"敷衍。`ai_context/decisions.md` 加 11f。

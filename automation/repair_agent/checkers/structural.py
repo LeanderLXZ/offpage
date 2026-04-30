@@ -186,7 +186,17 @@ class StructuralChecker(BaseChecker):
         map_key: str, examples_key: str,
     ) -> list[Issue]:
         """Validate target_voice_map / target_behavior_map (schema: array
-        of objects keyed by ``target_type``).
+        of objects keyed by ``target_character_id``).
+
+        Examples-count thresholds apply only to entries whose target has
+        actually appeared (i.e. ``examples`` is non-empty *or* tier-driven
+        importance demands content). For never-appeared baseline targets
+        the snapshot keeps an empty entry to satisfy the cross-file
+        set-equality rule (D4 state 3, see decisions.md #13); flagging
+        such empties as min_examples shortfalls would be a false
+        positive, so empty arrays are skipped here. The cross-file
+        set-equality is enforced separately by
+        ``TargetsKeysEqBaselineChecker``.
         """
         issues: list[Issue] = []
         state = data.get(state_key, {})
@@ -197,11 +207,16 @@ class StructuralChecker(BaseChecker):
         for idx, entry in enumerate(target_map):
             if not isinstance(entry, dict):
                 continue
-            target_name = entry.get("target_type") or f"#{idx}"
+            target_name = (entry.get("target_character_id")
+                           or entry.get("target_type") or f"#{idx}")
             examples = entry.get(examples_key, [])
             if not isinstance(examples, list):
                 continue
             count = len(examples)
+            if count == 0:
+                # Never-appeared target keeps an empty entry to satisfy
+                # cross-file set-equality (D4 state 3); skip threshold.
+                continue
             importance = importance_for_target(
                 target_name, self._importance_map)
             threshold = importance_min_examples(importance)

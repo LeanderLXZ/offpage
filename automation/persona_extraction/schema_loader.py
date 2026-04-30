@@ -1,9 +1,12 @@
 """Schema loader with cross-file ``$ref`` inlining.
 
 Schemas under ``schemas/`` may use cross-file ``$ref`` to share common
-fragments (e.g. ``schemas/_shared/targets_cap.schema.json`` carries the
-single-source ``maxItems`` for target arrays referenced by
-``target_baseline.targets`` and stage_snapshot's three target maps).
+fragments. For domain-internal sharing the fragment lives in that
+domain's directory (e.g. ``schemas/character/targets_cap.schema.json``
+carries the single-source ``maxItems`` for target arrays referenced by
+``target_baseline.targets`` and stage_snapshot's three target
+structures, all of which live in ``schemas/character/``); for
+cross-domain sharing the fragment lives in ``schemas/_shared/``.
 
 Both the orchestrator's repair_agent file-entry loader and validator's
 ``_validate_schema`` need ``$ref``-resolved schema dicts. ``referencing``
@@ -13,10 +16,10 @@ paths working without forking the validator, we inline relative
 ``$ref`` fragments at load time, producing a self-contained schema dict
 that any draft-version validator can consume directly.
 
-Only relative refs of the form ``../<dir>/<file>.schema.json`` (or the
-single-segment form ``./<file>.schema.json``) anchored under the
-``schemas/`` directory are inlined. Absolute / network refs are left
-untouched.
+Relative refs of the form ``./<file>.schema.json``,
+``<file>.schema.json`` (sibling), or ``../<dir>/<file>.schema.json``
+anchored under the ``schemas/`` directory are inlined. Absolute /
+network refs are left untouched.
 """
 
 from __future__ import annotations

@@ -42,6 +42,7 @@ from .checkers import CheckerPipeline
 from .checkers.json_syntax import JsonSyntaxChecker
 from .checkers.schema import SchemaChecker
 from .checkers.structural import StructuralChecker
+from .checkers.targets_keys_eq_baseline import TargetsKeysEqBaselineChecker
 from .checkers.semantic import SemanticChecker
 from .context_retriever import ContextRetriever
 from .fixers.programmatic import ProgrammaticFixer
@@ -82,6 +83,7 @@ def _build_pipeline(
     pipeline.register(JsonSyntaxChecker())
     pipeline.register(SchemaChecker())
     pipeline.register(StructuralChecker(importance_map=importance_map))
+    pipeline.register(TargetsKeysEqBaselineChecker())
     pipeline.register(SemanticChecker(llm_call=llm_call))
     return pipeline
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/world/fixed_relationships.schema.json",
   "title": "世界级固定关系网络",
-  "description": "不随阶段变化的结构性纽带（血缘、师承、门派归属等）。Phase 2 产出骨架，后续 stage 维护修正。",
+  "description": "**全书从开始到结束都未改变**的结构性纽带。判定核心是「是否在本作时间线内变化」，关系类型只是常见示例（血缘 / 自始即有的师承 / 自始即有的门派归属 / 长辈晚辈等）。**任何在故事中才建立 / 改变 / 解除的关系都不属于此处**——包括但不限于：故事中才结成的师承、加入的门派、收养、结义、结婚 / 离婚、决裂、归化等。这些不是 fixed_relationship，应作为普通 relationships 在 character/stage_snapshot 中按 stage 演进。Phase 2 产出骨架，后续 stage 维护修正（修正限于补漏、订正描述等，不应把 stage-acquired 关系反向迁入此处）。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -32,7 +32,7 @@
           },
           "type": {
             "type": "string",
-            "description": "关系类型（如 血缘、师承、门派归属、血亲、结义等）"
+            "description": "关系类型（如 血缘、自始即有的师承、自始即有的门派归属、血亲、长辈晚辈 等）。注意：仅当该关系在本作时间线内贯穿不变时才记入此处；故事中才建立的师承、门派归属、结义等不属此类，应走 character/stage_snapshot.relationships。"
           },
           "parties": {
             "type": "array",

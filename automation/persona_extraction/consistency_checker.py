@@ -7,12 +7,13 @@ degradation, etc.
 
 Produces ``consistency_report.json`` under the work's analysis dir.
 
-TODO(T-CHAR-SNAPSHOT-SUB-LANES): add D4 hard-constraint check —
-``stage_snapshot.{target_voice_map, target_behavior_map, relationships}``
-keys MUST be ⊆ ``target_baseline.targets[].target_character_id``
-(cross-file hard fail; see ``ai_context/decisions.md`` #13). Until this
-lands, phase 3 enforces D4 only via prompt instruction in
-``automation/prompt_templates/character_snapshot_extraction.md``.
+D4 (``stage_snapshot.{voice_state.target_voice_map,
+behavior_state.target_behavior_map, relationships}`` keys ==
+``target_baseline.targets[].target_character_id``) is enforced by the
+**phase 3 single-stage validate layer** through
+``automation/repair_agent/checkers/targets_keys_eq_baseline.py``;
+violations route into the file-level repair lifecycle (L1/L2/L3). This
+phase 3.5 module no longer owns that rule.
 """
 
 from __future__ import annotations
@@ -487,8 +488,13 @@ def _check_target_map_counts(
             voice_state = snapshot.get("voice_state", {})
             for idx, entry in enumerate(
                     voice_state.get("target_voice_map", [])):
-                target = entry.get("target_type", "?")
+                target = (entry.get("target_character_id")
+                          or entry.get("target_type") or "?")
                 examples = entry.get("dialogue_examples", [])
+                # Never-appeared baseline targets keep an empty entry
+                # (D4 state 3); skip threshold to avoid false positives.
+                if len(examples) == 0:
+                    continue
                 min_ex = _min_examples_for_target(target, imp)
                 if len(examples) >= min_ex:
                     continue
@@ -506,8 +512,11 @@ def _check_target_map_counts(
             behavior_state = snapshot.get("behavior_state", {})
             for idx, entry in enumerate(
                     behavior_state.get("target_behavior_map", [])):
-                target = entry.get("target_type", "?")
+                target = (entry.get("target_character_id")
+                          or entry.get("target_type") or "?")
                 examples = entry.get("action_examples", [])
+                if len(examples) == 0:
+                    continue
                 min_ex = _min_examples_for_target(target, imp)
                 if len(examples) >= min_ex:
                     continue
