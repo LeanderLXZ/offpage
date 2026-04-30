@@ -75,9 +75,10 @@ import jsonschema as _jsonschema
 
 
 def _load_analysis_schema(name: str) -> _jsonschema.Draft202012Validator:
+    from .schema_loader import load_schema as _load_schema_inlined
     schema_path = (Path(__file__).resolve().parents[2]
                    / "schemas/analysis" / name)
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema = _load_schema_inlined(schema_path)
     return _jsonschema.Draft202012Validator(schema)
 
 
@@ -530,6 +531,7 @@ class ExtractionOrchestrator:
         """
         import json as _json
         import re as _re
+        from .schema_loader import load_schema as _load_schema_inlined
         schema_dir = self.project_root / "schemas"
         files: list[RepairFileEntry] = []
 
@@ -538,8 +540,7 @@ class ExtractionOrchestrator:
             if not schema_path.exists():
                 return None
             try:
-                return _json.loads(
-                    schema_path.read_text(encoding="utf-8"))
+                return _load_schema_inlined(schema_path)
             except (ValueError, OSError):
                 return None
 

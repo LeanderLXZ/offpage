@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .json_repair import try_repair_json_file
+from .schema_loader import load_schema
 
 logger = logging.getLogger(__name__)
 
@@ -318,8 +319,9 @@ def _validate_schema(data: dict, schema_path: Path,
         return [ValidationIssue("warning", file_label,
                                 f"Schema not found: {schema_path.name}")]
 
-    schema = _load_json(schema_path)
-    if schema is None:
+    try:
+        schema = load_schema(schema_path)
+    except (OSError, ValueError):
         return [ValidationIssue("warning", file_label,
                                 f"Cannot load schema: {schema_path.name}")]
 

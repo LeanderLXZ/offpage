@@ -314,7 +314,7 @@ works/{work_id}/characters/{character_id}/
 
 - `manifest.json` — `paths.target_baseline_path` 指向 `canon/target_baseline.json`
 - `canon/identity.json` — 含 core_wounds（核心创伤）、key_relationships（核心人物关系弧线）；character-level 恒定文件之一，运行时与当前 stage_snapshot 配套加载
-- `canon/target_baseline.json` — 全书视野下该角色与其它角色的全部 target 关系（含 `tier` + `relationship_type` + ≤100 字描述）；character-level 恒定文件之二，phase 2 一次拍后 phase 3 全程只读不写。phase 3 stage_snapshot 中 `target_voice_map` / `target_behavior_map` / `relationships` 的 keys 必须 ⊆ `targets[].target_character_id`（cross-file hard 校验）
+- `canon/target_baseline.json` — 全书视野下该角色与其它角色的全部 target 关系（含 `tier` ∈ {核心/重要/次要/普通} + `relationship_type` 中文短词柔性 string，14 候选见 `schemas/character/target_baseline.schema.json` 描述 + ≤100 字 `description`）；character-level 恒定文件之二，phase 2 一次拍后 phase 3 全程只读不写。`targets` 数组容量上限通过 `schemas/_shared/targets_cap.schema.json` $ref 共享继承——下游 stage_snapshot 三 map 通过同一份 $ref 单源同步。phase 3 stage_snapshot 中 `target_voice_map` / `target_behavior_map` / `relationships` 的 keys 必须 ⊆ `targets[].target_character_id`（cross-file hard 校验）
 - `canon/stage_catalog.json` — `schemas/character/stage_catalog.schema.json`
 - `canon/stage_snapshots/{stage_id}.json` — **自包含**，运行时核心；
   含本阶段全量 `voice_state` / `behavior_state` / `boundary_state` /

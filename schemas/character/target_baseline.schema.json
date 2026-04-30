@@ -26,7 +26,10 @@
     },
     "targets": {
       "type": "array",
-      "description": "本角色与其它角色之间的全部 target 关系（全书视野）。每条目对应一个对方角色。",
+      "description": "本角色与其它角色之间的全部 target 关系（全书视野）。每条目对应一个对方角色。数量上限通过 _shared/targets_cap.schema.json 共享继承（单源），下游 stage_snapshot 三 map 同源引用。触顶时按 tier 优先级裁剪：核心 > 重要 > 次要 > 普通，普通先弃。",
+      "allOf": [
+        { "$ref": "../_shared/targets_cap.schema.json" }
+      ],
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -44,31 +47,13 @@
           },
           "relationship_type": {
             "type": "string",
-            "enum": [
-              "close_kin",
-              "lover",
-              "close_friend",
-              "mentor",
-              "disciple",
-              "friend",
-              "ally",
-              "colleague",
-              "subordinate",
-              "superior",
-              "acquaintance",
-              "stranger",
-              "rival",
-              "enemy",
-              "nemesis",
-              "passerby",
-              "other"
-            ],
-            "description": "关系类型。覆盖亲密度 × 立场两维：close_kin 至亲血亲；lover 恋人 / 配偶；close_friend 挚友；mentor 师长 / 引路人；disciple 弟子；friend 朋友；ally 盟友；colleague 同僚 / 同事；subordinate 下属；superior 上司；acquaintance 泛交；stranger 陌生人；rival 竞争对手（非敌对）；enemy 敌人；nemesis 宿敌；passerby 路人 / 微弱关联；other 其他（罕用，需在 description 说明）。"
+            "minLength": 1,
+            "description": "关系类型（中文短词，柔性 string，非 enum）。优先 14 候选：至亲（血亲 / 至亲）；恋人（恋人 / 配偶 / 道侣）；挚友（深交挚友）；师长（师父 / 引路人）；弟子；朋友；同僚（同事 / 盟友 / 上下级等阵营关系）；主人；下属；宠物；武器（具灵性的武器 / 法宝 / 神兵——视作可互动 target）；对手（竞争 / 比试，非敌对）；敌人；路人（陌生人 / 一面之缘 / 极弱人际关联）。候选无法准确描述时（如特殊语境下的「契约者」「操作者」「容器」等），允许使用列表外更精确的中文短词，但**必须在 `description` 字段说明该词与候选 14 项的差异**；不要硬塞进相近候选。tier 与 relationship_type 正交：tier 描述本角色视角下的重要度梯度，relationship_type 描述关系性质。"
           },
           "tier": {
             "type": "string",
-            "enum": ["核心", "重要", "次要", "路人"],
-            "description": "重要程度（站在本角色视角对该 target 的相对重要性）：核心=亲密圈 / 关键宿敌；重要=对角色行为有显著影响；次要=偶有交互；路人=极弱关联但仍在 baseline 范围内。"
+            "enum": ["核心", "重要", "次要", "普通"],
+            "description": "重要程度（站在本角色视角对该 target 的相对重要性）：核心=亲密圈 / 关键宿敌；重要=对角色行为有显著影响；次要=偶有交互；普通=极弱关联但仍在 baseline 范围内。注意 tier 的「普通」与 relationship_type 候选的「路人」是两个正交维度——同一 target 完全可以是「普通 + 路人」（既是重要度极低、关系性质也是路人）或「核心 + 路人」（关系性质虽是路人，但因伏笔 / 命运纠缠而对本角色至关重要）。"
           },
           "description": {
             "type": "string",

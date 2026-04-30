@@ -114,16 +114,16 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
    `knowledge_leaks`。
 
    每个 stage_snapshot 必须包含以下全部维度，即使某些字段相比上一阶段未变化：
-   - `active_aliases`：当前活跃名称（≤ 5 条）、隐藏身份（≤ 5 条）、各角色称呼映射（≤ 10 个角色）
-   - `voice_state`：语气基调、语言习惯、用词偏好、口头禅、禁忌用语、**情绪语气矩阵**（emotional_voice_map，≤ 15 种情绪，覆盖主要情绪）、**对象语气矩阵**（target_voice_map，≤ 10 个对象，见下方详细要求）、典型对话示例（至少 2-3 条，≤ 10 条）
-   - `behavior_state`：**core_goals**（理性目标——可权衡调整的）、**obsessions**（执念——非理性的心结，与创伤或强烈情感相关，不受理性权衡控制；区别于 core_goals）、决策风格、情绪触发器、**情绪反应矩阵**（≤ 15 种情绪）、**对象行为矩阵**（target_behavior_map，≤ 10 个对象，与 target_voice_map 对齐，见下方详细要求）、习惯性行为、压力应对
-   - `boundary_state`：**hard_boundaries**（硬边界，≤ 15 条）、**soft_boundaries**（软边界，≤ 15 条）、容易被误判的点（common_misconceptions，≤ 15 条）
-   - `failure_modes`：本阶段全量崩坏防护清单（4 子类）——`common_failures`（≤ 15 条）、`tone_traps`（≤ 10 条）、`relationship_traps`（≤ 10 条）、`knowledge_leaks`（≤ 15 条）。**S001**：从原文 + identity 推演基线种子。**S002+**：从前一 stage 的 failure_modes 演变（继承未消除 + 本阶段新增；已消除的不写）。**全量记录本阶段 active 的 failure modes**——不是"自上次以来变化"，而是"本 stage 当前完整有效的崩坏防护清单"
-   - `relationships`（≤ 10 条）：对每个重要角色的完整关系（态度、信任、亲密度、戒备度、语气/行为变化、驱动事件、关系演变概述）。不含边缘不重要角色
-   - `knowledge_scope`：知道什么、不知道什么、不确定什么。**条数上限** `knows` ≤ 50、`does_not_know` ≤ 30、`uncertain` ≤ 30；**每条 ≤ 50 字**（schema 硬门控，超限直接 FAIL）。**裁剪策略**（超限时）：优先保留 ① 影响当前阶段决策或扮演的条目、② 与 `core_wounds` / `active_obsessions` / 活跃 `relationships` 相关的条目；优先丢弃 ① 日常常识类条目、② 早期阶段已无触发点的细节、③ 已在 `memory_timeline` 中完整承载的条目。**禁止敷衍填充**（贴近 50 字上限但语义稀薄、堆砌形容词）
-   - `misunderstandings`（≤ 15 条，已 resolved 的移除）、`concealments`（≤ 15 条，已 revealed 的移除）
-   - `emotional_baseline`（含 **active_goals** 理性目标、**active_obsessions** 执念、active_fears、active_wounds；每项 ≤ 10 条）、`current_personality`（≤ 10 条）、`current_mood`（≤ 10 条）、`current_status`（≤ 10 条）
-   - `stage_events`（≤ 15 条，**仅本阶段**发生的关键事件清单，每条 **50–80 字** 的一句话摘要；schema 两端硬门控，过短/过长都会直接判失败；不累积历史，历史由 memory_timeline 和 world_event_digest 承载）。**事件归属（强约束）**：① 必写——本角色亲历 / 亲为 / 在场 / 直接影响其处境或认知的事件；② 不写——其他角色之间的私事、与本角色无关的对话 / 设局 / 经济活动 / 内心决定，**哪怕剧情很重要也不属于本角色 stage_events**；③ 世界级公共事件（势力变迁、大 boss 复活、天灾、地震、灵脉断裂、奇观、跨角色公共战役等）由 world `stage_snapshot.stage_events` 承载——**不要直接复制世界层文本**；仅当本角色亲历该世界事件时，必须以**角色视角**重写一条进入此清单（角色看到 / 经历 / 应对的是什么、对其造成的具体影响），不可遗漏也不可机械抄录
+   - `active_aliases`：当前活跃名称、隐藏身份、各角色称呼映射。**所有数组 / 映射上限以 schema 为准**
+   - `voice_state`：语气基调、语言习惯、用词偏好、口头禅、禁忌用语、**情绪语气矩阵**（emotional_voice_map，覆盖主要情绪）、**对象语气矩阵**（target_voice_map，见下方详细要求）、典型对话示例（至少 2-3 条）。**所有数组上限以 schema 为准**（schemas/character/stage_snapshot.schema.json）
+   - `behavior_state`：**core_goals**（理性目标——可权衡调整的）、**obsessions**（执念——非理性的心结，与创伤或强烈情感相关，不受理性权衡控制；区别于 core_goals）、决策风格、情绪触发器、**情绪反应矩阵**、**对象行为矩阵**（target_behavior_map，与 target_voice_map 对齐，见下方详细要求）、习惯性行为、压力应对。**所有数组上限以 schema 为准**
+   - `boundary_state`：**hard_boundaries**（硬边界）、**soft_boundaries**（软边界）、容易被误判的点（common_misconceptions）。**所有数组上限以 schema 为准**
+   - `failure_modes`：本阶段全量崩坏防护清单（4 子类）——`common_failures` / `tone_traps` / `relationship_traps` / `knowledge_leaks`，各子类 maxItems 以 schema 为准。**S001**：从原文 + identity 推演基线种子。**S002+**：从前一 stage 的 failure_modes 演变（继承未消除 + 本阶段新增；已消除的不写）。**全量记录本阶段 active 的 failure modes**——不是"自上次以来变化"，而是"本 stage 当前完整有效的崩坏防护清单"
+   - `relationships`：对每个重要角色的完整关系（态度、信任、亲密度、戒备度、语气/行为变化、驱动事件、关系演变概述）。不含边缘不重要角色。**容量上限通过 `schemas/_shared/targets_cap.schema.json` 与 target_baseline.targets 共享继承**（schema 单源，调整数字只改一处）；keys 必须 ⊆ baseline.targets[].target_character_id（cross-file 硬约束，详见 D4）
+   - `knowledge_scope`：知道什么、不知道什么、不确定什么。**条数上限**与每条字符上限**以 schema 为准**（schema 硬门控，超限直接 FAIL）。**裁剪策略**（超限时）：优先保留 ① 影响当前阶段决策或扮演的条目、② 与 `core_wounds` / `active_obsessions` / 活跃 `relationships` 相关的条目；优先丢弃 ① 日常常识类条目、② 早期阶段已无触发点的细节、③ 已在 `memory_timeline` 中完整承载的条目。**禁止敷衍填充**（贴近上限但语义稀薄、堆砌形容词）
+   - `misunderstandings`（已 resolved 的移除）、`concealments`（已 revealed 的移除）。**数组上限以 schema 为准**
+   - `emotional_baseline`（含 **active_goals** 理性目标、**active_obsessions** 执念、active_fears、active_wounds）、`current_personality`、`current_mood`、`current_status`。**所有数组上限以 schema 为准**
+   - `stage_events`（**仅本阶段**发生的关键事件清单，每条字数与数组上限**以 schema 为准**；schema 两端硬门控，过短/过长都会直接判失败；不累积历史，历史由 memory_timeline 和 world_event_digest 承载）。**事件归属（强约束）**：① 必写——本角色亲历 / 亲为 / 在场 / 直接影响其处境或认知的事件；② 不写——其他角色之间的私事、与本角色无关的对话 / 设局 / 经济活动 / 内心决定，**哪怕剧情很重要也不属于本角色 stage_events**；③ 世界级公共事件（势力变迁、大 boss 复活、天灾、地震、灵脉断裂、奇观、跨角色公共战役等）由 world `stage_snapshot.stage_events` 承载——**不要直接复制世界层文本**；仅当本角色亲历该世界事件时，必须以**角色视角**重写一条进入此清单（角色看到 / 经历 / 应对的是什么、对其造成的具体影响），不可遗漏也不可机械抄录
    - `stage_delta`：从上一阶段的变化（自由文本）。应能体现 (B) 类关键变化（target / emotion / relationship 等的演变要点）和 (D) 类消除原因（哪条 misunderstanding/concealment/failure_mode 在本阶段被 resolve/reveal/克服 + 为什么）。**不要写"无明显变化"敷衍**——若真的本阶段无变化（C 全态），写明你对照了哪些字段、原文为什么不带来变化
    - `character_arc`：角色从阶段 1 到当前阶段的整体弧线概述，**单一字符串**（≤ 200 字），一句到一段话概括核心变化轨迹。第一个阶段可省略或仅写起点状态
    - `timeline_anchor`：阶段时间锚点短描述（≤ 50 字），必填
