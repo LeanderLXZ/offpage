@@ -14,7 +14,11 @@
 
 最后一步完成：调 **<进度工具>** 把最后一条标 `completed`。
 
-**<进度工具> 解析**：Claude → `TodoWrite`（界面显示为 "Update Todos"）；Codex → `update_plan`。语义对齐：预登记 + 切状态 + 标完成。
+**子任务（可选，按需启用）**：当某个 step 内部工作复杂、明显由多个独立小任务组成（如 Step 4 同批改 schema / prompt / code / config 多块）时，进入该 step 时可在 <进度工具> 里把 `Step N: <title>` **展开**为若干条 `Step Na: <子标题>` / `Step Nb: …` / `Step Nc: …`（用字母序，同次调用替换原 `Step N` 条目），按子任务推进切 `in_progress` / `completed`。**只展开当前正在做的 step 的子任务**——其他 step 保持单条 `Step M: <title>` 折叠形态，不展开。当前 step 的子任务全部 `completed` 后，**进入下一 step 时把这些子任务折回成一条** `Step N: <title>` `status=completed`，再展开下一 step（如有需要）。这样 UI 里始终是"当前 step 细粒度 + 其他 step 折叠粗粒度"。
+
+简单 step 不必启用——直接按 `Step N: <title>` 切状态即可。子任务编号用同一字母序，**不要嵌套二层**（不要 `4a-1` / `4a-2`）。
+
+**<进度工具> 解析**：Claude → `TodoWrite`（界面显示为 "Update Todos"）；Codex → `update_plan`。语义对齐：预登记 + 切状态 + 标完成（含子任务展开 / 折回）。
 
 ## Step 0: Load skills config
 
