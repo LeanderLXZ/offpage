@@ -295,10 +295,13 @@ cross-file checker `targets_keys_eq_baseline` → L3 re-extract）。
   voice / behavior / boundary baseline 文件需要合并
 - voice / behavior / boundary / failure_modes 全部内联，由 stage_snapshot 演变链承载
 - `target_voice_map` 和 `target_behavior_map` 按用户扮演角色**过滤加载**
-  （只加载匹配条目）；如果当前快照缺少匹配条目，引擎向前扫描最近包含
-  该条目的快照（fallback，纯代码 I/O，不产生额外 LLM 调用）
-- 只对主要角色和重要配角详细记录（每 target 至少 3-5 条示例）；
-  泛化类型（陌生人、路人）简要描述即可
+  ——canon 角色（已绑定 baseline character_id）走 `target_character_id`
+  精确匹配；OC 角色按 role_binding 设定特征 + entry 的 sibling
+  `target_type` 标签 fallback 匹配。如果当前快照缺少匹配条目，引擎向前
+  扫描最近包含该条目的快照（fallback，纯代码 I/O，不产生额外 LLM 调用）
+- 详细度按 `tier` 分层：核心 / 重要 target 详细记录（每 target 至少
+  3-5 条示例），次要 / 普通 target 简要记录；从未登场的 baseline target
+  字段保持空（D4 状态 3，参与 set-equal 占位）
 
 **关键 section**：
 

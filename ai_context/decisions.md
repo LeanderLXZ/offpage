@@ -130,10 +130,17 @@ source. Long discussion chains live in `logs/change_logs/`.
     N char_support); any stage may correct identity (via char_support)
     but **never** writes to target_baseline.
 14. No per-stage report files; progress in-place.
-15. `target_voice_map` / `target_behavior_map` use specific names for
-    main / important chars (≥3–5 examples); generic types brief or
-    omitted. Runtime loads only entries matching user role; fallback =
-    backward scan previous snapshots (pure code I/O).
+15. `target_voice_map` / `target_behavior_map` entries all key by
+    `target_character_id` (set-equal to `baseline.targets[].target_character_id`,
+    see #13); detail level varies by `tier` — 核心 / 重要 targets get
+    ≥3–5 examples, 次要 / 普通 targets stay terse, never-appeared
+    baseline targets keep empty entries (D4 state 3) so the cross-file
+    set-equality holds. Runtime loads only entries matching user role:
+    canon role → exact match on `target_character_id`; OC role →
+    fallback match via the entry's `target_type` sibling label
+    (preserved as metadata) per role_binding affinity. If no matching
+    entry in the current snapshot, backward scan previous snapshots
+    (pure code I/O).
     → `architecture.md` §Automated Extraction Pipeline + `automation/README.md`.
 
 ## User Model

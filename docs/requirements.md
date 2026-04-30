@@ -993,18 +993,21 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 - `active_aliases`：当前活跃名称、隐藏身份、各角色对本角色的称呼映射
 - `voice_state`：语气基调、语言习惯、用词偏好、口头禅、禁忌用语、
   **情绪语气矩阵**（emotional_voice_map，覆盖主要情绪类型）、
-  **对象语气矩阵**（target_voice_map，只对主要角色和重要配角详细记录，
-  使用具体角色名，每个 target 至少 3-5 条对话示例，覆盖该对象下不同
-  情绪和场景；泛化类型如"陌生人"简要描述即可，LLM 可从整体性格推断）、
-  典型对话示例（dialogue_examples，至少 2-3 条）
+  **对象语气矩阵**（target_voice_map，每条 entry 以 `target_character_id`
+  为身份键，覆盖 baseline.targets 全集；详细度按 `tier` 分层——核心 /
+  重要 target 详细记录，每 target 至少 3-5 条对话示例，覆盖不同情绪和
+  场景；次要 / 普通 target 简要记录；从未登场的 baseline target 字段
+  保持空，LLM 可从 identity / 整体性格推断）、典型对话示例
+  （dialogue_examples，至少 2-3 条）
 - `behavior_state`：**core_goals**（理性目标）、**obsessions**（执念——
   非理性的心结，区别于可权衡调整的目标）、决策风格、情绪触发器、
   **情绪反应矩阵**（emotional_reaction_map）、
   **对象行为矩阵**（target_behavior_map，与 target_voice_map 平行且
-  对齐，只对主要角色和重要配角详细记录，描述面对该对象时的肢体反应、
-  距离感、习惯性动作、回避模式等，每个 target 至少 3-5 条行为示例；
-  泛化类型简要描述即可）、
-  习惯性行为、压力应对
+  对齐，每条 entry 以 `target_character_id` 为身份键，覆盖 baseline.targets
+  全集；详细度按 tier 分层——核心 / 重要 target 详细记录每 target 至少
+  3-5 条行为示例，描述面对该对象时的肢体反应、距离感、习惯性动作、回避
+  模式等；次要 / 普通 target 简要记录；从未登场的 baseline target 字段
+  保持空）、习惯性行为、压力应对
 - `boundary_state`：本阶段硬边界（hard_boundaries）、软边界
   （soft_boundaries）、容易被误判的点（common_misconceptions）
 - `failure_modes`：本阶段全量崩坏防护清单（4 子类 common_failures /
@@ -1582,7 +1585,7 @@ if result.passed:
 @dataclass
 class Issue:
     file: str              # 文件路径
-    json_path: str         # "$.voice_state.target_voice_map.角色B"
+    json_path: str         # 如 "$.voice_state.target_voice_map[3].dialogue_examples"（array index）或 "$.relationships[0].target_character_id"
     category: str          # "json_syntax" | "schema" | "structural" | "semantic"
     severity: str          # "error" | "warning"
     rule: str              # 检查规则 ID
@@ -1627,11 +1630,19 @@ importance 动态决定：
 extraction prompt 中注入 importance 和对应最低 examples 数，使 LLM 在生成时
 就知道标准。L2 structural checker 使用相同阈值做事后校验兜底。
 
-**`target_type` 与 `character_id` 的匹配规则**（L2 structural 与 Phase 3.5 consistency 共享）：
-`target_type` 允许带阶段/认知注释（例如 `<character_id>（<阶段修饰>）`）。
-阈值查找按**子串匹配**：遍历 `importance_map`，凡 `character_id in target_type`
-即命中；多命中时取 importance 更高的一档，若仍并列则取更长的 `character_id`。
-没有命中则按"其他（阈值 1）"处理。
+**Importance 查找规则**（L2 structural 与 Phase 3.5 consistency 共享）：
+
+新 keying 下 `voice_map` / `behavior_map` 每条 entry 的身份键是
+`target_character_id`，与 `importance_map` 的键完全同构——主路径是直接
+`importance_map[target_character_id]` 查表，命中即得 importance。
+
+**兼容 fallback**：若直接查表 miss（如 entry 本身缺 `target_character_id`、
+或仅携带 `target_type` sibling 标签且与 baseline character_id 形态接近的
+旧产物 / 异常路径），退回**子串匹配**——遍历 `importance_map`，凡
+`character_id in <身份字符串>` 即命中（`<身份字符串>` 兼容带阶段 / 认知
+注释的写法 `<character_id>（<阶段修饰>）`）；多命中时取 importance 更
+高的一档，若仍并列则取更长的 `character_id`。没有命中则按"其他（阈值
+1）"处理。
 
 #### 11.4.4 四层修复器（Fixer）与逐层升级
 
@@ -2780,10 +2791,14 @@ works/{work_id}/characters/{character_id}/canon/stage_snapshots/{stage_id}.json
 1. **加载当前 stage snapshot**：引擎从磁盘读取用户所选阶段的
    `stage_snapshots/{stage_id}.json`
 2. **匹配 target 条目**：在 `target_voice_map` 和 `target_behavior_map` 中
-   查找与用户角色匹配的条目
-   - 用户扮演 canon 角色 → 精确匹配 `target_type`
-   - 用户扮演 OC / 自定义角色 → 按 role_binding 中的设定特征匹配最接近的
-     关系类型条目
+   查找与用户角色匹配的条目（D4 keying 后所有 entry 的身份键都是
+   `target_character_id`，sibling `target_type` 仅做类型 / 关系定位标
+   注，专供 OC fallback 路径使用）
+   - **用户扮演 canon 角色**（role_binding 已绑定到具体 baseline
+     character_id）→ 精确匹配 `target_character_id`
+   - **用户扮演 OC / 自定义角色**（无对应 baseline character_id）→ 按
+     role_binding 中的设定特征 + entry 的 sibling `target_type` 字段，
+     匹配最接近的关系类型条目（fallback 路径）
 3. **Fallback——向前扫描**：如果当前 snapshot 中找不到匹配条目（如该角色
    近期数个阶段未出场，提取时继承遗漏），引擎按阶段编号 **逆序遍历**
    之前的 `stage_snapshots/` 文件，找到第一个包含该 target 条目的快照，

@@ -265,3 +265,105 @@ phase 3.5 `consistency_checker.py` 不再承担此规则。
   - 轨 1 大块全落实但"文档对齐"扩展面有 7 处运行时端连带漏改
   - 轨 2 0 High / 7 Medium，无 bug / 行为风险，新 checker 端到端 smoke 已过
 - **Conversation ref**: 同会话内 /post-check 输出
+
+---
+
+# Follow-up: 修复 /post-check 标记的 Missed Updates + Open Questions
+
+- **Started**: 2026-04-30 04:29:04 EDT
+- **Branch**: main
+- **Status**: PRE
+
+## 背景 / 触发
+
+`/post-check` 复查 commit `620be09` 后回写 REVIEWED-PARTIAL：D4 主声明链已对齐，但**运行时端解释链** 7 处连带漏改 + 2 个 Open Questions 等定。用户拍板"按推荐修复"，进入本轮 follow-up /go。同 log、单次 follow-up commit。
+
+## 结论与决策
+
+**Open Question 1 拍板**（decisions.md #15 "specific names vs generic types" 措辞）：
+**重写**——新 keying 下不再有"generic types as keys"；改为按 `tier`（核心 / 重要 / 次要 / 普通）分层描述详细度。
+
+**Open Question 2 拍板**（simulation/retrieval/load_strategy.md canon 角色 loader 匹配字段）：
+**双轨**——canon 角色（user 扮演的角色已绑定 baseline character_id）→ exact match `target_character_id`；OC（user 自定原创角色，无 baseline character_id）→ 用 `target_type` sibling 元数据按角色类型 fallback 匹配。这保留了 OC 用户场景，避免 OC 全程被排除。
+
+## 计划动作清单
+
+1. `simulation/retrieval/load_strategy.md` line 27: `⊆` → `==` 双向相等措辞
+2. `simulation/retrieval/load_strategy.md` line 35-37: "exact match on target_type" → 双轨 spec（canon = `target_character_id` 精确匹配；OC = `target_type` sibling fallback）
+3. `simulation/flows/startup_load.md` line 27: `⊆` → `==`
+4. `docs/requirements.md` line 2784: "用户扮演 canon 角色 → 精确匹配 target_type" → "精确匹配 `target_character_id`"；OC 路径同样改 sibling fallback 措辞
+5. `docs/requirements.md` line 1630-1632: 改写 `target_type` 子串匹配规则——明确这是**兼容 fallback 路径**（character_id keying 下 importance lookup 通常是直接 character_id 匹配，substring 仅供有 sibling target_type 字段时使用）
+6. `docs/requirements.md` line 1585: Issue.json_path 注释例 `.角色B` → `[N].target_character_id`（array 语法）
+7. `docs/architecture/system_overview.md` line 219-222: 重写"泛化类型简要描述即可"为"按 tier / importance 分层详细度"框架
+8. `docs/architecture/schema_reference.md` line 300-301: 同上 system_overview 改写
+9. `ai_context/decisions.md` #15 (line 133-136): 重写 "specific names ... generic types brief or omitted" → "all entries key by `target_character_id`; detail level varies by tier"
+10. `ai_context/architecture.md` line 92: 补 character_id keying + tier-based 详细度的运行时上下文
+
+## 验证标准
+
+- [ ] `grep -rn "⊆" simulation/ docs/ ai_context/ schemas/ automation/` 残留为 0（除 archived / change_logs）
+- [ ] `grep -rn "精确匹配 target_type\|exact match on target_type" simulation/ docs/ ai_context/` 残留为 0
+- [ ] `grep -rn "泛化类型.*简要\|generic types brief or omitted" simulation/ docs/ ai_context/` 残留为 0
+- [ ] `docs/requirements.md` line ~1585 注释例改为 array index 语法
+- [ ] `docs/requirements.md` line ~1630-1632 substring match 段标注为 fallback
+- [ ] simulation/retrieval/load_strategy.md / simulation/flows/startup_load.md / requirements.md 2784 三处 loader spec 一致描述双轨匹配（canon = target_character_id / OC = target_type sibling fallback）
+- [ ] decisions #15 描述与新 keying 一致（不再二分 specific names vs generic types）
+- [ ] schema 校验仍过：`python -c "import json,jsonschema;[jsonschema.Draft202012Validator.check_schema(json.load(open(p))) for p in ('schemas/character/stage_snapshot.schema.json','schemas/character/target_baseline.schema.json','schemas/character/targets_cap.schema.json')]"` 无报错（无 schema 改动，但跑作 sanity）
+
+## 执行偏差
+
+- **附加**：扫描时发现两处计划外的旧措辞残留——
+  - `automation/prompt_templates/character_snapshot_extraction.md:239` "未在上表中列出的泛化类型..." 仍按旧 keying 描述（"泛化类型"在新 keying 下不再作为独立 key 存在）
+  - `docs/todo_list.md:422` T-PHASE35-IMPORTANCE-AWARE 条目里引用了 decisions #15 的旧措辞 "main / important chars (≥3–5 examples); generic types brief or omitted"
+  
+  两处都顺手刷新到新 keying 框架：tier-based detail level + 占位 entry。属于本次 follow-up 的同质工作，未单独再开 todo。
+
+## 已落地变更
+
+**simulation/ (2 件)**
+
+- `simulation/retrieval/load_strategy.md`：
+  - line 27 `⊆` → `**set-equal** ... bidirectional, with tri-state carried by content emptiness`
+  - line 35-38 (Filtered loading 段) 加 `target_character_id keying` 上下文 + 双轨 spec：canon = exact match `target_character_id` / OC = sibling `target_type` 标签 fallback
+- `simulation/flows/startup_load.md` line 27 `⊆` → `set-equal ... bidirectionally, with tri-state`
+
+**docs/ (3 件)**
+
+- `docs/requirements.md`:
+  - line 1585: `Issue.json_path` 注释例 `.角色B` → `[3].dialogue_examples` / `[0].target_character_id`（array index）
+  - line 1630-1638: importance 查找规则改写——主路径 = 直接 `importance_map[target_character_id]` 查表；substring match 退到兼容 fallback 路径
+  - line ~990-1010：voice_state / behavior_state target_voice_map / target_behavior_map 描述按 tier 分层（核心 / 重要 详细 / 次要 / 普通 简要 / 从未登场空）+ keying 显式说明
+  - line 2790-2800 (运行时 loader): canon = exact match `target_character_id`；OC = sibling `target_type` 标签 fallback；同时显式说明 D4 keying 后 sibling 字段角色
+- `docs/architecture/system_overview.md` line 219-228: 重写 target_voice/behavior_map detail level + 运行时 filter 段为新 keying spec
+- `docs/architecture/schema_reference.md` line 297-303: 同上系统重写
+
+**ai_context/ (2 件)**
+
+- `ai_context/decisions.md` #15: 重写"specific names vs generic types brief"为统一 character_id keying + tier-based detail level + canon/OC 双轨匹配规则
+- `ai_context/architecture.md` line 92: 补 character_id keying + tier-based 详细度 + canon/OC 双轨 + backward-scan fallback 完整上下文
+
+**追加（执行偏差顺手）**
+
+- `automation/prompt_templates/character_snapshot_extraction.md` line 239-242: "未在上表中列出的泛化类型..." → "未在上表中列出的 target（baseline.targets 列了但 tier 次要/普通，sibling target_type 标签可能是村民/小孩/陌生人/路人 等）：仍需 entry 占位以满足 D4 set-equal..."
+- `docs/todo_list.md` line 422: T-PHASE35-IMPORTANCE-AWARE 条目里引用 decisions #15 的旧措辞改为 tier-based 表述
+
+## 与计划的差异
+
+- 新增两处计划外修订（执行偏差段已记）
+- Step 4 跳过实测（doc-only，无代码 / schema 改动）；Step 5 仅跑 schema sanity 与全文 grep 校验
+
+## 验证结果
+
+- [x] `grep -rn "⊆" simulation/ docs/ ai_context/ schemas/ automation/`（除 archived / change_logs）残留为 0
+- [x] `grep -rn "精确匹配 target_type\|exact match on target_type"`（除 change_logs）残留为 0
+- [x] `grep -rn "泛化类型.*简要\|generic types brief or omitted\|specific names for"`（除 change_logs）残留为 0
+- [x] `docs/requirements.md` line 1585 注释例改为 array index 语法 `[3].dialogue_examples` / `[0].target_character_id`
+- [x] `docs/requirements.md` line 1630-1638 substring match 段已标 "兼容 fallback"
+- [x] simulation/retrieval/load_strategy.md / simulation/flows/startup_load.md / requirements.md 2790-2800 / decisions #15 / ai_context/architecture.md:92 / system_overview / schema_reference 全部一致描述双轨匹配（canon = `target_character_id` / OC = `target_type` sibling fallback）
+- [x] decisions #15 描述与新 keying 一致（不再二分 specific names vs generic types）
+- [x] schema 校验仍过（stage_snapshot / target_baseline / targets_cap 三 schema Draft202012 通过）
+
+## Completed
+
+- **Status**: DONE
+- **Finished**: 2026-04-30 04:33:30 EDT
