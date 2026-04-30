@@ -97,4 +97,7 @@
 
 ## Abandoned
 
-_(empty — first abandoned entry moved from `todo_list.md` should follow the Abandoned-段 format and prepend to this section.)_
+### [T-CHAR-SNAPSHOT-TARGET-LIST] target_char_list 生成策略 + fallback 模式是否需要 · 废弃于 2026-04-29
+
+- 废弃原因：被 T-PHASE2-TARGET-BASELINE 方案吞掉。原 todo 围绕 sub-lane step 0 三选一策略（program-only / llm-light / hybrid）+ fallback 是否跑 step 0；新方案 phase 2 全书视野一次拍 per-character target_baseline.json，后续各 stage ⊆ baseline 写 keys，step 0 整个删除，两个决策项都不再需要。
+- 关联 log: [logs/change_logs/2026-04-29_203800_abandon_char_snapshot_target_list.md](../logs/change_logs/2026-04-29_203800_abandon_char_snapshot_target_list.md)

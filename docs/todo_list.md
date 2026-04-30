@@ -12,15 +12,16 @@
 |---|---|---|---|
 | `T-BASELINE-DEPRECATE` | 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载 | 2026-04-29 14:42 EDT | 代码完成、runtime 验证待跑 |
 
-### 🟡 Next (3)
+### 🟡 Next (4)
 
 | ID | Brief | Importance | Ready | Scope | Deps |
 |---|---|---|---|---|---|
 | `T-PHASE35-IMPORTANCE-AWARE` | [consistency_checker.py:96-117](../automation/persona_extraction/consistency_checker.py#L96-L117) 已构造 importance_map 但只 _check_target_map_counts 用上；其他 8 个 _check_* 一刀切，对次要配角的 field_completeness / relationship_continuity 过度报错。decisions.md #15 已定 bound 因 importance 而异。 | 🟢 Med-Low | 💬 Discuss first | 🟡 Medium | 无（触发自 2026-04-27 opus-4-7 review L-3） |
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | 无 |
-| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行抽取 + 程序合并 + repair lifecycle（rate-limit / 掉线兼容 R1/R2/R3）；schema / world / char_support / 其他 phase 不动；toml `[phase3].char_snapshot_sub_lanes`（默认 true）+ CLI 双向 flag；fallback `--no-char-snapshot-sub-lanes` 等价现行单 lane；prompt 共用单文件 + lane_scope 占位 | 🟢 High | ✅ Ready | 🟡 Medium | 无（target list 策略另议，program-only 占位起步） |
+| `T-PHASE2-TARGET-BASELINE` | phase 2 全书视野产 per-character target_baseline.json（含 tier + relationship_type），phase 3 全模式严格 ⊆ baseline 写 target keys，三方一致 by-construction，删除 sub-lane step 0 串行卡口。 | 🔴 High | ✅ Ready | 🔴 Large·Arch | T-BASELINE-DEPRECATE 已落地 |
+| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys ⊆ baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | T-PHASE2-TARGET-BASELINE |
 
-### ⚪ Discussing (7)
+### ⚪ Discussing (6)
 
 | ID | Brief | Open decisions | Blocked by |
 |---|---|---|---|
@@ -30,9 +31,8 @@
 | `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
-| `T-CHAR-SNAPSHOT-TARGET-LIST` | target_char_list 生成策略（program / llm-light / hybrid，主方案先 program-only 占位）+ fallback 模式（`--no-char-snapshot-sub-lanes`）下单 lane 是否真能保证三方 target 一致；先 0 token 验证 S001/S002 历史输出 | 3 | 0 token 验证可立刻；策略调整待主方案跑通 1–2 stage |
 
-**Total**: 11 — 🟢 In Progress 1 ｜ 🟡 Next 3 ｜ ⚪ Discussing 7
+**Total**: 11 — 🟢 In Progress 1 ｜ 🟡 Next 4 ｜ ⚪ Discussing 6
 
 ---
 
@@ -387,75 +387,167 @@ any node ─────────────────(abandoned)───
 
 ---
 
-### [T-CHAR-SNAPSHOT-SUB-LANES] character stage_snapshot 拆 3 sub-lane 并行抽取
+### [T-PHASE2-TARGET-BASELINE] phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点
+
+**上下文**
+
+当前 phase 3 char_snapshot 由 LLM 在 stage-local 视角自主决定
+target_voice_map / target_behavior_map / relationships 的 keys。三个痛点：
+
+1. stage-local 视角看不到全书关系网络，可能漏判跨章节的隐性重要关系
+   （反派只前/后期出场但贯穿主线等）
+2. 单 lane 模式下三方 keys 名义上由同一 LLM 写入应一致，实际是否真的
+   对齐尚未 0 token 验证（被替代的 T-CHAR-SNAPSHOT-TARGET-LIST 决策项 2
+   提的疑点）
+3. T-CHAR-SNAPSHOT-SUB-LANES 拆 3 lane 后三方 keys 必须 ⊆ 同一基线才能
+   合并，否则需每 stage 额外算 active target list（原 step 0 LLM 调用，
+   占串行卡口）
+
+新方案：phase 2 全书视野一次性拍每角色 `target_baseline.json`，列全书所有
+重要 target（含 tier + 关系类型），后续 phase 3 各 stage 严格 ⊆ baseline
+写 keys。三方一致 by-construction，跟 identity / fixed_relationships 同源
+思路（结构性 + 跨 stage 不变 → phase 2 一次拍，后续 stage 只读不写）。
+
+**改动清单**
+
+新增：
+- `schemas/character/target_baseline.schema.json` — 字段：`schema_version`
+  / `work_id` / `character_id` / `targets[]`，每条 target =
+  `target_character_id`（用 identity.id，规避化名 / 隐藏身份歧义）+
+  `relationship_type`（多候选清单待 prompt 实施期敲，覆盖亲密度 × 立场
+  两维：close_kin / lover / close_friend / mentor / friend / ally /
+  colleague / acquaintance / rival / enemy / nemesis / passerby 等）+
+  `tier`（核心 / 重要 / 次要 / 路人）+ `description`（≤100 字）
+
+修改：
+- `automation/prompt_templates/` 下 phase 2 character baseline prompt —
+  加 target_baseline 产出指令；input 同现行（全书摘要 + candidate_characters
+  + identity）
+- `automation/persona_extraction/` phase 2 落盘流程 — 把 target_baseline.json
+  写到 `works/{work_id}/characters/{cid}/canon/target_baseline.json`
+- `schemas/character/character_manifest.schema.json` — 加
+  `target_baseline_path` 字段
+- `automation/persona_extraction/manifests.py` — 写 character_manifest 时
+  填 target_baseline_path
+- `automation/persona_extraction/validate_baseline.py`（或对应位置）—
+  `validate_baseline()` 加 target_baseline.json schema 校验，必须存在 +
+  合规，缺失 / 违规阻断 phase 3
+- `ai_context/decisions.md` — 新增决策：phase 2 产 target_baseline +
+  immutable + D4 硬约束（phase 3 keys ⊆ baseline，违规 hard fail）
+- `ai_context/architecture.md` § Character canon / Phase 2 — 文件清单加
+  target_baseline
+- `docs/architecture/extraction_workflow.md` § 5 Baseline 产出（Phase 2）
+  — 加 target_baseline 描述
+- `docs/requirements.md` — 同步 character canon 描述
+
+**完成标准**
+
+- target_baseline.schema.json 落地 + jsonschema 校验通过
+- phase 2 跑通至少一个 work：每个 candidate character 产出
+  target_baseline.json，schema 合规
+- character_manifest 含 target_baseline_path
+- validate_baseline() 把 target_baseline 列为必须文件，缺失 / 违规阻断
+  phase 3
+- ai_context / docs 同步更新
+
+**预估**
+
+- 中量改动（新增 1 schema + phase 2 prompt 改造 + 几处 ai_context / docs
+  更新）
+- 实施 ~1 个工作日 + 跑 1 个 work 验证
+
+**依赖**
+
+- T-BASELINE-DEPRECATE 已落地（runtime 验证通过后归档）
+- 无其他硬依赖
+- 是 T-CHAR-SNAPSHOT-SUB-LANES 的硬前置（sub-lane 三方 keys ⊆ baseline
+  的锚点）
+
+---
+
+### [T-CHAR-SNAPSHOT-SUB-LANES] character stage_snapshot 拆 3 sub-lane 并行抽取 + phase 3 全模式 target keys 约束
 
 **上下文**
 
 Phase 3 单 stage 的 char_snapshot lane 是当前 wall-time 最长的瓶颈
 （粗估 T，49 stage 累加显著）。讨论后定方案：把单个 char_snapshot lane
-拆成 3 个并行 sub-lane（按字段聚类），每 sub-lane 输入完整源材料 +
-上阶段 snapshot + character baseline 全套（identity / voice_rules /
-behavior_rules / boundaries / failure_modes / manifest）+ 程序预算的
-active target 列表（**不**包含上阶段 memory_timeline——状态聚合不需要
-事件流水）；3 份 partial JSON 由程序合并成完整 stage_snapshot.json，
-再走 repair_agent 整文件 repair（最多 2 life-cycle，T3 触发时改为
-3 sub-lane 并行重抽 → re-merge → re-validate）。schema 不动、世界 lane
-和 char_support lane 不动、其他 phase 不动。
+拆成 3 个并行 sub-lane（按字段聚类）；3 份 partial JSON 由程序合并成
+完整 stage_snapshot.json，再走 repair_agent 整文件 repair（最多 2
+life-cycle，T3 触发时改为 3 sub-lane 并行重抽 → re-merge → re-validate）。
+schema 不动、世界 lane 和 char_support lane 不动、其他 phase 不动。
+
+**target keys 约束（合并自原 T-PHASE3-TARGET-CONSTRAINT，对单 lane / 三
+lane 模式均生效）**：每 sub-lane / 单 lane 主抽取读 phase 2 产出的
+`target_baseline.json` 为锚点，prompt 内嵌三态规则让 LLM 自行判断本 stage
+active 子集——
+
+- a) baseline 列了但本 stage + prev 都未登场 → keys 不出现（空缺）
+- b) 已登场 → 以 prev 的 target_voice_map / target_behavior_map /
+  relationships 为基线，按本 stage 原文必要时增删 / 更新对应字段
+- c) 曾登场但本 stage 未出现 → 直接继承 prev 内容，不动
+
+stage_snapshot 三方 keys（target_voice_map / target_behavior_map /
+relationships）必须 ⊆ baseline.targets[].target_character_id（D4 硬约束）；
+违规由 consistency_checker 跨文件校验 hard fail，T3 用尽仍违规 → 错误
+退出（不允许 stage 突破 baseline，即使 baseline 漏判也走人工编辑 baseline
++ stage 重抽）。
 
 **字段归属表**
 
 | sub-lane | 字段 |
 |---|---|
-| `char_expression` | `voice_state` / `active_aliases` / `current_mood` |
-| `char_decision` | `behavior_state` / `boundary_state` / `emotional_baseline` / `current_personality` / `current_status` |
-| `char_cognition` | `knowledge_scope` / `misunderstandings` / `concealments` / `relationships` / `stage_events` / `stage_delta` / `character_arc` / `snapshot_summary` |
+| `char_expression` | `voice_state` / `active_aliases` / `current_mood` / `failure_modes.tone_traps` |
+| `char_decision` | `behavior_state` / `boundary_state` / `emotional_baseline` / `current_personality` / `current_status` / `failure_modes.common_failures` |
+| `char_cognition` | `knowledge_scope` / `misunderstandings` / `concealments` / `relationships` / `stage_events` / `stage_delta` / `character_arc` / `snapshot_summary` / `failure_modes.relationship_traps` / `failure_modes.knowledge_leaks` |
 | 程序注入 | `character_id` / `stage_id` / `timeline_anchor` / `chapter_scope` / `extracted_at` |
 
 **流程**
 
 ```
 sub_lanes = true:
-  Step 0: 程序生成 target_char_list → .partial/{stage_id}_target_char_list.json
   Step 1: 3 sub-lane 并行 extract → .partial/{stage_id}_{lane}.json
+          每 sub-lane 输入：identity + 上阶段 snapshot + 章节原文 +
+          phase 2 target_baseline.json + 本 lane 字段集合白名单
   Step 2: 程序 merge → canon/stage_snapshots/{stage_id}.json，
-          清理 lane partial（保留 target_char_list partial 给 T3 复用）
-  Step 3: repair_agent（最多 2 life-cycle）；T3 触发 → 3 sub-lane 并行重抽 →
-          re-merge → re-validate；target_char_list 复用 step 0 产物，
-          每 sub-lane prompt 注入修复历史 + 错误信息
-  Step 4: 清理 target_char_list partial
+          清理 lane partial；merge 校验：字段集合互斥 + 全覆盖 schema
+          required + failure_modes 4 子类互斥白名单 + 三方 keys 一致
+          + keys ⊆ baseline
+  Step 3: repair_agent（最多 2 life-cycle）；T3 触发 → 3 sub-lane 并行
+          重抽 → re-merge → re-validate；每 sub-lane prompt 注入修复
+          历史 + 错误信息
 
-sub_lanes = false（fallback 到现行行为）：
-  跳过 Step 0 / 2 / sub-lane T3；走单 lane char_snapshot + 单调用 T3
+sub_lanes = false（fallback 模式，仍享 target keys 约束）：
+  单 lane char_snapshot + 单调用 T3；prompt 同样注入 target_baseline +
+  三态规则；产出仍走 keys ⊆ baseline 校验
 ```
 
 **改动清单**
 
 新增：
-- `automation/persona_extraction/target_char_list.py` — Step 0 实现，
-  函数签名 `compute_target_char_list(stage_id, work_id, character_id) -> list[str]`；
-  策略待 T-CHAR-SNAPSHOT-TARGET-LIST 决议，先放 program-only 占位
-  （扫上阶段 snapshot.target_voice_map keys + memory_timeline character mention）；
-  上限直接读 `schemas/character/stage_snapshot.schema.json` 的
-  `target_voice_map.maxItems`（bounds-only-in-schema）
-- `automation/persona_extraction/snapshot_merge.py`（或并入 `post_processing.py`）
-  — Step 2 merge：按字段归属表拼接 + 校验 target 三方一致 / 字段不重叠
-  / 必填齐 / 注入结构性字段
+- `automation/persona_extraction/snapshot_merge.py`（或并入
+  `post_processing.py`）— Step 2 merge：按字段归属表拼接 + 校验字段
+  集合互斥 / failure_modes 4 子类互斥白名单 / 必填齐 / 三方 keys 一致
+  + ⊆ baseline / 注入结构性字段
 
 修改：
 - `automation/prompt_templates/character_snapshot_extraction.md` — **保留
   单一文件（不拆 3 份）**。加 `{lane_scope}` 占位（取值 `ALL` /
   `char_expression` / `char_decision` / `char_cognition`）+
-  `{target_char_list}` 占位；prompt 头部按 lane_scope 注入"本次仅写以下
-  字段"约束。字段归属表移到代码（同一来源给 sub-lane 调度 + merge 用，
-  避免 prompt 与 merge 字段集合漂移），fallback 模式 `lane_scope=ALL`
-  等价现行单 lane
+  `{target_baseline}` 占位；prompt 头部按 lane_scope 注入"本次仅写以下
+  字段"约束。新增「target keys 三态规则」段（D2 a/b/c）+「target keys
+  必须 ⊆ baseline」硬约束段。字段归属表移到代码（同一来源给 sub-lane
+  调度 + merge 用，避免 prompt 与 merge 字段集合漂移），fallback 模式
+  `lane_scope=ALL` 等价单 lane 但同样吃 baseline + 三态规则
 - `automation/persona_extraction/orchestrator.py` — sub-lane 调度
   + hard-stop 时 `executor.shutdown(cancel_futures=True)` + .partial 清理；
-  分支 `if config.phase3.char_snapshot_sub_lanes` 包住 Step 0/2/T3-sub-lane 路径，
-  否则走现行单 lane
+  分支 `if config.phase3.char_snapshot_sub_lanes` 包住三 lane 路径，
+  否则走单 lane（两种模式都注入 baseline + 三态 prompt）
 - `automation/persona_extraction/repair_agent/` T3 dispatcher — sub-lane 开启
   时改为 3 并行重抽 + 注入修复历史 + 错误信息；T3 内 rate-limit pause
   重跑**不**消耗 `t3_max_per_file` 槽
+- `automation/persona_extraction/consistency_checker.py` — 加跨文件校验：
+  stage_snapshot 三方 keys ⊆ baseline.targets[].target_character_id；
+  违规列入 hard error（非 warning）
 - `automation/persona_extraction/config.py` + `automation/config.toml` +
   `automation/config.toml.example` — 新增
   ```toml
@@ -466,10 +558,12 @@ sub_lanes = false（fallback 到现行行为）：
   / `--no-char-snapshot-sub-lanes` 双向 flag
 - `.gitignore` — `works/*/characters/*/canon/stage_snapshots/.partial/`
 - `docs/architecture/extraction_workflow.md` § Phase 3 — 描述 sub-lane
-  拆分 + 流程图
+  拆分 + target_baseline 锚点 + 三态规则 + keys ⊆ baseline 硬约束（对
+  全 phase 3 模式生效）
 - `automation/README.md` — Phase 3 说明 + toml 配置文档
 - `ai_context/architecture.md` § Automated Extraction Pipeline — 一句话补充
-- `ai_context/decisions.md` — 新增决策：sub-lane 拆分 + target_char_list 复用
+- `ai_context/decisions.md` — 新增决策：sub-lane 拆分 + target keys ⊆
+  baseline by-construction + 三态规则
 - `docs/requirements.md` §11 — 同步描述
 
 **rate-limit / 掉线兼容（推荐方案）**
@@ -488,11 +582,15 @@ sub_lanes = false（fallback 到现行行为）：
 **完成标准**
 
 - toml `[phase3].char_snapshot_sub_lanes = true` + CLI 双向 flag 生效
-- sub_lanes=true 跑通：Step 0/1/2/3/4 完整，merge 后 schema 校验通过
-- sub_lanes=false 跑通：行为跟现行单 lane 完全等价（回归测试）
+- sub_lanes=true 跑通：Step 1/2/3 完整，merge 后 schema 校验通过
+- sub_lanes=false 跑通：单 lane 仍注入 baseline + 三态规则，三方 keys ⊆
+  baseline 校验生效（与三 lane 模式同口径）
 - 3 sub-lane partial 字段集合互斥 + 全覆盖 schema required（merge 函数兜底校验）
-- target_char_list 三方一致（A.target_voice_map keys ==
-  B.target_behavior_map keys ⊆ C.relationships keys，merge 时校验）
+- failure_modes 4 子类按字段归属表互斥分布到 3 sub-lane，merge 后字段
+  完整
+- 三方 keys（target_voice_map / target_behavior_map / relationships）⊆
+  baseline.targets[].target_character_id（cross-file hard 校验，违规 fail
+  而非 warning）
 - T3 触发时 3 sub-lane 并行重抽 + 注入修复历史，re-merge 后 re-validate
 - rate-limit 兼容：R1/R2/R3 在测试场景下行为符合上述描述
 - disk reconcile 启动时正确清理孤儿 .partial
@@ -500,25 +598,25 @@ sub_lanes = false（fallback 到现行行为）：
 
 **预估**
 
-- 中量改动（新增 2 模块 + 修改 ~10 文件 + 拆 1 prompt）
-- 实施 ~1–2 个工作日；首次跑 1 stage 验证 + 对比单 lane 输出质量
+- 中量改动（新增 1 模块 + 修改 ~10 文件 + prompt 改造，含 phase 3 全模式
+  target keys 约束改造）
+- 实施 ~1.5 个工作日；首次跑 1 stage 验证 sub_lanes=true 与
+  sub_lanes=false 两套行为 + keys ⊆ baseline 校验
 
 **依赖**
 
-- 无硬依赖。target_char_list 实现策略可先用 program-only 占位，由
-  T-CHAR-SNAPSHOT-TARGET-LIST 后续决议替换
-- 跟 T-CHAR-SNAPSHOT-TARGET-LIST 并行讨论：fallback 模式是否也跑 step 0
-- **建议先执行 T-BASELINE-DEPRECATE**：若先做废弃，sub-lane 输入清单
-  自动简化为 `identity + 上阶段 snapshot + 章节 + target_char_list`
-  （三件套已删 / manifest 已移除 / failure_modes 是 character-level
-  不进 prompt）；若后做，sub-lane 实现需按本任务上下文段的 6 件套读取
+- **硬前置**：T-PHASE2-TARGET-BASELINE（baseline 是三方 keys 锚点；无
+  baseline 则 D4 硬约束无依据可校验）
+- 无其他硬依赖
 
 **暂不做的事**
 
-- 不拆分 sub-lane 输入（每 sub-lane 仍拿完整源 + 上阶段 snapshot，
-  token 总量约 ×3，订阅模式可承受）
+- 不拆分 sub-lane 输入（每 sub-lane 仍拿完整源 + 上阶段 snapshot +
+  baseline，token 总量约 ×3，订阅模式可承受）
 - 不拆 schema（character / stage_snapshot 结构不动）
 - 不动 world lane / char_support lane / 其他 phase
+- 不允许 stage 突破 baseline（即使 baseline 漏判某 target，也由人工
+  编辑 baseline + stage 重抽处理，不引入 escape hatch）
 - 当前 work package 切到新模型的时序问题不在本任务内（按用户原则
   「不过度工程，整 lane 重跑」处理）
 
@@ -770,66 +868,5 @@ T-LOG 已落地：[llm_backend.py:565-680](../automation/persona_extraction/llm_
 - 不提前补 schema，避免与后续 loader 字段收敛方案冲突
 
 **依赖**：simulation runtime loader 选型 / 设计定稿
-
----
-
-### [T-CHAR-SNAPSHOT-TARGET-LIST] target_char_list 生成策略 + fallback 模式是否需要
-
-**上下文**
-
-T-CHAR-SNAPSHOT-SUB-LANES 主方案的 Step 0 由
-`compute_target_char_list()` 扫源 + 上阶段产物，输出本阶段 active
-target 列表，注入 3 sub-lane prompt 强约束三方一致（A.target_voice_map
-/ B.target_behavior_map / C.relationships keys 对齐）。函数签名定下来
-即可解锁主方案，但**生成策略**和 **fallback 模式行为**两个具体问题
-需要决议。
-
-**待决策项 1：生成策略**
-
-1.1 选用哪个？
-   - **A. program-only（0 token）**：上阶段 snapshot.target_voice_map
-     keys ∪ 本阶段 memory_timeline 中（jieba + candidate_characters
-     角色清单）匹配出的 character mention，按出现频次排序取 top N
-   - **B. llm-light（~5% sub-lane token）**：精简 prompt = candidate_characters
-     角色清单 + 本阶段 memory_timeline 全文 + 上阶段 active target
-     列表，让 LLM 输出 active target 列表 JSON 数组。优点：识别化名 /
-     别号 / 第三方称呼
-   - **C. hybrid**：先 A 跑，结果若覆盖率不足（如低于上阶段一半 target
-     数）降级到 B
-1.2 默认起步用哪个？（推荐 program-only，留 hybrid 作未来升级路径）
-1.3 策略不做成 toml 配置项（用户已明确去掉 `target_budget_strategy`
-   字段）；代码硬选一个，未来切换直接换函数体不动调用方
-
-**待决策项 2：fallback 模式（`--no-char-snapshot-sub-lanes`）是否也需要 target_char_list**
-
-2.1 单 lane 模式下，LLM 在同一 context 内同时写 voice_map / behavior_map
-   / relationships，**理论上** target 集合天然对齐。但**实际是否真的
-   一致**需验证：抓 S001 / S002 的历史输出，0 token 比对三方 target keys
-   - 验证命令：
-     `jq '.voice_state.target_voice_map | keys' / '.behavior_state.target_behavior_map | keys' / '.relationships[] | .target'`
-2.2 若验证发现单 lane 也存在不一致：
-   - 选项 X：fallback 模式额外跑 Step 0 + 注入 prompt
-   - 选项 Y：在 prompt 头加一段「以上阶段 snapshot 的 target_voice_map
-     keys 为基准」的 0-token 约束（无需新模块）
-2.3 若验证发现单 lane 一致性 OK：
-   - 保留当前推荐（`--no-char-snapshot-sub-lanes` 完全等价于现行行为，
-     跳过 Step 0）
-
-**完成标准**
-
-- 决策项 1：选定一个生成策略，落到 `target_char_list.py` 的实现
-- 决策项 2：先做 0 token 验证（S001 / S002 历史输出），据此决定 fallback
-  模式行为
-- 主方案 T-CHAR-SNAPSHOT-SUB-LANES 跑通 1–2 stage 后，对比目标列表
-  vs 实际 LLM 写入的 target 集合，验证策略覆盖率 ≥ 95%
-- 两个决议均追加到 `ai_context/decisions.md`
-
-**依赖**
-
-- 决策项 1 不阻塞 T-CHAR-SNAPSHOT-SUB-LANES（主方案先用 program-only
-  占位起步）
-- 决策项 2 的 0 token 验证可立刻做（S001 / S002 已 commit）；结论会
-  反向影响主方案的 fallback 分支实现，但不阻塞主路径（sub_lanes=true）
-- 实际策略调整可参考主方案首次跑通后的 1–2 stage 输出
 
 ---
