@@ -38,7 +38,7 @@ source. Long discussion chains live in `logs/change_logs/`.
 
 ## Character Depth
 
-11a. `identity.json` carries `core_wounds` (root traumas + behavioral impact) + `key_relationships` (relationship arcs with initial state / evolution / turning points). Loaded with the stage snapshot. **Only character-level constant file** — voice / behavior / boundary / failure_modes are inlined into stage_snapshot (#11d).
+11a. `identity.json` carries `core_wounds` (root traumas + behavioral impact) + `key_relationships` (relationship arcs with initial state / evolution / turning points). Loaded with the stage snapshot. **Character-level constant file alongside `target_baseline.json` (#13)** — voice / behavior / boundary / failure_modes are inlined into stage_snapshot (#11d).
 11b. `behavior_state` separates `core_goals` (rational, re-prioritizable) from `obsessions` (irrational, trauma- / emotion-tied, not cost-benefit). `emotional_baseline` mirrors with `active_goals` + `active_obsessions`.
 11c. `character_arc` in `stage_snapshot` = bird's-eye stage 1 → current. Complements `stage_delta` (last step only).
 11d. **4-piece character baseline deprecated.** `voice_rules.json` /

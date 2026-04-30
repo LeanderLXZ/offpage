@@ -87,7 +87,7 @@ boundary_state, `failure_modes` (inline 4 sub-classes), relationships,
 personality, mood, knowledge, `character_arc`). Runtime loads a single
 snapshot — no baseline merge required.
 
-- `identity.json` is the only character-level constant — loads alongside the stage snapshot.
+- `identity.json` + `target_baseline.json` are the character-level constants (both Phase 2 outputs, immutable from Phase 3 onward) — load alongside the stage snapshot. `target_baseline` anchors phase 3 stage_snapshot target keys (cross-file hard fail; see #13).
 - voice / behavior / boundary / failure_modes have **no separate baseline files**; their state is carried by the stage_snapshot evolution chain (S001 derives a baseline seed from source + identity; S002+ evolves from prev snapshot).
 - `target_voice_map` / `target_behavior_map` filtered by user role; fallback = backward scan through previous snapshots (pure code I/O).
 

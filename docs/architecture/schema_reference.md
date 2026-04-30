@@ -13,7 +13,7 @@
 | `schemas/analysis/` | Phase 0 / Phase 1 / Phase 4 LLM 产物（Phase 1 三件套入 git，其余不入运行时） | 5 |
 | `schemas/work/` | 作品入库、目录、阶段目录、per-work 加载配置 | 6 |
 | `schemas/world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | 6 |
-| `schemas/character/` | 角色 baseline + 阶段快照 + 记忆 | 5 |
+| `schemas/character/` | 角色 baseline + 阶段快照 + 记忆 | 6 |
 | `schemas/user/` | 用户根画像、绑定、长期档案、关系核心、钉选记忆条目 | 5 |
 | `schemas/runtime/` | Context / Session / 请求载荷 / 场景归档条目 | 5 |
 | `schemas/shared/` | 跨域共享（extraction_notes 等） | 1 |
@@ -235,6 +235,40 @@ key_relationships 提供关系的全局演变轨迹。
 
 ---
 
+### character/target_baseline.schema.json
+
+**用途**：角色 target 关系 baseline（全书视野）。Phase 2 一次性拍出
+该角色与其它角色之间的全部 target 关系列表，character-level 恒定文件，
+phase 3 各 stage 只读不写。
+**位置**：`characters/{character_id}/canon/target_baseline.json`
+**运行时**：始终加载（与 `identity.json` 并列的两件 character-level
+恒定文件）。
+
+**关键字段**：
+- `character_id` — 本 baseline 描述的角色 ID（与 identity.character_id /
+  目录名 / manifest.character_id 一致）
+- `targets[]` — 每条对应一个对方角色，含 `target_character_id`（统一
+  用对方 identity.character_id 而非 canonical_name / aliases，规避化名
+  / 隐藏身份歧义）+ `relationship_type`（亲密度 × 立场两维 17 候选枚举：
+  close_kin / lover / close_friend / mentor / disciple / friend / ally /
+  colleague / subordinate / superior / acquaintance / stranger / rival /
+  enemy / nemesis / passerby / other）+ `tier` ∈ {核心 / 重要 / 次要 /
+  路人}（站在本角色视角对该 target 的相对重要性）+ `description`
+  （≤100 字关系描述）
+
+**Phase 3 硬约束**：phase 3 stage_snapshot 中 `target_voice_map` /
+`target_behavior_map` / `relationships` 的 keys 必须严格 ⊆
+`targets[].target_character_id`（cross-file hard fail，无 escape hatch）。
+若 phase 2 漏判某 target，phase 3 不会自动补救——需要人工编辑 baseline
+后重抽对应 stage。所以 phase 2 产出时**宁可多列、不可漏列**：任何在
+全书摘要里出现过、与本角色有过互动 / 涉及关系演变 / 即使只是路人但被
+点名提及的角色，都应纳入。
+
+**生成时机**：Phase 2 baseline 由 LLM 按 `baseline_production.md` 产出
+（产出 3 段）。Phase 3 全程不重新生成。
+
+---
+
 ### character/stage_snapshot.schema.json
 
 **用途**：角色阶段快照——**自包含**的完整角色状态。
@@ -243,7 +277,8 @@ key_relationships 提供关系的全局演变轨迹。
 
 **核心原则**：
 - 每个快照必须自包含，包含完整的状态（即使与上一阶段无变化）
-- 运行时与 `identity.json` 配套加载即可，无独立 baseline 文件需要合并
+- 运行时与 `identity.json` + `target_baseline.json` 配套加载即可，无独立
+  voice / behavior / boundary baseline 文件需要合并
 - voice / behavior / boundary / failure_modes 全部内联，由 stage_snapshot 演变链承载
 - `target_voice_map` 和 `target_behavior_map` 按用户扮演角色**过滤加载**
   （只加载匹配条目）；如果当前快照缺少匹配条目，引擎向前扫描最近包含
@@ -448,7 +483,8 @@ permanence_reason?, pinned_at?
 | 文件 | 提取时 | 运行时 |
 |------|--------|--------|
 | identity.json | 首阶段创建（Phase 2），后续 char_support lane 修订 | **加载** |
-| stage_snapshot（含内联 failure_modes / voice_state / behavior_state / boundary_state / hard_boundaries / soft_boundaries 全字段） | 每阶段产出 | **加载**（核心；与 identity 配套即可） |
+| target_baseline.json | Phase 2 一次性产出（全书视野），phase 3 全程只读不写 | **加载**（与 identity 并列的 character-level 恒定文件；phase 3 stage_snapshot target keys ⊆ baseline 硬约束）|
+| stage_snapshot（含内联 failure_modes / voice_state / behavior_state / boundary_state / hard_boundaries / soft_boundaries 全字段） | 每阶段产出 | **加载**（核心；与 identity + target_baseline 配套即可）|
 | memory_timeline | 每阶段产出 | 近期 2 阶段全量 + memory_digest 1..N 过滤 + FTS5 按需 |
 
 ---

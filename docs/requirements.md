@@ -1253,7 +1253,8 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 │                         ▼                                       │
 │  ┌─ Phase 2 ─ Baseline 产出 (claude -p) ────────┐             │
 │  │  foundation.json + fixed_relationships.json      │             │
-│  │  + identity.json (角色级唯一常量, 全书视野初稿)    │             │
+│  │  + identity.json + target_baseline.json           │             │
+│  │    (两件 character-level 恒定文件, 全书视野初稿)   │             │
 │  │  + manifest.json + 空 stage_catalog               │             │
 │  └──────────────────────┬──────────────────────────┘            │
 │                         ▼                                       │
@@ -1379,7 +1380,7 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
   char_support 不读 stage_snapshot，世界和角色互不读取
 - 阶段间和调用间上下文完全靠文件系统传递
 - 编排脚本预先为每次调用组装 prompt，明确列出该读哪些文件
-- **输入裁剪原则**：每次调用只传最近一个 stage_snapshot 和 memory_timeline（用于计算 delta 和延续格式），不传全部历史。identity.json（角色级唯一常量）每个 stage 都传入（char_support 任意 stage 可修正）
+- **输入裁剪原则**：每次调用只传最近一个 stage_snapshot 和 memory_timeline（用于计算 delta 和延续格式），不传全部历史。identity.json + target_baseline.json（两件 character-level 恒定文件）每个 stage 都传入——identity 由 char_support 任意 stage 可修正；target_baseline 在 phase 3 全程只读不写（cross-file 硬约束 keys ⊆ baseline）
 - **显式排除**：以下文件不传入 extraction agent：
   - `simulation/contracts/baseline_merge.md` — 自包含快照的语义契约已内嵌在 extraction prompt 中
   - `memory_digest.jsonl` — 由程序在提取后自动生成（见 §11.3a）
@@ -3227,7 +3228,8 @@ works/{work_id}/
   │   ├── stage_catalog.json          # 世界阶段索引（程序自动维护）
   │   └── world_event_digest.jsonl    # 世界事件摘要（程序自动维护）
   ├── characters/{character_id}/canon/
-  │   ├── identity.json               # 角色身份 baseline（Phase 2，唯一角色级常量）
+  │   ├── identity.json               # 角色身份 baseline（Phase 2，character-level 恒定）
+  │   ├── target_baseline.json        # 目标关系 baseline（Phase 2，character-level 恒定，全书视野；phase 3 stage keys ⊆ baseline 硬约束）
   │   ├── stage_snapshots/
   │   │   └── {stage_id}.json         # 角色阶段快照（Phase 3 char_snapshot lane，含本 stage 全量 voice/behavior/boundary/failure_modes）
   │   ├── memory_timeline/
