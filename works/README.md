@@ -43,11 +43,8 @@ works/{work_id}/
       manifest.json
       canon/
         identity.json
+        target_baseline.json
         memory_timeline/{stage_id}.json
-        voice_rules.json
-        behavior_rules.json
-        boundaries.json
-        failure_modes.json
         stage_catalog.json
         stage_snapshots/{stage_id}.json
 
@@ -118,6 +115,22 @@ works/{work_id}/
   性别、种族、出身、外貌、初始社会地位）；此外还承载 `core_wounds`
   （根源性心理创伤）与 `key_relationships`（跨作品关系弧）。schema:
   `schemas/character/identity.schema.json`
+- `target_baseline.json` — 角色 target 关系 baseline（全书视野），与
+  `identity.json` 并列的 character-level 恒定文件。Phase 2 一次性产出
+  全部 target 列表，Phase 3 全程只读不写；运行时与 identity + 当前阶段
+  snapshot 一同加载。内容涵盖：
+  - `targets[]`：每条对应一个对方角色，含 `target_character_id`（对方
+    identity.character_id，规避化名 / 隐藏身份歧义）+ `relationship_type`
+    （中文短词，柔性 string；14 候选 至亲 / 恋人 / 挚友 / 师长 / 弟子 /
+    朋友 / 同僚 / 主人 / 下属 / 宠物 / 武器 / 对手 / 敌人 / 路人，候选
+    无法准确描述时允许用更精确中文短词，需在 `description` 说明差异）+
+    `tier` ∈ {核心 / 重要 / 次要 / 普通}（站在本角色视角对该 target 的
+    相对重要性；与 `relationship_type` 正交）+ `description`（关系描述）
+  - Phase 3 `stage_snapshot` 三结构（`voice_state.target_voice_map` /
+    `behavior_state.target_behavior_map` / 顶层 `relationships`）的
+    keys 必须**双向相等**于 `targets[].target_character_id`；多 / 少均
+    cross-file 硬失败
+  - schema: `schemas/character/target_baseline.schema.json`
 - `memory_timeline/{stage_id}.json` — 角色视角的记忆时间线，按阶段拆分（JSON
   数组，每个元素为一条记忆）。加载阶段 N 时只需读取阶段 1..N 的文件。内容涵盖：
   - 客观事件与角色的主观体验（可能与事实不同）
@@ -127,49 +140,36 @@ works/{work_id}/
   - 该事件对角色关系的影响
   - 记忆重要程度（trivial → defining）
   - schema: `schemas/character/memory_timeline_entry.schema.json`
-- `voice_rules.json` — 语言风格规则（基线），内容涵盖：
-  - 基础语气、语言习惯、用词偏好、标志性口头禅
-  - 代表性台词示例（含出处和语境）
-  - 按情绪状态分类的语言变化（暧昧、愤怒、委屈、嘴硬、关心、吃醋等）
-  - 按对象类型分类的说话差异（亲近者、陌生人、敌对者等）
-  - 语言禁忌
-  - schema: `schemas/character/voice_rules.schema.json`
-- `behavior_rules.json` — 行为规则（基线），内容涵盖：
-  - 核心行为驱动力与决策风格
-  - 情绪触发点（什么事情引发强烈反应及反应模式）
-  - 按情绪状态分类的完整反应模式（内心感受、外在表现、典型动作、恢复方式）
-  - 按关系类型分类的行为差异（默认态度、底线、升级/恶化模式）
-  - 习惯性行为与压力反应（应对方式、崩溃临界点、危机后行为）
-  - schema: `schemas/character/behavior_rules.schema.json`
-- `boundaries.json` — 人设边界，内容涵盖：
-  - 硬边界：任何情况下都不会做的事（含原因）
-  - 软边界：强烈抗拒但极端条件下可能打破的事（含例外条件）
-  - 常见误解：人们容易搞错的关于角色的认知
-  - schema: `schemas/character/boundaries.schema.json`
-- `failure_modes.json` — 崩坏预警（给 AI 运行时的防护指南），内容涵盖：
-  - 常见扮演错误（错误描述、产生原因、正确行为）
-  - 语气陷阱
-  - 关系互动陷阱
-  - 知识泄漏风险（角色不该知道但 AI 容易泄漏的信息）
-  - schema: `schemas/character/failure_modes.schema.json`
 - `stage_catalog.json` — 角色阶段目录，每个阶段包含一句话总结
   （`summary`）供用户选择（仅 bootstrap 阶段选择，运行时不加载）
-- `stage_snapshots/` — 角色在每个阶段的投影快照，内容涵盖：
+- `stage_snapshots/{stage_id}.json` — 角色在每个阶段的**自包含**状态快照
+  （voice / behavior / boundary / failure_modes 全部内联，无独立 baseline
+  文件；运行时与 `identity.json` + `target_baseline.json` 配套加载即可）。
+  内容涵盖：
   - 仅本阶段发生的事件 `stage_events`（每条 50–80 字，schema 硬门控；
     非累积历史；跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
     `world_event_digest.jsonl` 共同承载）
   - 当前状态（生死、恋爱、等级等随时间变化的状态）
   - 当前性格与性格转变
   - 当前心情与情感基线（驱动力、欲望、恐惧、心理创伤）
-  - 当前口吻与口癖变化（相对基线的 override）
-  - 当前行为模式变化（压力下、面对陌生人、面对亲密者、冲突风格）
+  - `voice_state`（内联）：基础语气 / 语言习惯 / 用词偏好 / 口头禅 /
+    禁忌 / `emotional_voice_map` / `target_voice_map` / 典型对话示例
+  - `behavior_state`（内联）：`core_goals` / `obsessions` / 决策风格 /
+    情绪触发器 / `emotional_reaction_map` / `target_behavior_map` /
+    习惯性行为 / 压力应对
+  - `boundary_state`（内联）：`hard_boundaries` / `soft_boundaries` /
+    `common_misconceptions`
+  - `failure_modes`（内联，4 子类）：`common_failures` / `tone_traps` /
+    `relationship_traps` / `knowledge_leaks`，全量记录本阶段 active 的
+    崩坏防护清单（继承未消除 + 新增；已消除的不写）
   - 知识边界（知道/不知道/不确定；条数上限 50/30/30，每条 ≤ 50 字，
     schema 硬门控）
   - 误解：角色主观认为对但客观错误的认知（含真相和原因）
   - 隐瞒：角色知道但故意不说的信息（含对象和原因）
   - 阶段间变化 delta：从上一阶段到当前阶段的关键变化摘要
     （触发事件、性格变化、关系变化、状态变化、情绪基调转变、口吻转变）
-  - 对其他角色的关系状态与信任度
+  - 对其他角色的关系状态与信任度（顶层 `relationships`；keys 与
+    `target_baseline.targets[].target_character_id` **双向相等**）
   - schema: `schemas/character/stage_snapshot.schema.json`
 
 ### analysis/
@@ -222,6 +222,10 @@ works/{work_id}/
 - 只有源文本证据可以修订世界 canon，用户对话不可以
 - 运行时加载 `fixed_relationships.json`（Tier 0）；阶段性关系变化由
   `stage_snapshots/` 中的 `relationship_shifts` 提供
+- 角色侧 voice / behavior / boundary / failure_modes 全部内联在
+  `stage_snapshots/` 中逐 stage 演化，无独立 baseline 文件；character-level
+  恒定文件只有 `identity.json` 与 `target_baseline.json`，运行时与当前
+  阶段 snapshot 配套加载即可
 
 ## 剧情阶段模型
 
