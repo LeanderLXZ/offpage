@@ -1381,8 +1381,8 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 - 阶段间和调用间上下文完全靠文件系统传递
 - 编排脚本预先为每次调用组装 prompt，明确列出该读哪些文件
 - **输入裁剪原则**：每次调用只传最近一个 stage_snapshot 和 memory_timeline（用于计算 delta 和延续格式），不传全部历史。identity.json + target_baseline.json（两件 character-level 恒定文件）每个 stage 都传入——identity 由 char_support 任意 stage 可修正；target_baseline 在 phase 3 全程只读不写（cross-file 硬约束 keys ⊆ baseline）
-- **显式排除**：以下文件不传入 extraction agent：
-  - `simulation/contracts/baseline_merge.md` — 自包含快照的语义契约已内嵌在 extraction prompt 中
+- **显式排除**：以下文件不传入 extraction agent（自包含快照的语义契约
+  已内嵌在 extraction prompt 中，无独立 baseline merge 文件）：
   - `memory_digest.jsonl` — 由程序在提取后自动生成（见 §11.3a）
   - `world_event_digest.jsonl` — 由程序在提取后自动生成（见 §11.3a）
   - `stage_catalog.json`（世界和角色均是）— 由程序在提取后自动维护（见 §11.3a）
