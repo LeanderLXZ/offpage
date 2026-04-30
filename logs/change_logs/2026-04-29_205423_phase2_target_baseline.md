@@ -185,3 +185,31 @@ todo 范围（这是它的硬前置）。
 
 - **Status**: DONE（代码完成；runtime 验证待跑作为 In Progress 状态保留）
 - **Finished**: 2026-04-29 21:06:35 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：6/10 项计划完整落实（schema / manifest / prompt_builder / validator /
+  decisions #13&#11d / extraction_workflow / ai_context/requirements §7 /
+  todo_list 状态迁移）；4 项部分落实（baseline_production.md 末尾总结漏
+  target_baseline / decisions.md #11a / architecture.md §Self-Contained /
+  docs/requirements.md 角色层段对、其余三处 ASCII 图 + "输入裁剪" 段 + 目录
+  结构图未跟）；验证标准 5/6 通过，**grep 残留验证标准实际失败**（PRE 用
+  "唯一恒定" 关键词漏抓 6 处变体）
+- Missed updates: 8 处（详见对话）
+
+### 轨 2 — 影响扩散
+- Findings: High=3 / Medium=5 / Low=2
+- 主线问题：identity → identity + target_baseline 的措辞同步在 6 处文件遗漏；
+  Cross-File Alignment 表明确要求 schema 改动同步的 schemas/README.md +
+  docs/architecture/schema_reference.md 两张表全部漏更新
+- Open Questions: 2 条（详见对话）
+
+## 复查时状态
+- **Reviewed**: 2026-04-29 21:32 EDT
+- **Status**: REVIEWED-FAIL
+  - 触发：轨 2 出现 3 处 High（conventions.md / schema_reference.md /
+    schemas/README.md）+ 轨 1 grep 残留验证标准失败 → 大面积未落实
+- **Conversation ref**: 同会话内 /post-check 输出
