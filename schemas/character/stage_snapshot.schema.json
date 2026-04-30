@@ -308,8 +308,10 @@
         },
         "target_voice_map": {
           "type": "array",
-          "description": "当前阶段下面对不同对象的语气变化。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条对话示例），泛化类型（陌生人、路人等）简要描述即可。最多 10 条。",
-          "maxItems": 10,
+          "description": "当前阶段下面对不同对象的语气变化。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条对话示例），泛化类型简要描述即可。容量上限通过 _shared/targets_cap.schema.json 共享继承，与 target_baseline.targets 同源；keys 必须 ⊆ target_baseline.targets[].target_character_id（cross-file 硬约束）。",
+          "allOf": [
+            { "$ref": "../_shared/targets_cap.schema.json" }
+          ],
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -432,8 +434,10 @@
         },
         "target_behavior_map": {
           "type": "array",
-          "description": "当前阶段下面对不同对象的具体行为模式。与 voice_state.target_voice_map 平行且对齐，侧重肢体反应、距离感、习惯性动作、回避模式等行为差异。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条行为示例），泛化类型简要描述即可。最多 10 条。",
-          "maxItems": 10,
+          "description": "当前阶段下面对不同对象的具体行为模式。与 voice_state.target_voice_map 平行且对齐，侧重肢体反应、距离感、习惯性动作、回避模式等行为差异。运行时按用户角色过滤加载。只对主要角色和重要配角详细记录（每 target 至少 3-5 条行为示例），泛化类型简要描述即可。容量上限通过 _shared/targets_cap.schema.json 共享继承，与 target_baseline.targets 同源；keys 必须 ⊆ target_baseline.targets[].target_character_id（cross-file 硬约束）。",
+          "allOf": [
+            { "$ref": "../_shared/targets_cap.schema.json" }
+          ],
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -689,8 +693,10 @@
     },
     "relationships": {
       "type": "array",
-      "description": "当前阶段角色对每个重要角色的完整关系状态。不包含边缘的不重要角色。最多 10 条。",
-      "maxItems": 10,
+      "description": "当前阶段角色对每个重要角色的完整关系状态。不包含边缘的不重要角色。容量上限通过 _shared/targets_cap.schema.json 共享继承，与 target_baseline.targets 同源；target_character_id 必须 ⊆ target_baseline.targets[].target_character_id（cross-file 硬约束）。",
+      "allOf": [
+        { "$ref": "../_shared/targets_cap.schema.json" }
+      ],
       "items": {
         "type": "object",
         "additionalProperties": false,

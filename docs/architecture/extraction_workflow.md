@@ -105,10 +105,14 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 identity 与 target_baseline 都是 character-level 恒定文件——identity 记录
 角色基础事实（aliases / core_wounds / key_relationships 等），target_baseline
 记录该角色与其它角色之间的全部 target 关系（含 `tier` ∈ {核心 / 重要 /
-次要 / 路人} + `relationship_type` 枚举 + ≤100 字描述）。两者都是后续
-stage 的修正锚点；voice / behavior / boundary / failure_modes 不在 Phase 2
-产出——由 Phase 3 char_snapshot lane 在每个 stage_snapshot 中直接生成
-（S001 从原文 + identity 推演基线种子，S002+ 从前一 stage_snapshot 演变）。
+次要 / 普通} + `relationship_type` 中文短词柔性 string，14 候选 +
+fallback 详见 `baseline_production.md` + ≤100 字描述）。`targets` 数组
+容量上限通过 `schemas/_shared/targets_cap.schema.json` $ref 共享继承
+（下游 stage_snapshot 三 map 通过同一份 $ref 单源同步）。两者都是后续
+stage 的修正锚点；voice / behavior / boundary / failure_modes 不在
+Phase 2 产出——由 Phase 3 char_snapshot lane 在每个 stage_snapshot 中
+直接生成（S001 从原文 + identity 推演基线种子，S002+ 从前一
+stage_snapshot 演变）。
 
 **target_baseline 的 phase 3 硬约束**：phase 3 stage_snapshot 中
 `target_voice_map` / `target_behavior_map` / `relationships` 的 keys 必须
@@ -390,7 +394,9 @@ Phase 2 产出**两个**角色级 baseline 文件：
 - `identity.json` — 记录跨阶段稳定的角色基础事实（aliases /
   core_wounds / key_relationships 等）
 - `target_baseline.json` — 全书视野下该角色与其它角色之间的全部 target
-  关系（含 `tier` + `relationship_type` + ≤100 字描述）
+  关系（含 `tier` ∈ {核心/重要/次要/普通} + `relationship_type` 中文短词
+  柔性 string + ≤100 字描述）。`targets` 数组容量上限通过
+  `schemas/_shared/targets_cap.schema.json` $ref 共享继承
 
 两者共同的作用：
 

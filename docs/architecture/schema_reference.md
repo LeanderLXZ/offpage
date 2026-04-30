@@ -249,20 +249,25 @@ phase 3 各 stage 只读不写。
   目录名 / manifest.character_id 一致）
 - `targets[]` — 每条对应一个对方角色，含 `target_character_id`（统一
   用对方 identity.character_id 而非 canonical_name / aliases，规避化名
-  / 隐藏身份歧义）+ `relationship_type`（亲密度 × 立场两维 17 候选枚举：
-  close_kin / lover / close_friend / mentor / disciple / friend / ally /
-  colleague / subordinate / superior / acquaintance / stranger / rival /
-  enemy / nemesis / passerby / other）+ `tier` ∈ {核心 / 重要 / 次要 /
-  路人}（站在本角色视角对该 target 的相对重要性）+ `description`
-  （≤100 字关系描述）
+  / 隐藏身份歧义）+ `relationship_type`（中文短词，柔性 string 非 enum；
+  14 候选：至亲 / 恋人 / 挚友 / 师长 / 弟子 / 朋友 / 同僚 / 主人 / 下属
+  / 宠物 / 武器 / 对手 / 敌人 / 路人；候选无法准确描述时允许使用列表外
+  更精确中文短词，需在 `description` 字段说明差异）+ `tier` ∈ {核心 /
+  重要 / 次要 / 普通}（站在本角色视角对该 target 的相对重要性；与
+  relationship_type 正交）+ `description`（≤100 字关系描述）
+- `targets` 数组容量上限通过 `schemas/_shared/targets_cap.schema.json`
+  $ref 共享继承（单源；下游 stage_snapshot.{target_voice_map,
+  target_behavior_map, relationships} 通过同一份 $ref 同步），调整数字
+  只改这一处
 
 **Phase 3 硬约束**：phase 3 stage_snapshot 中 `target_voice_map` /
 `target_behavior_map` / `relationships` 的 keys 必须严格 ⊆
 `targets[].target_character_id`（cross-file hard fail，无 escape hatch）。
 若 phase 2 漏判某 target，phase 3 不会自动补救——需要人工编辑 baseline
 后重抽对应 stage。所以 phase 2 产出时**宁可多列、不可漏列**：任何在
-全书摘要里出现过、与本角色有过互动 / 涉及关系演变 / 即使只是路人但被
-点名提及的角色，都应纳入。
+全书摘要里出现过、与本角色有过互动 / 涉及关系演变 / 即使只是泛弱关联
+但被点名提及的角色，都应纳入。**触顶 maxItems 时按 `tier` 优先级裁剪**：
+核心 > 重要 > 次要 > 普通，普通先弃。
 
 **生成时机**：Phase 2 baseline 由 LLM 按 `baseline_production.md` 产出
 （产出 3 段）。Phase 3 全程不重新生成。
