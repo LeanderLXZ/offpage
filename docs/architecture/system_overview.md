@@ -308,10 +308,10 @@ target_voice_map 和 target_behavior_map 只对主要角色和重要配角详细
 
 在对话开始时，系统应加载：
 
-`世界 foundation（含 fixed_relationships）+ 选定的世界阶段快照 + world_event_digest 1..N + 角色不变层（identity + failure_modes + hard_boundaries）+ 选定阶段的自包含快照 + memory_timeline 近期 2 阶段全量 + memory_digest 1..N 过滤 + scene_archive 最近 N 条 full_text（默认 10；摘要不进启动，按需从 FTS5 取）+ 用户绑定 + 长期档案 + 关系核心 + 当前 context + 近期 session 状态`
+`世界 foundation（含 fixed_relationships）+ 选定的世界阶段快照 + world_event_digest 1..N + 角色不变层（identity + target_baseline）+ 选定阶段的自包含快照 + memory_timeline 近期 2 阶段全量 + memory_digest 1..N 过滤 + scene_archive 最近 N 条 full_text（默认 10；摘要不进启动，按需从 FTS5 取）+ 用户绑定 + 长期档案 + 关系核心 + 当前 context + 近期 session 状态`
 
-注意：角色 baseline（voice_rules、behavior_rules、boundaries 的 soft 部分）
-**不在运行时加载**。运行时角色状态完全由自包含的 stage_snapshot 提供。
+注意：voice / behavior / boundary / failure_modes 全部内联进 stage_snapshot，
+没有独立 baseline 文件；运行时角色状态完全由自包含的 stage_snapshot 提供。
 
 推荐的加载拆分：
 

@@ -129,6 +129,14 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
    - `timeline_anchor`：阶段时间锚点短描述（≤ 50 字），必填
    - `snapshot_summary`：当前阶段一段式摘要，100–200 字，必填
 
+   **D4 硬约束（target keys ⊆ baseline）**：`target_voice_map` /
+   `target_behavior_map` / `relationships` 三处的 keys（角色名）必须严格
+   ⊆ phase 2 产出的 `target_baseline.targets[].target_character_id`。
+   不允许写出 baseline 之外的对方角色——若原文出现 baseline 未覆盖的
+   target，**不要写入** stage_snapshot；该情况记到 `stage_delta` 自由
+   文本说明，由 phase 3 之后的人工流程决定是否补 baseline 重抽。详见
+   `ai_context/decisions.md` #13。
+
 3. **标识命名**：中文作品的 `work_id`、`character_id` 和路径段使用中文；`stage_id` 使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`）
 4. **时间性**：当前阶段写清"现在"，历史事件标注为"已发生"，不要混成扁平总结
 

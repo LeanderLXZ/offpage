@@ -6,6 +6,13 @@ validation cannot detect: alias drift, relationship jumps, annotation
 degradation, etc.
 
 Produces ``consistency_report.json`` under the work's analysis dir.
+
+TODO(T-CHAR-SNAPSHOT-SUB-LANES): add D4 hard-constraint check —
+``stage_snapshot.{target_voice_map, target_behavior_map, relationships}``
+keys MUST be ⊆ ``target_baseline.targets[].target_character_id``
+(cross-file hard fail; see ``ai_context/decisions.md`` #13). Until this
+lands, phase 3 enforces D4 only via prompt instruction in
+``automation/prompt_templates/character_snapshot_extraction.md``.
 """
 
 from __future__ import annotations
