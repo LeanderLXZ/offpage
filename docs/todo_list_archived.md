@@ -102,6 +102,11 @@
 
 ## Abandoned
 
+### [T-PHASE35-IMPORTANCE-AWARE] Phase 3.5 一致性检查按 importance 调门槛 · 废弃于 2026-04-30
+
+- 废弃原因：核心痛点（`_check_target_map_counts` 对从未登场 / tier=次要/普通 角色 over-error）已在 T-CONSISTENCY-TARGETS-SUBSET commit `620be09` 顺手用"空 examples 跳过"守卫等价解决；剩余 7 个 `_check_*` 的 over-error 风险被 D4 == + schema-required 字段双重稀释，且 T-PHASE2-TARGET-BASELINE / T-BASELINE-DEPRECATE runtime 未跑前调阈值是过早优化。后续如确有需要，按"D4-state + tier 双锚点"重新立项即可。
+- 关联 log: [logs/change_logs/2026-04-30_045522_abandon_t_phase35_importance_aware.md](../logs/change_logs/2026-04-30_045522_abandon_t_phase35_importance_aware.md)
+
 ### [T-MIGRATE-TARGET-BASELINE-ZH] 迁移现有 target_baseline.json：英文 enum → 中文柔性 string + tier 路人→普通 · 废弃于 2026-04-30
 
 - 废弃原因：前提失效，无可迁移对象。原 todo 假设"phase 2 已 commit baseline 全是英文值，新 schema 校验 fail"，但 `works/` 在 `## Do-not-commit paths` 内，target_baseline.json 从未入库（`git log --diff-filter=D` 全空）；本地当前 work 的 `analysis/` 也只剩空 progress/，无 baseline 文件。下次 phase 2 重跑直接用新中文 schema 生成，无需迁移工具。
