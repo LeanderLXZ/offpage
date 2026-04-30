@@ -213,3 +213,48 @@ todo 范围（这是它的硬前置）。
   - 触发：轨 2 出现 3 处 High（conventions.md / schema_reference.md /
     schemas/README.md）+ 轨 1 grep 残留验证标准失败 → 大面积未落实
 - **Conversation ref**: 同会话内 /post-check 输出
+
+<!-- /post-check 第 2 轮（修补后再审）填写 -->
+
+## 复查结论 (2nd round, full T-PHASE2-TARGET-BASELINE scope)
+
+经第一轮 /post-check + 修补 /go (754a19b) 后再审。本轮 scope = 完整 todo
+工作流（commits 2343e60..754a19b 含修补轮 + 副 log）。
+
+### 轨 1 — 需求落实（含修补轮）
+- 落实率：10/10 项 PRE 计划项已全部 PASS 或 PASS+intentional-defer；
+  6/6 验证标准全部通过（含修补后的 grep 残留 = 0）
+- Missed updates: 0 条（首轮 8 条全部由 754a19b 闭合）
+
+### 轨 2 — 影响扩散（含修补轮）
+- Findings: High=1 / Medium=3 / Low=2
+- 新发现（首轮未抓）：
+  - [H] system_overview.md:311-314 内部矛盾（line 311「公式」列 identity
+    + failure_modes + hard_boundaries 旧四件套；line 313 「baseline
+    (voice_rules / behavior_rules / boundaries soft 部分)」引用废弃文件；
+    与 line 321 已更新的 identity + target_baseline 同节相互打架）
+  - [M] character_snapshot_extraction.md 全文 0 命中 target_baseline /
+    keys ⊆ baseline / D4 — phase 3 LLM 当前对 D4 硬约束无知；SUB-LANES
+    landing 前若有人跑 phase 3，无 prompt-level 防护
+  - [M] D4 enforcement 在 consistency_checker.py / repair_agent / phase 3
+    prompt 三层均无；PRE log 已说属 SUB-LANES，但代码侧无 TODO 标注，
+    SUB-LANES 排期变化时存在被遗忘风险
+  - [M] 悬挂引用：simulation/contracts/baseline_merge.md 在 ai_context
+    (decisions.md #24 / architecture.md ×2) + docs/requirements.md
+    §11.3 共 4 处引用，文件实际不存在（属遗留问题非本次引入）
+  - [L] validator.py 模块 docstring 仍带 "skeleton voice/behavior/
+    boundary/failure-mode files" stale 措辞（属 BASELINE-DEPRECATE 残余）
+  - [L] simulation/flows/close_and_merge.md 未触及 — 经 grep 验证不
+    relevant（不涉 baseline 加载）
+- Open Questions: 1 条（详见对话）
+
+## 复查时状态 (2nd round)
+- **Reviewed**: 2026-04-29 22:14 EDT
+- **Status**: REVIEWED-FAIL
+  - 触发：轨 2 仍有 1 处 High（system_overview.md:311-314 同节内三处
+    陈述自相矛盾，本次 fix-up 的 grep 关键词集仍漏抓「voice_rules /
+    behavior_rules / boundaries soft 部分」+ 旧公式表达）
+  - 注：本次 [H] 的修复路径明确简单（line 311 公式 + line 313 注释改
+    写为 identity + target_baseline 表达），属 BASELINE-DEPRECATE 残余
+    与本次 alignment sweep 漏点的交集，不影响代码 / schema / 运行时
+- **Conversation ref**: 同会话内 /post-check 第 2 轮输出
