@@ -29,7 +29,8 @@
 后续步骤出现 "skills_config.md `## XX`" 时引用本配置。本 skill 用到：
 `## Example artifact directories`（轨 2 产物结构线）、
 `## Sensitive content placeholder rules`（轨 2 残留检查）、
-`## Protected branch prefixes`（Step 5 commit 分支提示）。
+`## Protected branch prefixes`（Step 5 commit 分支提示）、
+`## Data contract directories`（Step 3 规范线数据契约扫描；含 JSON Schema / proto / OpenAPI / Pydantic / SQL DDL 等）。
 
 ## Step 1: 界定本次改动范围
 
@@ -52,11 +53,14 @@
 
 ## Step 3: 并行 sub-agent 双轨审计线
 
-改动面小就单线跑；跨模块或跨层时并行派 sub-agent，三条线各自同时承担双轨：
+> **轨 vs. 线**：**轨**是审计视角（轨 1 对账 / 轨 2 扩散，共 2 条），**线**是扫描分工（按文件域切片派 sub-agent，共 4 条）。两者正交——每条线都同时跑两条轨。
 
-1. **规范线**：`docs/requirements.md` / `docs/architecture/` / `ai_context/` / `schemas/` / `prompts/` —— 描述 vs. 本次改动是否一致，有无残留旧描述 / 旧字段 / 旧流程
+改动面小就单线跑；跨模块或跨层时并行派 sub-agent，四条线各自同时承担双轨：
+
+1. **规范线**：`docs/requirements.md` / `docs/architecture/` / `ai_context/` / skills_config.md `## Data contract directories` 列出的目录（`(none)` 时跳过该节扫描）/ `prompts/` —— 描述 vs. 本次改动是否一致，有无残留旧描述 / 旧字段 / 旧流程
 2. **实现线**：本次改过的代码 + 其上下游（调用方 / 被调用方 / 导入方）—— 字段名 / 参数 / 返回值 / 状态机 / 门控 / 异常路径是否连贯，import 是否还能跑
-3. **产物与结构线**：本次是否影响 skills_config.md `## Example artifact directories` 列出的目录里的样例、相关 README 展示、目录结构；若改了目录或文件名，追查所有引用点。该节 `(none)` / 留空时跳过本线
+3. **风险线**：本次改过的代码 + 受其牵连的相关代码（调用方 / 被调用方 / 共享状态 / 共享数据流）—— 边界条件、空值 / None、异常路径、并发、重试 / 回滚、错误处理是否藏 bug；新行为是否引入数据丢失 / 安全口子 / 性能回退；状态机 / 门控 / 不变量是否有漏覆盖分支。**与实现线区分**：实现线问"还连得上吗"（签名 / import / 上下游一致性），风险线问"做的事对吗"（语义正确性 + 失败模式）；产出归到 Step 4 的「bug / 行为风险」与 Step 6 报告的同名小节
+4. **产物与结构线**：本次是否影响 skills_config.md `## Example artifact directories` 列出的目录里的样例、相关 README 展示、目录结构；若改了目录或文件名，追查所有引用点。该节 `(none)` / 留空时跳过本线
 
 > **派出的每个 sub agent 都必须先重读 intent 基线 PRE log**：把 Step 1.5 读到的 log 路径塞进它的 prompt，并**明示要求它开工前先读完 PRE 的"结论与决策 / 计划动作清单 / 验证标准 / 执行偏差"**，再按本条线的范围扫描。sub agent 是独立 context，不强制它读 PRE 就只会按 prompt 里的 brief 空转，容易脱离本次 intent；对账与扩散判断都必须扎根在 PRE log 上。
 

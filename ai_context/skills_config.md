@@ -66,6 +66,17 @@ implementation track for code-level scans.
 - `automation/`
 - `simulation/`
 
+## Data contract directories
+
+Project-specific directories holding data-shape contracts —
+JSON Schema, Protobuf, OpenAPI, Pydantic models, SQL DDL, Avro,
+GraphQL schemas, etc. Used by `/full-review` and `/post-check` "spec
+track" plus `/go` Step 7 spec track. Many projects don't have a
+dedicated directory (contracts inline in code) — leave as `(none)` and
+the related scans degrade gracefully.
+
+- `schemas/`
+
 ## Example artifact directories
 
 Used by `/full-review` "artifact track" and `/post-check` Track 2

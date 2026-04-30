@@ -12,6 +12,7 @@
 
 后续步骤出现 "skills_config.md `## XX`" 时引用本配置。本 skill 用到：
 `## Source directories`（实现线扫描范围）、
+`## Data contract directories`（规范线数据契约扫描；含 JSON Schema / proto / OpenAPI / Pydantic / SQL DDL 等）、
 `## Example artifact directories`（产物线扫描范围）、
 `## Core component keywords`（重点检查项）、
 `## Timezone`（结果归档时间戳）。
@@ -34,19 +35,20 @@
 - 不要默认去读 `logs/change_logs/`，除非已发现冲突、必须追溯历史决策
 - 然后扫描整个仓库，包括但不限于：
   - skills_config.md `## Source directories` 列出的目录
-  - `schemas/`、`prompts/`
+  - skills_config.md `## Data contract directories` 列出的目录（`(none)` 时跳过）、`prompts/`
   - skills_config.md `## Example artifact directories` 列出的目录
   - `README.md`、`.gitignore`
-- 如果能力支持并行，并行跑至少三条审计线：
-  1. **规范线（必跑）**：`ai_context/`、`docs/`、`schemas/`、`prompts/`
-  2. **实现线**：扫 skills_config.md `## Source directories` 列出的目录 + 脚本 / 状态机 / 校验 / 重试 / 回滚逻辑。该节 `(none)` / 留空时退化为"项目根下所有非 ai_context / docs / logs / schemas / prompts / .git 的子目录"
-  3. **样例产物线**：扫 skills_config.md `## Example artifact directories` 列出的目录，看已提交的 progress / artifact 是否与规范一致。该节 `(none)` / 留空时跳过本线并打印"未声明示例产物目录，跳过产物线"
+- 如果能力支持并行，并行跑至少四条审计线：
+  1. **规范线（必跑）**：`ai_context/`、`docs/`、skills_config.md `## Data contract directories` 列出的目录（`(none)` 时跳过该节扫描）、`prompts/`
+  2. **实现线**：扫 skills_config.md `## Source directories` 列出的目录 + 脚本 / 状态机 / 校验 / 重试 / 回滚逻辑。该节 `(none)` / 留空时退化为"项目根下所有非 ai_context / docs / logs / .git / `## Data contract directories` 已列目录 / prompts 的子目录"
+  3. **风险线**：以实现线同样的扫描范围为底，但视角不同——实现线问"还连得上吗 / 字段是否漂移 / 门控是否对齐文档"，风险线问"做的事对吗"：边界条件、空值 / None、异常路径、并发、重试 / 回滚、错误处理是否藏 bug；新行为或长期未审的代码是否有数据丢失 / 安全口子 / 性能回退；状态机 / 门控 / 不变量是否有漏覆盖分支；产出归到「重点检查项」里的 bug / 行为风险类条目和 Findings 同名小节
+  4. **样例产物线**：扫 skills_config.md `## Example artifact directories` 列出的目录，看已提交的 progress / artifact 是否与规范一致。该节 `(none)` / 留空时跳过本线并打印"未声明示例产物目录，跳过产物线"
 
 ## 重点检查项
 
 - `ai_context` 与 `docs` 是否一致
 - `docs/requirements.md` 与 `docs/architecture/*` 是否一致
-- `schemas` 是否覆盖文档承诺的核心数据结构
+- skills_config.md `## Data contract directories` 列出的目录（含 schema / proto / openapi / pydantic / SQL DDL 等数据契约层）是否覆盖文档承诺的核心数据结构（该节 `(none)` 时跳过本项）
 - prompt 模板是否仍引用过时字段、旧流程、已废弃文件
 - skills_config.md `## Core component keywords` 列出的组件是否真的兑现文档中的门控与校验承诺（该节 `(none)` / 留空时跳过本项）
 - Phase / 状态机 / 恢复 / 回滚 / 重试 / commit gate 是否有缺口

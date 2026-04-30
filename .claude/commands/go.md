@@ -20,7 +20,7 @@
 
 **<进度工具> 解析**：Claude → `TodoWrite`（界面显示为 "Update Todos"）；Codex → `update_plan`。语义对齐：预登记 + 切状态 + 标完成（含子任务展开 / 折回）。
 
-## Step 0: Load skills config
+## Step 0: 加载 skills 配置
 
 `Read` `ai_context/skills_config.md`。
 
@@ -34,9 +34,10 @@
 `## Protected branch prefixes`（Step 10 同步判断）、
 `## Do-not-commit paths`（Step 9）、
 `## Timezone`（Step 2 / Step 8 时间戳）、
-`## Sensitive content placeholder rules`（Step 3 / Step 7）。
+`## Sensitive content placeholder rules`（Step 3 / Step 7）、
+`## Data contract directories`（Step 5 / Step 7 数据契约扫描；含 JSON Schema / proto / OpenAPI / Pydantic / SQL DDL 等）。
 
-## Step 1: 环境 & 自动锁定工作位置
+## Step 1: 锁定工作位置（环境探测 + worktree 隔离）
 按 skills_config.md `## Main branch policy` 锁定主分支名与变更同步方向。`/go` 的 git 交互契约：**Step 1 到 Step 10 中途一次都不问**，只在全部完成后按需问一次是否切回主分支。
 
 - `git branch --show-current` / `git status --short` / 按 skills_config.md `## Background processes` 探测（pgrep 模式 + 进程产物路径；该节留空则跳过进程检测）——采信息，**不问**用户
@@ -79,7 +80,7 @@ PRE 段必须包含：
 
 ## 验证标准
 - [ ] {如 Import 无报错}
-- [ ] {如 jsonschema 通过}
+- [ ] {如 数据契约校验通过}
 - [ ] {如 grep 残留为 0}
 - ...
 
@@ -89,26 +90,75 @@ PRE 段必须包含：
 
 写完 PRE 段**再进入 Step 3**。中途发现偏离计划 → 在 log 里追加 `## 执行偏差` 段落记新决定，**不默默改**。
 
-## Step 3: 需求文档 `docs/requirements.md`
-更新相关节，含流程图 / 示例。**新增流程图 / 示例仅当现有内容无法覆盖新逻辑时**，避免冗余。**按 skills_config.md `## Sensitive content placeholder rules` 用占位符替换真实内容**（该节留空则跳过该项扫描）；描述只写当前设计，不写"旧 / legacy / 已废弃 / 原为"。同步 `ai_context/requirements.md` + `decisions.md`。
+## Step 3: 把讨论结论落到文档（内容创作）
 
-## Step 4: 核心实现
+把会话里已拍板的方案翻译成文档语言。**这一步只做"写入"**——跨文档对齐校验留给 Step 6，全库 review 留给 Step 7；本步任何"某文件 A 写完发现文件 B 也得改"的连带感觉，**先记进 PRE log 的「执行偏差」段**，留给 Step 6 系统补齐，不要边写边四处串改。
+
+按本次讨论触及的范围筛取（不要无脑全跑）：
+
+- **`docs/requirements.md`**：相关节 / 流程图 / 示例。**新增流程图 / 示例仅当现有内容无法覆盖新逻辑时**，避免冗余
+- **`docs/architecture/`**：本次拍板含结构性决策（新模块 / 新接口 / 新状态机 / 调用关系变化）时更新
+- **`ai_context/requirements.md`**：与 `docs/requirements.md` 相关节同步
+- **`ai_context/decisions.md`**：本次产生的 durable 决策立刻落条目，不要拖到 Step 6 / Step 8
+- **`prompts/`**：讨论结论包含 prompt 行为契约 / 模板变化时更新
+- **`README.md`**：仅当目录 / 入口 / 启动方式有变化
+
+写作约束：
+
+- **按 skills_config.md `## Sensitive content placeholder rules` 用占位符替换真实内容**（该节留空则跳过该项扫描）
+- 描述只写当前设计，不写"旧 / legacy / 已废弃 / 原为"
+
+## Step 4: 实现代码 / schema / prompt / 配置
 按讨论改 schema、prompt template、架构代码、配置。**先确认 PRE log「验证标准」段已有 ≥ 1 条具体可执行项**（如 `import 无报错` / `grep 残留 = 0` / `smoke X 全过`；非"做对了就行"这类含糊）；含糊 → 立刻补具体的再继续。对照 `ai_context/conventions.md` 的 Cross-File Alignment 表列出连带文件（该表不存在则跳过本项，仅按本次改动直觉判断）。
 
-## Step 5: 轻量测试（仅有代码 / schema 变更时）
-Import 检查 + 关键函数 smoke test；schema 改动跑 `jsonschema` 校验。有错立即修。
+## Step 5: Smoke 测试 + 数据契约校验（仅当代码 / 数据契约改动时）
+Import 检查 + 关键函数 smoke test；如本次改动触及 skills_config.md `## Data contract directories` 列出的目录（schema / proto / openapi / pydantic / SQL DDL 等数据契约），按项目对应的校验工具跑一次（例：JSON Schema → `jsonschema` / `ajv`；OpenAPI → `openapi-spec-validator` / `redocly lint`；proto → `protoc --lint_out`；pydantic → 模型 import + `model_rebuild()`；SQL DDL → migration dry-run）。该节 `(none)` 时跳过本步契约校验。有错立即修。
 
-## Step 6: 文档对齐
-同步 `ai_context/`（仅 durable truth）、`docs/architecture/`、相关 README。再查 `docs/todo_list.md`：新任务登记到合适分段、本次涉及的已完成条目**整条移到 `docs/todo_list_archived.md`** 的 `## Completed` 段（瘦身：标题 + 完成形式 + 1 行摘要 + 本次 log 链接）、状态变化更新；任务移段 / 增改后**同步刷新顶部 `## Index` 段**（规则在 `docs/todo_list.md` 顶部"Index maintenance"小节）。`/todo` skill 只读索引，不刷新就会给出过期信息。
+## Step 6: 跨文档对齐 + todo_list 维护
 
-## Step 7: 全库 review
-并行扫描（可派 Agent）所有可能涉及的文件：需求、schema、代码、README、architecture、ai_context、prompts、目录结构。检查项：**残留旧逻辑、歧义、跨文件不一致、冲突、遗漏更新、bug、风险**；顺查有无违反 skills_config.md `## Sensitive content placeholder rules` 的内容或 legacy 字样。**发现即修**；太大则登记到 `docs/todo_list.md`。
+到这里 Step 3 / 4 / 5 已分别把内容写进文档与代码。**本步只做"对齐校验 + 维护收尾"**，不做内容创作——若发现某项需要重新写一段需求 / 架构描述，回到 Step 3 重写而不是在本步硬塞。
+
+**跨文档对齐**：
+
+- 对照 `ai_context/conventions.md` 的 Cross-File Alignment 表（不存在则按 Step 3 / Step 4 实际触及的文件直觉判断），核对 schema / prompt / code / docs / ai_context / README 在以下维度是否一致：
+  - 字段名 / 参数 / 返回值 / 状态值 / 错误码
+  - 流程描述 / 状态机 / 门控时序
+  - 术语 / 概念命名
+- 发现某文件本应同步却没动 → **查漏补缺**式补上；改动量小（一两行同步）就地修，改动量大（要重写整段需求 / 架构描述）→ 回 Step 3 重做
+
+**ai_context durable 维护**：
+
+- `ai_context/current_status.md`：当前状态行是否需要更新
+- `ai_context/next_steps.md`：本次产生的新方向 / 阻塞是否需要登记
+- `ai_context/handoff.md`：是否需要给下一会话留一句话
+
+**todo_list 维护**：
+
+- `docs/todo_list.md`：本次完成的条目**整条移到 `docs/todo_list_archived.md`** 的 `## Completed` 段（瘦身：标题 + 完成形式 + 1 行摘要 + 本次 log 链接）；状态变化更新
+- 任务移段 / 增改后**同步刷新顶部 `## Index` 段**（规则在 `docs/todo_list.md` 顶部"Index maintenance"小节）。`/todo` skill 只读索引，不刷新就会给出过期信息
+- ⚠️ 仅维护"本次改动直接产生 / 完成"的条目；Step 7 review 期间发现的新问题**不在本步登记**，按 Step 7 的处理规则走
+
+## Step 7: 全库多线 review（并行）
+
+并行扫描全仓与本次改动相关 / 受牵连的文件，**至少四条线，可派 sub-agent 并行**；改动面小则单线串跑。
+
+**四条线**（每条都先重读 PRE log 再扫描）：
+
+1. **规范线**：`ai_context/` / `docs/` / skills_config.md `## Data contract directories` 列出的目录（`(none)` 时跳过该节扫描）/ `prompts/` —— 描述 vs. 本次改动是否一致，有无残留旧描述 / 旧字段 / 旧流程；顺查有无违反 skills_config.md `## Sensitive content placeholder rules` 的真实内容、`旧 / legacy / 已废弃 / 原为` 字样
+2. **实现线**：本次改过的代码 + 其上下游（调用方 / 被调用方 / 导入方）—— 字段名 / 参数 / 返回值 / 状态机 / 门控 / 异常路径是否连贯，import 是否还能跑
+3. **风险线**：本次改过的代码 + 受其牵连的相关代码（调用方 / 被调用方 / 共享状态 / 共享数据流）—— 边界条件、空值 / None、异常路径、并发、重试 / 回滚、错误处理是否藏 bug；新行为是否引入数据丢失 / 安全口子 / 性能回退；状态机 / 门控 / 不变量是否有漏覆盖分支。**与实现线区分**：实现线问"还连得上吗"（签名 / import 一致性），风险线问"做的事对吗"（语义正确性 + 失败模式）
+4. **结构线**：README / 目录结构 / 已提交样例产物 / artifact 目录 是否与本次变化对齐；改了文件名 / 目录结构 → 追查所有引用点
+
+**Findings 处理**（**重要**：本步发现的问题不要直接写进 `docs/todo_list.md`）：
+
+- **一行能修的小问题**（错别字、漏占位符、漏一个 import、明显笔误、悬挂引用一处）→ **发现即修**，不留尾
+- **大问题 / 跨范围 / 需要重新讨论 / 不在本次 intent 范围内的发现** → **不自己写进 `docs/todo_list.md`**；在对话里列一段「**建议登记到 todo_list**」清单，每条带：文件 + 行号、问题摘要、建议归到哪个分段。等用户拍板后由 `/todo-add` 或下一轮 `/go` 落条目——避免本次 intent 之外的发现污染 todo_list 历史
 
 > **进入本步之前，自己先重读 Step 2 创建的 PRE log**——经过前几步的编辑上下文，已经离"原始 intent"有距离；以 PRE 的"结论与决策 / 计划动作清单 / 验证标准"重新校准，再开始扫描。
 >
 > **派出的每个 sub agent 也必须先重读同一份 PRE log**：把 `LOG:` 路径塞进它的 prompt，并**明示要求它开工前先读完该 log 的 PRE 段**再做事。sub agent 是独立 context，不强制它读 PRE 就只会按 prompt 里的 brief 空转，容易脱离本次 intent。
 
-## Step 8: POST log 更新（收尾前必填）
+## Step 8: POST log 收尾
 更新 **Step 2 创建的同一份 log**，追加 POST 段：
 
 ```markdown
