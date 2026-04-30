@@ -61,8 +61,9 @@ Resume command → `handoff.md` §Current Work Continuation.
 - Content language = work language; `ai_context/` stays English
 - Real user packages stay local
 - No novels / databases / indexes / large artifacts in git
-- `works/*/analysis/`: only `world_overview`, `stage_plan`, `candidate_characters`, `consistency_report` tracked; `progress/`, `chapter_summaries/`, `scene_splits/`, `evidence/*` local
-- `works/*/world/`, `works/*/characters/`, `works/*/indexes/` tracked; `works/*/retrieval/` local
+- The following `works/*` tracking rules apply only to `extraction/{work_id}` and `library` branches; `main` is framework-only and contains no `works/{work_id}/` artefacts (only `works/README.md`):
+  - `works/*/analysis/`: only `world_overview`, `stage_plan`, `candidate_characters`, `consistency_report` tracked; `progress/`, `chapter_summaries/`, `scene_splits/`, `evidence/*` local
+  - `works/*/world/`, `works/*/characters/`, `works/*/indexes/` tracked; `works/*/retrieval/` local
 - `logs/change_logs/` + `logs/review_reports/` write-mostly — do not proactively read
 - No per-stage report files; progress updated in-place
 - Stages split by natural story boundaries (target 10, min 5, max 15)

@@ -13,18 +13,18 @@
 | `user/` | 用户根画像、绑定、长期档案、关系核心、钉选记忆条目 | `user_profile`、`role_binding`、`long_term_profile`、`relationship_core`、`pinned_memory_entry` |
 | `runtime/` | Context / Session / 请求载荷 / 场景归档条目 | `context_manifest`、`context_character_state`、`session_manifest`、`runtime_session_request`、`scene_archive_entry` |
 | `shared/` | 跨域**业务**共享（运行时 / 抽取产物中跨子域复用的数据片段，独立 schema 文件） | `source_note` |
-| `_shared/` | （**当前为空，仅保留作为 cross-domain 内部 `$ref` 片段占位**）跨域 schema-internal 共享片段。改动这些片段意味着多个域的 schema 同步变化 | _(none)_ |
 
-**`_shared/` 与 `shared/` 的区分**——前导下划线代表"内部基础设施"语义：
-
-- `_shared/` = **跨域** schema 文件内部通过 `$ref` 引用的子片段（character / world / runtime 多个域同时使用），本身不直接对应任何运行时 / 抽取产物 JSON 文件；改动意味着多域 bound / 结构同步变化。当前为空——之前放过 `targets_cap`，但它只被 character 域内部的 `target_baseline` + `stage_snapshot` 共享，按"域内独享 → 放对应域目录"的约定回滚到 `schemas/character/`。
-- `shared/` = 业务层 cross-cutting 数据格式（如 `source_note` 在抽取 / repair / 审计多处复用），每个文件**独立对应一种数据载体**。
-
-加载侧通过 `automation/persona_extraction/schema_loader.py` 在加载时 inline 化 `$ref`（包括 `./<file>.schema.json`、sibling `<file>.schema.json`、`../<dir>/<file>.schema.json` 三种相对形式），让 Draft7 / Draft202012 任一 validator 都能直接吃自包含 schema。
+`shared/` 用于业务层 cross-cutting 数据格式（如 `source_note` 在抽取 /
+repair / 审计多处复用），每个文件**独立对应一种数据载体**。加载侧通过
+`automation/persona_extraction/schema_loader.py` 在加载时 inline 化
+`$ref`（包括 `./<file>.schema.json`、sibling `<file>.schema.json`、
+`../<dir>/<file>.schema.json` 三种相对形式），让 Draft7 / Draft202012
+任一 validator 都能直接吃自包含 schema。
 
 新增 schema 文件归类：
-- 被 `$ref` 引用的**单域内**共享片段 → 放该域目录（如 `schemas/character/targets_cap.schema.json`）
-- 被 `$ref` 引用的**跨域**共享片段 → 放 `_shared/`
+- 被 `$ref` 引用的共享片段 → 放该片段所服务的域目录（如
+  `schemas/character/targets_cap.schema.json` 被 character 域内的
+  `target_baseline` + `stage_snapshot` 共享，故置于 `schemas/character/`）
 - 独立的运行时 / 抽取产物 schema → 放对应域目录或 `shared/`
 
 各 schema 的 `$id` 统一为 `offpage/<subdir>/<name>.schema.json`；功能说明与字段索引见

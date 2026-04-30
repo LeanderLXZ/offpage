@@ -1,12 +1,11 @@
 """Schema loader with cross-file ``$ref`` inlining.
 
 Schemas under ``schemas/`` may use cross-file ``$ref`` to share common
-fragments. For domain-internal sharing the fragment lives in that
-domain's directory (e.g. ``schemas/character/targets_cap.schema.json``
-carries the single-source ``maxItems`` for target arrays referenced by
+fragments. The fragment lives in the directory of the domain that uses
+it (e.g. ``schemas/character/targets_cap.schema.json`` carries the
+single-source ``maxItems`` for target arrays referenced by
 ``target_baseline.targets`` and stage_snapshot's three target
-structures, all of which live in ``schemas/character/``); for
-cross-domain sharing the fragment lives in ``schemas/_shared/``.
+structures, all of which live in ``schemas/character/``).
 
 Both the orchestrator's repair_agent file-entry loader and validator's
 ``_validate_schema`` need ``$ref``-resolved schema dicts. ``referencing``
