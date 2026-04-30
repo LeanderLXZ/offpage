@@ -213,3 +213,23 @@ H5 无需修复，M4 不动。
 ## Completed
 - **Status**: DONE
 - **Finished**: 2026-04-30 11:30:47 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：13/13 项计划 + 11/11 项验证（全部 ✅）
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=1 / Low=1
+- Open Questions: 0 条
+- 核心发现：commit_stage scope guard 不识别中文路径（与本项目 work_id 中文化直接相关）；`_classify_rate_limit` 扫 stdout 存在低概率误报。
+- sub-agent 报的 Phase 3 extraction lane RateLimitHardStop 漏防是 false positive（无 enclosing except Exception，hard stop 自然透传）。
+
+## 复查时状态
+- **Reviewed**: 2026-04-30 11:50:00 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全过，轨 2 1 条 Medium → PARTIAL（不是 PASS）
+- **Conversation ref**: 同会话内 /post-check 输出
