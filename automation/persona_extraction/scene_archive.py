@@ -35,7 +35,12 @@ from .llm_backend import LLMBackend, run_with_retry
 from .json_repair import programmatic_repair
 from .process_guard import PidLock
 from .prompt_builder import build_scene_split_prompt
-from .rate_limit import RateLimitController, get_active as get_active_rl, set_active as set_active_rl
+from .rate_limit import (
+    RateLimitController,
+    RateLimitHardStop,
+    get_active as get_active_rl,
+    set_active as set_active_rl,
+)
 
 
 @lru_cache(maxsize=1)
@@ -910,6 +915,10 @@ def _run_parallel(
                 chapter_id = futures.pop(future)
                 try:
                     cid, success, error_msg = future.result()
+                except RateLimitHardStop:
+                    # Propagate hard stop to the main thread → CLI exit 2.
+                    # Per docs/requirements.md §11.13.
+                    raise
                 except Exception as exc:
                     cid = chapter_id
                     success = False

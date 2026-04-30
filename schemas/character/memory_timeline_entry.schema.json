@@ -12,7 +12,8 @@
     "location",
     "event_description",
     "digest_summary",
-    "subjective_experience"
+    "subjective_experience",
+    "memory_importance"
   ],
   "properties": {
     "memory_id": {

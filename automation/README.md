@@ -294,7 +294,7 @@ Phase 3 的文件校验和修复由独立的 `repair_agent` 模块负责。
 | L0 | json_syntax | 0 token | 文件存在、UTF-8、JSON 解析、非空 |
 | L1 | schema | 0 token | jsonschema 校验 |
 | L2 | structural | 0 token | 业务规则（ID 格式、样本数、长度、一致性） |
-| L3 | semantic | LLM | 事实准确性、逻辑一致性、跨阶段连续性 |
+| L3 | semantic | LLM | 事实准确性、逻辑一致性、跨阶段连续性。**LLM 调用失败 / 空响应 / 不可解析时不再视为 pass**——`SemanticReviewLLMUnavailable` 转成 blocking `semantic_unavailable`/`semantic_unparseable` issue，强制走修复路径而不是放行 |
 
 **四层修复器**（T0–T3，逐层升级）：
 
@@ -395,8 +395,11 @@ retry 通路接住，不引入新模块：
   校验 schema + required 字段非空，阻断不合格的 baseline 进入 Phase 3
 - **磁盘对账自愈**：每次启动加载 progress 后自动调用 `reconcile_with_disk()`
   对账（Phase 0/3/4 全覆盖）。规则：(1) 终态但产物缺失 → 回退 PENDING；
-  (2) PENDING 但磁盘有产物 → 清掉产物（视为不完整的半成品）；
-  (3) 任意中间态 → 清产物 + 回退。Phase 3 额外用 `git cat-file -e` 校验
+  (2) Phase 0 终态但产物 partial / corrupt / schema-failing → 清产物 +
+  回退 PENDING（与 skip 路径和 Phase-1 gate 共用同一份 schema-gated 完整性
+  判据 `_chunk_passes_full_check`，确保半成品不能从任何一道关漏过）；
+  (3) PENDING 但磁盘有产物 → 清掉产物（视为不完整的半成品）；
+  (4) 任意中间态 → 清产物 + 回退。Phase 3 额外用 `git cat-file -e` 校验
   `committed_sha` 是否仍可达，reset/rebase 丢掉的 commit 视同产物缺失
 - **Phase 3 progress 自愈**：若 Phase 1.5 已完成但 `phase3_stages.json`
   缺失或损坏，从 `stage_plan.json` 重建（全部 stage 标 pending），避免

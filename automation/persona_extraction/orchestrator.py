@@ -108,6 +108,7 @@ def _candidate_characters_validator() -> _jsonschema.Draft202012Validator:
 
 from .rate_limit import (
     RateLimitController,
+    RateLimitHardStop,
     get_active as get_active_rl,
     set_active as set_active_rl,
 )
@@ -122,6 +123,7 @@ from ..repair_agent import (
     run as run_repair,
     validate_only as repair_validate_only,
 )
+from ..repair_agent.checkers.semantic import SemanticReviewLLMUnavailable
 from ..repair_agent.recorder import RepairRecorder
 
 logger = logging.getLogger(__name__)
@@ -404,6 +406,32 @@ class ExtractionOrchestrator:
     # Phase 0: Chapter summarization (chunk-based)
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _chunk_passes_full_check(
+        output_path: Path, expected: int,
+    ) -> tuple[bool, str]:
+        """Verify chunk file is structurally complete: exists + valid JSON
+        + schema-passing + ``len(summaries) == expected``.
+
+        Single source of truth for "chunk done"; called from skip path,
+        final gate, and reconcile_with_disk so a partial / stale file
+        cannot pass any one of them.
+        """
+        if not output_path.exists():
+            return False, "missing"
+        data = _load_json(output_path)
+        if data is None:
+            return False, "json parse failed"
+        errs = list(_chunk_validator().iter_errors(data))
+        if errs:
+            first = errs[0]
+            err_path = "/".join(str(p) for p in first.absolute_path) or "<root>"
+            return False, f"schema fail @ {err_path}: {first.message[:80]}"
+        count = len(data.get("summaries", []))
+        if count < expected:
+            return False, f"partial {count}/{expected}"
+        return True, ""
+
     def _summarize_chunk(
         self,
         idx: int,
@@ -491,7 +519,20 @@ class ExtractionOrchestrator:
         count = len(data.get("summaries", [])) if data else 0
         expected = end - start + 1
         if count < expected:
-            return idx, True, f"{count}/{expected} summaries (partial)"
+            output_path.unlink(missing_ok=True)
+            if not _is_l3_retry:
+                logger.info("L3 full re-run for chunk_%03d (partial: %d/%d)",
+                            idx, count, expected)
+                return self._summarize_chunk(
+                    idx, total_chunks, start, end, summaries_dir,
+                    _is_l3_retry=True,
+                    _prior_error=(f"章节摘要不完整（{count}/{expected}）。"
+                                  f"必须为 chapter {start:04d}-{end:04d} 的"
+                                  f"每一章都生成一条 summaries[] 条目，"
+                                  f"不得跳过任何章节。"),
+                )
+            return idx, False, (f"Partial chunk (L3 also failed): "
+                                f"{count}/{expected} summaries")
 
         return idx, True, ""
 
@@ -714,40 +755,55 @@ class ExtractionOrchestrator:
         print(f"  Chunk size: {self.chunk_size}")
         print(f"  Total chunks: {total_chunks}")
 
-        # Filter out already-completed chunks
+        # Filter out already-completed chunks. Skip judgement is
+        # *schema-gated*: file existence alone is not enough — partial /
+        # stale / corrupt files must re-run, otherwise Phase 1 will fan
+        # out on a missing-chapter foundation.
         pending: list[tuple[int, int, int]] = []
         for idx, start, end in chunks:
             chunk_id = f"chunk_{idx:03d}"
             entry = phase0.chunks.get(chunk_id)
             output_path = summaries_dir / f"{chunk_id}.json"
+            expected = end - start + 1
 
-            # Check progress + file existence
-            if entry and entry.state == "done" and output_path.exists():
-                print(f"  [{idx}/{total_chunks}] {chunk_id} "
-                      f"({start:04d}-{end:04d}) — already done, skipping")
-                continue
+            ok, why = self._chunk_passes_full_check(output_path, expected)
 
-            if output_path.exists():
-                existing = _load_json(output_path)
-                if existing is None:
-                    ok, desc = try_repair_json_file(
-                        output_path,
-                        backend=self.backend,
-                        expected_key="summaries",
-                    )
+            if not ok and output_path.exists() and "json parse" in why:
+                # L1+L2 JSON repair attempt; re-check after repair
+                repaired, desc = try_repair_json_file(
+                    output_path,
+                    backend=self.backend,
+                    expected_key="summaries",
+                )
+                if repaired:
+                    ok, why = self._chunk_passes_full_check(
+                        output_path, expected)
                     if ok:
-                        existing = _load_json(output_path)
                         print(f"  [{idx}/{total_chunks}] {chunk_id} "
-                              f"({start:04d}-{end:04d}) — repaired ({desc}), "
-                              f"skipping")
-                if existing and existing.get("summaries"):
-                    # File exists but progress not marked — fix it
+                              f"({start:04d}-{end:04d}) — repaired "
+                              f"({desc}), skipping")
+
+            if ok:
+                if not entry or entry.state != "done":
                     if entry:
                         entry.state = "done"
-                        phase0.save(self.project_root)
+                    phase0.save(self.project_root)
+                if entry and entry.state == "done":
                     print(f"  [{idx}/{total_chunks}] {chunk_id} "
-                          f"({start:04d}-{end:04d}) — already done, skipping")
-                    continue
+                          f"({start:04d}-{end:04d}) — already done, "
+                          f"skipping")
+                continue
+
+            # Re-extract: drop any partial / unrepairable file and reset
+            # progress to pending so worker pool re-runs it cleanly.
+            if output_path.exists():
+                output_path.unlink(missing_ok=True)
+                if entry:
+                    entry.state = "pending"
+                    entry.error_message = f"reset by gate: {why}"
+                    phase0.save(self.project_root)
+                print(f"  [{idx}/{total_chunks}] {chunk_id} "
+                      f"({start:04d}-{end:04d}) — re-extract ({why})")
             pending.append((idx, start, end))
 
         if not pending:
@@ -785,6 +841,11 @@ class ExtractionOrchestrator:
                 chunk_id = f"chunk_{idx:03d}"
                 try:
                     chunk_idx, success, msg = future.result()
+                except RateLimitHardStop:
+                    # Hard stop must propagate to the main thread (and
+                    # then to CLI) per docs/requirements.md §11.13;
+                    # never demote it to a per-chunk failure.
+                    raise
                 except Exception as exc:
                     chunk_idx, success, msg = idx, False, str(exc)
 
@@ -819,19 +880,28 @@ class ExtractionOrchestrator:
         if completed > 0:
             print(f"  Avg: {_fmt_duration(elapsed / completed)}/chunk")
 
-        # Verify all chunks completed — gate for Phase 1
-        all_done = sum(1 for i in range(1, total_chunks + 1)
-                       if (summaries_dir / f"chunk_{i:03d}.json").exists())
+        # Verify all chunks completed — gate for Phase 1. Schema-gated:
+        # file existence alone is not enough; the file must parse, pass
+        # schema, and cover every chapter in its range.
+        gate_failures: list[str] = []
+        for idx, start, end in chunks:
+            output_path = summaries_dir / f"chunk_{idx:03d}.json"
+            expected = end - start + 1
+            ok, why = self._chunk_passes_full_check(output_path, expected)
+            if not ok:
+                gate_failures.append(f"chunk_{idx:03d} ({why})")
 
-        if all_done < total_chunks:
-            missing = [f"chunk_{i:03d}" for i in range(1, total_chunks + 1)
-                       if not (summaries_dir / f"chunk_{i:03d}.json").exists()]
-            print(f"\n[ERROR] Summarization: {all_done}/{total_chunks} chunks")
-            print(f"  Missing: {missing}")
-            print("  Re-run to fill gaps (completed chunks will be skipped).")
+        if gate_failures:
+            print(f"\n[ERROR] Summarization gate failed: "
+                  f"{len(gate_failures)}/{total_chunks} chunks incomplete")
+            for f in gate_failures[:10]:
+                print(f"  - {f}")
+            if len(gate_failures) > 10:
+                print(f"  ... and {len(gate_failures) - 10} more")
+            print("  Re-run to fill gaps (passing chunks will be skipped).")
             sys.exit(1)
 
-        print(f"\n[OK] Summarization: {all_done}/{total_chunks} chunks")
+        print(f"\n[OK] Summarization: {total_chunks}/{total_chunks} chunks")
 
         # Mark pipeline phase_0 done
         if self.pipeline:
@@ -893,17 +963,21 @@ class ExtractionOrchestrator:
                 print("  [WARN] World overview not found.")
 
             # Phase 1 schema gate (schemas/analysis/{world_overview,stage_plan,
-            # candidate_characters}.schema.json). Schema fails feed
-            # correction_feedback together with stage limit violations and
-            # share the existing retry budget.
+            # candidate_characters}.schema.json). Schema fails AND missing
+            # files both feed correction_feedback together with stage
+            # limit violations, sharing the existing retry budget. A
+            # missing trio file is fatal — Phase 2/3/4 cannot run on a
+            # partial trio.
             schema_failures: list[tuple[str, list[Any]]] = []
+            missing_files: list[str] = []
             for fname, data, validator in (
                 ("world_overview.json", world_overview, _world_overview_validator()),
                 ("stage_plan.json", stage_plan, _stage_plan_validator()),
                 ("candidate_characters.json", candidates, _candidate_characters_validator()),
             ):
                 if data is None:
-                    continue  # missing file is a separate failure path
+                    missing_files.append(fname)
+                    continue
                 errs = list(validator.iter_errors(data))
                 if errs:
                     schema_failures.append((fname, errs))
@@ -917,9 +991,14 @@ class ExtractionOrchestrator:
                     min_stage_size=STAGE_MIN,
                 )
 
-            if schema_failures or violating:
+            if schema_failures or violating or missing_files:
                 if attempt <= MAX_ANALYSIS_RETRIES:
                     feedback_lines: list[str] = []
+                    if missing_files:
+                        feedback_lines.append(
+                            "缺失输出文件（必须三件套齐全）：")
+                        for fname in missing_files:
+                            feedback_lines.append(f"- `{fname}` 未生成")
                     if schema_failures:
                         feedback_lines.append("Schema 校验失败：")
                         for fname, errs in schema_failures:
@@ -956,17 +1035,32 @@ class ExtractionOrchestrator:
                         if plan_path.exists():
                             plan_path.unlink()
                     print(f"  [RETRY] Will re-run Phase 1 to fix "
+                          f"{len(missing_files)} missing file(s) + "
                           f"{len(schema_failures)} schema fail(s) + "
                           f"{len(violating)} stage limit violation(s) "
                           f"(attempt {attempt + 1})...")
                 else:
                     print(f"  [FATAL] Phase 1 still failing after "
-                          f"{MAX_ANALYSIS_RETRIES} retries. Aborting.")
+                          f"{MAX_ANALYSIS_RETRIES} retries: "
+                          f"{len(missing_files)} missing, "
+                          f"{len(schema_failures)} schema-fail, "
+                          f"{len(violating)} stage-limit. Aborting.")
                     sys.exit(1)
-            elif stage_plan:
-                break  # all good
             else:
-                break  # no plan produced, let downstream handle
+                break  # trio complete, schema-clean, stage limits OK
+
+        # Final guard: defense in depth — `break` above is only reached
+        # when the trio is complete + schema-clean, but any future edit
+        # to that loop must not silently mark phase_1 done with a
+        # missing file. Re-load from disk and abort if anything is gone.
+        for fname in (
+            "stage_plan.json", "world_overview.json",
+            "candidate_characters.json",
+        ):
+            if not (inc_dir / fname).exists():
+                print(f"[FATAL] Phase 1 marked complete but `{fname}` "
+                      f"missing on disk. Aborting.")
+                sys.exit(1)
 
         # Mark pipeline phase_1 done
         if self.pipeline:
@@ -1260,6 +1354,7 @@ class ExtractionOrchestrator:
                         self.run_baseline_production(pipeline.target_characters)
                         sha = commit_stage(
                             self.project_root, "baseline",
+                            work_id=pipeline.work_id,
                             message="Phase 2 baseline (validation-triggered "
                                     "recovery)")
                         if sha:
@@ -1272,6 +1367,7 @@ class ExtractionOrchestrator:
                     self.run_baseline_production(pipeline.target_characters)
                     # Commit baseline so extraction starts with clean tree
                     sha = commit_stage(self.project_root, "baseline",
+                                       work_id=pipeline.work_id,
                                        message="Phase 2 baseline (recovery)")
                     if sha:
                         print(f"  [OK] Baseline committed as {sha}")
@@ -1755,7 +1851,12 @@ class ExtractionOrchestrator:
                     / pipeline.work_id / "chapters"),
             )
 
-            # LLM callable for semantic checker + T1/T2/T3 fixers
+            # LLM callable for semantic checker + T1/T2/T3 fixers.
+            # On backend failure (token limit, retry exhausted, etc.) we
+            # raise SemanticReviewLLMUnavailable so the L3 checker turns
+            # it into a blocking issue instead of a silent pass. Other
+            # call sites (T1/T2/T3 fixers) likewise see a hard error
+            # rather than an empty string.
             default_timeout = get_config().phase3.review_timeout_s
 
             def _llm_call(prompt: str, timeout: int | None = None) -> str:
@@ -1765,6 +1866,9 @@ class ExtractionOrchestrator:
                     timeout_seconds=timeout or default_timeout,
                     lane_name=f"repair[{stage.stage_id}]",
                 )
+                if not result.success:
+                    raise SemanticReviewLLMUnavailable(
+                        result.error or "LLM call failed")
                 return result.text
 
             importance_map = load_importance_map(
@@ -1830,6 +1934,10 @@ class ExtractionOrchestrator:
                     submitted = futures[fut]
                     try:
                         per_file_results.append(fut.result())
+                    except RateLimitHardStop:
+                        # Propagate hard stop to the main thread; CLI
+                        # exit-2 contract per docs/requirements.md §11.13.
+                        raise
                     except Exception as exc:  # noqa: BLE001
                         # Worker raised (e.g. context_retriever ERR,
                         # unreadable file). Don't abort the whole pool —
@@ -1926,7 +2034,9 @@ class ExtractionOrchestrator:
             # (empty diff or commit failure), treat the stage as FAILED and
             # preserve the progress file so the next resume can retry.
             # See requirements.md §11.4b "提交顺序契约".
-            sha = commit_stage(self.project_root, stage.stage_id)
+            sha = commit_stage(
+                self.project_root, stage.stage_id,
+                work_id=pipeline.work_id)
             tracker.record_step(ProgressTracker.STEP_COMMIT)
 
             if not sha:
@@ -2315,6 +2425,7 @@ class ExtractionOrchestrator:
 
             # Commit baseline output so Phase 3 starts with a clean tree
             sha = commit_stage(self.project_root, "baseline",
+                               work_id=pipeline.work_id,
                                message="Phase 0-2 baseline")
             if sha:
                 print(f"  [OK] Baseline committed as {sha}")

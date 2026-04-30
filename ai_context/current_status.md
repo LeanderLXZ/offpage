@@ -33,7 +33,7 @@ framework-level engineering progress only.
 - No simulation-engine service implementation
 - No terminal adapter implementation
 - No retrieval implementation (design finalized, awaiting extraction output)
-- World schemas partially informal (foundation, timeline, events, locations, maps, state snapshots — foundation skeleton in `automation/prompt_templates/baseline_production.md`)
+- World schemas partially formal: `foundation` schema exists at `schemas/world/foundation.schema.json` (permissive); timeline / events / locations / maps still need directly writable schemas
 - No final roleplay prompt produced
 
 ## Rules In Effect

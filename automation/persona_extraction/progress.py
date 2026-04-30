@@ -298,12 +298,25 @@ class Phase0Progress:
         """Reconcile in-memory states against on-disk chunk summaries.
 
         Rules:
-          - state == "done" but file missing       → revert to "pending"
-          - state != "done" but file exists        → delete partial file
-            (interrupted mid-write; re-extract)
+          - state == "done" but file missing                 → revert to "pending"
+          - state == "done" but file partial / corrupt /
+            schema-failing                                   → revert + purge
+          - state != "done" but file exists                  → purge stale
+            partial (interrupted mid-write; re-extract)
+
+        "Done" means the file parses as JSON, passes
+        ``chapter_summary_chunk`` schema, and contains a ``summaries``
+        array with one entry per expected chapter — same judgement used
+        by the skip path and Phase-1 gate, so a partial cannot survive
+        any one of them.
 
         Returns counts: {"reverted": N, "purged": M}.
         """
+        # Lazy import to avoid pulling jsonschema validators at module
+        # load time (and to avoid a circular import — orchestrator.py
+        # imports from this module).
+        from .orchestrator import ExtractionOrchestrator
+
         summaries_dir = (project_root / "works" / self.work_id
                          / "analysis" / "chapter_summaries")
         reverted = 0
@@ -312,15 +325,40 @@ class Phase0Progress:
             idx = int(entry.chunk_id.split("_")[-1])
             output_path = summaries_dir / f"chunk_{idx:03d}.json"
             on_disk = output_path.exists()
-            if entry.state == "done" and not on_disk:
-                entry.state = "pending"
-                entry.retry_count = 0
-                entry.error_message = ""
-                reverted += 1
-            elif entry.state != "done" and on_disk:
+            expected = self._expected_chapter_count(entry)
+            if entry.state == "done":
+                if not on_disk:
+                    entry.state = "pending"
+                    entry.retry_count = 0
+                    entry.error_message = ""
+                    reverted += 1
+                    continue
+                if expected is not None:
+                    ok, why = (
+                        ExtractionOrchestrator._chunk_passes_full_check(
+                            output_path, expected))
+                    if not ok:
+                        # Partial / stale / corrupt — purge file and
+                        # reset so re-run regenerates from scratch.
+                        output_path.unlink(missing_ok=True)
+                        entry.state = "pending"
+                        entry.retry_count = 0
+                        entry.error_message = f"reset by reconcile: {why}"
+                        reverted += 1
+                        purged += 1
+            elif on_disk:
                 output_path.unlink()
                 purged += 1
         return {"reverted": reverted, "purged": purged}
+
+    @staticmethod
+    def _expected_chapter_count(entry: "ChunkEntry") -> int | None:
+        """Parse ``chapters`` field ('NNNN-MMMM') → expected count."""
+        try:
+            lo, hi = entry.chapters.split("-")
+            return int(hi) - int(lo) + 1
+        except (ValueError, AttributeError):
+            return None
 
 
 # ---------------------------------------------------------------------------

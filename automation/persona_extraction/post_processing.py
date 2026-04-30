@@ -181,10 +181,15 @@ def _timeline_to_digest(entry: dict, stage_id: str) -> dict | None:
     if not memory_id:
         return None
 
+    # `memory_importance` is required by memory_timeline_entry schema.
+    # The L1 jsonschema gate fails the timeline file if any entry is
+    # missing it, so by this point the value must be present and
+    # within the 5-level enum — pulling it via [...] makes a missing
+    # value a hard KeyError rather than a silent demotion to "minor".
     digest: dict[str, Any] = {
         "memory_id": memory_id,
         "summary": entry.get("digest_summary", ""),
-        "importance": entry.get("memory_importance", "minor"),
+        "importance": entry["memory_importance"],
         "time": entry.get("time", ""),
         "location": entry.get("location", ""),
     }

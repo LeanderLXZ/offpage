@@ -1041,6 +1041,17 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
   **单一字符串**，一句到一段话概括核心变化轨迹。第一个阶段可省略
   或仅写起点
 
+**字段必填强度（schema vs 内容契约的分层）**：
+schema 顶层 `required` 仅包含**结构性骨架**——`voice_state` /
+`behavior_state` / `boundary_state` / `failure_modes` / `relationships` /
+`stage_events` / `character_arc` 等运行时必读字段；
+`emotional_baseline` / `current_status` / `misunderstandings` /
+`concealments` / `stage_delta` 是**情境性维度**，schema 不强制顶层
+`required`——本阶段原文里没有对应内容时允许字段省略或为空数组 / 空对象。
+prompt template + Phase 3.5 一致性审计（§11.5）继续负责把"应有变化但未
+记录"判出来；schema 只硬卡结构骨架，不硬卡情境维度，避免 LLM 为了过 gate
+凑出虚假内容。
+
 #### 字段条数上限汇总
 
 所有 `maxItems` / `maxLength` / `minLength` 由 schema 硬门控，**具体数
@@ -1506,7 +1517,8 @@ stage_catalog 仅用于 bootstrap 阶段选择，**运行时不加载**：
 | snapshot `stage_id` | `stage_id` | 直接复制（`S###`，既是主键也是排序键） |
 | snapshot `stage_title` | `stage_title` | 直接复制（短标题） |
 | snapshot `snapshot_summary` | `summary` | 直接复制（世界事件概要，非主角剧情复述） |
-| 计算 | `snapshot_path` | `canon/stage_snapshots/{stage_id}.json` |
+| 计算（character） | `snapshot_path` | `canon/stage_snapshots/{stage_id}.json` |
+| 计算（world） | `snapshot_path` | `world/stage_snapshots/{stage_id}.json` |
 | snapshot `timeline_anchor` | `timeline_anchor` | 直接复制 |
 | stage `chapters` | `chapter_scope` | 解析章节范围 |
 

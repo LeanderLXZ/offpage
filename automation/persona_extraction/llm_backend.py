@@ -37,6 +37,25 @@ def _fmt_elapsed(seconds: float) -> str:
     return f"{h}h{m:02d}m{s:02d}s"
 
 
+# Keywords that indicate the underlying request hit a rate-limit / quota
+# surface (case-insensitive). Matches the contract in
+# docs/requirements.md §11.13.4 — keep this list in sync with that table.
+_RATE_LIMIT_SIGNALS = (
+    "rate limit",
+    "rate_limit",
+    "too many requests",
+    "429",
+)
+
+
+def _classify_rate_limit(text: str) -> bool:
+    """Return True iff *text* looks like a rate-limit / quota error."""
+    if not text:
+        return False
+    lower = text.lower()
+    return any(sig in lower for sig in _RATE_LIMIT_SIGNALS)
+
+
 _HB_RING_MAXLEN = 20
 
 
@@ -358,9 +377,11 @@ class ClaudeBackend(LLMBackend):
                     subtype=parsed.get("subtype"),
                     num_turns=parsed.get("num_turns"),
                     total_cost_usd=parsed.get("total_cost_usd"))
-            # Detect rate-limit (retryable)
-            rate_limit_signals = ["rate limit", "rate_limit", "too many requests"]
-            if any(sig in lower for sig in rate_limit_signals):
+            # Detect rate-limit (retryable). Signals (incl. HTTP 429) are
+            # centralised in `_classify_rate_limit` so requirements.md
+            # §11.13.4 is the single source of truth across backends.
+            if (_classify_rate_limit(stderr_s)
+                    or _classify_rate_limit(raw_stdout_capped or "")):
                 return LLMResult(
                     success=False, text="",
                     error=f"rate_limit: {stderr_s}",
