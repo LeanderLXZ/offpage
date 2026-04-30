@@ -12,31 +12,20 @@ Shorter is better than longer; push detail into the linked source rather than gr
 
 ## Highest Priority
 
-1. **Continue automated extraction for the onboarded work package.**
-   - Phase 0/1/1.5/2/4 complete; Phase 3 in progress — S001 (sha
-     `991c09f`) + S002 (sha `7639c8b`) committed, S003 in ERROR
-     (`char_support` lane — `error_max_turns`), S004–S049 pending.
-     Phase 3.5 pending — blocked on all stages `COMMITTED`.
-   - Resume command → `handoff.md` §Current Work Continuation.
-   - `--resume` auto-resets ERROR → PENDING; committed stages + lane
-     products preserved.
-   - Preflight tolerates dirt **outside** the work scope (editor state,
-     other local changes); scope-internal dirt still blocks.
-
-2. **Refine schemas into directly writable instance formats.**
+1. **Refine schemas into directly writable instance formats.**
    - World package: timeline, events, locations, maps — foundation
      schema still implicit in `automation/prompt_templates/baseline_production.md`.
 
 ## Medium Priority
 
-3. Write first-pass code stubs from `simulation/contracts/` and `simulation/flows/`.
-4. Define evidence-record format for traceable canon support.
-5. Define request / response formats for terminal adapters.
-6. Define user-context and session indexes for on-demand transcript recall.
+2. Write first-pass code stubs from `simulation/contracts/` and `simulation/flows/`.
+3. Define evidence-record format for traceable canon support.
+4. Define request / response formats for terminal adapters.
+5. Define user-context and session indexes for on-demand transcript recall.
 
 ## Later
 
-7. Implement the unified character-service interface.
-8. Support richer stage slicing (including relationship-stage slicing).
-9. Add automatic evaluation for roleplay consistency.
-10. Add more complete crawling and import support.
+6. Implement the unified character-service interface.
+7. Support richer stage slicing (including relationship-stage slicing).
+8. Add automatic evaluation for roleplay consistency.
+9. Add more complete crawling and import support.
