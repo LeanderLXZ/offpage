@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from .checkers import CheckerPipeline
 from .checkers.json_syntax import JsonSyntaxChecker
@@ -760,11 +760,11 @@ def _run_fixer_with_escalation(
                     set(result.resolved_fingerprints)
                     | set(result.source_inherent_candidates.keys())
                 )
-                t3_files = {
-                    fingerprint_to_file.get(fp)
-                    for fp in t3_touched_fps
-                    if fingerprint_to_file.get(fp)
-                }
+                t3_files: set[str] = set()
+                for fp in t3_touched_fps:
+                    f_path = fingerprint_to_file.get(fp)
+                    if f_path:
+                        t3_files.add(f_path)
                 for f_path in t3_files:
                     tracker.record_tier_use_on_file(f_path, 3)
                     modified_files.add(f_path)
@@ -775,9 +775,10 @@ def _run_fixer_with_escalation(
             ]
 
             for issue in attempted:
-                status = ("resolved"
-                          if issue.fingerprint in result.resolved_fingerprints
-                          else "persisting")
+                status: Literal["resolved", "persisting"] = (
+                    "resolved"
+                    if issue.fingerprint in result.resolved_fingerprints
+                    else "persisting")
                 tracker.record_attempt(RepairAttempt(
                     issue_fingerprint=issue.fingerprint,
                     tier=tier,

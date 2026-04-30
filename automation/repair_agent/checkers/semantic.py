@@ -100,6 +100,10 @@ class SemanticChecker(BaseChecker):
 
     def _review_file(self, file_path: str, content: Any,
                      focus_paths: list[str] | None = None) -> list[Issue]:
+        # Callers (`check` / `check_scoped`) guard with `_llm_call is None`
+        # before invoking this method; assert reflects that contract for
+        # the type checker, since narrowing doesn't cross method boundaries.
+        assert self._llm_call is not None
         prompt_parts = [SEMANTIC_REVIEW_SYSTEM, "\n--- FILE ---\n"]
 
         content_str = json.dumps(content, ensure_ascii=False, indent=2)

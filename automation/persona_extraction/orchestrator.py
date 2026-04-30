@@ -21,7 +21,7 @@ import os
 import signal
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +58,6 @@ from .progress import (
     Phase3Progress,
     PipelineProgress,
     migrate_legacy_progress,
-    PHASE_DONE,
     PHASE_RUNNING,
 )
 from .prompt_builder import (
@@ -109,7 +108,6 @@ def _candidate_characters_validator() -> _jsonschema.Draft202012Validator:
 from .rate_limit import (
     RateLimitController,
     RateLimitHardStop,
-    get_active as get_active_rl,
     set_active as set_active_rl,
 )
 from .scene_archive import run_scene_archive
@@ -121,7 +119,6 @@ from ..repair_agent import (
     RetryPolicy,
     SourceContext,
     run as run_repair,
-    validate_only as repair_validate_only,
 )
 from ..repair_agent.checkers.semantic import SemanticReviewLLMUnavailable
 from ..repair_agent.recorder import RepairRecorder
@@ -281,7 +278,7 @@ class ProgressTracker:
         """Print final summary."""
         elapsed = time.monotonic() - self.loop_start
         print(f"\n{'=' * 60}")
-        print(f"  Extraction Summary")
+        print("  Extraction Summary")
         print(f"{'=' * 60}")
         print(f"  Completed this run: {self.completed_this_run}")
         print(f"  Total completed: {self.completed}/{self.total}")
@@ -389,9 +386,9 @@ class ExtractionOrchestrator:
             pid = existing.get("pid", "?")
             started = existing.get("started", "?")
             mem = fmt_memory(get_rss_mb(pid)) if isinstance(pid, int) else "?"
-            print(f"[ERROR] Another extraction is already running:")
+            print("[ERROR] Another extraction is already running:")
             print(f"  PID: {pid}  Started: {started}  Mem: {mem}")
-            print(f"  If the process is dead, remove the lock:")
+            print("  If the process is dead, remove the lock:")
             print(f"  rm \"{self._lock.lock_path}\"")
             return False
         if not self._lock.acquire():
@@ -840,14 +837,14 @@ class ExtractionOrchestrator:
                 idx, start, end = futures[future]
                 chunk_id = f"chunk_{idx:03d}"
                 try:
-                    chunk_idx, success, msg = future.result()
+                    _, success, msg = future.result()
                 except RateLimitHardStop:
                     # Hard stop must propagate to the main thread (and
                     # then to CLI) per docs/requirements.md §11.13;
                     # never demote it to a per-chunk failure.
                     raise
                 except Exception as exc:
-                    chunk_idx, success, msg = idx, False, str(exc)
+                    success, msg = False, str(exc)
 
                 entry = phase0.chunks.get(chunk_id)
                 if success:
@@ -1255,7 +1252,7 @@ class ExtractionOrchestrator:
 
         run_label = (f"first {preset_end_stage}" if preset_end_stage
                      else "all")
-        print(f"\n[OK] Configuration saved.")
+        print("\n[OK] Configuration saved.")
         print(f"     Characters: {selected}")
         print(f"     Stages: {len(phase3.stages)} total "
               f"(this run: {run_label})")
@@ -1396,7 +1393,7 @@ class ExtractionOrchestrator:
             tracker = ProgressTracker(len(phase3.stages), completed_before)
 
             print(f"\n{'=' * 60}")
-            print(f"  Phase 3: Extraction Loop")
+            print("  Phase 3: Extraction Loop")
             print(f"{'=' * 60}")
             print(f"  Work: {pipeline.work_id}")
             print(f"  Characters: {pipeline.target_characters}")
@@ -1927,11 +1924,11 @@ class ExtractionOrchestrator:
             per_file_results: list[tuple[RepairFileEntry, RepairResult]] = []
             with ThreadPoolExecutor(
                     max_workers=repair_concurrency) as pool:
-                futures = {
+                repair_futures: dict[Future, RepairFileEntry] = {
                     pool.submit(_repair_one, f): f for f in repair_files
                 }
-                for fut in as_completed(futures):
-                    submitted = futures[fut]
+                for fut in as_completed(repair_futures):
+                    submitted = repair_futures[fut]
                     try:
                         per_file_results.append(fut.result())
                     except RateLimitHardStop:
@@ -2132,6 +2129,7 @@ class ExtractionOrchestrator:
         try:
             sha = commit_stage(
                 self.project_root, "phase3.5",
+                work_id=self.pipeline.work_id,
                 message=message, files=[rel])
         except Exception as exc:  # noqa: BLE001
             logger.warning(
@@ -2183,7 +2181,7 @@ class ExtractionOrchestrator:
 
         print(f"\n  All stages committed on branch '{branch}'.")
         print(f"  Squash-merge to '{target}' will consolidate all extraction")
-        print(f"  commits into a single clean commit.")
+        print("  commits into a single clean commit.")
 
         if get_config().git.auto_squash_merge:
             print("  [auto] [git].auto_squash_merge = true; merging.")
@@ -2244,7 +2242,7 @@ class ExtractionOrchestrator:
         if not ok:
             print(f"  [WARN] git gc reported error: {err}")
         else:
-            print(f"  [OK] Reclaimed unreachable objects via git gc.")
+            print("  [OK] Reclaimed unreachable objects via git gc.")
 
     # ------------------------------------------------------------------
     # Stage expansion (like Phase 4: always derive targets from plan)
@@ -2322,6 +2320,8 @@ class ExtractionOrchestrator:
         preset_end_stage: int | None = None,
     ) -> None:
         """Run the complete pipeline: analysis → confirm → extract."""
+        pipeline: PipelineProgress | None
+        phase3: Phase3Progress | None
         # Check for legacy progress and migrate if needed
         legacy_result = migrate_legacy_progress(
             self.project_root, self.work_id)
@@ -2362,7 +2362,7 @@ class ExtractionOrchestrator:
                 print(f"[REBUILT] phase3_stages.json from stage_plan.json "
                       f"({len(phase3.stages)} stages, all pending).")
 
-        if phase3 is not None:
+        if pipeline is not None and phase3 is not None:
             rec = phase3.reconcile_with_disk(
                 self.project_root, pipeline.target_characters)
             if rec["reverted"] or rec["purged_files"]:

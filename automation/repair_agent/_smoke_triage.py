@@ -34,6 +34,7 @@ from .protocol import (
     RepairConfig,
     RetryPolicy,
     SourceContext,
+    SourceNote,
 )
 from .triage import Triager
 
@@ -337,8 +338,8 @@ def scenario_d_non_semantic_rejected() -> None:
     cfg = RepairConfig(triage_enabled=True, accept_cap_per_file=3)
     triager = Triager(llm_call=stub)
     notes_writer = NotesWriter(ctx.work_path)
-    accepted_notes = []
-    notes_per_file = {}
+    accepted_notes: list[SourceNote] = []
+    notes_per_file: dict[str, int] = {}
 
     remaining = _run_triage_round(
         triager=triager, notes_writer=notes_writer, config=cfg,

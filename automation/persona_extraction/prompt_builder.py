@@ -255,7 +255,9 @@ def build_world_extraction_prompt(
         "schemas_dir": str(project_root / "schemas"),
         "prev_world_snapshot": prev_world_snapshot,
         "files_to_read": "\n".join(f"- {f}" for f in files_to_read),
-        "is_first_stage": bool(stages) and stage.stage_id == stages[0].stage_id,
+        "is_first_stage": (
+            stages is not None and len(stages) > 0
+            and stage.stage_id == stages[0].stage_id),
         "reviewer_feedback": reviewer_feedback,
         "retry_note": (
             f"\n\n## 重试注意\n\n"
@@ -314,7 +316,9 @@ def build_char_snapshot_prompt(
         "schemas_dir": str(project_root / "schemas"),
         "prev_char_snapshot": prev_char_snapshot,
         "files_to_read": "\n".join(f"- {f}" for f in files_to_read),
-        "is_first_stage": bool(stages) and stage.stage_id == stages[0].stage_id,
+        "is_first_stage": (
+            stages is not None and len(stages) > 0
+            and stage.stage_id == stages[0].stage_id),
         "quality_requirements": quality_requirements,
         "reviewer_feedback": reviewer_feedback,
         "retry_note": (
@@ -362,7 +366,9 @@ def build_char_support_prompt(
         "work_dir": str(work_dir),
         "schemas_dir": str(project_root / "schemas"),
         "files_to_read": "\n".join(f"- {f}" for f in files_to_read),
-        "is_first_stage": bool(stages) and stage.stage_id == stages[0].stage_id,
+        "is_first_stage": (
+            stages is not None and len(stages) > 0
+            and stage.stage_id == stages[0].stage_id),
         "reviewer_feedback": reviewer_feedback,
         "retry_note": (
             f"\n\n## 重试注意\n\n"

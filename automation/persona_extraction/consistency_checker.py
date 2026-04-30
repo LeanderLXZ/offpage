@@ -160,21 +160,32 @@ def save_report(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _load_json(path: Path) -> dict | list | None:
-    """Read a JSON file read-only.
+def _load_json(path: Path) -> dict | None:
+    """Read a JSON file read-only, returning the object or None.
 
     Phase 3.5 must not mutate tracked artifacts as a side effect — any
     write here would leave uncommitted dirt that blocks ``checkout_main``
     (see requirements §11.10 "Phase 3.5 产物提交契约"). Parse errors are
     the repair agent's responsibility; here we just log and return None.
+
+    Every consumer in this module operates on object-shaped schemas
+    (``identity.json``, ``stage_snapshot.json``, ``target_baseline.json``
+    etc.); list-shaped or scalar files are returned as ``None`` so the
+    standard "missing / unreadable" branch handles them.
     """
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning("Failed to load %s: %s", path, exc)
         return None
+    if not isinstance(raw, dict):
+        logger.warning(
+            "Loaded %s but top-level is %s, expected object",
+            path, type(raw).__name__)
+        return None
+    return raw
 
 
 def _load_jsonl(path: Path) -> list[dict]:
@@ -548,7 +559,7 @@ def _check_stage_id_alignment(
         missing = expected - world_stages
         for sid in missing:
             issues.append(ConsistencyIssue(
-                "error", "stage_alignment", f"world/stage_catalog",
+                "error", "stage_alignment", "world/stage_catalog",
                 f"stage_id '{sid}' missing from world stage_catalog"))
 
     # World snapshots directory
@@ -558,7 +569,7 @@ def _check_stage_id_alignment(
         missing = expected - world_files
         for sid in missing:
             issues.append(ConsistencyIssue(
-                "error", "stage_alignment", f"world/stage_snapshots",
+                "error", "stage_alignment", "world/stage_snapshots",
                 f"stage_snapshot file missing for '{sid}'"))
 
     # Character catalogs and snapshots

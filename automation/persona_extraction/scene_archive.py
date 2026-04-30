@@ -21,7 +21,9 @@ import json
 import logging
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, FIRST_COMPLETED, wait
+from concurrent.futures import (
+    Future, ThreadPoolExecutor, FIRST_COMPLETED, wait,
+)
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -671,9 +673,9 @@ def run_scene_archive(
     if existing:
         pid = existing.get("pid", "?")
         started = existing.get("started", "?")
-        print(f"[ERROR] Another Phase 4 process is already running:")
+        print("[ERROR] Another Phase 4 process is already running:")
         print(f"  PID: {pid}  Started: {started}")
-        print(f"  If the process is dead, remove the lock:")
+        print("  If the process is dead, remove the lock:")
         print(f"  rm \"{lock.lock_path}\"")
         return False
     if not lock.acquire():
@@ -893,7 +895,7 @@ def _run_parallel(
         return next(pending_iter, None)
 
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
-        futures: dict = {}
+        futures: dict[Future, str] = {}
 
         # Seed initial stage
         for _ in range(concurrency):

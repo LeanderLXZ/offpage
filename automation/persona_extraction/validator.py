@@ -299,23 +299,43 @@ def validate_baseline(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _load_json(path: Path, *, auto_repair: bool = True) -> dict | list | None:
+def _load_json(path: Path, *, auto_repair: bool = True) -> dict | None:
+    """Load a JSON file expected to be an object.
+
+    Every caller in this validator targets schemas whose root is an
+    object; list-shaped or scalar JSON files are returned as ``None`` so
+    they hit the "Invalid JSON" error branch alongside genuine parse
+    failures. This keeps the error message uniform and lets the type
+    checker prove `.get(...)` is safe at every callsite.
+    """
+    raw: object
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         if auto_repair:
             ok, desc = try_repair_json_file(path)
             if ok:
                 logger.info("Auto-repaired %s (%s)", path.name, desc)
                 try:
-                    return json.loads(path.read_text(encoding="utf-8"))
+                    raw = json.loads(path.read_text(encoding="utf-8"))
                 except json.JSONDecodeError:
-                    pass
-        logger.warning("Cannot load %s (repair failed)", path)
-        return None
+                    logger.warning("Cannot load %s (repair failed)", path)
+                    return None
+            else:
+                logger.warning("Cannot load %s (repair failed)", path)
+                return None
+        else:
+            logger.warning("Cannot load %s (repair failed)", path)
+            return None
     except OSError as e:
         logger.warning("Cannot load %s: %s", path, e)
         return None
+    if not isinstance(raw, dict):
+        logger.warning(
+            "Loaded %s but top-level is %s, expected object",
+            path, type(raw).__name__)
+        return None
+    return raw
 
 
 def _validate_schema(data: dict, schema_path: Path,

@@ -19,8 +19,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
-from pathlib import Path
 from typing import Callable
 
 from .context_retriever import ContextRetriever
@@ -170,9 +168,10 @@ class Triager:
         # Verify quotes against chapter text
         accepted: list[TriageVerdict] = []
         for issue in issues:
-            v = verdicts.get(issue.fingerprint)
-            if v is None or not v.source_inherent:
+            v_or_none = verdicts.get(issue.fingerprint)
+            if v_or_none is None or not v_or_none.source_inherent:
                 continue
+            v = v_or_none
             if v.discrepancy_type not in DISCREPANCY_TYPES:
                 logger.warning(
                     "triage: %s rejected — bad discrepancy_type %r",
