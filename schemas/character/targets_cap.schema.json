@@ -2,6 +2,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/character/targets_cap.schema.json",
   "title": "Targets array cap (character-domain shared)",
-  "description": "全角色 target 数组容量上限的单源约束。本文件被 target_baseline.targets 与 stage_snapshot.{voice_state.target_voice_map, behavior_state.target_behavior_map, 顶层 relationships} 通过 $ref 共享继承——调整 maxItems 数值只改这一处，所有引用方自动同步（项目约定 #27b 的 schema 单源原则；character 域内部共享，故置于 schemas/character/ 而非 schemas/_shared/）。stage_snapshot 三结构的实际 keys 还受 phase 3 单 stage validate 层 cross-file 硬约束 set(三结构 keys) == set(target_baseline.targets[].target_character_id) 进一步收紧，越界走 file-level repair lifecycle。",
+  "description": "全角色 target 数组容量上限的单源约束。本文件被 target_baseline.targets 与 stage_snapshot.{voice_state.target_voice_map, behavior_state.target_behavior_map, 顶层 relationships} 通过 $ref 共享继承——调整 maxItems 数值只改这一处，所有引用方自动同步（项目约定 #27b 的 schema 单源原则；character 域内部共享，故置于 schemas/character/）。stage_snapshot 三结构的实际 keys 还受 phase 3 单 stage validate 层 cross-file 硬约束 set(三结构 keys) == set(target_baseline.targets[].target_character_id) 进一步收紧，越界走 file-level repair lifecycle。",
   "maxItems": 15
 }

@@ -11,9 +11,9 @@
 | 子目录 | 作用 | 文件数 |
 |--------|------|--------|
 | `schemas/analysis/` | Phase 0 / Phase 1 / Phase 4 LLM 产物（Phase 1 三件套入 git，其余不入运行时） | 5 |
-| `schemas/work/` | 作品入库、目录、阶段目录、per-work 加载配置 | 6 |
+| `schemas/work/` | 作品入库、目录、阶段目录、per-work 加载配置 | 5 |
 | `schemas/world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | 6 |
-| `schemas/character/` | 角色 baseline + 阶段快照 + 记忆 | 6 |
+| `schemas/character/` | 角色 baseline + 阶段快照 + 记忆（含 `target_baseline` + `targets_cap` 域内 `$ref` 片段） | 7 |
 | `schemas/user/` | 用户根画像、绑定、长期档案、关系核心、钉选记忆条目 | 5 |
 | `schemas/runtime/` | Context / Session / 请求载荷 / 场景归档条目 | 5 |
 | `schemas/shared/` | 跨域共享（extraction_notes 等） | 1 |
