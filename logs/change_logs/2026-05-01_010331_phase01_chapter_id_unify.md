@@ -256,3 +256,30 @@ dict key 是裸数字（与 `C####` lookup 100% miss）。立即跑 phase 0/1/3/
 
 - **Status**: DONE
 - **Finished**: 2026-05-01 01:13:20 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：8/8 项 PRE 计划全部落实 + 8/8 项 PRE 验证标准通过；但 PRE
+  验证标准本身覆盖不足（"4 形态多路径 grep" 只 grep 自己刚改的具体
+  变量名 `{ch:04d}` / `{chapters/{ch:04d}.txt`，未跑 conventions.md
+  checklist 推荐的通用 `\{:04d\}` 形态）→ 同 family 漏点未抓
+- Missed updates: 5 处（详见对话）
+
+### 轨 2 — 影响扩散
+- Findings: High=4 / Medium=2 / Low=1
+- Open Questions: 2 条（详见对话）
+
+## 复查时状态
+- **Reviewed**: 2026-05-01 01:24:42 EDT
+- **Status**: REVIEWED-FAIL
+  - FAIL = `automation/repair_agent/context_retriever.py` 的 chapter
+    文件加载 / chapter range 解析 / chapter summary 查找 全套仍按
+    bare-numeric 假定工作；`automation/persona_extraction/scene_archive.py
+    ::_collect_chapters` 与 `_build_chapter_to_stage_map` 为孪生
+    函数，phase01 只修了后者；`orchestrator.py:747` ChunkEntry chapters
+    字段写入仍是 bare-numeric "0001-0010"。立即跑 phase 0 / phase 4 /
+    repair_agent 任意一个会 broken（ValueError 或 silent 全 miss）
+- **Conversation ref**: 同会话内 /post-check 输出
