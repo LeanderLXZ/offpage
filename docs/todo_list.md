@@ -8,31 +8,31 @@
 
 ### 🟢 In Progress (3)
 
-| ID | Title | Start time | Status |
-|---|---|---|---|
-| `T-BASELINE-DEPRECATE` | 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载 | 2026-04-29 14:42 EDT | 代码完成、runtime 验证待跑 |
-| `T-PHASE2-TARGET-BASELINE` | phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点 | 2026-04-29 20:54 EDT | 代码完成、runtime 验证待跑（与 BASELINE-DEPRECATE 同形态，可同批跑） |
-| `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
+| ID | Title | Start time | Updated | Status |
+|---|---|---|---|---|
+| `T-BASELINE-DEPRECATE` | 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载 | 2026-04-29 14:42 EDT | — | 代码完成、runtime 验证待跑 |
+| `T-PHASE2-TARGET-BASELINE` | phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点 | 2026-04-29 20:54 EDT | — | 代码完成、runtime 验证待跑（与 BASELINE-DEPRECATE 同形态，可同批跑） |
+| `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | — | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
 
 ### 🟡 Next (2)
 
-| ID | Brief | Importance | Ready | Scope | Deps |
-|---|---|---|---|---|---|
-| `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | 无 |
-| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | T-PHASE2-TARGET-BASELINE |
+| ID | Brief | Importance | Ready | Scope | Updated | Deps |
+|---|---|---|---|---|---|---|
+| `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
+| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | — | T-PHASE2-TARGET-BASELINE |
 
 ### ⚪ Discussing (8)
 
-| ID | Brief | Open decisions | Blocked by |
-|---|---|---|---|
-| `T-REPAIR-EVENT-DRIVEN` | E2 方案：每 lane 完成立刻触发 repair，与后续 lane extract 重叠。2026-04-22 测算只比 E1 省 4min/stage（49 stage 共 ~3h），双线程池 + peak 9 并发撞 rate limit 复杂度跳一档，暂不做。等 E1 真实耗时数据出来再重评。 | 0 | T-REPAIR-PARALLEL 先落地 |
-| `T-CODEX-STDIN` | ClaudeBackend 已改 stdin 临时文件绕过 argv 128KiB 上限；CodexBackend.run 仍走 positional argv，切 `--backend codex` 时大 prompt 会复现 Argument list too long。已加注释未改代码——本机无 codex CLI 实测。 | 2 | 有 codex CLI 的机器 / 订阅 |
-| `T-CODEX-RATE-LIMIT` | ClaudeBackend 已通过 `_classify_rate_limit`（含 429）把 stderr 映射为 `rate_limit:`；CodexBackend.run 非零退出仍直接返回 `exit N`，撞限额走普通 retry，不进 pause-controller。本机无 codex CLI 实测。 | 2 | 有 codex CLI 的机器 / 订阅 |
-| `T-PROMPT-SCHEMA-INJECT` | conventions.md 要求 bounds 只在 schema 写一次，但 prompt template + schema_reference.md 部分段落仍复述具体数字。需选定路径：A 自动从 schema 注入 prompt bound 段；B 修订 conventions 加 prompt 例外条款。 | 3 | 无（路径决策即可启动） |
-| `T-SIMULATION-MODE-MARKER` | CLAUDE.md / AGENTS.md 已预留 `[simulation_runtime_mode]` worker-mode short-circuit；extraction 侧已注入 `[extraction_worker_mode]`，simulation 侧零 Python 尚无注入点。 | 2 | simulation runtime 首次实装 |
-| `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | Phase 3 全量完成 + retrieval 层设计定稿 |
-| `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | 无（T-LOG 已完成） |
-| `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
+| ID | Brief | Open decisions | Updated | Blocked by |
+|---|---|---|---|---|
+| `T-REPAIR-EVENT-DRIVEN` | E2 方案：每 lane 完成立刻触发 repair，与后续 lane extract 重叠。2026-04-22 测算只比 E1 省 4min/stage（49 stage 共 ~3h），双线程池 + peak 9 并发撞 rate limit 复杂度跳一档，暂不做。等 E1 真实耗时数据出来再重评。 | 0 | — | T-REPAIR-PARALLEL 先落地 |
+| `T-CODEX-STDIN` | ClaudeBackend 已改 stdin 临时文件绕过 argv 128KiB 上限；CodexBackend.run 仍走 positional argv，切 `--backend codex` 时大 prompt 会复现 Argument list too long。已加注释未改代码——本机无 codex CLI 实测。 | 2 | — | 有 codex CLI 的机器 / 订阅 |
+| `T-CODEX-RATE-LIMIT` | ClaudeBackend 已通过 `_classify_rate_limit`（含 429）把 stderr 映射为 `rate_limit:`；CodexBackend.run 非零退出仍直接返回 `exit N`，撞限额走普通 retry，不进 pause-controller。本机无 codex CLI 实测。 | 2 | — | 有 codex CLI 的机器 / 订阅 |
+| `T-PROMPT-SCHEMA-INJECT` | conventions.md 要求 bounds 只在 schema 写一次，但 prompt template + schema_reference.md 部分段落仍复述具体数字。需选定路径：A 自动从 schema 注入 prompt bound 段；B 修订 conventions 加 prompt 例外条款。 | 3 | — | 无（路径决策即可启动） |
+| `T-SIMULATION-MODE-MARKER` | CLAUDE.md / AGENTS.md 已预留 `[simulation_runtime_mode]` worker-mode short-circuit；extraction 侧已注入 `[extraction_worker_mode]`，simulation 侧零 Python 尚无注入点。 | 2 | — | simulation runtime 首次实装 |
+| `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
+| `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | — | 无（T-LOG 已完成） |
+| `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 **Total**: 13 — 🟢 In Progress 3 ｜ 🟡 Next 2 ｜ ⚪ Discussing 8
 
 ---
@@ -80,13 +80,22 @@ any node ─────────────────(abandoned)───
 
 ### How to update entries
 
-**添加任务**：放进合适的分节（Next / Discussing）。新任务必须有上方"What to record"列出的字段。**不要直接添加到"In Progress"**——那个段位仅由 `/go` 启动动作填入。
+**所有段位条目共同字段**：每条 `### [T-XXX]` 块都必须含 `**更新时间**`
+（YYYY-MM-DD HH:MM 时区缩写——按 skills_config.md `## Timezone`）。CREATE 时
+初始化 = 创建时刻；正文任意字段被改 / 跨段移动时刷新 = 改动时刻。**纯索引
+刷新本身不刷该字段**——索引是缓存，正文没动就是没动。该字段是 `/recent-activity`
+判定"何时讨论 / 改过该 task"的唯一锚点。
+
+**添加任务**：放进合适的分节（Next / Discussing）。新任务必须有上方"What to record"
+列出的字段 + `**更新时间**`。**不要直接添加到"In Progress"**——那个段位仅由 `/go`
+启动动作填入。
 
 **任务进入执行（/go 启动）**：
 1. 把整条从 "Next" 移到 "In Progress"
 2. 在条目里追加 `**开始时间**`（YYYY-MM-DD HH:MM 时区缩写——按 skills_config.md `## Timezone`）和 `**当前状态**`（进行中 / 等用户决策 / 暂停）字段
-3. **In Progress 段位单槽**——若已有占用，先把当前那条 commit 完成或显式暂停回退到 "Next" 再启动新任务
-4. 同步刷新索引段（见 "Index maintenance"）
+3. 刷新 `**更新时间**` = 启动时刻
+4. **In Progress 段位单槽**——若已有占用，先把当前那条 commit 完成或显式暂停回退到 "Next" 再启动新任务
+5. 同步刷新索引段（见 "Index maintenance"）
 
 **任务完成（commit 完成 + 验证通过）**：
 1. 把整条**移到** `docs/todo_list_archived.md` 的 `## Completed` 段，按归档格式瘦身（标题 + 完成形式 + 1 行摘要 + log 链接），原条目从本文件删除
@@ -109,7 +118,7 @@ any node ─────────────────(abandoned)───
 **触发时机**：以下任一发生时刷新：
 
 - 添加新任务条目
-- 修改现有条目的：标题、上下文摘要、依赖、待决策项、改动清单文件数、是否触及 schema / 架构 / 多 phase
+- 修改现有条目的：标题、上下文摘要、依赖、待决策项、改动清单文件数、是否触及 schema / 架构 / 多 phase、`**更新时间**`
 - 任务移段：Discussing → Next、Next → In Progress、In Progress → archived、任意 → archived（abandoned）
 - 任务在 "In Progress" 段内的"当前状态"变化（进行中 / 等用户决策 / 暂停）
 
@@ -122,6 +131,7 @@ any node ─────────────────(abandoned)───
 | ID | 反引号包裹的 T-XXX slug |
 | Title | 方括号后的中文短语 |
 | Start time | 条目里的 `**开始时间**` 字段，YYYY-MM-DD HH:MM 时区缩写 |
+| Updated | 条目里的 `**更新时间**` 字段，YYYY-MM-DD（仅日期，省 HH:MM）；缺字段 → "—" |
 | Status | 条目里的 `**当前状态**` 字段：进行中 / 等用户决策 / 暂停 |
 
 **Next**
@@ -133,6 +143,7 @@ any node ─────────────────(abandoned)───
 | Importance | 🔴 High / 🟢 Med-Low / 🟡 Medium（推断规则见下） |
 | Ready | ✅ Ready / 💬 Discuss first / ⏸ Blocked（推断规则见下） |
 | Scope | 🟢 Small / 🟡 Medium / 🔴 Large·Arch / —（推断规则见下） |
+| Updated | 条目里的 `**更新时间**` 字段，YYYY-MM-DD；缺字段 → "—" |
 | Deps | 条目"**依赖**"段首句 |
 
 **Discussing**
@@ -142,6 +153,7 @@ any node ─────────────────(abandoned)───
 | ID | 反引号包裹的 T-XXX slug |
 | Brief | 同上，≤ 150 字 |
 | Open decisions | 数 `**待决策项**` 段下的列表条目数；缺该段 → 0 |
+| Updated | 条目里的 `**更新时间**` 字段，YYYY-MM-DD；缺字段 → "—" |
 | Blocked by | "**依赖**"段首句 |
 
 **字段推断规则**（确定性，不要灵活发挥）：

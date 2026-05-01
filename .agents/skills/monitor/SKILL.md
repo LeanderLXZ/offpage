@@ -79,4 +79,4 @@ description: 后台进程进度监控 — 以固定间隔（默认 5min，argume
 
 ---
 
-**镜像约束**：本文件和 `.claude/commands/monitor.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。本文件额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /monitor` 起往下）与 `.claude/commands/monitor.md` **逐字一致**。
+**镜像约束**：本文件和 `.claude/skills/monitor/SKILL.md` 的 YAML frontmatter + 正文（从一级标题 `# /monitor` 起到本段之前）**逐字一致** — 任一侧修改必须在同 commit 内镜像到另一侧。本镜像约束段是两侧唯一允许差异的部分（路径互引）。

@@ -1,3 +1,8 @@
+---
+name: todo
+description: 直接读 docs/todo_list.md 顶部 ## Index (auto-generated; do not hand-edit) 段并原样渲染给用户，末尾问一句"想看哪条？"。$ARGUMENTS 可传关键字过滤 ID。索引由维护 todo_list.md 的人在改条目时同步刷新（规则在 todo_list.md 顶部 "Index maintenance" 段），/todo 信任索引、不重新解析、不重新分档、不生成建议。只读不改 todo_list / 代码 / 不 commit。用户说"todo"、"接下来做啥"、"todo list 上有啥"、"现在该干嘛"时触发。
+---
+
 # /todo — todo_list 索引展示
 
 直接读 `docs/todo_list.md` 顶部 `## Index (auto-generated; do not hand-edit)` 段并原样渲染给用户，末尾问一句"想看哪条？"。**只读**——不解析正文、不重新分档、不生成建议、不改 todo_list、不改代码、不 commit。`$ARGUMENTS` 可选作为 ID 关键字过滤（如 `schema` 只显示 ID 含 schema 的条目）；不传则全展示。
@@ -50,4 +55,4 @@
 
 ---
 
-**镜像约束**：本文件和 `.claude/commands/todo.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。本文件额外带 YAML frontmatter（`name`），正文（从一级标题 `# /todo` 起往下）与 `.claude/commands/todo.md` **逐字一致**。
+**镜像约束**：本文件和 `.agents/skills/todo/SKILL.md` 的 YAML frontmatter + 正文（从一级标题 `# /todo` 起到本段之前）**逐字一致** — 任一侧修改必须在同 commit 内镜像到另一侧。本镜像约束段是两侧唯一允许差异的部分（路径互引）。

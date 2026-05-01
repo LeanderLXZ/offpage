@@ -113,3 +113,19 @@ Step 8 POST log, `/full-review` archived report filename, `/monitor`
 per-cycle Timestamp).
 
 - Command template: `TZ='America/New_York' date '+%Y-%m-%d_%H%M%S'`
+
+## Activity sources
+
+Used by `/recent-activity` to assemble a unified reverse-chronological
+timeline of project actions across multiple sources. Git commits are
+implicit (always available from the current repo); the other two are
+listed here so non-default project layouts can override them.
+
+- Change logs:
+  - Path: `logs/change_logs/`
+  - Filename time pattern: `{YYYY-MM-DD}_{HHMMSS}_{slug}.md` (timestamp
+    parses from filename; file mtime is **not** used)
+- TODO list:
+  - Path: `docs/todo_list.md`
+  - Per-entry updated-time field: `**更新时间**` (YYYY-MM-DD HH:MM TZ;
+    written/refreshed by `/todo-add`)

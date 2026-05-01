@@ -1,3 +1,8 @@
+---
+name: monitor
+description: 后台进程进度监控 — 以固定间隔（默认 5min，argument 可指定如 3min/10min）定期汇报由 ai_context/skills_config.md `## Background processes` 声明的进程（PID、进度、错误、吞吐、ETA、异常）。只读不改：发现问题先查清原因给信息+建议，不 kill、不重启、不改配置，等用户决定后再让 /go 执行。支持带场景说明定位关注点。`## Background processes` 留空且 $ARGUMENTS 未指定临时目标 → 提示无可监控对象并停手。用户说"监控一下"、"monitor 5min ..." 时触发。
+---
+
 # /monitor — 后台进程进度监控
 
 以固定间隔监控正在运行的后台任务，定期向用户汇报进度、错误、效率、预估完成时间。**只读不改**：发现问题先查清原因，向用户提供信息与建议，不着急动手。
@@ -74,4 +79,4 @@
 
 ---
 
-**镜像约束**：本文件和 `.claude/commands/monitor.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。本文件额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /monitor` 起往下）与 `.claude/commands/monitor.md` **逐字一致**。
+**镜像约束**：本文件和 `.agents/skills/monitor/SKILL.md` 的 YAML frontmatter + 正文（从一级标题 `# /monitor` 起到本段之前）**逐字一致** — 任一侧修改必须在同 commit 内镜像到另一侧。本镜像约束段是两侧唯一允许差异的部分（路径互引）。
