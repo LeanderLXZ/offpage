@@ -840,10 +840,10 @@ def _collect_chapters(
         ch_range = stage.get("chapters", "")
         if "-" in ch_range:
             parts = ch_range.split("-")
-            ch_start = int(parts[0])
-            ch_end = int(parts[1])
+            ch_start = int(parts[0].lstrip("C"))
+            ch_end = int(parts[1].lstrip("C"))
             for ch in range(ch_start, ch_end + 1):
-                chapters.append(f"{ch:04d}")
+                chapters.append(f"C{ch:04d}")
 
     return chapters
 

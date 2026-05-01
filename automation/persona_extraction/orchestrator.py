@@ -524,7 +524,7 @@ class ExtractionOrchestrator:
                     idx, total_chunks, start, end, summaries_dir,
                     _is_l3_retry=True,
                     _prior_error=(f"章节摘要不完整（{count}/{expected}）。"
-                                  f"必须为 chapter {start:04d}-{end:04d} 的"
+                                  f"必须为 chapter C{start:04d}-C{end:04d} 的"
                                   f"每一章都生成一条 summaries[] 条目，"
                                   f"不得跳过任何章节。"),
                 )
@@ -744,7 +744,7 @@ class ExtractionOrchestrator:
             if chunk_id not in phase0.chunks:
                 phase0.chunks[chunk_id] = ChunkEntry(
                     chunk_id=chunk_id,
-                    chapters=f"{start:04d}-{end:04d}",
+                    chapters=f"C{start:04d}-C{end:04d}",
                 )
         phase0.save(self.project_root)
 
@@ -777,7 +777,7 @@ class ExtractionOrchestrator:
                         output_path, expected)
                     if ok:
                         print(f"  [{idx}/{total_chunks}] {chunk_id} "
-                              f"({start:04d}-{end:04d}) — repaired "
+                              f"(C{start:04d}-C{end:04d}) — repaired "
                               f"({desc}), skipping")
 
             if ok:
@@ -787,7 +787,7 @@ class ExtractionOrchestrator:
                     phase0.save(self.project_root)
                 if entry and entry.state == "done":
                     print(f"  [{idx}/{total_chunks}] {chunk_id} "
-                          f"({start:04d}-{end:04d}) — already done, "
+                          f"(C{start:04d}-C{end:04d}) — already done, "
                           f"skipping")
                 continue
 
@@ -800,7 +800,7 @@ class ExtractionOrchestrator:
                     entry.error_message = f"reset by gate: {why}"
                     phase0.save(self.project_root)
                 print(f"  [{idx}/{total_chunks}] {chunk_id} "
-                      f"({start:04d}-{end:04d}) — re-extract ({why})")
+                      f"(C{start:04d}-C{end:04d}) — re-extract ({why})")
             pending.append((idx, start, end))
 
         if not pending:
@@ -855,11 +855,11 @@ class ExtractionOrchestrator:
                     phase0.save(self.project_root)
                     if msg:  # partial
                         print(f"    [WARN] {chunk_id} "
-                              f"({start:04d}-{end:04d}): {msg}  "
+                              f"(C{start:04d}-C{end:04d}): {msg}  "
                               f"({completed}/{total_pending})")
                     else:
                         print(f"    [OK] {chunk_id} "
-                              f"({start:04d}-{end:04d})  "
+                              f"(C{start:04d}-C{end:04d})  "
                               f"({completed}/{total_pending})")
                 else:
                     failed += 1

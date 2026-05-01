@@ -17,6 +17,27 @@ from .protocol import Issue, SourceContext
 logger = logging.getLogger(__name__)
 
 
+def _entry_matches_chapter(entry: dict, chapter_num: int) -> bool:
+    """Check if a summary entry matches the requested chapter_num.
+
+    Supports both the current schema (``chapter`` is a ``C####`` string,
+    e.g. ``"C0001"``) and the legacy shape (``chapter_number`` is a bare
+    int). Strings are tolerantly stripped of an optional leading ``C``
+    before integer comparison.
+    """
+    raw = entry.get("chapter") if "chapter" in entry else entry.get("chapter_number")
+    if raw is None:
+        return False
+    if isinstance(raw, int):
+        return raw == chapter_num
+    if isinstance(raw, str):
+        try:
+            return int(raw.lstrip("C")) == chapter_num
+        except ValueError:
+            return False
+    return False
+
+
 class ContextRetriever:
     """Retrieves original chapter text relevant to an issue.
 
@@ -140,14 +161,16 @@ class ContextRetriever:
                     continue
                 chapters = stage.get("chapters")
                 if isinstance(chapters, str):
-                    m = re.match(r"^(\d+)\s*-\s*(\d+)$", chapters.strip())
+                    m = re.match(r"^C?(\d+)\s*-\s*C?(\d+)$",
+                                 chapters.strip())
                     if m:
                         start, end = int(m.group(1)), int(m.group(2))
                         if end >= start:
                             return list(range(start, end + 1))
                     return []
                 if isinstance(chapters, list) and len(chapters) == 2:
-                    return list(range(int(chapters[0]), int(chapters[1]) + 1))
+                    return list(range(int(str(chapters[0]).lstrip("C")),
+                                      int(str(chapters[1]).lstrip("C")) + 1))
                 return []
         except (json.JSONDecodeError, OSError):
             pass
@@ -197,7 +220,8 @@ class ContextRetriever:
     def _read_chapter_summary(self, summaries_dir: Path,
                               chapter_num: int) -> str:
         # Try common naming patterns
-        for pattern in [f"{chapter_num:04d}.json", f"{chapter_num}.json"]:
+        for pattern in [f"C{chapter_num:04d}.json",
+                        f"{chapter_num:04d}.json", f"{chapter_num}.json"]:
             path = summaries_dir / pattern
             if path.exists():
                 try:
@@ -214,14 +238,12 @@ class ContextRetriever:
                 if isinstance(chunk, list):
                     for entry in chunk:
                         if isinstance(entry, dict):
-                            ch = entry.get("chapter_number") or entry.get("chapter")
-                            if ch == chapter_num:
+                            if _entry_matches_chapter(entry, chapter_num):
                                 return entry.get("summary", json.dumps(entry, ensure_ascii=False))
                 elif isinstance(chunk, dict):
-                    chapters = chunk.get("chapters", [])
-                    for entry in chapters:
-                        ch = entry.get("chapter_number") or entry.get("chapter")
-                        if ch == chapter_num:
+                    summaries = chunk.get("summaries", chunk.get("chapters", []))
+                    for entry in summaries:
+                        if _entry_matches_chapter(entry, chapter_num):
                             return entry.get("summary", json.dumps(entry, ensure_ascii=False))
             except (json.JSONDecodeError, OSError):
                 continue
@@ -233,7 +255,8 @@ class ContextRetriever:
         if cache_key in self._chapter_text_cache:
             return self._chapter_text_cache[cache_key]
 
-        for pattern in [f"{chapter_num:04d}.txt", f"{chapter_num}.txt",
+        for pattern in [f"C{chapter_num:04d}.txt",
+                        f"{chapter_num:04d}.txt", f"{chapter_num}.txt",
                         f"chapter_{chapter_num:04d}.txt"]:
             path = chapters_dir / pattern
             if path.exists():

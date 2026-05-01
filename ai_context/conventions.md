@@ -63,8 +63,14 @@ those legitimately carry historical snapshots):
 1. **Old literal prefix** — `chapter[0-9]{4}` / `stage[0-9]{4}`
 2. **Bare numeric pattern in JSON Schema** — `"\^\\d{4}\$"` /
    `"\^\\d{4}-\\d{4}\$"` (zero-padded numerics often hide there)
-3. **Python f-string format spec** — `\{ch:04d\}` / `\{:04d\}` in
-   path / dict-key / format strings
+3. **Python f-string format spec** — **must grep with the generic
+   regex `\{[a-z_]+:04d\}`** (covers any variable name like `ch`,
+   `chapter_num`, `start`, `end`). **Never** use a specific variable
+   name (e.g. `\{ch:04d\}`) as the only grep form — sibling code
+   using a different name (e.g. `\{chapter_num:04d\}` in another
+   module) will silently slip through. Apply to path concatenations,
+   dict-key construction, log/print f-strings, and any
+   `f"...{var:04d}..."` site
 4. **File-name literals in docs / examples** — `0001\.txt` /
    `"0001-0010"` (renames usually drift in prose examples)
 
