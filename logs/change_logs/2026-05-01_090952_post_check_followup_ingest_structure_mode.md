@@ -153,3 +153,30 @@ cosmetic 2 项）按 PRE 计划清单逐条落地。
 
 - **Status**: DONE
 - **Finished**: 2026-05-01 09:46:16 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：5/5 计划项 + 6/6 验证标准
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=1 / Low=2
+- Open Questions: 0 条
+- 关键 Medium：`automation/persona_extraction/orchestrator.py:937 _STAGE_TITLE_MAX = 80`
+  硬编码 schema bound，违反 `ai_context/decisions.md` §27b（"Bounds-only-in-schema"）
+  / `ai_context/conventions.md` L118（"no duplicates anywhere else"）。§27b 仅
+  grandfather 一条 `StructuralChecker.relationship_history_summary_max_chars`
+  程序 fallback；本次新加的 `_STAGE_TITLE_MAX` 是第二条未登记的 fallback。
+  风险：schema 端 80 改动后，代码端不会自动同步，可能复发本次试图根除的
+  无穷重试家族风险（schema 收紧时）或失去截断意图（schema 放宽时）
+
+## 复查时状态
+- **Reviewed**: 2026-05-01 10:05:38 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全落实 → PASS
+  - 轨 2 有 1 Medium（§27b duplicate）→ 不达 PASS
+  - 不到 FAIL（无 High；轨 1 无大面积缺口）
+- **Conversation ref**: 同会话内 /post-check 输出
