@@ -1,6 +1,6 @@
 ---
 name: check-review
-description: 复核 review 报告 — 读取 logs/review_reports/ 下最近一份报告（可选按模型过滤：claude / codex / 具体 slug；不传参则取全局最新），逐条复核 finding / risk / open question 是否仍真实存在，给出证据（文件+行号）与落地方案草稿，输出不落盘不改代码，等用户确认后再用 /go 执行。用户说"复核 review"、"核一下 codex/claude 的 review"、"check-review" 时触发。
+description: 复核 review 报告 — 读取 logs/review_reports/ 下最近一份报告（可选按模型过滤：claude / codex / gpt / 具体 slug；不传参则取全局最新），逐条复核 finding / risk / open question 是否仍真实存在，给出证据（文件+行号）与落地方案草稿，输出不落盘不改代码，等用户确认后再用 /go 执行。用户说"复核 review"、"核一下 codex/gpt/claude 的 review"、"check-review" 时触发。
 ---
 
 # /check-review — 复核 review 报告
@@ -9,8 +9,8 @@ description: 复核 review 报告 — 读取 logs/review_reports/ 下最近一�
 
 `$ARGUMENTS` = 模型筛选关键字，**可选**。映射规则：
 - 缺省（不传参） → 不按模型过滤，直接取目录下**时间戳最新**的一份
-- `claude` → 匹配 slug 以 `opus-` / `sonnet-` / `haiku-` 开头的报告
-- `codex` → 匹配 slug 为 `codex`
+- `claude` / `opus` / `sonnet` / `haiku` → 同义别名；匹配 slug 以 `opus-` / `sonnet-` / `haiku-` 开头的报告（Claude 家族产出视为同一来源）
+- `codex` / `gpt` → 同义别名；匹配 slug 为 `codex` 或以 `gpt-` 开头的报告（codex 与 gpt 系列产出视为同一来源）
 - `gpt-5`、`opus-4-7` 等具体 slug → 精确匹配
 - 有参数但无匹配：报错，列出 `logs/review_reports/` 下已有的 model slug 供选择
 

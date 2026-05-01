@@ -4,8 +4,8 @@
 
 `$ARGUMENTS` = 模型筛选关键字，**可选**。映射规则：
 - 缺省（不传参） → 不按模型过滤，直接取目录下**时间戳最新**的一份
-- `claude` → 匹配 slug 以 `opus-` / `sonnet-` / `haiku-` 开头的报告
-- `codex` → 匹配 slug 为 `codex`
+- `claude` / `opus` / `sonnet` / `haiku` → 同义别名；匹配 slug 以 `opus-` / `sonnet-` / `haiku-` 开头的报告（Claude 家族产出视为同一来源）
+- `codex` / `gpt` → 同义别名；匹配 slug 为 `codex` 或以 `gpt-` 开头的报告（codex 与 gpt 系列产出视为同一来源）
 - `gpt-5`、`opus-4-7` 等具体 slug → 精确匹配
 - 有参数但无匹配：报错，列出 `logs/review_reports/` 下已有的 model slug 供选择
 
