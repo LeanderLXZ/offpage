@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | `T-BASELINE-DEPRECATE` | 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载 | 2026-04-29 14:42 EDT | — | 代码完成、runtime 验证待跑 |
 | `T-PHASE2-TARGET-BASELINE` | phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点 | 2026-04-29 20:54 EDT | — | 代码完成、runtime 验证待跑（与 BASELINE-DEPRECATE 同形态，可同批跑） |
-| `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | — | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
+| `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | 2026-05-01 | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
 
 ### 🟡 Next (2)
 
@@ -428,6 +428,8 @@ target_voice_map / target_behavior_map / relationships 的 keys。三个痛点�
 
 **开始时间**：2026-05-01 07:04 EDT
 
+**更新时间**：2026-05-01 14:29 EDT
+
 **当前状态**：schema/code/prompt/ai_context/docs 完成、smoke 全过；
 post-check 第 1 轮残留缺口（stage_title.maxLength 50→80 + 代码层软截断兜底；
 progress.py `_expected_chapter_count` 兼容 `C####-C####`；automation/README
@@ -474,7 +476,11 @@ phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapt
   `repair_agent.context_retriever`、`post_processing._parse_chapter_scope`）
   零改动
 - prompt：`prompts/ingestion/原始资料规范化.md` 补 `structure_mode` 填写
-  指引 + light_novel 三层 seq 字段说明 + title 派生公式
+  指引 + light_novel 三层 seq 字段说明 + title 派生公式；2026-05-01 14:29
+  update：把 task 步骤 2 改成"判定 `structure_mode`"流程——先输出 monolithic
+  / light_novel 判定 + 依据 + 置信度，≥ 0.8 直接进 / < 0.8 停手等用户拍板，
+  任意识别信号"不确定" → 置信度上限 0.7（必走人工确认）；manifest 段
+  `structure_mode` 子项的旧"判定要点" bullet 删除（迁到 step 2 单源）
 - ai_context：`decisions.md` 加 27j/27k/27l + 更新 10a；`conventions.md`
   Cross-File Alignment 加 `structure_mode` 行；`architecture.md` Phase 0/1
   描述加双模式

@@ -192,9 +192,16 @@ source. Long discussion chains live in `logs/change_logs/`.
      STAGE_MAX `chapter_count` validation. Phase 2+ does NOT branch —
      consumes `stage_plan` uniformly; volume / printed-chapter
      semantics ride on `chapter_index` profile-B fields, character /
-     world schemas untouched. Identification of `structure_mode` from
-     raw source (LLM-driven) is deferred to a separate todo; for now
-     normalization writes it manually.
+     world schemas untouched. **Identification of `structure_mode`** is
+     LLM-driven inside the normalization prompt (`prompts/ingestion/
+     原始资料规范化.md` task step 2): scan source TOC / filenames /
+     volume markers + chapter sample, emit `判定 + 依据 + 置信度`,
+     then gate — confidence ≥ 0.8 fills `manifest.structure_mode`
+     directly; < 0.8 stops and asks the user; any signal flagged
+     "不确定" caps confidence at 0.7 (forcing the human-confirm path).
+     `light_novel` requires all three signals (volume separators +
+     volume count ≥ 2 + identifiable in-chapter sub-sections) — the
+     single-volume case falls back to `monolithic`.
      → `schemas/work/{work_manifest,works_manifest,chapter_index}.schema.json`
      (both source-side `work_manifest` and canon-side `works_manifest`
      declare the field; canon copy by `manifests.write_works_manifest`),
