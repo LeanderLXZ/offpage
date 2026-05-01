@@ -186,7 +186,8 @@ Import 检查 + 关键函数 smoke test；如本次改动触及 skills_config.md
 Step 1 已经把工作位置锁在主分支（主 checkout 或 worktree），**不再询问**切主分支。
 
 - `git status` 只剩本次改动；按 skills_config.md `## Do-not-commit paths` 列表 +（`.gitignore` + `ai_context/conventions.md`）兜底扫描
-- message 风格对齐 `git log --oneline -10`；按逻辑单元分 commit
+- message 风格对齐 `git log --oneline -10`
+- **本次改动 + PRE/POST log 文件合并为单次 commit**——不再拆 `<slug>: ...` + `log(<slug>): /go PRE+POST` 两次
 - 提交后 `git status` 确认干净
 - **若 Step 1 走了 worktree 路径**：commit 完成后立刻回到主 checkout（无需离开主 checkout 的原分支）并 `git worktree remove --force ../<repo>-<MAIN>`（`<MAIN>` = skills_config.md `## Main branch policy` 主分支字段）；commit 已落到主分支 ref，worktree 目录删除不丢数据
 
