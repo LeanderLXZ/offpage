@@ -237,11 +237,13 @@ source. Long discussion chains live in `logs/change_logs/`.
      mode: `title` continues to be the human-readable chapter title
      copied from source ToC. **Code-side soft-truncation safeguard**:
      `_build_light_novel_stage_plan` truncates the resulting
-     `stage_title` to schema cap (currently 80) with `…` ellipsis when
-     the formula's full output would exceed the cap, so adversarial
-     long volume_title × original_chapter_title combinations cannot
-     trip an infinite Phase 1 retry loop on `stage_title.maxLength`
-     schema fail.
+     `stage_title` to the schema cap (read dynamically at startup from
+     `stage_plan.schema.json::stages.items.properties.stage_title.maxLength`
+     via `_stage_title_max_length()`, preserving §27b single-source) with
+     `…` ellipsis when the formula's full output would exceed the cap,
+     so adversarial long volume_title × original_chapter_title
+     combinations cannot trip an infinite Phase 1 retry loop on
+     `stage_title.maxLength` schema fail.
      → `schemas/work/chapter_index.schema.json`, `schemas/analysis/
      stage_plan.schema.json` (`stage_title.maxLength`), `prompts/
      ingestion/原始资料规范化.md`, `automation/persona_extraction/

@@ -68,7 +68,7 @@
   - `stage_id = S{n:03d}`（n 从 1 起，对应 chapter_index 顺序）
   - `chapters = f"{chapter_id}-{chapter_id}"`（degenerate 单章区间，例 `"C0001-C0001"`；与 monolithic 共享 `^C[0-9]{4}-C[0-9]{4}$` 解析路径，phase 2/3/4 消费方零分叉）
   - `chapter_count = 1`
-  - `stage_title = chapter_index[i].title`（已含卷 / 印刷章 / sub-section 由规范化派生的拼接）
+  - `stage_title = chapter_index[i].title`（已含卷 / 印刷章 / sub-section 由规范化派生的拼接；超 schema `stage_title.maxLength` 由 orchestrator 软截断 + `…` 兜底，避免对抗性长 title 触发 schema gate fail → 无穷重试 → FATAL）
   - 跳过 STAGE_MIN / STAGE_MAX `chapter_count` 校验（1:1 派生天然违反 5–15 限制，是预期行为）
   - `world_overview.json` / `candidate_characters.json` 仍由 LLM 走分析子任务（沿用 monolithic 同一 prompt）
 

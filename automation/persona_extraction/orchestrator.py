@@ -103,6 +103,43 @@ def _stage_plan_validator() -> _jsonschema.Draft202012Validator:
     return _load_analysis_schema("stage_plan.schema.json")
 
 
+# Defensive fallback for `_stage_title_max_length()`. Only used if the
+# schema path drifts and lookup fails; logs a WARN so the drift surfaces.
+# Per `ai_context/decisions.md` §27b (Bounds-only-in-schema), schema is
+# the single source of truth; this fallback exists purely so a malformed
+# / missing schema does not crash Phase 1 — the WARN is the signal.
+_STAGE_TITLE_FALLBACK_MAX = 80
+
+
+@_lru_cache(maxsize=1)
+def _stage_title_max_length() -> int:
+    """Read `stage_title.maxLength` from `stage_plan.schema.json`.
+
+    light_novel mode uses this cap to soft-truncate
+    `_build_light_novel_stage_plan` output, preventing adversarial
+    long volume_title × original_chapter_title combinations from
+    tripping schema gate → infinite Phase 1 retry → FATAL.
+
+    Schema is the authoritative single source per §27b
+    (Bounds-only-in-schema); drift falls back to
+    `_STAGE_TITLE_FALLBACK_MAX` with a WARN.
+    """
+    try:
+        schema = _stage_plan_validator().schema
+        cap = (schema["properties"]["stages"]["items"]
+               ["properties"]["stage_title"]["maxLength"])
+        if isinstance(cap, int) and cap > 1:
+            return cap
+        print(f"[WARN] stage_title.maxLength schema lookup returned "
+              f"non-positive int {cap!r}; falling back to "
+              f"{_STAGE_TITLE_FALLBACK_MAX}.")
+    except (KeyError, TypeError, AttributeError) as exc:
+        print(f"[WARN] stage_title.maxLength schema lookup failed "
+              f"({exc!r}); falling back to {_STAGE_TITLE_FALLBACK_MAX}. "
+              f"Check schemas/analysis/stage_plan.schema.json drift.")
+    return _STAGE_TITLE_FALLBACK_MAX
+
+
 @_lru_cache(maxsize=1)
 def _candidate_characters_validator() -> _jsonschema.Draft202012Validator:
     """Lazy-load schemas/analysis/candidate_characters.schema.json once."""
@@ -929,13 +966,6 @@ class ExtractionOrchestrator:
     # Phase 1: Analysis (from summaries)
     # ------------------------------------------------------------------
 
-    # stage_plan.schema.json::stage_title.maxLength single-source cap.
-    # Adversarial volume_title × original_chapter_title combinations
-    # could otherwise produce a derived `title` that exceeds the cap,
-    # triggering Phase 1 schema gate → retry loop → identical re-derive
-    # → FATAL exit. Soft-truncate at cap-1 + `…` ellipsis defensively.
-    _STAGE_TITLE_MAX = 80
-
     def _build_light_novel_stage_plan(self) -> dict[str, Any]:
         """Programmatically derive stage_plan 1:1 from chapter_index.
 
@@ -964,8 +994,14 @@ class ExtractionOrchestrator:
                 print(f"[ERROR] chapter_index entry #{i} missing "
                       f"required field: {exc}")
                 sys.exit(1)
-            if len(title) > self._STAGE_TITLE_MAX:
-                title = title[: self._STAGE_TITLE_MAX - 1] + "…"
+            # Soft-truncate to schema's `stage_title.maxLength` cap
+            # (read dynamically per §27b Bounds-only-in-schema) +
+            # `…` ellipsis, preventing adversarial long volume_title
+            # × original_chapter_title combinations from triggering
+            # schema gate fail → infinite Phase 1 retry → FATAL.
+            title_cap = _stage_title_max_length()
+            if len(title) > title_cap:
+                title = title[: title_cap - 1] + "…"
             # `chapters` reuses the C####-C#### degenerate-range format
             # (start == end) so downstream phase 2/3/4 consumers
             # (prompt_builder._parse_chapter_range, scene_archive,
