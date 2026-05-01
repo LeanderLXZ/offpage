@@ -202,3 +202,24 @@ PRE 验证标准里"4 形态多路径 grep" 只 grep 自己刚改的具体变量
 
 - **Status**: DONE
 - **Finished**: 2026-05-01 02:07:30 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：6/6 项 PRE 计划全部落实 + 8/8 项 PRE 验证标准通过
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=0 / Low=1（_read_chapter_summary 的
+  chunk dict fallback 在 summaries 缺失 + chapters 是 string 时
+  会 AttributeError；实际产物 schema 强制 summaries 存在，dead
+  defensive 边界）
+- Open Questions: 0 条
+
+## 复查时状态
+- **Reviewed**: 2026-05-01 02:19:05 EDT
+- **Status**: REVIEWED-PASS
+  - PASS = 轨 1 全落实 且 轨 2 无 High/Medium（仅 1 LOW 防御性边界）
+- **Conversation ref**: 同会话内 /post-check 输出
