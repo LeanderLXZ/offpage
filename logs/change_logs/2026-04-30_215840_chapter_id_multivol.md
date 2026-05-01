@@ -190,3 +190,21 @@
 
 - **Status**: DONE
 - **Finished**: 2026-04-30 22:08:26 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：7/7 项计划落实 + 5/6 项验证通过；1 项验证标准（"代码侧无回归"）实际未满足——`scene_archive._build_chapter_to_stage_map` 与 `prompt_builder._parse_chapter_range` 仍用裸数字 `{ch:04d}`，与新 chapter_id `C0001` 不一致
+- Missed updates: 7 处（phase 0/1 schema + prompt + code 全组未同步，详见对话）
+
+### 轨 2 — 影响扩散
+- Findings: High=4 / Medium=2 / Low=1
+- Open Questions: 2 条（phase 0/1 命名同步策略 + grep 验证标准模板，详见对话）
+
+## 复查时状态
+- **Reviewed**: 2026-04-30 23:52:16 EDT
+- **Status**: REVIEWED-FAIL
+  - FAIL = 轨 2 出现 High finding（phase 0/1 schema/prompt/code 与新 chapter_id 命名漂移，立即跑 phase 0/1/3/4 会 broken）
+- **Conversation ref**: 同会话内 /post-check 输出
