@@ -74,7 +74,7 @@ def _write_work_layout(root: Path, stage_id: str = "S001") -> tuple[
     analysis.mkdir(parents=True, exist_ok=True)
     (analysis / "stage_plan.json").write_text(
         json.dumps({"stages": [{"stage_id": stage_id,
-                                "chapters": "0001-0001"}]}),
+                                "chapters": "C0001-C0001"}]}),
         encoding="utf-8",
     )
 
@@ -512,7 +512,7 @@ def scenario_f_coverage_shortage_accepted() -> None:
     analysis.mkdir(parents=True, exist_ok=True)
     (analysis / "stage_plan.json").write_text(
         json.dumps({"stages": [{"stage_id": "S001",
-                                "chapters": "0001-0001"}]}),
+                                "chapters": "C0001-C0001"}]}),
         encoding="utf-8",
     )
 

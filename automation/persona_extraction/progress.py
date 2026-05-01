@@ -207,7 +207,7 @@ class PipelineProgress:
 @dataclass
 class ChunkEntry:
     chunk_id: str
-    chapters: str           # e.g. "0001-0025"
+    chapters: str           # e.g. "C0001-C0025"
     state: str = "pending"  # pending | done | failed
     retry_count: int = 0
     error_message: str = ""
@@ -403,7 +403,7 @@ _TRANSITIONS: dict[StageState, set[StageState]] = {
 @dataclass
 class StageEntry:
     stage_id: str
-    chapters: str               # e.g. "0001-0010"
+    chapters: str               # e.g. "C0001-C0010"
     chapter_count: int
     stage_title: str = ""       # human-readable short title
     state: StageState = StageState.PENDING

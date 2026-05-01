@@ -24,7 +24,7 @@
 
 **用途**：Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳。
 **位置**：`works/{work_id}/analysis/chapter_summaries/chunk_NNN.json`（本地生成，不入 git）
-**关键字段**：`work_id` / `chunk_index` / `chapters` / `summaries[]`（per-summary 含 `chapter` / `title` / `summary` / `key_events` / `characters_present` / `location` / `emotional_tone` / `identity_notes`）
+**关键字段**：`work_id` / `chunk_index` / `chapters`（范围 `^C[0-9]{4}-C[0-9]{4}$`） / `summaries[]`（per-summary 含 `chapter` `^C[0-9]{4}$` 与 chapter_index `chapter_id` 一致 / `title` / `summary` / `key_events` / `characters_present` / `location` / `emotional_tone` / `identity_notes`）
 **消费方**：Phase 1 (`automation/prompt_templates/analysis.md`) 把所有 chunk 作为输入构造 stage_plan / world_overview / candidate_characters。
 **生成时机**：Phase 0 by `automation/prompt_templates/summarization.md`，分 chunk 并行 LLM 调用。
 
@@ -55,7 +55,7 @@
 
 **用途**：Phase 1 stage 切分计划。下游 Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择都依赖此文件。
 **位置**：`works/{work_id}/analysis/stage_plan.json`（**入 git**）
-**关键字段**：`work_id` / `default_stage_size` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^\d{4}-\d{4}$` / `chapter_count` 5-15 hard / `boundary_reason`）
+**关键字段**：`work_id` / `default_stage_size` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^C[0-9]{4}-C[0-9]{4}$`（与 chapter_id 命名一致） / `chapter_count` 5-15 hard / `boundary_reason`）
 **生成时机**：Phase 1 by `automation/prompt_templates/analysis.md`。
 **契约**：`chapter_count` 5-15 由 schema 强制（与 prompt 自检 + orchestrator `_check_stage_plan_limits` 一致；schema 是权威）。
 

@@ -492,10 +492,10 @@ def _build_chapter_to_stage_map(
         ch_range = stage.get("chapters", "")
         if "-" in ch_range:
             parts = ch_range.split("-")
-            ch_start = int(parts[0])
-            ch_end = int(parts[1])
+            ch_start = int(parts[0].lstrip("C"))
+            ch_end = int(parts[1].lstrip("C"))
             for ch in range(ch_start, ch_end + 1):
-                mapping[f"{ch:04d}"] = stage_id
+                mapping[f"C{ch:04d}"] = stage_id
 
     return mapping
 
@@ -829,7 +829,7 @@ def _collect_chapters(
 ) -> list[str]:
     """Collect chapter IDs from stage plan, respecting end_stage limit.
 
-    Parses the 'chapters' field (format: "0001-0011") from each stage.
+    Parses the 'chapters' field (format: "C0001-C0011") from each stage.
     """
     chapters: list[str] = []
     stages = plan.get("stages", [])

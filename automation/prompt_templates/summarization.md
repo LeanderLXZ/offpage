@@ -4,14 +4,14 @@
 
 ## 目标
 
-对作品 `{work_id}` 的第 {start_chapter}–{end_chapter} 章进行归纳，产出每章的结构化摘要。
+对作品 `{work_id}` 的章节 {start_chapter}–{end_chapter} 进行归纳，产出每章的结构化摘要。
 
 ## 作品信息
 
 - work_id: `{work_id}`
 - 书名: `{title}`
 - 语言: `{language}`
-- 本 chunk 章节范围: 第 {start_chapter}–{end_chapter} 章（共 {chunk_chapter_count} 章）
+- 本 chunk 章节范围: {start_chapter}–{end_chapter}（共 {chunk_chapter_count} 章）
 - 源目录: `{source_dir}`
 
 ## 执行步骤
@@ -26,7 +26,7 @@
 
 对每一章产出一条结构化摘要，**所有字段均 required**。schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`，长度上下限以 schema 为准、本说明只描述用途。**bound 是硬上限不是配额**——能 30 字写清的 summary 不要为凑 50 字注水；能列 3 条的 key_events 不要为凑 5 条添碎事。
 
-- `chapter`: 章节编号（4 位零填充，如 `"0001"`）
+- `chapter`: 章节标识，与 `chapter_index.json` 的 `chapter_id` 一致（C 前缀 + 4 位零填充，如 `"C0001"`）
 - `title`: 章节标题（从原文提取；原文无明确标题时为空字符串）
 - `summary`: 1-3 句话概括本章核心剧情（事件描述，不是文学评论）。长度 50-100 字
 - `key_events`: 本章推动剧情的关键事件列表，**最多 5 条**，每条 ≤ 50 字，跳过日常水文
@@ -48,7 +48,7 @@ JSON 结构（不要添加 schema 之外的字段）：
   "chapters": "{start_chapter}-{end_chapter}",
   "summaries": [
     {{
-      "chapter": "0001",
+      "chapter": "C0001",
       "title": "...",
       "summary": "...",
       "key_events": ["...", "..."],

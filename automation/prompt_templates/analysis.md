@@ -132,7 +132,7 @@ JSON 结构：
     {{
       "stage_id": "S001",
       "stage_title": "主角初登场",
-      "chapters": "0001-0010",
+      "chapters": "C0001-C0010",
       "chapter_count": 10,
       "boundary_reason": "..."
     }}

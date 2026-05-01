@@ -18,8 +18,8 @@
     },
     "chapters": {
       "type": "string",
-      "pattern": "^\\d{4}-\\d{4}$",
-      "description": "本 chunk 覆盖的章节范围，形如 0001-0025（4 位零填充 + 连字符 + 4 位零填充）。"
+      "pattern": "^C[0-9]{4}-C[0-9]{4}$",
+      "description": "本 chunk 覆盖的章节范围，形如 C0001-C0025（C 前缀 + 4 位零填充 + 连字符 + C 前缀 + 4 位零填充），与 chapter_id 命名一致。"
     },
     "summaries": {
       "type": "array",
@@ -41,8 +41,8 @@
         "properties": {
           "chapter": {
             "type": "string",
-            "pattern": "^\\d{4}$",
-            "description": "章节编号（4 位零填充，例如 0001）。"
+            "pattern": "^C[0-9]{4}$",
+            "description": "章节标识，与 chapter_index.json 的 chapter_id 一致（C 前缀 + 4 位零填充，例如 C0001）。"
           },
           "title": {
             "type": "string",

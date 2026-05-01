@@ -35,8 +35,8 @@ source. Long discussion chains live in `logs/change_logs/`.
 9. Chinese works: Chinese `work_id`, entity names, identifier values, path segments.
 10. `ai_context/` stays English. JSON field names may be English.
     → `conventions.md` §Naming.
-10a. `chapter_id` = `^C[0-9]{4}$` (4-digit), `volume_id` = `^V[0-9]{3}$` (3-digit, multi-volume sources only). Width split = expected cardinality (chapters per work ≤ 9999, volumes ≤ 999); letter prefix aligns with the `S###` / `M-S###-##` ID family. Multi-volume sources fill the optional triple `volume_id` / `volume_title` / `volume_chapter_seq` in `chapter_index.json`; single-volume sources omit all three. **No standalone `volume_index.json`** — `chapter_index` carries the cross-product. Sub-chapter splitting (one source chapter → multiple `C####` units) is deferred to phase-1 stage planning, out of scope for ingestion-side IDs.
-    → `conventions.md` §Naming, `schemas/work/chapter_index.schema.json`.
+10a. `chapter_id` = `^C[0-9]{4}$` (4-digit), `volume_id` = `^V[0-9]{3}$` (3-digit, multi-volume sources only). Width split = expected cardinality (chapters per work ≤ 9999, volumes ≤ 999); letter prefix aligns with the `S###` / `M-S###-##` ID family. Multi-volume sources fill the optional triple `volume_id` / `volume_title` / `volume_chapter_seq` in `chapter_index.json`; single-volume sources omit all three. **No standalone `volume_index.json`** — `chapter_index` carries the cross-product. Sub-chapter splitting (one source chapter → multiple `C####` units) is deferred to phase-1 stage planning, out of scope for ingestion-side IDs. **Phase 0/1 schemas + prompts + code consume `C####` end-to-end** (`chapter_summary_chunk.chapter`, `stage_plan.chapters` ranges as `C####-C####`); `automation/persona_extraction/{prompt_builder,scene_archive}.py` build paths and chapter→stage mappings with the `C` prefix. Identifier rename audits use the 4-form checklist in `conventions.md` §Cross-File Alignment.
+    → `conventions.md` §Naming + §Cross-File Alignment, `schemas/work/chapter_index.schema.json`, `schemas/analysis/{chapter_summary_chunk,stage_plan}.schema.json`.
 
 ## Character Depth
 

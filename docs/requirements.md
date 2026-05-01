@@ -2393,8 +2393,8 @@ Phase 4 进度在 `analysis/progress/phase4_scenes.json`：
 1. 按章节号顺序遍历 `splits/` 目录
 2. 读每章标注 → 根据行号从原文提取 `full_text`
 3. 查 `stage_plan.json` 补充 `stage_id`（解析 stage 的 `chapters` 字段，
-   格式为 `"0001-0011"` 字符串，构建 chapter → stage_id 映射）——**始终以
-   当前 stage_plan 为真源**
+   格式为 `"C0001-C0011"` 字符串，构建 chapter_id → stage_id 映射）——
+   **始终以当前 stage_plan 为真源**
 4. 生成 `scene_id`（`SC-S{stage:03d}-{seq:02d}`，seq 在同一 stage 内
    按"章节号 → 章节内 scene 序"递增，从 01 开始）
 5. 整体重写 `scene_archive.jsonl`（每次合并完整重建，确保与 stage_plan 对齐）

@@ -74,7 +74,7 @@ def build_summarization_prompt(
     # Build chapter file list
     chapter_files = []
     for ch in range(start_chapter, end_chapter + 1):
-        chapter_files.append(f"- `{source_dir}/chapters/{ch:04d}.txt`")
+        chapter_files.append(f"- `{source_dir}/chapters/C{ch:04d}.txt`")
 
     summaries_dir = (project_root / "works" / work_id
                      / "analysis" / "chapter_summaries")
@@ -95,8 +95,8 @@ def build_summarization_prompt(
         "language": manifest.get("language", "zh") if manifest else "zh",
         "chunk_index": chunk_index,
         "total_chunks": total_chunks,
-        "start_chapter": f"{start_chapter:04d}",
-        "end_chapter": f"{end_chapter:04d}",
+        "start_chapter": f"C{start_chapter:04d}",
+        "end_chapter": f"C{end_chapter:04d}",
         "chunk_chapter_count": end_chapter - start_chapter + 1,
         "source_dir": str(source_dir),
         "chapter_file_list": "\n".join(chapter_files),
@@ -429,7 +429,7 @@ def _build_world_read_list(
     # Source chapters for this stage
     start, end = _parse_chapter_range(stage.chapters)
     for ch in range(start, end + 1):
-        ch_file = source_dir / "chapters" / f"{ch:04d}.txt"
+        ch_file = source_dir / "chapters" / f"C{ch:04d}.txt"
         if ch_file.exists():
             files.append(str(ch_file.relative_to(project_root)))
 
@@ -470,7 +470,7 @@ def _build_char_snapshot_read_list(
     # Source chapters
     start, end = _parse_chapter_range(stage.chapters)
     for ch in range(start, end + 1):
-        ch_file = source_dir / "chapters" / f"{ch:04d}.txt"
+        ch_file = source_dir / "chapters" / f"C{ch:04d}.txt"
         if ch_file.exists():
             files.append(str(ch_file.relative_to(project_root)))
 
@@ -511,7 +511,7 @@ def _build_char_support_read_list(
     # Source chapters
     start, end = _parse_chapter_range(stage.chapters)
     for ch in range(start, end + 1):
-        ch_file = source_dir / "chapters" / f"{ch:04d}.txt"
+        ch_file = source_dir / "chapters" / f"C{ch:04d}.txt"
         if ch_file.exists():
             files.append(str(ch_file.relative_to(project_root)))
 
@@ -548,11 +548,11 @@ def _deduplicate(files: list[str]) -> list[str]:
 
 
 def _parse_chapter_range(chapters: str) -> tuple[int, int]:
-    """Parse '0001-0010' into (1, 10)."""
+    """Parse 'C0001-C0010' into (1, 10)."""
     parts = chapters.split("-")
     if len(parts) == 2:
-        return int(parts[0]), int(parts[1])
-    return int(parts[0]), int(parts[0])
+        return int(parts[0].lstrip("C")), int(parts[1].lstrip("C"))
+    return int(parts[0].lstrip("C")), int(parts[0].lstrip("C"))
 
 
 def _chunk_covers_range(chunk_path: Path, stage_start: int,

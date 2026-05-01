@@ -49,6 +49,29 @@ When a concept changes, update every file in its row:
 
 After any change, grep for the old phrasing to catch stale references.
 
+### Identifier rename — multi-form scan checklist
+
+When renaming an identifier (e.g. `chapter0001` → `C0001`,
+`stage0001` → `S001`), a single literal grep is **not enough** —
+identifiers tend to leak into multiple syntactic forms across the
+repo. Before declaring "no residue", grep all four forms below
+across `schemas/` / `prompts/` / `automation/` / `docs/` /
+`ai_context/` / `simulation/` (exclude `sources/` / `users/` /
+`works/` / `logs/change_logs/` / `docs/todo_list_archived.md` since
+those legitimately carry historical snapshots):
+
+1. **Old literal prefix** — `chapter[0-9]{4}` / `stage[0-9]{4}`
+2. **Bare numeric pattern in JSON Schema** — `"\^\\d{4}\$"` /
+   `"\^\\d{4}-\\d{4}\$"` (zero-padded numerics often hide there)
+3. **Python f-string format spec** — `\{ch:04d\}` / `\{:04d\}` in
+   path / dict-key / format strings
+4. **File-name literals in docs / examples** — `0001\.txt` /
+   `"0001-0010"` (renames usually drift in prose examples)
+
+Codify the four forms into the PRE log "Validation criteria"
+section when planning an identifier rename, so /post-check can
+verify each independently.
+
 ## Naming and Identifiers
 
 - Chinese works → Chinese `work_id`, `character_id`, path segments.
