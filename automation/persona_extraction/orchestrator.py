@@ -46,7 +46,11 @@ from .lane_output import (
     expected_lane_names,
     verify_lane_output,
 )
-from .manifests import write_works_manifest, write_world_manifest
+from .manifests import (
+    read_structure_mode,
+    write_works_manifest,
+    write_world_manifest,
+)
 from .llm_backend import LLMBackend, LLMResult, run_with_retry
 from .post_processing import run_stage_post_processing
 from .process_guard import PidLock, fmt_memory, get_rss_mb
@@ -694,8 +698,12 @@ class ExtractionOrchestrator:
 
     def run_summarization(self) -> Path:
         """Summarize all chapters in chunks, return summaries directory."""
+        structure_mode = read_structure_mode(self.project_root, self.work_id)
+        is_light_novel = structure_mode == "light_novel"
+
         print("\n" + "=" * 60)
-        print("  Phase 0: Chapter Summarization")
+        print(f"  Phase 0: Chapter Summarization "
+              f"(structure_mode={structure_mode})")
         print("=" * 60 + "\n")
 
         source_dir = (self.project_root / "sources" / "works"
@@ -712,13 +720,20 @@ class ExtractionOrchestrator:
                          / "analysis" / "chapter_summaries")
         summaries_dir.mkdir(parents=True, exist_ok=True)
 
-        # Build chunk list: (idx, start, end) all 1-based
+        # Build chunk list: (idx, start, end) all 1-based.
+        # light_novel: 1 sub-section = 1 chunk = 1 chapter — degenerate
+        # single-element chunks bypass token-budget batching but reuse the
+        # same downstream chunk_summary schema / path / parallel runner.
         chunks: list[tuple[int, int, int]] = []
-        for i in range(0, total_chapters, self.chunk_size):
-            start = i + 1
-            end = min(i + self.chunk_size, total_chapters)
-            idx = i // self.chunk_size + 1
-            chunks.append((idx, start, end))
+        if is_light_novel:
+            for i in range(total_chapters):
+                chunks.append((i + 1, i + 1, i + 1))
+        else:
+            for i in range(0, total_chapters, self.chunk_size):
+                start = i + 1
+                end = min(i + self.chunk_size, total_chapters)
+                idx = i // self.chunk_size + 1
+                chunks.append((idx, start, end))
 
         total_chunks = len(chunks)
 
@@ -749,7 +764,10 @@ class ExtractionOrchestrator:
         phase0.save(self.project_root)
 
         print(f"  Total chapters: {total_chapters}")
-        print(f"  Chunk size: {self.chunk_size}")
+        if is_light_novel:
+            print(f"  Chunk size: 1 (light_novel mode)")
+        else:
+            print(f"  Chunk size: {self.chunk_size}")
         print(f"  Total chunks: {total_chunks}")
 
         # Filter out already-completed chunks. Skip judgement is
@@ -911,13 +929,75 @@ class ExtractionOrchestrator:
     # Phase 1: Analysis (from summaries)
     # ------------------------------------------------------------------
 
+    def _build_light_novel_stage_plan(self) -> dict[str, Any]:
+        """Programmatically derive stage_plan 1:1 from chapter_index.
+
+        light_novel mode: 1 sub-section = 1 phase 0 chunk = 1 phase 1
+        stage. The LLM analysis call still runs (for world_overview +
+        candidate_characters), but its stage_plan output is overwritten
+        by this derivation before schema gate.
+        """
+        chapter_index = _load_json(
+            self.project_root / "sources" / "works" / self.work_id
+            / "metadata" / "chapter_index.json")
+        if not isinstance(chapter_index, list) or not chapter_index:
+            print("[ERROR] light_novel stage_plan derivation: "
+                  "chapter_index.json missing or empty.")
+            sys.exit(1)
+
+        stages: list[dict[str, Any]] = []
+        for i, entry in enumerate(chapter_index, start=1):
+            if not isinstance(entry, dict):
+                print(f"[ERROR] chapter_index entry #{i} is not an object.")
+                sys.exit(1)
+            try:
+                chapter_id = entry["chapter_id"]
+                title = entry["title"]
+            except (KeyError, TypeError) as exc:
+                print(f"[ERROR] chapter_index entry #{i} missing "
+                      f"required field: {exc}")
+                sys.exit(1)
+            # `chapters` reuses the C####-C#### degenerate-range format
+            # (start == end) so downstream phase 2/3/4 consumers
+            # (prompt_builder._parse_chapter_range, scene_archive,
+            # repair_agent.context_retriever, post_processing._parse_chapter_scope)
+            # work unchanged. Volume / printed-chapter display info lives
+            # on the chapter_index profile-B fields, which already feed
+            # `title` here via the normalization-derived formula.
+            stages.append({
+                "stage_id": f"S{i:03d}",
+                "stage_title": title,
+                "chapters": f"{chapter_id}-{chapter_id}",
+                "chapter_count": 1,
+                "boundary_reason": (
+                    "light_novel: 1 sub-section = 1 stage"
+                ),
+            })
+
+        return {
+            "work_id": self.work_id,
+            "default_stage_size": 1,
+            "total_chapters": len(chapter_index),
+            "stages": stages,
+        }
+
     def run_analysis(self) -> dict[str, Any]:
         """Run analysis phase: identity merge + world overview + stage plan + candidates.
 
         If the produced stage plan contains oversized stages (>15 chapters),
         the plan file is deleted and the LLM is re-run with corrective
         feedback (up to MAX_ANALYSIS_RETRIES times).
+
+        light_novel mode (`structure_mode = "light_novel"`): Phase 1 still
+        runs the LLM analysis prompt (for world_overview + candidate_characters),
+        but the LLM-produced stage_plan is overwritten by a 1:1 derivation
+        from chapter_index before schema gate; STAGE_MIN/MAX validation is
+        bypassed (1:1 derivation of 1-chapter stages would always violate
+        5-15).
         """
+        structure_mode = read_structure_mode(self.project_root, self.work_id)
+        is_light_novel = structure_mode == "light_novel"
+
         cfg = get_config()
         MAX_ANALYSIS_RETRIES = cfg.phase1.exit_validation_max_retry
         STAGE_MIN = cfg.stage.min_chapter_count
@@ -929,7 +1009,8 @@ class ExtractionOrchestrator:
         for attempt in range(1, MAX_ANALYSIS_RETRIES + 2):
             print("\n" + "=" * 60)
             if attempt == 1:
-                print("  Phase 1: Analysis (from chapter summaries)")
+                print(f"  Phase 1: Analysis (from chapter summaries) "
+                      f"[structure_mode={structure_mode}]")
             else:
                 print(f"  Phase 1: Analysis — retry {attempt - 1}"
                       f" (correcting stage plan)")
@@ -949,6 +1030,15 @@ class ExtractionOrchestrator:
                 sys.exit(1)
 
             print("[OK] Analysis complete.")
+
+            # light_novel: overwrite LLM stage_plan with 1:1 derivation
+            # before any validation reads it.
+            if is_light_novel:
+                derived = self._build_light_novel_stage_plan()
+                _write_json(inc_dir / "stage_plan.json", derived)
+                print(f"  [OK] light_novel stage_plan derived: "
+                      f"{len(derived['stages'])} stages "
+                      f"(1 sub-section = 1 stage)")
 
             stage_plan = _load_json(inc_dir / "stage_plan.json")
             candidates = _load_json(inc_dir / "candidate_characters.json")
@@ -979,9 +1069,11 @@ class ExtractionOrchestrator:
                 if errs:
                     schema_failures.append((fname, errs))
 
-            # Phase 1 exit validation: check stage chapter_count limits
+            # Phase 1 exit validation: check stage chapter_count limits.
+            # light_novel bypasses this — 1:1 derivation always = 1 chapter
+            # per stage which violates the monolithic 5-15 rule by design.
             violating: list[dict[str, Any]] = []
-            if stage_plan:
+            if stage_plan and not is_light_novel:
                 violating = _check_stage_plan_limits(
                     stage_plan,
                     max_stage_size=STAGE_MAX,
@@ -2485,3 +2577,11 @@ def _load_json(path: Path) -> dict[str, Any] | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
+
+
+def _write_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )

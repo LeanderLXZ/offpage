@@ -55,9 +55,9 @@
 
 **用途**：Phase 1 stage 切分计划。下游 Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择都依赖此文件。
 **位置**：`works/{work_id}/analysis/stage_plan.json`（**入 git**）
-**关键字段**：`work_id` / `default_stage_size` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^C[0-9]{4}-C[0-9]{4}$`（与 chapter_id 命名一致） / `chapter_count` 5-15 hard / `boundary_reason`）
-**生成时机**：Phase 1 by `automation/prompt_templates/analysis.md`。
-**契约**：`chapter_count` 5-15 由 schema 强制（与 prompt 自检 + orchestrator `_check_stage_plan_limits` 一致；schema 是权威）。
+**关键字段**：`work_id` / `default_stage_size` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^C[0-9]{4}-C[0-9]{4}$`（与 chapter_id 命名一致；light_novel 模式用 degenerate 单章区间，例 `C0001-C0001`） / `chapter_count` 1-15（schema） / `boundary_reason`）
+**生成时机**：monolithic 模式由 Phase 1 LLM (`automation/prompt_templates/analysis.md`) 产出；light_novel 模式由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生（同次仍跑 LLM 产 world_overview + candidate_characters，stage_plan 在 schema gate 之前被覆写）。
+**契约**：schema `chapter_count.minimum = 1`（为 light_novel 让出空间）；monolithic 的 5–15 上下限由 orchestrator `_check_stage_plan_limits` 在代码层强制（light_novel 模式跳过此校验）。
 
 ---
 
@@ -75,10 +75,11 @@
 
 ### work/work_manifest.schema.json
 
-**用途**：source package manifest。
+**用途**：source package manifest（source 端，`sources/works/{work_id}/manifest.json`）。**与 canon 端 `works_manifest.schema.json` 是两份不同 schema**（命名差一个 `s`），分别管 source 与 canon 包目录页。
 **位置**：`sources/works/{work_id}/manifest.json`
-**关键字段**：work_id, title, language, source_types, ingestion_status, paths
-**生成时机**：`prompts/ingestion/原始资料规范化.md` 执行规范化时产出。
+**关键字段**：work_id, title, language, source_types, ingestion_status, paths, `structure_mode`（enum `monolithic` / `light_novel`，default `monolithic`，phase 0/1 双模式调度信号）
+**生成时机**：`prompts/ingestion/原始资料规范化.md` 执行规范化时产出（含 `structure_mode` 手填）。
+**跨文件契约**：`structure_mode` ⇔ `chapter_index` items profile（monolithic 禁 6 字段、light_novel 必填 4 + 可选 2）由 `automation/ingestion/validator.py` 跨文件断言；canon 端 `works/{work_id}/manifest.json` 由 `manifests.write_works_manifest` 拷贝该字段。
 
 ---
 
@@ -86,7 +87,7 @@
 
 **用途**：canon 作品包 manifest（作品包目录页）。
 **位置**：`works/{work_id}/manifest.json`
-**关键字段**：work_id, title, language, source_package_ref, paths, chapter_count, stage_count, character_count, stage_ids, character_ids
+**关键字段**：work_id, title, language, source_package_ref, paths, chapter_count, stage_count, character_count, stage_ids, character_ids, `structure_mode`（enum `monolithic` / `light_novel`，default `monolithic`，从 source manifest 拷贝；下游 phase 0/1 调度依赖此值）
 **生成时机**：Phase 1.5 用户确认完成时由 `automation.persona_extraction.manifests.write_works_manifest` 程序化写出；不走 LLM。
 
 ---
@@ -102,10 +103,16 @@
 
 ### work/chapter_index.schema.json
 
-**用途**：章节索引（顶层 JSON 数组）。
+**用途**：章节索引（顶层 JSON 数组）。`items` 为 `oneOf` 双 profile，由 source manifest `structure_mode` 调度。
 **位置**：`sources/works/{work_id}/metadata/chapter_index.json`
-**关键字段**：每条含 sequence（严格连续递增）、chapter_id（格式 `^C[0-9]{4}$`，例如 `C0001`）、title、normalized_path（例如 `chapters/C0001.txt`）。多卷书额外可选 volume_id（格式 `^V[0-9]{3}$`）/ volume_title / volume_chapter_seq 三件套（多卷书必填，单卷书不填）。
-**生成时机**：规范化阶段产出；后续 Phase 0/1/3/4 的 chapter 引用都以 chapter_id 为锚。
+**关键字段**：
+- 全 profile 共有：sequence（严格连续递增）、chapter_id（格式 `^C[0-9]{4}$`，例如 `C0001`）、title（minLength 1，light_novel 模式由规范化按公式派生）、normalized_path（例如 `chapters/C0001.txt`）；可选 source_path / paragraph_count / char_count
+- **monolithic profile**（`structure_mode = "monolithic"`）：`additionalProperties: false`，禁用 6 个 light_novel 字段（volume_id / volume_title / volume_seq / original_chapter_seq / original_sub_chapter_seq / original_chapter_title）
+- **light_novel profile**（`structure_mode = "light_novel"`）：required 三层 seq 全部 — volume_id（`^V[0-9]{3}$`）+ volume_seq（int ≥ 1，卷在全书的 1-based 序号）+ original_chapter_seq（int ≥ 1，原印刷章在所属 volume 的 1-based 序号，过卷重置）+ original_sub_chapter_seq（int ≥ 1，sub-section 在所属 original_chapter 的 1-based 序号，过原章重置）；可选 volume_title + original_chapter_title
+
+**title 派生（light_novel）**：`f"{volume_title or '第N卷'} {original_chapter_title or '第M章'} {original_sub_chapter_seq}"`，N = volume_seq、M = original_chapter_seq；缺失字段用占位字符串。
+
+**生成时机**：规范化阶段产出；后续 Phase 0/1/3/4 的 chapter 引用都以 chapter_id 为锚（profile 拆分不向下游传播）。
 
 ---
 

@@ -28,20 +28,26 @@
 - 归一化章节：`sources/works/{work_id}/normalized/`
 - 创建元数据（三份均为 schema 硬门控）：
   - `sources/works/{work_id}/manifest.json`
-    （schema：`schemas/work/work_manifest.schema.json`）
+    （schema：`schemas/work/work_manifest.schema.json`；含 `structure_mode` 字段，enum `monolithic` / `light_novel`，default `monolithic`，决定 phase 0/1 双模式调度）
   - `sources/works/{work_id}/metadata/book_metadata.json`
     （schema：`schemas/work/book_metadata.schema.json`）
   - `sources/works/{work_id}/metadata/chapter_index.json`
-    （schema：`schemas/work/chapter_index.schema.json`）
+    （schema：`schemas/work/chapter_index.schema.json`；items `oneOf` 双 profile 必须与 `structure_mode` 一致）
 - 交付前 gate：运行 `python -m automation.ingestion.validator <work_id>`，
-  任一文件不过 schema 必须回修，才可进入 Phase 0。
+  任一文件不过 schema 必须回修，才可进入 Phase 0；validator 同时跨文件断言
+  `structure_mode` ⇔ `chapter_index` profile 一致（不一致即报错）。
 
 **对应提示词**：`prompts/ingestion/原始资料规范化.md`
 
 ### 2. 章节归纳（Phase 0）
 
-- 将全书按分组（chunk，约 20-25 章/组）归纳
-- 多 chunk 并行处理（`--concurrency` 控制，默认 10）
+**双模式调度**（由 source manifest `structure_mode` 字段决定，default `monolithic`，works manifest 在 Phase 1.5 从 source 拷字段）：
+
+- **monolithic 模式**（既有路径）：将全书按分组（chunk，`chunk_size` 章/组，默认见 `automation/config.toml`）归纳；多 chunk 并行处理（`--concurrency` 控制，默认 10）
+- **light_novel 模式**：1 sub-section = 1 chunk = 1 chapter；不跑 token-budget batch，`chunks = [(i+1, i+1, i+1) for i in range(total_chapters)]`；仍按 concurrency 并行；chunk_summary 落盘 schema / 路径 / 命名不变（`chunk_001.json` / `chunk_002.json` / ...）
+
+通用流程：
+
 - 产出每章的结构化摘要（事件、出场角色、地点、情绪基调、身份变化线索）
 - JSON 修复：L1 程序化 → L2 LLM（600s）→ L3 全量重跑（最多 1 次）
 - **Schema gate**：每个 chunk 落盘后跑 jsonschema (`schemas/analysis/chapter_summary_chunk.schema.json`) 校验，
@@ -55,7 +61,22 @@
 
 ### 3. 全书分析（Phase 1）
 
-基于所有章节摘要（不读原文），按顺序执行：
+**双模式调度**（沿用 Phase 0 的 `structure_mode`）：
+
+- **monolithic 模式**：基于所有章节摘要（不读原文），LLM 走单次 prompt 串联跑 a/b/c/d 四子任务；stage 边界由 LLM 按 5–15 章规则自主发现；走出口验证（schema + STAGE_MIN/MAX）
+- **light_novel 模式**：跳过 LLM stage 边界发现，由 orchestrator 程序化 1:1 从 chapter_index 派生 stage_plan：
+  - `stage_id = S{n:03d}`（n 从 1 起，对应 chapter_index 顺序）
+  - `chapters = f"{chapter_id}-{chapter_id}"`（degenerate 单章区间，例 `"C0001-C0001"`；与 monolithic 共享 `^C[0-9]{4}-C[0-9]{4}$` 解析路径，phase 2/3/4 消费方零分叉）
+  - `chapter_count = 1`
+  - `stage_title = chapter_index[i].title`（已含卷 / 印刷章 / sub-section 由规范化派生的拼接）
+  - 跳过 STAGE_MIN / STAGE_MAX `chapter_count` 校验（1:1 派生天然违反 5–15 限制，是预期行为）
+  - `world_overview.json` / `candidate_characters.json` 仍由 LLM 走分析子任务（沿用 monolithic 同一 prompt）
+
+阶段规划是分析阶段**最核心的产出**——每个 stage 边界直接成为系统的 stage 边界，
+世界快照、角色快照、记忆时间线、运行时阶段选择全部建立在此切分之上（monolithic
+路径为剧情边界准确性优先于均匀；light_novel 路径粒度 = sub-section）。
+
+monolithic 子任务（不变）：
 
 a. **跨 chunk 角色身份合并**：不同 chunk 中以不同名称出现的同一角色统一为
    单一候选条目
@@ -67,9 +88,6 @@ c. **源文件阶段规划**：按自然剧情边界切分（默认目标 10 章
 d. **候选角色识别**：基于身份合并后的角色出场信息。
    输出：`works/{work_id}/analysis/candidate_characters.json`
 
-阶段规划是分析阶段**最核心的产出**——每个 stage 边界直接成为系统的 stage 边界，
-世界快照、角色快照、记忆时间线、运行时阶段选择全部建立在此切分之上。
-
 **出口验证（硬性门控）**：Phase 1 完成后跑三层校验，**共享同一 retry 预算**
 （`[phase1].exit_validation_max_retry`，默认 2 次）：
 
@@ -79,8 +97,9 @@ d. **候选角色识别**：基于身份合并后的角色出场信息。
 2. **jsonschema 校验**：三件套各自跑 `Draft202012Validator.iter_errors`
    （`schemas/analysis/{world_overview,stage_plan,candidate_characters}.schema.json`），
    覆盖结构 / bound / enum / pattern。
-3. **stage `chapter_count` 5-15 限制**（`_check_stage_plan_limits`，与 schema
-   `chapter_count: minimum 5, maximum 15` 同义；belt-and-suspenders）。
+3. **stage `chapter_count` 5-15 限制**（`_check_stage_plan_limits`；schema
+   `chapter_count.minimum=1` 是为 light_novel 让出空间，monolithic 5-15
+   由本代码层强制；light_novel 模式跳过此校验）。
 
 任一层失败 → 把缺失文件清单 + 首条 schema 错误 + stage 限制违规明细合并进
 `correction_feedback`（按 `build_analysis_prompt(correction_feedback=...)`

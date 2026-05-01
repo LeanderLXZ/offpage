@@ -172,6 +172,53 @@ def validate_source_package(
                 )
                 break
 
+    # structure_mode ⇔ chapter_index profile cross-file assertion.
+    # The chapter_index schema's items oneOf already gates that each
+    # entry matches exactly one profile (monolithic forbids 6 fields,
+    # light_novel requires 4). This loop verifies that the profile
+    # actually selected matches the manifest's declared structure_mode,
+    # which oneOf alone cannot enforce.
+    manifest = loaded.get("manifest.json")
+    if isinstance(manifest, dict) and isinstance(ci, list):
+        mode = manifest.get("structure_mode", "monolithic")
+        ci_label = str(source_dir / "metadata/chapter_index.json")
+        light_novel_required = (
+            "volume_id",
+            "volume_seq",
+            "original_chapter_seq",
+            "original_sub_chapter_seq",
+        )
+        light_novel_optional = ("volume_title", "original_chapter_title")
+        light_novel_fields = light_novel_required + light_novel_optional
+        for idx, entry in enumerate(ci, start=1):
+            if not isinstance(entry, dict):
+                continue
+            present = [k for k in light_novel_fields if k in entry]
+            if mode == "monolithic" and present:
+                issues.append(
+                    ValidationIssue(
+                        "error",
+                        ci_label,
+                        f"sequence={idx}: structure_mode=monolithic but "
+                        f"light_novel field(s) present: "
+                        f"{', '.join(sorted(present))}",
+                    )
+                )
+                break
+            if mode == "light_novel":
+                missing = [k for k in light_novel_required if k not in entry]
+                if missing:
+                    issues.append(
+                        ValidationIssue(
+                            "error",
+                            ci_label,
+                            f"sequence={idx}: structure_mode=light_novel "
+                            f"but required field(s) missing: "
+                            f"{', '.join(sorted(missing))}",
+                        )
+                    )
+                    break
+
     passed = not any(i.severity == "error" for i in issues)
     return ValidationReport(passed=passed, issues=issues)
 

@@ -3,62 +3,130 @@
   "$id": "offpage/work/chapter_index.schema.json",
   "title": "章节索引",
   "type": "array",
-  "description": "source package 章节清单，按 sequence 升序排列，与 chapters/ 目录下的规范化文件一一对应。",
+  "description": "source package 章节清单，按 sequence 升序排列，与 chapters/ 目录下的规范化文件一一对应。items 为 oneOf 双 profile：monolithic（单卷非结构化作品）禁用 6 个 light_novel 字段；light_novel（多卷结构化作品）必填三层 seq + volume_id。profile 必须与 source manifest 的 structure_mode 一致，跨文件断言由 automation/ingestion/validator.py 执行。",
   "items": {
-    "type": "object",
-    "additionalProperties": false,
-    "required": [
-      "sequence",
-      "chapter_id",
-      "title",
-      "normalized_path"
-    ],
-    "properties": {
-      "sequence": {
-        "type": "integer",
-        "minimum": 1,
-        "description": "章节序号，从 1 起递增，全序列严格连续。"
+    "oneOf": [
+      {
+        "$comment": "monolithic profile — structure_mode = monolithic",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "chapter_id",
+          "title",
+          "normalized_path"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "章节序号，从 1 起递增，全序列严格连续。"
+          },
+          "chapter_id": {
+            "type": "string",
+            "pattern": "^C[0-9]{4}$",
+            "description": "章节稳定标识，格式 ^C[0-9]{4}$，例如 C0001。后续 Phase 0/1/3/4 的交叉引用依赖此值。"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_path": {
+            "type": "string",
+            "description": "原始文件相对路径（相对 source package 根）。"
+          },
+          "normalized_path": {
+            "type": "string",
+            "description": "规范化后纯文本章节文件的相对路径，例如 chapters/C0001.txt。"
+          },
+          "paragraph_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "char_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
       },
-      "chapter_id": {
-        "type": "string",
-        "pattern": "^C[0-9]{4}$",
-        "description": "章节稳定标识，格式 ^C[0-9]{4}$，例如 C0001。后续 Phase 0/1/3/4 的交叉引用依赖此值。"
-      },
-      "title": {
-        "type": "string",
-        "minLength": 1
-      },
-      "source_path": {
-        "type": "string",
-        "description": "原始文件相对路径（相对 source package 根）。"
-      },
-      "normalized_path": {
-        "type": "string",
-        "description": "规范化后纯文本章节文件的相对路径，例如 chapters/C0001.txt。"
-      },
-      "paragraph_count": {
-        "type": "integer",
-        "minimum": 0
-      },
-      "char_count": {
-        "type": "integer",
-        "minimum": 0
-      },
-      "volume_id": {
-        "type": "string",
-        "pattern": "^V[0-9]{3}$",
-        "description": "卷标识，格式 ^V[0-9]{3}$，例如 V001。多卷书必填，单卷书不填。"
-      },
-      "volume_title": {
-        "type": "string",
-        "minLength": 1,
-        "description": "卷名（作品语言），例如 第一卷 邂逅。多卷书必填，单卷书不填。"
-      },
-      "volume_chapter_seq": {
-        "type": "integer",
-        "minimum": 1,
-        "description": "卷内章序（从 1 起递增；与全书 sequence 不同）。多卷书必填，单卷书不填。"
+      {
+        "$comment": "light_novel profile — structure_mode = light_novel",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "chapter_id",
+          "title",
+          "normalized_path",
+          "volume_id",
+          "volume_seq",
+          "original_chapter_seq",
+          "original_sub_chapter_seq"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "章节序号（sub-section 全书 1-based 序号），从 1 起递增，全序列严格连续。"
+          },
+          "chapter_id": {
+            "type": "string",
+            "pattern": "^C[0-9]{4}$",
+            "description": "sub-section 稳定标识，格式 ^C[0-9]{4}$，例如 C0001。后续 Phase 0/1/3/4 的交叉引用依赖此值；light_novel 模式下 1 sub-section = 1 C-id。"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "由规范化按公式派生：f\"{volume_title or '第N卷'} {original_chapter_title or '第M章'} {original_sub_chapter_seq}\"，N = volume_seq、M = original_chapter_seq。"
+          },
+          "source_path": {
+            "type": "string",
+            "description": "原始文件相对路径（相对 source package 根）。"
+          },
+          "normalized_path": {
+            "type": "string",
+            "description": "规范化后纯文本章节文件的相对路径，例如 chapters/C0001.txt。"
+          },
+          "paragraph_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "char_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "volume_id": {
+            "type": "string",
+            "pattern": "^V[0-9]{3}$",
+            "description": "卷标识，格式 ^V[0-9]{3}$，例如 V001。"
+          },
+          "volume_seq": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "卷在全书的 1-based 序号（V001 → 1, V002 → 2, ...）。与 volume_id 信息冗余，保留作 title 派生 / 排序整数源。"
+          },
+          "original_chapter_seq": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "原印刷章在所属 volume 的 1-based 序号；过卷重置。"
+          },
+          "original_sub_chapter_seq": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "sub-section 在所属 original_chapter 的 1-based 序号；过原章重置。"
+          },
+          "volume_title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "卷名（作品语言），例如 第一卷 邂逅。"
+          },
+          "original_chapter_title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "原印刷章名（多个连续 sub-section 共享）。"
+          }
+        }
       }
-    }
+    ]
   }
 }

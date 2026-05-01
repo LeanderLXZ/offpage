@@ -6,12 +6,13 @@
 
 > 本段是三张子表的渲染缓存，由维护本文件的人（包括 Claude）在**每次对正文条目增 / 改 / 移段 / 完成 / 废弃后**顺手刷新——具体规则见下方"## File guide → Index maintenance"。`/todo` skill 不解析正文，只读这一段，所以这里的内容必须与正文同步；不同步会让 `/todo` 给出错误结论。
 
-### 🟢 In Progress (2)
+### 🟢 In Progress (3)
 
 | ID | Title | Start time | Status |
 |---|---|---|---|
 | `T-BASELINE-DEPRECATE` | 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载 | 2026-04-29 14:42 EDT | 代码完成、runtime 验证待跑 |
 | `T-PHASE2-TARGET-BASELINE` | phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点 | 2026-04-29 20:54 EDT | 代码完成、runtime 验证待跑（与 BASELINE-DEPRECATE 同形态，可同批跑） |
+| `T-INGEST-STRUCTURE-MODE` | phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | schema/code/prompt/ai_context/docs 完成、smoke 全过；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
 
 ### 🟡 Next (2)
 
@@ -19,7 +20,6 @@
 |---|---|---|---|---|---|
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | 无 |
 | `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | T-PHASE2-TARGET-BASELINE |
-| `T-INGEST-STRUCTURE-MODE` | 2026-04-30 接入《狼与香辛料》暴露 phase 0/1 仅为单卷网络小说设计；新增 light_novel 模式（1 sub-section = 1 C-id = 1 chunk = 1 stage），由 source manifest structure_mode 调度；chapter_index schema 改 oneOf 双 profile。 | 🟢 Med-Low | ⏸ Blocked | 🔴 Large·Arch | 狼与香辛料 source 规范化 fixture |
 
 ### ⚪ Discussing (8)
 
@@ -33,7 +33,7 @@
 | `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
-**Total**: 13 — 🟢 In Progress 2 ｜ 🟡 Next 3 ｜ ⚪ Discussing 8
+**Total**: 13 — 🟢 In Progress 3 ｜ 🟡 Next 2 ｜ ⚪ Discussing 8
 
 ---
 
@@ -412,6 +412,84 @@ target_voice_map / target_behavior_map / relationships 的 keys。三个痛点�
 
 ---
 
+### [T-INGEST-STRUCTURE-MODE] Phase 0/1 双模式（monolithic / light_novel）调度
+
+**开始时间**：2026-05-01 07:04 EDT
+
+**当前状态**：schema/code/prompt/ai_context/docs 完成、smoke 全过；
+end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有
+fixture 双向回归）
+
+**上下文**
+
+phase 0/1 流程原本仅为单卷非结构化作品（典型中文网络小说）设计：phase 0
+按 token-budget 启发式切 batch、phase 1 自主发现 stage 边界。多卷结构化
+轻小说的天然结构（卷 → 印刷章 → sub-section）这套流程没有利用，且
+`1 stage = 1 sub-section` 的粒度需求与启发式不匹配。
+
+方向：phase 0/1 支持双模式，由 source manifest `structure_mode` 字段调度——
+
+- **monolithic**：维持现有 token-budget 启发式 + 自动 stage 发现
+- **light_novel**：1 phase 0 chunk = 1 phase 1 stage = 1 sub-section
+  （normalization 后的 1 个 C-id）；stage_plan 直接 1:1 从 chapter_index
+  派生，不跑 boundary discovery
+
+phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapter_index
+里 profile-B 字段携带，character / world schema 不动。
+
+**已落地（schema/code/prompt/ai_context/docs，2026-05-01）**
+
+- schema：`schemas/work/chapter_index.schema.json` items 改 `oneOf` 双
+  profile（monolithic 禁 6 字段、light_novel 必填 4 + 可选 2）；
+  `schemas/work/work_manifest.schema.json` + `schemas/work/works_manifest.schema.json`
+  加 `structure_mode` enum（默认 `monolithic`）；`schemas/analysis/stage_plan.schema.json`
+  放宽容纳 light_novel（`chapter_count.minimum` 5→1、`stages.maxItems`
+  200→1000、`stage_title.maxLength` 14→50；`chapters.pattern` 保持
+  `^C[0-9]{4}-C[0-9]{4}$` 不变，light_novel 走 degenerate 单章区间）
+- code：`automation/ingestion/validator.py` 跨文件断言 `structure_mode` ⇔
+  chapter_index profile；`automation/persona_extraction/manifests.py` 加
+  `read_structure_mode()` + `write_works_manifest` 拷字段；
+  `automation/persona_extraction/orchestrator.py` 加
+  `_build_light_novel_stage_plan()` 输出 `chapters = f"{chapter_id}-{chapter_id}"`
+  degenerate 单章区间，phase 0 / phase 1 入口分支调度，phase 1 STAGE_MIN/MAX
+  校验在 light_novel 下绕过；phase 2/3/4 既有 `chapters` 解析器
+  （`prompt_builder._parse_chapter_range`、`scene_archive`、
+  `repair_agent.context_retriever`、`post_processing._parse_chapter_scope`）
+  零改动
+- prompt：`prompts/ingestion/原始资料规范化.md` 补 `structure_mode` 填写
+  指引 + light_novel 三层 seq 字段说明 + title 派生公式
+- ai_context：`decisions.md` 加 27j/27k/27l + 更新 10a；`conventions.md`
+  Cross-File Alignment 加 `structure_mode` 行；`architecture.md` Phase 0/1
+  描述加双模式
+- docs：`docs/architecture/{schema_reference,extraction_workflow}.md`、
+  `docs/requirements.md` §8.4 / §9.2 同步双模式说明
+- smoke：chapter_index oneOf（monolithic + 字段误用拒绝、light_novel +
+  缺字段拒绝）4 case；validator 跨文件断言（pass + fail 双向）4 case；
+  `_build_light_novel_stage_plan` 12-sub-section fixture 通过 stage_plan
+  schema；`write_works_manifest` 拷 `structure_mode` + `read_structure_mode`
+  prefer works → source 全过
+
+**待跑（runtime 验证）**
+
+- 拿一份完整规范化的多卷 light_novel fixture 跑一遍 phase 0 + phase 1：
+  phase 0 chunk 数 == chapter_index 长度；phase 1 stage 数 == chapter_index
+  长度；stage_plan 顺序、stage_id、stage_title 正确
+- 既有 monolithic fixture dry-run 一遍 phase 0/1，与历史结果一致——确认
+  默认路径不退化
+
+**暂不做的事**
+
+- normalization-时 LLM 形态判断的 prompt 设计 / 落地（独立后续 todo）
+- 第三种 mode（western_epub / webnovel_serialized 等）— 不预设 schema 扩
+  展点，等真有 fixture 再说
+- chunking_strategy / stage_strategy 解耦的 feature-flag 重构 — 现 2 个
+  mode 用 if/else 够用
+- light_novel 模式 phase 0/1 LLM call 合并优化 — take 这份冗余成本
+- 上/下卷合并、短篇集粒度细化 — 由 normalization 阶段控制 volume_id
+  （同卷给同 id）；不在 phase 0/1 处理
+
+---
+
 ## Next
 
 ### [T-PLUGIN-README] 写 .agents/skills 的 plugin README
@@ -602,159 +680,6 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   编辑 baseline + stage 重抽处理，不引入 escape hatch）
 - 当前 work package 切到新模型的时序问题不在本任务内（按用户原则
   「不过度工程，整 lane 重跑」处理）
-
----
-
-### [T-INGEST-STRUCTURE-MODE] Phase 0/1 双模式（monolithic / light_novel）调度
-
-**上下文**
-
-2026-04-30 接入《狼与香辛料》（22 卷结构化多卷轻小说）暴露 phase 0/1 流程
-仅为单卷非结构化中文网络小说（<character>）设计：phase 0 按 token-budget 启发式
-切 batch、phase 1 自主发现 stage 边界。多卷轻小说的天然结构（卷 → 印刷
-章 → sub-section）这套流程没有利用，且 1 stage = 1 sub-section 的粒度需
-求与启发式不匹配。
-
-方向：phase 0/1 支持双模式，由 source manifest `structure_mode` 字段调度——
-
-- **monolithic**（<character>等中文网络小说）：维持现有 token-budget 启发式 +
-  自动 stage 发现
-- **light_novel**（狼与香辛料等日式轻小说）：1 phase 0 chunk = 1 phase 1
-  stage = 1 sub-section（normalization 后的 1 个 C-id）；stage_plan 直接
-  1:1 从 chapter_index 派生，不跑 boundary discovery
-
-phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapter_index
-里 profile-B 字段携带，character / world schema 不动。
-
-**已拍板**（2026-05-01 收敛）
-
-1. 调度信号字段：`structure_mode: "monolithic" | "light_novel"`，default
-   `"monolithic"`（<character>向后兼容）
-2. **真相源 = source manifest**（normalization 写入），works manifest 在
-   phase 0 init 时复制；loader 跨文件断言两边一致
-3. light_novel 数据模型（三层 seq 全部 required，分别管 volume /
-   original_chapter / sub-section 三层）：
-   - 1 sub-section = 1 C-id = 1 phase 0 chunk = 1 phase 1 stage
-   - `volume_id` 形如 V001（字符串 id，沿用 T-CHAPTER-MULTIVOL）
-   - `volume_seq` 整数 ≥ 1：volume 在全书内的序号（V001 ⇒ 1, V002 ⇒ 2…），
-     与 volume_id 信息冗余但保留作 title 派生 / 排序整数源
-   - `original_chapter_seq` 整数 ≥ 1：original_chapter 在所属 volume 内的
-     序号（每 volume 起首重置）
-   - `original_sub_chapter_seq` 整数 ≥ 1：sub-section 在所属 original_chapter
-     内的序号（每 original_chapter 起首重置；即原 T-CHAPTER-MULTIVOL
-     `volume_chapter_seq` 的 B 语义，**重命名**为本字段）
-   - `original_chapter_title` optional（原书印刷的章名，多个连续 C-id 共享）
-   - `volume_title` optional
-4. chapter_index schema：items 改 `oneOf` 双 profile——
-   - **monolithic profile**：禁用 `volume_id` / `volume_title` /
-     `volume_seq` / `original_chapter_seq` / `original_sub_chapter_seq` /
-     `original_chapter_title`
-   - **light_novel profile**：required `volume_id` + `volume_seq` +
-     `original_chapter_seq` + `original_sub_chapter_seq`，optional
-     `volume_title` / `original_chapter_title`
-   - title 始终 required (minLength 1)
-5. title 派生（normalization 计算后写入 chapter_index）：
-   `f"{volume_title or '第N卷'} {original_chapter_title or '第M章'} {original_sub_chapter_seq}"`
-   缺失字段用占位字符串：N = `volume_seq`、M = `original_chapter_seq`
-   （例：volume_title 缺、volume_seq=1、original_chapter_title 缺、
-   original_chapter_seq=2、original_sub_chapter_seq=3 →
-   title = `"第1卷 第2章 3"`）
-6. light_novel 模式仍跑 phase 0 LLM chunk_summary（每 sub-section 一次）+
-   phase 1 LLM stage_summary（每 sub-section 一次）；接受冗余以换代码
-   复杂度收敛
-7. light_novel 模式绕过 phase 1 STAGE_MIN / STAGE_MAX chapter_count 校验
-8. structure_mode 由 normalization 阶段判定（含 LLM 形态识别 prompt
-   设计）—— **本条 todo 不含**，作为独立后续 todo；本条暂时靠 manifest
-   手填 `structure_mode` 跑通
-
-**改动清单**
-
-Schema：
-
-- file: `schemas/work/chapter_index.schema.json` — items 改 `oneOf` 双
-  profile；monolithic profile `additionalProperties: false` 禁
-  volume_id / volume_title / volume_seq / original_chapter_seq /
-  original_sub_chapter_seq / original_chapter_title 全套；light_novel
-  profile required 含 volume_id + volume_seq + original_chapter_seq +
-  original_sub_chapter_seq，optional volume_title / original_chapter_title；
-  **重命名 `volume_chapter_seq` → `original_sub_chapter_seq`**（语义保留
-  "在所属 original_chapter 内 1 起递增，过原章重置"，仅改名以与新增的
-  `original_chapter_seq` 区分层级）；新增 `volume_seq` integer ≥ 1 +
-  `original_chapter_seq` integer ≥ 1 + `original_chapter_title` string
-  optional
-- file: `schemas/work/manifest.schema.json`（路径 /go 前确认存在 / 创建）—
-  加 `structure_mode` enum 字段，default `"monolithic"`
-- file: source manifest schema（路径 /go 前 grep 定位；如复用同一 schema
-  则一处即可）— 同步加 `structure_mode`
-- 检查 `schemas/analysis/`、`schemas/work/` 下间接引用 chapter_index 的
-  schema，确认 oneOf 拆分不破坏下游引用
-
-Code：
-
-- file: `automation/ingestion/validator.py` — 加跨文件断言：source
-  manifest.structure_mode ⇔ chapter_index profile 一致；works manifest
-  ⇔ source manifest 一致
-- file: `automation/persona_extraction/manifests.py` L64 附近 — 读
-  `structure_mode` 并暴露给下游；works manifest 生成时从 source 拷字段
-- file: `automation/persona_extraction/orchestrator.py` phase 0 入口
-  （L696 附近 `summarize chapters` path）— 分支：light_novel 则
-  `chunks = [[c] for c in chapter_index]`，跳过 token-budget batch 逻辑；
-  chunk_summary 落盘 schema / 路径不变
-- file: `automation/persona_extraction/orchestrator.py` phase 1 入口
-  （L917+ `_build_stage_plan` 区域）— 分支：light_novel 跳过 boundary
-  discovery，1:1 派生 stage_plan：`stage_id = S{n:03d}` 顺序号；
-  `chapters = f"{volume_id}-{original_chapter_seq:02d}-{original_sub_chapter_seq:02d}"`
-  显示用拼接（例 "V001-02-03"；3 字段组合保证全书唯一）；
-  `chapter_count = 1`；`stage_title = chapter_index[i].title`
-- file: `automation/persona_extraction/orchestrator.py` L982+ phase 1
-  exit validation — light_novel 模式下绕过 STAGE_MIN / STAGE_MAX 限制
-- file: 规范化路径（具体模块 /go 前 grep 定位；可能在 `automation/ingestion/`
-  或独立 normalization 子目录）— 加 light_novel 形态识别（手填 → 后续
-  接 LLM 判定）+ chapter_index profile B 字段填充 + title 派生
-
-ai_context：
-
-- file: `ai_context/architecture.md` — 增加双模式调度说明
-- file: `ai_context/decisions.md` — 记录三条决策：structure_mode 调度
-  信号；schema oneOf 双 profile；title 由 normalization 派生
-- file: `ai_context/conventions.md` Cross-File Alignment 表 — 加一行
-  "structure_mode ↔ chapter_index profile ↔ source/works manifest"
-
-**完成标准**
-
-- jsonschema validate：
-  - <character> chapter_index 通过 monolithic profile；混入 volume_id 时明确报错
-  - 狼与香辛料的开发期 fixture chapter_index 通过 light_novel profile
-- validator.py 跨文件断言通过：source manifest 与 chapter_index profile
-  一致、works manifest 拷贝准确
-- 拿狼与香辛料跑一遍 phase 0 + phase 1：phase 0 chunk 数 == chapter_index
-  长度；phase 1 stage 数 == chapter_index 长度；stage_plan 顺序、stage_id、
-  stage_title 正确
-- <character>重抽（或 dry-run）一遍 phase 0/1，与历史结果一致——确认 monolithic
-  默认路径不退化
-
-**依赖**
-
-- T-CHAPTER-MULTIVOL 已落地（提供 `volume_id` / `volume_title` /
-  `volume_chapter_seq` 三字段；本条把单一 seq 字段拆成三层：保留
-  `volume_id` + `volume_title`；`volume_chapter_seq` 重命名为
-  `original_sub_chapter_seq`；新增 `volume_seq` + `original_chapter_seq`
-  补齐 volume / original_chapter 两层显式序号。无既存数据冲突——<character>
-  monolithic 不用这些字段、狼与香辛料尚未规范化）
-- 至少 1 个完整规范化的多卷书 source 产物（狼与香辛料）作为开发期 fixture
-- normalization 阶段 LLM 形态判断 prompt 设计（独立后续 todo，本条暂时手
-  填 manifest 跑通）
-
-**暂不做的事**
-
-- normalization-时 LLM 形态判断的 prompt 设计 / 落地（独立后续 todo）
-- 第三种 mode（western_epub / webnovel_serialized 等）— 不预设 schema 扩
-  展点，等真有 fixture 再说
-- chunking_strategy / stage_strategy 解耦的 feature-flag 重构 — 现 2 个
-  mode 用 if/else 够用
-- light_novel 模式 phase 0/1 LLM call 合并优化 — take 这份冗余成本
-- 上/下卷合并、SIDE COLORS / SPRING LOG 短篇集粒度细化 — 由 normalization
-  阶段控制 volume_id（同卷给同 id）；不在 phase 0/1 处理
 
 ---
 

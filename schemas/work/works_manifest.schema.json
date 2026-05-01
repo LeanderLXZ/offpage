@@ -104,6 +104,15 @@
       },
       "description": "作品包内当前建档角色标识列表，默认为 Phase 1.5 确认后的 candidate_characters 子集。"
     },
+    "structure_mode": {
+      "type": "string",
+      "enum": [
+        "monolithic",
+        "light_novel"
+      ],
+      "default": "monolithic",
+      "description": "phase 0/1 双模式调度信号；从 source manifest 拷贝（automation.persona_extraction.manifests.write_works_manifest），下游 orchestrator phase 0 / phase 1 入口分支依据此值。语义详见 schemas/work/work_manifest.schema.json::structure_mode。"
+    },
     "notes": {
       "type": "string"
     },

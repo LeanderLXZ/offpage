@@ -35,7 +35,7 @@ source. Long discussion chains live in `logs/change_logs/`.
 9. Chinese works: Chinese `work_id`, entity names, identifier values, path segments.
 10. `ai_context/` stays English. JSON field names may be English.
     → `conventions.md` §Naming.
-10a. `chapter_id` = `^C[0-9]{4}$` (4-digit), `volume_id` = `^V[0-9]{3}$` (3-digit, multi-volume sources only). Width split = expected cardinality (chapters per work ≤ 9999, volumes ≤ 999); letter prefix aligns with the `S###` / `M-S###-##` ID family. Multi-volume sources fill the optional triple `volume_id` / `volume_title` / `volume_chapter_seq` in `chapter_index.json`; single-volume sources omit all three. **No standalone `volume_index.json`** — `chapter_index` carries the cross-product. Sub-chapter splitting (one source chapter → multiple `C####` units) is deferred to phase-1 stage planning, out of scope for ingestion-side IDs. **Phase 0/1 schemas + prompts + code consume `C####` end-to-end** (`chapter_summary_chunk.chapter`, `stage_plan.chapters` ranges as `C####-C####`); `automation/persona_extraction/{prompt_builder,scene_archive}.py` build paths and chapter→stage mappings with the `C` prefix. Identifier rename audits use the 4-form checklist in `conventions.md` §Cross-File Alignment.
+10a. `chapter_id` = `^C[0-9]{4}$` (4-digit), `volume_id` = `^V[0-9]{3}$` (3-digit, light_novel sources only). Width split = expected cardinality (chapters per work ≤ 9999, volumes ≤ 999); letter prefix aligns with the `S###` / `M-S###-##` ID family. `chapter_index.schema.json` `items` is `oneOf` over **monolithic** profile (single-volume non-structured works — forbids the 6 light_novel-only fields) and **light_novel** profile (multi-volume structured works — required `volume_id` + `volume_seq` + `original_chapter_seq` + `original_sub_chapter_seq` triple-layer seq, optional `volume_title` + `original_chapter_title`). Profile is dispatched by `manifest.structure_mode`. **No standalone `volume_index.json`** — `chapter_index` carries the cross-product. Each `C####` is one ingestion unit (sub-section in light_novel; chapter in monolithic). **Phase 0 / 1 / 3 / 4 schemas + prompts + code consume `C####` end-to-end** (`chapter_summary_chunk.chapter`, `stage_plan.chapters` as `C####-C####`; light_novel uses degenerate range `C####-C####` with start == end so phase 2/3/4 consumers parse it identically); `automation/persona_extraction/{prompt_builder,scene_archive}.py` build paths and chapter→stage mappings with the `C` prefix. Volume / original-chapter display info lives on `chapter_index` profile-B fields and is surfaced via the derived `title`, not on `stage_plan.chapters`. Identifier rename audits use the 4-form checklist in `conventions.md` §Cross-File Alignment.
     → `conventions.md` §Naming + §Cross-File Alignment, `schemas/work/chapter_index.schema.json`, `schemas/analysis/{chapter_summary_chunk,stage_plan}.schema.json`.
 
 ## Character Depth
@@ -176,6 +176,68 @@ source. Long discussion chains live in `logs/change_logs/`.
 27g. `stage_snapshot` structural prunes: `character_arc` is a short string (was object); top-level `memory_refs` / `evidence_refs` removed; per-item `evidence_ref` removed from every `dialogue_examples` / `action_examples`.
 27h. `world_stage_snapshot` structural prunes: `character_status_changes` removed (per-character status changes belong on character `stage_snapshot` / `memory_timeline`; world snapshot keeps only the public-world layer); `evidence_refs` removed (no schema keeps chapter anchors). Field-level `maxItems` / `maxLength` tightened in schema; `stage_events` widened from 50–80 to 50–100 CJK chars.
 27i. **schema-gate-as-retry-trigger pattern.** L1 `jsonschema` validation acts as another retry trigger for LLM output failure (peer with JSON-parse failure, stage-limit violation, etc.); the first failure is injected into the next retry's prompt: Phase 0 / Phase 4 via `{retry_note}` placeholder + `prior_error` argument; Phase 1 via `correction_feedback` code-side append (reusing the existing stage-limit retry channel, schema fails are merged into it). Covers 5 schemas: `schemas/analysis/{chapter_summary_chunk,scene_split,world_overview,stage_plan,candidate_characters}.schema.json`. Plumbing → `automation/persona_extraction/orchestrator.py:_summarize_chunk + run_analysis`, `scene_archive.py:validate_scene_split`, `prompt_builder.py:build_summarization_prompt(prior_error) + build_scene_split_prompt(prior_error) + build_analysis_prompt(correction_feedback)`. Pairs with #27b (Bounds-only-in-schema): bounds defined in schema, enforcement applied in the pipeline through the existing retry path.
+27j. **Phase 0/1 dual-mode dispatch via `structure_mode`.** Source manifest
+     carries `structure_mode: "monolithic" | "light_novel"` (default
+     `"monolithic"`); works manifest copies it at Phase 1.5. Source
+     manifest is the single source of truth — `automation/ingestion/
+     validator.py` cross-checks `structure_mode` against the
+     `chapter_index` profile (see #27k); `manifests.write_works_manifest`
+     copies the value forward and asserts equality. **`monolithic`** =
+     existing token-budget chunking (Phase 0) + LLM stage-boundary
+     discovery (Phase 1). **`light_novel`** = `1 sub-section = 1 C-id =
+     1 Phase 0 chunk = 1 Phase 1 stage`; Phase 0 sets
+     `chunks = [[c] for c in chapter_index]` and skips token-budget
+     batching; Phase 1 derives `stage_plan` 1:1 from `chapter_index`
+     (no boundary-discovery LLM call) and bypasses STAGE_MIN /
+     STAGE_MAX `chapter_count` validation. Phase 2+ does NOT branch —
+     consumes `stage_plan` uniformly; volume / printed-chapter
+     semantics ride on `chapter_index` profile-B fields, character /
+     world schemas untouched. Identification of `structure_mode` from
+     raw source (LLM-driven) is deferred to a separate todo; for now
+     normalization writes it manually.
+     → `schemas/work/{work_manifest,works_manifest,chapter_index}.schema.json`
+     (both source-side `work_manifest` and canon-side `works_manifest`
+     declare the field; canon copy by `manifests.write_works_manifest`),
+     `automation/ingestion/validator.py`, `automation/persona_extraction/
+     {manifests,orchestrator}.py`.
+27k. **`chapter_index.schema.json` `items` = `oneOf` two profiles.**
+     **monolithic profile**: `additionalProperties: false`, forbids
+     `volume_id` / `volume_title` / `volume_seq` /
+     `original_chapter_seq` / `original_sub_chapter_seq` /
+     `original_chapter_title`. **light_novel profile**: required
+     three-layer seq triple `volume_id` (`^V[0-9]{3}$`) + `volume_seq`
+     (≥1) + `original_chapter_seq` (≥1) + `original_sub_chapter_seq`
+     (≥1), optional `volume_title` + `original_chapter_title`. The
+     three layers map: `volume_seq` = 1-based volume index in book;
+     `original_chapter_seq` = 1-based original printed chapter index
+     within volume (resets per volume); `original_sub_chapter_seq` =
+     1-based sub-section index within original printed chapter (resets
+     per original chapter). `title` always required (minLength 1)
+     regardless of profile; `chapter_id` (`^C[0-9]{4}$`) / `sequence`
+     / `normalized_path` required across both. Downstream Phase 0 /
+     3 / 4 consume `chapter_id` only — `stage_plan.chapters` stays
+     `C####-C####` in both modes (light_novel uses a degenerate range
+     `C####-C####` with start == end so existing parsers work
+     unchanged); volume / original-chapter display info rides on
+     `chapter_index` profile-B fields and surfaces via the derived
+     `title`.
+     → `schemas/work/chapter_index.schema.json`, `prompts/ingestion/
+     原始资料规范化.md`.
+27l. **`title` derived by normalization for `light_novel`.** Formula:
+     `f"{volume_title or '第N卷'} {original_chapter_title or '第M章'}
+     {original_sub_chapter_seq}"` where `N = volume_seq`,
+     `M = original_chapter_seq`. Optional fields with placeholder
+     fallbacks ensure `title` (schema-required, minLength 1) is always
+     fillable purely from required fields. Example: `volume_seq=1`,
+     `volume_title=None`, `original_chapter_seq=2`,
+     `original_chapter_title=None`, `original_sub_chapter_seq=3` →
+     `title = "第1卷 第2章 3"`. Rule lives in normalization (prompt +
+     downstream eventual code path), not in extraction code, so Phase
+     1 / Phase 3 consumers see a populated `title` field. Monolithic
+     mode: `title` continues to be the human-readable chapter title
+     copied from source ToC.
+     → `schemas/work/chapter_index.schema.json`, `prompts/ingestion/
+     原始资料规范化.md`.
 
 ## Memory System
 

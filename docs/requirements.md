@@ -707,7 +707,8 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
    - 每个文件包含完整的一章正文
 4. **元数据生成**：
    - `metadata/book_metadata.json`：书名、作者、章节数、来源信息
-   - `metadata/chapter_index.json`：有序章节列表，含标题和文件路径
+   - `metadata/chapter_index.json`：有序章节列表（items `oneOf` 双 profile：
+     monolithic / light_novel；profile 由 `manifest.structure_mode` 调度）
 
 ### 8.3 Source Package 边界
 
@@ -733,6 +734,15 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
   - `chunked`：已完成分块或 RAG 切片（如有）
   - `indexed`：索引、词表等检索资源已生成
   - `active`：可供下游 `works/{work_id}/` 抽取和运行时使用
+- `structure_mode`：phase 0/1 双模式调度信号，枚举 `"monolithic"`（默认）/
+  `"light_novel"`。
+  - `monolithic`：单卷非结构化作品（典型中文网络小说）。phase 0 token-budget
+    chunking + phase 1 LLM 自主发现 stage 边界
+  - `light_novel`：多卷结构化作品（典型日式轻小说，卷 → 印刷章 → sub-section
+    三层结构）。1 sub-section = 1 C-id = 1 phase 0 chunk = 1 phase 1 stage；
+    stage_plan 1:1 程序化派生
+  - 必须与 `metadata/chapter_index.json` items 的 `oneOf` profile 一致；
+    `automation/ingestion/validator.py` 跨文件断言
 
 中文作品的 `work_id` 应直接使用中文书名。
 
@@ -823,21 +833,24 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 从原始小说到可运行角色包的完整流程如下：
 
 1. **作品入库**：原始文件规范化、章节拆分、元数据生成（见 §八）
-2. **章节归纳**（Phase 0）：将全书按分组（chunk，约 20-25 章一组）逐组归纳，
+2. **章节归纳**（Phase 0）：双模式调度（由 source manifest `structure_mode` 字段决定，
+   default `monolithic`）：
+   - **monolithic**：将全书按分组（chunk，约 20-25 章一组）逐组归纳，每个 chunk
+     独立处理，多 chunk 并行执行（`--concurrency` 控制，默认 10）
+   - **light_novel**：1 sub-section = 1 chunk = 1 chapter，仍按 concurrency 并行；
+     不跑 token-budget batch
    产出每章的结构化摘要（事件、出场角色、地点、情绪基调、身份变化线索、
-   候选阶段边界标记）。每个 chunk 独立处理，多 chunk 并行执行
-   （`--concurrency` 控制，默认 10）
-3. **全书分析**（Phase 1）：基于所有章节摘要，执行以下分析任务（按顺序）：
-   a. **跨 chunk 角色身份合并**：识别不同 chunk 中以不同名称出现的同一角色，
-      建立统一的身份映射
-   b. **世界观概览**：分析作品的世界观基础信息，包括题材类型、力量体系、
-      主要势力/阵营、地理结构、大的时代/世界线划分、核心设定规则。产出
-      世界观概览文件，供后续提取阶段作为背景认知
-   c. **源文件阶段规划**：制定 stage plan，按自然剧情边界切分（默认目标
-      10 章，最小 5 章，最大 15 章），每个 stage 的章节数可因剧情节点而
-      不同。世界线的大转折、时代切换等应作为重要的阶段边界依据
-   d. **候选角色识别**：基于身份合并后的角色出场信息，识别可建包的候选
-      角色。同一角色的不同名称必须合并为一个候选条目
+   候选阶段边界标记）；落盘 schema / 路径不区分模式
+3. **全书分析**（Phase 1）：双模式调度：
+   - **monolithic**：基于所有章节摘要单次 LLM 调用产出 a/b/c/d 四子任务
+     （a 跨 chunk 角色身份合并 / b 世界观概览 / c 源文件阶段规划 / d 候选角色识别）；
+     stage 边界由 LLM 按自然剧情切分（默认目标 10 章，最小 5 章，最大 15 章）
+   - **light_novel**：LLM 调用照旧（产出 world_overview + candidate_characters），
+     但 stage_plan 由 orchestrator 程序化 1:1 从 chapter_index 派生
+     （`stage_id = S{n:03d}`、`chapters = f"{chapter_id}-{chapter_id}"`
+     degenerate 单章区间（与 monolithic 共享 `^C[0-9]{4}-C[0-9]{4}$` 模式，
+     phase 2/3/4 消费方零分叉）、`chapter_count = 1`、
+     `stage_title` 取 `chapter_index[i].title`）；STAGE_MIN/MAX 校验自动跳过
 4. **活跃角色确认**（Phase 1.5）：用户从候选中选择要建包的目标角色
 5. **Baseline 产出**（Phase 2）：基于全书摘要和确认的角色，产出世界
    foundation 和角色 identity/manifest 初稿

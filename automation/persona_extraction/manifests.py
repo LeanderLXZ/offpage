@@ -90,11 +90,31 @@ def write_works_manifest(
         "character_count": len(character_ids),
         "stage_ids": stage_ids,
         "character_ids": list(character_ids),
+        "structure_mode": source_manifest.get("structure_mode", "monolithic"),
         "created_at": created_at,
         "updated_at": _now_iso(),
     }
     _write_json(manifest_path, manifest)
     return manifest_path
+
+
+def read_structure_mode(project_root: Path, work_id: str) -> str:
+    """Read structure_mode for the work, preferring the works manifest.
+
+    Phase 0/1 dispatch reads this. Source manifest is the authoritative
+    source; works manifest carries a copy populated at Phase 1.5. Both
+    are checked so the value is available even before Phase 1.5 has
+    written the works manifest (Phase 0 runs before Phase 1.5).
+    """
+    work_dir = project_root / "works" / work_id
+    works_manifest = _read_json(work_dir / "manifest.json")
+    if isinstance(works_manifest, dict) and works_manifest.get("structure_mode"):
+        return str(works_manifest["structure_mode"])
+    source_dir = project_root / "sources" / "works" / work_id
+    source_manifest = _read_json(source_dir / "manifest.json")
+    if isinstance(source_manifest, dict) and source_manifest.get("structure_mode"):
+        return str(source_manifest["structure_mode"])
+    return "monolithic"
 
 
 def write_world_manifest(project_root: Path, work_id: str) -> Path:
