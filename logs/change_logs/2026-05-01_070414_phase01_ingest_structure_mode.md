@@ -297,3 +297,26 @@ todo_list（2 文件）：
 
 - **Status**: DONE
 - **Finished**: 2026-05-01 07:47:40 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：8/8 计划项（4 schema + 3 code + 1 prompt + 3 docs + 2 ai_context 全链路） + 8/8 验证标准
+- 2 条执行偏差均已在 PRE log 显式记录并 in-flight 修正：#1 schema 列表补全（works_manifest + stage_plan）、#2 chapters 格式从 `V###-##-##` 回退到 degenerate `C####-C####`
+- Missed updates：0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=1 / Medium=1（pre-existing, 越界）/ Low=5
+- Open Questions: 0 条
+- 关键 High：`schemas/analysis/stage_plan.schema.json::stage_title.maxLength=50` 在长 CJK 卷名 + 长印刷章名组合下仍可被对抗性输入超过 → 触发 PRE 偏差 #1 试图避免的同一 FATAL 无穷重试家族风险（14→50 bump 经验上仍不足）
+- 关键 Medium（pre-existing，非本次引入）：`automation/persona_extraction/progress.py::_expected_chapter_count` 对 `C0001-C0001` 形式 `int("C0001")` 抛 ValueError 静默 fallback 到 None，绕过 reconcile 深度长度校验。本次未引入也未触及，留作下一轮独立修
+
+## 复查时状态
+- **Reviewed**: 2026-05-01 08:06:18 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全落实 → PASS
+  - 轨 2 有 1 High（残留风险，非本次净新增；与 PRE 偏差 #1 同家族，已部分缓解但未根除）→ 不达 PASS
+  - 不到 FAIL（轨 1 无大面积缺口；轨 2 High 是 latent / 对抗输入触发，非当前 fixture 即时崩溃）
+- **Conversation ref**: 同会话内 /post-check 输出
