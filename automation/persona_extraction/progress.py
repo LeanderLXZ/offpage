@@ -353,10 +353,16 @@ class Phase0Progress:
 
     @staticmethod
     def _expected_chapter_count(entry: "ChunkEntry") -> int | None:
-        """Parse ``chapters`` field ('NNNN-MMMM') → expected count."""
+        """Parse ``chapters`` field → expected count.
+
+        Accepts both the current `C####-C####` format (post
+        `T-CHAPTER-ID-UNIFY`, see `ai_context/decisions.md` §10a) and
+        the historical `####-####` form. `int(part.lstrip("C"))` aligns
+        with `prompt_builder._parse_chapter_range`.
+        """
         try:
             lo, hi = entry.chapters.split("-")
-            return int(hi) - int(lo) + 1
+            return int(hi.lstrip("C")) - int(lo.lstrip("C")) + 1
         except (ValueError, AttributeError):
             return None
 

@@ -929,6 +929,13 @@ class ExtractionOrchestrator:
     # Phase 1: Analysis (from summaries)
     # ------------------------------------------------------------------
 
+    # stage_plan.schema.json::stage_title.maxLength single-source cap.
+    # Adversarial volume_title × original_chapter_title combinations
+    # could otherwise produce a derived `title` that exceeds the cap,
+    # triggering Phase 1 schema gate → retry loop → identical re-derive
+    # → FATAL exit. Soft-truncate at cap-1 + `…` ellipsis defensively.
+    _STAGE_TITLE_MAX = 80
+
     def _build_light_novel_stage_plan(self) -> dict[str, Any]:
         """Programmatically derive stage_plan 1:1 from chapter_index.
 
@@ -957,6 +964,8 @@ class ExtractionOrchestrator:
                 print(f"[ERROR] chapter_index entry #{i} missing "
                       f"required field: {exc}")
                 sys.exit(1)
+            if len(title) > self._STAGE_TITLE_MAX:
+                title = title[: self._STAGE_TITLE_MAX - 1] + "…"
             # `chapters` reuses the C####-C#### degenerate-range format
             # (start == end) so downstream phase 2/3/4 consumers
             # (prompt_builder._parse_chapter_range, scene_archive,

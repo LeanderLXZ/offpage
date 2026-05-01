@@ -12,7 +12,7 @@
 |---|---|---|---|
 | `T-BASELINE-DEPRECATE` | 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载 | 2026-04-29 14:42 EDT | 代码完成、runtime 验证待跑 |
 | `T-PHASE2-TARGET-BASELINE` | phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点 | 2026-04-29 20:54 EDT | 代码完成、runtime 验证待跑（与 BASELINE-DEPRECATE 同形态，可同批跑） |
-| `T-INGEST-STRUCTURE-MODE` | phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | schema/code/prompt/ai_context/docs 完成、smoke 全过；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
+| `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | schema/code/prompt/ai_context/docs 完成 + post-check 残留缺口（stage_title 软截断 + progress.py reconcile C 前缀兼容 + cosmetic）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
 
 ### 🟡 Next (2)
 
@@ -417,8 +417,10 @@ target_voice_map / target_behavior_map / relationships 的 keys。三个痛点�
 **开始时间**：2026-05-01 07:04 EDT
 
 **当前状态**：schema/code/prompt/ai_context/docs 完成、smoke 全过；
-end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有
-fixture 双向回归）
+post-check 残留缺口（stage_title.maxLength 50→80 + 代码层软截断兜底；
+progress.py `_expected_chapter_count` 兼容 `C####-C####`；automation/README
+加 dual-mode 指针；todo_list Index 大小写对齐）已修；end-to-end runtime
+验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归）
 
 **上下文**
 

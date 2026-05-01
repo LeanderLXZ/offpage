@@ -235,9 +235,17 @@ source. Long discussion chains live in `logs/change_logs/`.
      downstream eventual code path), not in extraction code, so Phase
      1 / Phase 3 consumers see a populated `title` field. Monolithic
      mode: `title` continues to be the human-readable chapter title
-     copied from source ToC.
-     → `schemas/work/chapter_index.schema.json`, `prompts/ingestion/
-     原始资料规范化.md`.
+     copied from source ToC. **Code-side soft-truncation safeguard**:
+     `_build_light_novel_stage_plan` truncates the resulting
+     `stage_title` to schema cap (currently 80) with `…` ellipsis when
+     the formula's full output would exceed the cap, so adversarial
+     long volume_title × original_chapter_title combinations cannot
+     trip an infinite Phase 1 retry loop on `stage_title.maxLength`
+     schema fail.
+     → `schemas/work/chapter_index.schema.json`, `schemas/analysis/
+     stage_plan.schema.json` (`stage_title.maxLength`), `prompts/
+     ingestion/原始资料规范化.md`, `automation/persona_extraction/
+     orchestrator.py::_build_light_novel_stage_plan`.
 
 ## Memory System
 

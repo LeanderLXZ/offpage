@@ -44,8 +44,8 @@
           },
           "stage_title": {
             "type": "string",
-            "maxLength": 50,
-            "description": "人类可读短标题（≤50 字，bootstrap 选择阶段时展示）。monolithic 模式由 LLM 产出短标题（典型 ≤14 字，由 prompt 软约束）；light_novel 模式从 chapter_index[i].title 拉取（含卷 / 印刷章 / sub-section 组合，可能较长）。本字段是 stage_title 的唯一权威源；下游 schema（stage_snapshot / world_stage_snapshot / stage_catalog / world_stage_catalog）的 stage_title 从这里按 stage_id 拉取，不重复定义 bound。"
+            "maxLength": 80,
+            "description": "人类可读短标题（≤80 字，bootstrap 选择阶段时展示）。monolithic 模式由 LLM 产出短标题（典型 ≤14 字，由 prompt 软约束）；light_novel 模式从 chapter_index[i].title 拉取（含卷 / 印刷章 / sub-section 组合，可能较长，由 orchestrator `_build_light_novel_stage_plan` 在派生时按本上限 - 1 字符 + `…` 软截断兜底，避免对抗性长 title 触发 schema gate fail → 无穷重试 → FATAL）。本字段是 stage_title 的唯一权威源；下游 schema（stage_snapshot / world_stage_snapshot / stage_catalog / world_stage_catalog）的 stage_title 从这里按 stage_id 拉取，不重复定义 bound。"
           },
           "chapters": {
             "type": "string",

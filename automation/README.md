@@ -352,6 +352,16 @@ note_id 格式 `SN-S{stage:03d}-{seq:02d}`；stage 保持 COMMITTED，不新增�
 
 代码：`repair_agent/`
 
+### Phase 0 / Phase 1 双模式调度
+
+Phase 0/1 由 source manifest `structure_mode` 字段（`monolithic` / `light_novel`，
+default `monolithic`，works manifest 在 Phase 1.5 从 source 拷字段）调度双
+路径——monolithic 走 token-budget chunking + LLM stage 边界发现；light_novel
+走 1 sub-section = 1 chunk = 1 stage、stage_plan 由 orchestrator
+`_build_light_novel_stage_plan` 程序化 1:1 派生。详细规则与字段契约见
+[../docs/architecture/extraction_workflow.md](../docs/architecture/extraction_workflow.md) §1-3
++ `ai_context/decisions.md` §27j/27k/27l。
+
 ### Phase 0 JSON 修复
 
 Phase 0（章节归纳）仍使用 `persona_extraction/json_repair.py` 的三级修复
