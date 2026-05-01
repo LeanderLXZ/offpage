@@ -20,7 +20,7 @@
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | 无 |
 | `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | T-PHASE2-TARGET-BASELINE |
 
-### ⚪ Discussing (8)
+### ⚪ Discussing (9)
 
 | ID | Brief | Open decisions | Blocked by |
 |---|---|---|---|
@@ -32,8 +32,9 @@
 | `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | simulation runtime loader 选型 / 设计定稿 |
+| `T-INGEST-STRUCTURE-MODE` | 2026-04-30 接入《狼与香辛料》（22 卷）暴露 phase 0/1 只为单卷非结构化书设计。新方向：双模式调度，monolithic 走现有启发式，volumed 按卷切 batch / 1:1 派生 stage_plan；调度信号走 manifest.structure_mode 显式字段。 | 3 | 需先有完整规范化的多卷 fixture（狼与香辛料） |
 
-**Total**: 12 — 🟢 In Progress 2 ｜ 🟡 Next 2 ｜ ⚪ Discussing 8
+**Total**: 13 — 🟢 In Progress 2 ｜ 🟡 Next 2 ｜ ⚪ Discussing 9
 
 ---
 
@@ -443,6 +444,8 @@ target_voice_map / target_behavior_map / relationships 的 keys。三个痛点�
   / `/full-review` 都能正常降级或运行
 
 **依赖**：无（skills_config.md 已落地、6 skill 改造已完成）
+
+---
 
 ---
 
@@ -941,5 +944,58 @@ T-LOG 已落地：[llm_backend.py:565-680](../automation/persona_extraction/llm_
 - 不提前补 schema，避免与后续 loader 字段收敛方案冲突
 
 **依赖**：simulation runtime loader 选型 / 设计定稿
+
+---
+
+### [T-INGEST-STRUCTURE-MODE] Phase 0/1 双模式（structured / monolithic）调度
+
+**上下文**
+
+2026-04-30 接入《狼与香辛料》（22 卷结构化多卷书）后，发现现有
+phase 0/1 流程是为单卷非结构化书（<character>）设计的：phase 0 按 token-budget
+启发式切 batch，phase 1 自主发现 stage 边界。多卷书的天然结构（卷 = 自然
+stage 单元）这套流程没有利用，强行走启发式既低效又可能错切边界。
+
+新方向：phase 0/1 支持双模式——
+
+- **monolithic 模式**（<character>等单卷书）：维持现有 token-budget 启发式 +
+  自动 stage 发现
+- **volumed 模式**（狼与香辛料等多卷书）：1 batch = 1 volume；stage_plan
+  直接 1:1 从 volume list 派生（22 卷 → S001..S022）
+
+phase 2+ 不分叉，统一消费 stage_plan，volume 语义由 stage 边界承载，
+不引入 character/world schema 字段。
+
+**已拍板**
+
+1. 调度信号走 `manifest.json` 显式字段 `structure_mode: "volumed" |
+   "monolithic"`，默认 `monolithic`（<character>向后兼容）；不靠隐式推断
+   （如 chapter_index 是否有 volume_id）
+2. volumed 模式下"1 stage = 1 volume"，**不做卷内再切 stage**
+3. "上/下"卷如需合并为同一 stage，由规范化阶段给上下卷标同一个
+   `volume_id` 控制（决策不下推到 phase 1）
+
+**待决策项**
+
+1. **volumed 模式下 phase 1 如何"跳过自动发现"的具体调度点**：
+   - 在 phase 1 入口分支判定 structure_mode，跳过 boundary detection 直接
+     从 chapter_index 派生 stage_plan？
+   - 还是把"派生 stage_plan"做成 phase 1 的另一条 strategy 子流程？
+2. **上下卷合并的规范化时判断规则**：
+   - 文件名带"上"/"下"自动合并 volume_id？还是要规范化 prompt 显式让
+     LLM/人工判定？
+   - 如果"上"是独立故事但"下"延续同主题（SIDE COLORS II / III 这类），
+     合并 vs 不合并的判定基准是什么
+3. **SIDE COLORS / SPRING LOG 短篇集是否真的 1 卷 1 stage 够用**：
+   - 单卷内是多个独立短篇（07/11/13/18/19/20）。"1 卷 = 1 stage"是否粒度
+     过粗？是否需要在 stage_plan 生成后人工 review 决定是否拆分？
+   - 暂定先 1:1 起跑、phase 1 跑完后人工 review；不在 schema 层提前为这种
+     情况加复杂度
+
+**依赖**
+
+- T-CHAPTER-MULTIVOL 已落地（提供 volume_id / volume_title /
+  volume_chapter_seq 字段，本条调度逻辑可消费 source 侧数据）
+- 至少 1 个完整规范化的多卷书产物（狼与香辛料）作为开发期 fixture
 
 ---

@@ -57,6 +57,12 @@ After any change, grep for the old phrasing to catch stale references.
 - `stage_title` = human-readable short name (work language; length cap in schema);
   sibling of `stage_id` in `stage_plan.json` and every
   `stage_catalog.json` entry; label shown at bootstrap stage selection.
+- `chapter_id` = `C####` (4-digit zero-pad), enforced by
+  `schemas/work/chapter_index.schema.json` `pattern: "^C[0-9]{4}$"`.
+  `volume_id` (optional, multi-volume sources only) = `V###`
+  (3-digit zero-pad). Width split rationale: chapter count per work can
+  reach the thousands (≤ 9999 covers it); volume count stays small
+  (≤ 999), so `V###` keeps the ID compact without ambiguity.
 - `ai_context/` stays English. JSON field names may be English;
   content text follows work language.
 

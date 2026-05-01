@@ -73,6 +73,11 @@
 
 ## Completed
 
+### [T-CHAPTER-MULTIVOL] chapter_id 格式改 C0001 + chapter_index 加多卷字段 · 完成于 2026-04-30 · 完整完成
+
+- 1 行摘要：(1) `schemas/work/chapter_index.schema.json` `chapter_id` 加 `pattern: "^C[0-9]{4}$"` + 新增 3 个可选字段 `volume_id`（`^V[0-9]{3}$`）/ `volume_title` / `volume_chapter_seq`（多卷书必填三件套，单卷书不填）；(2) `prompts/ingestion/原始资料规范化.md` 例子改 `C0001` / `chapters/C0001.txt` + 多卷书识别条件与三字段填写指引；(3) <character> `sources/works/<work_id>/` 全量迁移 537 章（chapter_index.json 537 条 `chapter_id` / `normalized_path` 字段值改写、`chapters/0001.txt`~`0537.txt` 重命名为 `C####.txt`，epub 内部 `source_path` 保持原样）；(4) `ai_context/conventions.md` § Naming and Identifiers 加 chapter_id / volume_id 命名规则与位宽理由；(5) `ai_context/decisions.md` Work Scope 加 #10a；(6) `docs/architecture/schema_reference.md` 同步描述。`automation.ingestion.validator` 校验通过、jsonschema 校验通过、全库 `chapter[0-9]{4}` 残留为 0。子章节切分约定推到 T-INGEST-STRUCTURE-MODE。
+- 关联 log: [logs/change_logs/2026-04-30_215840_chapter_id_multivol.md](../logs/change_logs/2026-04-30_215840_chapter_id_multivol.md)
+
 ### [T-CONSISTENCY-TARGETS-SUBSET] phase 3 stage_snapshot 三结构 keys == baseline.targets 强校验 + map 切 character_id keying + targets_cap 路径回滚 · 完成于 2026-04-30 · 完整完成
 
 - 1 行摘要：D4 由"prompt 软约束 + 文档承诺"升级到代码强校验：(1) snapshot `voice_state.target_voice_map` / `behavior_state.target_behavior_map` 切 `target_character_id` keying（保留 `target_type` 作 sibling 元数据），与顶层 `relationships` 统一；(2) 三结构 keys 必须**双向相等**于 `baseline.targets[].target_character_id`（多/少都 fail），三态由内容是否填充承载，fixed_relationship 例外可预填关系字段，"fixed = 全书贯穿不变"严控（故事中才建立 / 改变 / 解除的师承 / 门派 / 婚姻 / 收养 / 决裂 等都不算）；(3) 校验从 phase 3.5 末端搬到 phase 3 单 stage validate 层，新增 L2 cross-file checker `repair_agent/checkers/targets_keys_eq_baseline.py`，越界走 file-level repair lifecycle (L1/L2/L3)；(4) `targets_cap.schema.json` 从 `schemas/_shared/` 回滚到 `schemas/character/`（共享面只在 character 域内），$ref + decision #27b + README 同步。docs / ai_context / prompt 全链 ⊆ → == 同步刷新。

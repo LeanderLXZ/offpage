@@ -21,8 +21,8 @@
       },
       "chapter_id": {
         "type": "string",
-        "minLength": 1,
-        "description": "章节稳定标识，例如 chapter0001。后续 Phase 0/1/3/4 的交叉引用依赖此值。"
+        "pattern": "^C[0-9]{4}$",
+        "description": "章节稳定标识，格式 ^C[0-9]{4}$，例如 C0001。后续 Phase 0/1/3/4 的交叉引用依赖此值。"
       },
       "title": {
         "type": "string",
@@ -34,7 +34,7 @@
       },
       "normalized_path": {
         "type": "string",
-        "description": "规范化后纯文本章节文件的相对路径，例如 chapters/0001.txt。"
+        "description": "规范化后纯文本章节文件的相对路径，例如 chapters/C0001.txt。"
       },
       "paragraph_count": {
         "type": "integer",
@@ -43,6 +43,21 @@
       "char_count": {
         "type": "integer",
         "minimum": 0
+      },
+      "volume_id": {
+        "type": "string",
+        "pattern": "^V[0-9]{3}$",
+        "description": "卷标识，格式 ^V[0-9]{3}$，例如 V001。多卷书必填，单卷书不填。"
+      },
+      "volume_title": {
+        "type": "string",
+        "minLength": 1,
+        "description": "卷名（作品语言），例如 第一卷 邂逅。多卷书必填，单卷书不填。"
+      },
+      "volume_chapter_seq": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "卷内章序（从 1 起递增；与全书 sequence 不同）。多卷书必填，单卷书不填。"
       }
     }
   }

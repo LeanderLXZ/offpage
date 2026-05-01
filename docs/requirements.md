@@ -703,7 +703,7 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
    - 产出干净的纯文本，保存在 `normalized/`
 3. **章节拆分**：
    - 按章节边界拆分为独立文件，保存在 `chapters/`
-   - 每章一个文件，零填充编号（如 `0001.txt`）
+   - 每章一个文件，命名 `C####.txt`，4 位零填充并与 `chapter_id` 一致（如 `C0001.txt`）
    - 每个文件包含完整的一章正文
 4. **元数据生成**：
    - `metadata/book_metadata.json`：书名、作者、章节数、来源信息

@@ -104,7 +104,7 @@
 
 **用途**：章节索引（顶层 JSON 数组）。
 **位置**：`sources/works/{work_id}/metadata/chapter_index.json`
-**关键字段**：每条含 sequence（严格连续递增）、chapter_id、title、normalized_path
+**关键字段**：每条含 sequence（严格连续递增）、chapter_id（格式 `^C[0-9]{4}$`，例如 `C0001`）、title、normalized_path（例如 `chapters/C0001.txt`）。多卷书额外可选 volume_id（格式 `^V[0-9]{3}$`）/ volume_title / volume_chapter_seq 三件套（多卷书必填，单卷书不填）。
 **生成时机**：规范化阶段产出；后续 Phase 0/1/3/4 的 chapter 引用都以 chapter_id 为锚。
 
 ---
