@@ -177,8 +177,10 @@ source. Long discussion chains live in `logs/change_logs/`.
 27h. `world_stage_snapshot` structural prunes: `character_status_changes` removed (per-character status changes belong on character `stage_snapshot` / `memory_timeline`; world snapshot keeps only the public-world layer); `evidence_refs` removed (no schema keeps chapter anchors). Field-level `maxItems` / `maxLength` tightened in schema; `stage_events` widened from 50–80 to 50–100 CJK chars.
 27i. **schema-gate-as-retry-trigger pattern.** L1 `jsonschema` validation acts as another retry trigger for LLM output failure (peer with JSON-parse failure, stage-limit violation, etc.); the first failure is injected into the next retry's prompt: Phase 0 / Phase 4 via `{retry_note}` placeholder + `prior_error` argument; Phase 1 via `correction_feedback` code-side append (reusing the existing stage-limit retry channel, schema fails are merged into it). Covers 5 schemas: `schemas/analysis/{chapter_summary_chunk,scene_split,world_overview,stage_plan,candidate_characters}.schema.json`. Plumbing → `automation/persona_extraction/orchestrator.py:_summarize_chunk + run_analysis`, `scene_archive.py:validate_scene_split`, `prompt_builder.py:build_summarization_prompt(prior_error) + build_scene_split_prompt(prior_error) + build_analysis_prompt(correction_feedback)`. Pairs with #27b (Bounds-only-in-schema): bounds defined in schema, enforcement applied in the pipeline through the existing retry path.
 27j. **Phase 0/1 dual-mode dispatch via `structure_mode`.** Source manifest
-     carries `structure_mode: "monolithic" | "light_novel"` (default
-     `"monolithic"`); works manifest copies it at Phase 1.5. Source
+     carries `structure_mode: "monolithic" | "light_novel"` (**required** —
+     schema `required` in both `work_manifest` / `works_manifest`, missing
+     value fails schema gate; no implicit default-fill); works manifest
+     copies it at Phase 1.5. Source
      manifest is the single source of truth — `automation/ingestion/
      validator.py` cross-checks `structure_mode` against the
      `chapter_index` profile (see #27k); `manifests.write_works_manifest`

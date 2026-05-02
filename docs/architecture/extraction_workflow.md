@@ -28,7 +28,7 @@
 - 归一化章节：`sources/works/{work_id}/normalized/`
 - 创建元数据（三份均为 schema 硬门控）：
   - `sources/works/{work_id}/manifest.json`
-    （schema：`schemas/work/work_manifest.schema.json`；含 `structure_mode` 字段，enum `monolithic` / `light_novel`，default `monolithic`，决定 phase 0/1 双模式调度）
+    （schema：`schemas/work/work_manifest.schema.json`；含 `structure_mode` 字段，enum `monolithic` / `light_novel`，**必填**（schema `required`，缺省即校验失败），决定 phase 0/1 双模式调度）
   - `sources/works/{work_id}/metadata/book_metadata.json`
     （schema：`schemas/work/book_metadata.schema.json`）
   - `sources/works/{work_id}/metadata/chapter_index.json`
@@ -41,7 +41,7 @@
 
 ### 2. 章节归纳（Phase 0）
 
-**双模式调度**（由 source manifest `structure_mode` 字段决定，default `monolithic`，works manifest 在 Phase 1.5 从 source 拷字段）：
+**双模式调度**（由 source manifest `structure_mode` 字段决定，schema 必填、works manifest 在 Phase 1.5 从 source 拷字段）：
 
 - **monolithic 模式**（既有路径）：将全书按分组（chunk，`chunk_size` 章/组，默认见 `automation/config.toml`）归纳；多 chunk 并行处理（`--concurrency` 控制，默认 10）
 - **light_novel 模式**：1 sub-section = 1 chunk = 1 chapter；不跑 token-budget batch，`chunks = [(i+1, i+1, i+1) for i in range(total_chapters)]`；仍按 concurrency 并行；chunk_summary 落盘 schema / 路径 / 命名不变（`chunk_001.json` / `chunk_002.json` / ...）

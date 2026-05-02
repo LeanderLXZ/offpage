@@ -77,7 +77,7 @@
 
 **用途**：source package manifest（source 端，`sources/works/{work_id}/manifest.json`）。**与 canon 端 `works_manifest.schema.json` 是两份不同 schema**（命名差一个 `s`），分别管 source 与 canon 包目录页。
 **位置**：`sources/works/{work_id}/manifest.json`
-**关键字段**：work_id, title, language, source_types, ingestion_status, paths, `structure_mode`（enum `monolithic` / `light_novel`，default `monolithic`，phase 0/1 双模式调度信号）
+**关键字段**：work_id, title, language, source_types, ingestion_status, paths, `structure_mode`（enum `monolithic` / `light_novel`，**必填** — schema `required`，缺省即校验失败；phase 0/1 双模式调度信号）
 **生成时机**：`prompts/ingestion/原始资料规范化.md` 执行规范化时产出（`structure_mode` 由 task 步骤 2 LLM 判定：先输出 `判定 + 依据 + 置信度`，置信度 ≥ 0.8 直接填、< 0.8 停手等用户确认）。
 **跨文件契约**：`structure_mode` ⇔ `chapter_index` items profile（monolithic 禁 6 字段、light_novel 必填 4 + 可选 2）由 `automation/ingestion/validator.py` 跨文件断言；canon 端 `works/{work_id}/manifest.json` 由 `manifests.write_works_manifest` 拷贝该字段。
 
@@ -87,7 +87,7 @@
 
 **用途**：canon 作品包 manifest（作品包目录页）。
 **位置**：`works/{work_id}/manifest.json`
-**关键字段**：work_id, title, language, source_package_ref, paths, chapter_count, stage_count, character_count, stage_ids, character_ids, `structure_mode`（enum `monolithic` / `light_novel`，default `monolithic`，从 source manifest 拷贝；下游 phase 0/1 调度依赖此值）
+**关键字段**：work_id, title, language, source_package_ref, paths, chapter_count, stage_count, character_count, stage_ids, character_ids, `structure_mode`（enum `monolithic` / `light_novel`，**必填** — schema `required`，从 source manifest 拷贝；下游 phase 0/1 调度依赖此值）
 **生成时机**：Phase 1.5 用户确认完成时由 `automation.persona_extraction.manifests.write_works_manifest` 程序化写出；不走 LLM。
 
 ---

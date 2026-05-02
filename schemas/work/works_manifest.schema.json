@@ -17,6 +17,7 @@
     "character_count",
     "stage_ids",
     "character_ids",
+    "structure_mode",
     "created_at",
     "updated_at"
   ],
@@ -110,8 +111,7 @@
         "monolithic",
         "light_novel"
       ],
-      "default": "monolithic",
-      "description": "phase 0/1 双模式调度信号；从 source manifest 拷贝（automation.persona_extraction.manifests.write_works_manifest），下游 orchestrator phase 0 / phase 1 入口分支依据此值。语义详见 schemas/work/work_manifest.schema.json::structure_mode。"
+      "description": "phase 0/1 双模式调度信号（必填）；从 source manifest 拷贝（automation.persona_extraction.manifests.write_works_manifest），下游 orchestrator phase 0 / phase 1 入口分支依据此值。语义详见 schemas/work/work_manifest.schema.json::structure_mode。"
     },
     "notes": {
       "type": "string"

@@ -734,8 +734,9 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
   - `chunked`：已完成分块或 RAG 切片（如有）
   - `indexed`：索引、词表等检索资源已生成
   - `active`：可供下游 `works/{work_id}/` 抽取和运行时使用
-- `structure_mode`：phase 0/1 双模式调度信号，枚举 `"monolithic"`（默认）/
-  `"light_novel"`。
+- `structure_mode`（**必填**）：phase 0/1 双模式调度信号，枚举
+  `"monolithic"` / `"light_novel"`。schema `required`，缺省即校验失败；
+  由 `prompts/ingestion/原始资料规范化.md` Step 2 判定后写入。
   - `monolithic`：单卷非结构化作品（典型中文网络小说）。phase 0 token-budget
     chunking + phase 1 LLM 自主发现 stage 边界
   - `light_novel`：多卷结构化作品（典型日式轻小说，卷 → 印刷章 → sub-section
@@ -834,7 +835,7 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 
 1. **作品入库**：原始文件规范化、章节拆分、元数据生成（见 §八）
 2. **章节归纳**（Phase 0）：双模式调度（由 source manifest `structure_mode` 字段决定，
-   default `monolithic`）：
+   schema 必填）：
    - **monolithic**：将全书按分组（chunk，约 20-25 章一组）逐组归纳，每个 chunk
      独立处理，多 chunk 并行执行（`--concurrency` 控制，默认 10）
    - **light_novel**：1 sub-section = 1 chunk = 1 chapter，仍按 concurrency 并行；
