@@ -19,7 +19,7 @@
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
-| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | — | T-PHASE2-TARGET-BASELINE |
+| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | 2026-05-02 | T-PHASE2-TARGET-BASELINE |
 
 ### ⚪ Discussing (8)
 
@@ -551,10 +551,14 @@ phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapt
 
 ### [T-CHAR-SNAPSHOT-SUB-LANES] character stage_snapshot 拆 3 sub-lane 并行抽取 + phase 3 全模式 target keys 约束
 
+**更新时间**：2026-05-02 10:16 EDT
+
 **上下文**
 
 Phase 3 单 stage 的 char_snapshot lane 是当前 wall-time 最长的瓶颈
-（粗估 T，49 stage 累加显著）。讨论后定方案：把单个 char_snapshot lane
+（粗估 T，monolithic 模式 ≈ 49 stage 累加显著；light_novel 模式 stage 数
+≈ chapter 数，单 stage 更小，sub-lane 相对收益另议——开关默认值届时按
+真实 mode 重评）。讨论后定方案：把单个 char_snapshot lane
 拆成 3 个并行 sub-lane（按字段聚类）；3 份 partial JSON 由程序合并成
 完整 stage_snapshot.json，再走 repair_agent 整文件 repair（最多 2
 life-cycle，T3 触发时改为 3 sub-lane 并行重抽 → re-merge → re-validate）。
@@ -578,12 +582,29 @@ relationships）必须 == baseline.targets[].target_character_id（D4 硬约束�
 
 **字段归属表**
 
+> 设计约束：`stage_snapshot.schema.json` 顶层 `additionalProperties: false`
+> ——三 sub-lane partial 字段集合 ∪ 程序注入 必须**严格等于** schema
+> properties 全集（不能多、不能少），merge 函数前置校验。
+
 | sub-lane | 字段 |
 |---|---|
 | `char_expression` | `voice_state` / `active_aliases` / `current_mood` / `failure_modes.tone_traps` |
-| `char_decision` | `behavior_state` / `boundary_state` / `emotional_baseline` / `current_personality` / `current_status` / `failure_modes.common_failures` |
-| `char_cognition` | `knowledge_scope` / `misunderstandings` / `concealments` / `relationships` / `stage_events` / `stage_delta` / `character_arc` / `snapshot_summary` / `failure_modes.relationship_traps` / `failure_modes.knowledge_leaks` |
-| 程序注入 | `character_id` / `stage_id` / `timeline_anchor` / `chapter_scope` / `extracted_at` |
+| `char_decision` | `behavior_state` / `boundary_state` / `emotional_baseline` / `current_personality` / `current_status` / `failure_modes.common_failures` / `stage_delta.status_changes` / `stage_delta.mood_shift` / `stage_delta.personality_changes` |
+| `char_cognition` | `knowledge_scope` / `misunderstandings` / `concealments` / `relationships` / `relationship_state_summary` / `stage_events` / `character_arc` / `snapshot_summary` / `stage_delta.trigger_events` / `stage_delta.relationship_changes` / `stage_delta.voice_shift` / `failure_modes.relationship_traps` / `failure_modes.knowledge_leaks` |
+| 程序注入 | `schema_version` / `work_id` / `character_id` / `stage_id` / `stage_title` / `timeline_anchor` / `chapter_scope` |
+
+`stage_delta` 子键拆 char_decision / char_cognition 两 lane 的原因：
+`status_changes` / `mood_shift` / `personality_changes` 与 char_decision 写
+的 `current_status` / `current_mood` / `current_personality` 同源（避免
+sub-lane 互不可见 → partial 不一致）；`trigger_events` / `relationship_changes`
+/ `voice_shift` 与 char_cognition 的 relationships 联动。merge 函数把两
+lane 的 stage_delta 子 object 合并，**子键互斥**（每子键只允许一个 lane
+写）+ **6 子键全覆盖**（缺一即 partial 失败）。
+
+`failure_modes` 4 子键（`common_failures` / `tone_traps` / `relationship_traps`
+/ `knowledge_leaks`）分布到 3 lane：merge 校验"4 子键互斥 + 4 子键齐"双
+约束（schema 上 4 子键非 required，但运行时假设全有，所以 merge 层加 hard
+gate）。
 
 **流程**
 
@@ -607,11 +628,23 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
 
 **改动清单**
 
+> 注：三方 keys == baseline 的跨文件校验**已存在**于
+> `automation/repair_agent/checkers/targets_keys_eq_baseline.py`（L2
+> checker，已在 `coordinator.py:86` 注册到 file-level repair pipeline）—
+> 不需要重写到 `consistency_checker.py`；sub-lane merge 阶段 Step 2 复用
+> 同一 checker 做早期预检即可。
+
 新增：
 - `automation/persona_extraction/snapshot_merge.py`（或并入
   `post_processing.py`）— Step 2 merge：按字段归属表拼接 + 校验字段
-  集合互斥 / failure_modes 4 子类互斥白名单 / 必填齐 / 三方 keys 一致
-  + == baseline / 注入结构性字段
+  集合互斥（含 stage_delta 6 子键互斥 + failure_modes 4 子键互斥）+
+  字段集合 ∪ 程序注入 == schema properties 全集（schema
+  `additionalProperties: false` 配套）+ stage_delta / failure_modes 子键
+  全覆盖（缺一即 partial 失败）+ 复用
+  `repair_agent/checkers/targets_keys_eq_baseline.py` 早期预检三方 keys
+  == baseline + 注入结构性字段（`schema_version` / `work_id` /
+  `character_id` / `stage_id` / `stage_title` / `timeline_anchor` /
+  `chapter_scope`）
 
 修改：
 - `automation/prompt_templates/character_snapshot_extraction.md` — **保留
@@ -623,15 +656,24 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   调度 + merge 用，避免 prompt 与 merge 字段集合漂移），fallback 模式
   `lane_scope=ALL` 等价单 lane 但同样吃 baseline + 三态规则
 - `automation/persona_extraction/orchestrator.py` — sub-lane 调度
-  + hard-stop 时 `executor.shutdown(cancel_futures=True)` + .partial 清理；
-  分支 `if config.phase3.char_snapshot_sub_lanes` 包住三 lane 路径，
-  否则走单 lane（两种模式都注入 baseline + 三态 prompt）
-- `automation/persona_extraction/repair_agent/` T3 dispatcher — sub-lane 开启
-  时改为 3 并行重抽 + 注入修复历史 + 错误信息；T3 内 rate-limit pause
-  重跑**不**消耗 `t3_max_per_file` 槽
-- `automation/persona_extraction/consistency_checker.py` — 加跨文件校验：
-  stage_snapshot 三方 keys == baseline.targets[].target_character_id；
-  违规列入 hard error（非 warning）
+  （新建独立 ThreadPoolExecutor 与 repair pool 共用同一 `RateLimitController`
+  信号源，hard-stop 任一池都触发 `executor.shutdown(cancel_futures=True)`）
+  + .partial 清理；分支 `if config.phase3.char_snapshot_sub_lanes` 包住三
+  lane 路径，否则走单 lane（两种模式都注入 baseline + 三态 prompt）。
+  调用点 `prompt_builder.build_char_snapshot_prompt(..., lane_scope=...,
+  target_baseline_path=...)` 增 2 入参
+- `automation/persona_extraction/prompt_builder.py` —
+  `build_char_snapshot_prompt` 增 `lane_scope`（`ALL` / `char_expression`
+  / `char_decision` / `char_cognition`）+ `target_baseline_path` 入参，
+  context dict 注入 `{lane_scope}` / `{lane_field_whitelist}` /
+  `{target_baseline}` 三键
+- `automation/repair_agent/coordinator.py` 或对应 T3 dispatcher
+  （**实际路径在 `automation/repair_agent/`，非 `persona_extraction/repair_agent/`**）
+  — sub-lane 开启时改为 3 并行重抽 + 注入修复历史 + 错误信息；T3 内
+  rate-limit pause 重跑**不**消耗 `t3_max_per_file` 槽
+- `automation/persona_extraction/progress.py` — disk reconcile 扩展识别
+  `.partial/{stage_id}_{lane}.json` 命名（不只是 `<stage>/<lane>` 现有
+  约定），PENDING/ERROR lane 的 partial 一律删
 - `automation/persona_extraction/config.py` + `automation/config.toml` +
   `automation/config.toml.example` — 新增
   ```toml
@@ -667,17 +709,24 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
 
 - toml `[phase3].char_snapshot_sub_lanes = true` + CLI 双向 flag 生效
 - sub_lanes=true 跑通：Step 1/2/3 完整，merge 后 schema 校验通过
+  （`additionalProperties: false` 不报漂移字段）
 - sub_lanes=false 跑通：单 lane 仍注入 baseline + 三态规则，三方 keys ==
   baseline 校验生效（与三 lane 模式同口径）
-- 3 sub-lane partial 字段集合互斥 + 全覆盖 schema required（merge 函数兜底校验）
-- failure_modes 4 子类按字段归属表互斥分布到 3 sub-lane，merge 后字段
-  完整
+- 3 sub-lane partial 字段集合 ∪ 程序注入 == schema properties 全集（merge
+  前置校验，覆盖 schema 所有 required + 非 required 字段，无漂移）
+- failure_modes 4 子类按字段归属表互斥分布 + 全 4 子类覆盖（hard gate，
+  缺一即 partial 失败），merge 后字段完整
+- stage_delta 6 子键按字段归属表互斥分布到 char_decision / char_cognition +
+  全 6 子键覆盖（hard gate，缺一即 partial 失败）
 - 三方 keys（target_voice_map / target_behavior_map / relationships）==
   baseline.targets[].target_character_id 双向相等（多/少都 cross-file
-  hard fail；三态由内容是否填充承载，从未登场 entry 字段空）
+  hard fail；三态由内容是否填充承载，从未登场 entry 字段空）— 复用现有
+  `repair_agent/checkers/targets_keys_eq_baseline.py`
 - T3 触发时 3 sub-lane 并行重抽 + 注入修复历史，re-merge 后 re-validate
-- rate-limit 兼容：R1/R2/R3 在测试场景下行为符合上述描述
-- disk reconcile 启动时正确清理孤儿 .partial
+- rate-limit 兼容：R1/R2/R3 在测试场景下行为符合上述描述（含 sub-lane
+  pool 与 repair pool 共享 RateLimitController 信号源，任一 hard-stop
+  双池齐落）
+- disk reconcile 启动时正确清理孤儿 `.partial/{stage_id}_{lane}.json`
 - 文档（architecture / extraction_workflow / README / ai_context / requirements）同步
 
 **预估**
@@ -686,11 +735,16 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   target keys 约束改造）
 - 实施 ~1.5 个工作日；首次跑 1 stage 验证 sub_lanes=true 与
   sub_lanes=false 两套行为 + keys == baseline 校验
+- 以上排期基于 monolithic 底数；light_novel 模式 stage 数量级更高、单
+  stage 更小，sub-lane 默认开关与排期届时按真实 mode 重评
 
 **依赖**
 
 - **硬前置**：T-PHASE2-TARGET-BASELINE（baseline 是三方 keys 锚点；无
-  baseline 则 D4 硬约束无依据可校验）
+  baseline 则 D4 硬约束无依据可校验）。**启动门槛 = 先跑 phase 2 runtime
+  验证**——目前 T-PHASE2-TARGET-BASELINE "代码完成、runtime 验证待跑"，
+  在真书上验证 baseline 实际产出 shape 之前不要开 sub-lane prompt 改造，
+  避免 baseline 字段语义后续微调 → sub-lane prompt 全部回炉
 - 无其他硬依赖
 
 **暂不做的事**
