@@ -19,7 +19,7 @@
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
-| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | 2026-05-02 | T-PHASE2-TARGET-BASELINE |
+| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | 2026-05-02 | T-PHASE2-TARGET-BASELINE + T-BASELINE-DEPRECATE |
 
 ### ⚪ Discussing (8)
 
@@ -551,18 +551,21 @@ phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapt
 
 ### [T-CHAR-SNAPSHOT-SUB-LANES] character stage_snapshot 拆 3 sub-lane 并行抽取 + phase 3 全模式 target keys 约束
 
-**更新时间**：2026-05-02 10:16 EDT
+**更新时间**：2026-05-02 18:18 EDT
 
 **上下文**
 
 Phase 3 单 stage 的 char_snapshot lane 是当前 wall-time 最长的瓶颈
 （粗估 T，monolithic 模式 ≈ 49 stage 累加显著；light_novel 模式 stage 数
-≈ chapter 数，单 stage 更小，sub-lane 相对收益另议——开关默认值届时按
-真实 mode 重评）。讨论后定方案：把单个 char_snapshot lane
-拆成 3 个并行 sub-lane（按字段聚类）；3 份 partial JSON 由程序合并成
-完整 stage_snapshot.json，再走 repair_agent 整文件 repair（最多 2
-life-cycle，T3 触发时改为 3 sub-lane 并行重抽 → re-merge → re-validate）。
-schema 不动、世界 lane 和 char_support lane 不动、其他 phase 不动。
+≈ chapter 数，单 stage 更小，sub-lane 启动开销可能 > 抽取耗时收益——
+跑 light_novel 时由用户手动 `--no-char-snapshot-sub-lanes` 切换，不引入
+mode-aware schema 默认值，详见"暂不做的事"）。讨论后定方案：把单个
+char_snapshot lane 拆成 3 个并行 sub-lane（按字段聚类）；3 份 partial JSON
+由程序合并成完整 stage_snapshot.json，再走 file-level repair_agent
+（最多 2 lifecycle，per T-REPAIR-T3-LIFECYCLE-RESET：lifecycle 1 末端
+T3 触发 → state reset → lifecycle 2 按 sub-lane 模式重新 extract →
+re-merge → re-validate）。schema 不动、世界 lane 和 char_support lane
+不动、其他 phase 不动。
 
 **target keys 约束（合并自原 T-PHASE3-TARGET-CONSTRAINT，对单 lane / 三
 lane 模式均生效）**：每 sub-lane / 单 lane 主抽取读 phase 2 产出的
@@ -589,8 +592,8 @@ relationships）必须 == baseline.targets[].target_character_id（D4 硬约束�
 | sub-lane | 字段 |
 |---|---|
 | `char_expression` | `voice_state` / `active_aliases` / `current_mood` / `failure_modes.tone_traps` |
-| `char_decision` | `behavior_state` / `boundary_state` / `emotional_baseline` / `current_personality` / `current_status` / `failure_modes.common_failures` / `stage_delta.status_changes` / `stage_delta.mood_shift` / `stage_delta.personality_changes` |
-| `char_cognition` | `knowledge_scope` / `misunderstandings` / `concealments` / `relationships` / `relationship_state_summary` / `stage_events` / `character_arc` / `snapshot_summary` / `stage_delta.trigger_events` / `stage_delta.relationship_changes` / `stage_delta.voice_shift` / `failure_modes.relationship_traps` / `failure_modes.knowledge_leaks` |
+| `char_decision` | `behavior_state` / `boundary_state` / `emotional_baseline` / `current_personality` / `current_status` / `stage_delta.status_changes` / `stage_delta.mood_shift` / `stage_delta.personality_changes` |
+| `char_cognition` | `knowledge_scope` / `misunderstandings` / `concealments` / `relationships` / `relationship_state_summary` / `stage_events` / `character_arc` / `snapshot_summary` / `stage_delta.trigger_events` / `stage_delta.relationship_changes` / `stage_delta.voice_shift` / `failure_modes.common_failures` / `failure_modes.relationship_traps` / `failure_modes.knowledge_leaks` |
 | 程序注入 | `schema_version` / `work_id` / `character_id` / `stage_id` / `stage_title` / `timeline_anchor` / `chapter_scope` |
 
 `stage_delta` 子键拆 char_decision / char_cognition 两 lane 的原因：
@@ -601,10 +604,23 @@ sub-lane 互不可见 → partial 不一致）；`trigger_events` / `relationshi
 lane 的 stage_delta 子 object 合并，**子键互斥**（每子键只允许一个 lane
 写）+ **6 子键全覆盖**（缺一即 partial 失败）。
 
-`failure_modes` 4 子键（`common_failures` / `tone_traps` / `relationship_traps`
-/ `knowledge_leaks`）分布到 3 lane：merge 校验"4 子键互斥 + 4 子键齐"双
-约束（schema 上 4 子键非 required，但运行时假设全有，所以 merge 层加 hard
-gate）。
+`failure_modes` 4 子键分布到 **2 lane**（`tone_traps` → char_expression，
+`common_failures` / `relationship_traps` / `knowledge_leaks` → char_cognition）：
+merge 校验"4 子键互斥 across 2 lane + 4 子键齐"双约束（schema 上 4 子键
+非 required，但运行时假设全有，所以 merge 层加 hard gate）。
+
+**task balance 决策（2026-05-02）**：粗算各 lane 最大输出 char 数
+（含 N=5 target；schema `maxItems × maxLength` 折算）—
+char_expression ~22K / char_decision ~26K / char_cognition ~28.3K，
+bottleneck 28.3K（理论加速比 ~2.3×）。比较：
+- 4 子键拆 3 lane（tone→expr / common→dec / relationship+knowledge→cog）：
+  bottleneck 33.6K（decision 重），merge 互斥需 across 3 lane，复杂度高
+- 4 子键整块归 cog：bottleneck 29.8K，cog 单调用 output 风险最高，且
+  tone_traps 离开 expression 牺牲"语气写崩↔语气写法"theme coupling
+- **当前选 F**（tone 留 expr / 其余 3 子键归 cog）：bottleneck 最低 + 保
+  tone↔voice 同源 + common_failures 离开 decision（schema description 写
+  "AI 扮演该角色时最常见的错误模式"跨三方，挂 decision 凑数；reflective
+  性质归 cognition 同源）
 
 **流程**
 
@@ -615,15 +631,23 @@ sub_lanes = true:
           phase 2 target_baseline.json + 本 lane 字段集合白名单
   Step 2: 程序 merge → canon/stage_snapshots/{stage_id}.json，
           清理 lane partial；merge 校验：字段集合互斥 + 全覆盖 schema
-          required + failure_modes 4 子类互斥白名单 + 三方 keys 一致
-          + keys == baseline
-  Step 3: repair_agent（最多 2 life-cycle）；T3 触发 → 3 sub-lane 并行
-          重抽 → re-merge → re-validate；每 sub-lane prompt 注入修复
-          历史 + 错误信息
+          required + failure_modes 4 子键互斥 across 2 lane（tone_traps
+          仅 expr / 其余 3 子键仅 cog）+ stage_delta 6 子键互斥 across
+          2 lane（dec / cog）+ 三方 keys 一致 + keys == baseline
+  Step 3: file-level repair_agent（最多 2 lifecycle，per
+          T-REPAIR-T3-LIFECYCLE-RESET）：
+          - lifecycle 1：file-level L1/L2/L3 repair；末端若 T3 触发
+            → state reset → lifecycle 2 启动
+          - lifecycle 2：按 sub-lane 模式重新 extract（3 sub-lane 并行
+            → re-merge → re-validate），lifecycle 2 默认禁用 T3，再升
+            T3 即 T3_EXHAUSTED；每 sub-lane prompt 注入 prior_attempt_context
+            （resolved+remaining 摘要 ≤600 char）+ 错误信息
+          - fingerprint 过滤为 file-level（merge 后整文件 hash），
+            sub-lane 间共享、不各自维护
 
 sub_lanes = false（fallback 模式，仍享 target keys 约束）：
-  单 lane char_snapshot + 单调用 T3；prompt 同样注入 target_baseline +
-  三态规则；产出仍走 keys == baseline 校验
+  单 lane char_snapshot + file-level 2 lifecycle 标准流程；prompt 同样
+  注入 target_baseline + 三态规则；产出仍走 keys == baseline 校验
 ```
 
 **改动清单**
@@ -637,14 +661,18 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
 新增：
 - `automation/persona_extraction/snapshot_merge.py`（或并入
   `post_processing.py`）— Step 2 merge：按字段归属表拼接 + 校验字段
-  集合互斥（含 stage_delta 6 子键互斥 + failure_modes 4 子键互斥）+
+  集合互斥（含 stage_delta 6 子键互斥 across 2 lane + failure_modes 4
+  子键互斥 across 2 lane：`tone_traps` 仅 char_expression 写、`common_failures`
+  / `relationship_traps` / `knowledge_leaks` 仅 char_cognition 写）+
   字段集合 ∪ 程序注入 == schema properties 全集（schema
   `additionalProperties: false` 配套）+ stage_delta / failure_modes 子键
   全覆盖（缺一即 partial 失败）+ 复用
   `repair_agent/checkers/targets_keys_eq_baseline.py` 早期预检三方 keys
   == baseline + 注入结构性字段（`schema_version` / `work_id` /
   `character_id` / `stage_id` / `stage_title` / `timeline_anchor` /
-  `chapter_scope`）
+  `chapter_scope`）+ merge 成功后写入 file-level fingerprint（整文件
+  hash，供 lifecycle 2 启动时按 T-REPAIR-T3-LIFECYCLE-RESET 已 accept
+  fingerprint 过滤复用——sub-lane 间共享、不各自维护）
 
 修改：
 - `automation/prompt_templates/character_snapshot_extraction.md` — **保留
@@ -652,9 +680,11 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   `char_expression` / `char_decision` / `char_cognition`）+
   `{target_baseline}` 占位；prompt 头部按 lane_scope 注入"本次仅写以下
   字段"约束。新增「target keys 三态规则」段（D2 a/b/c）+「target keys
-  必须 == baseline」硬约束段。字段归属表移到代码（同一来源给 sub-lane
-  调度 + merge 用，避免 prompt 与 merge 字段集合漂移），fallback 模式
-  `lane_scope=ALL` 等价单 lane 但同样吃 baseline + 三态规则
+  必须 == baseline」硬约束段。**T-BASELINE-DEPRECATE 引入的「maxItems
+  统一裁剪规则」段对所有 lane 全 inherits**（不按 lane_scope 过滤——该段
+  是抽取期通用准则，与字段归属正交）。字段归属表移到代码（同一来源给
+  sub-lane 调度 + merge 用，避免 prompt 与 merge 字段集合漂移），fallback
+  模式 `lane_scope=ALL` 等价单 lane 但同样吃 baseline + 三态规则
 - `automation/persona_extraction/orchestrator.py` — sub-lane 调度
   （新建独立 ThreadPoolExecutor 与 repair pool 共用同一 `RateLimitController`
   信号源，hard-stop 任一池都触发 `executor.shutdown(cancel_futures=True)`）
@@ -667,10 +697,13 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   / `char_decision` / `char_cognition`）+ `target_baseline_path` 入参，
   context dict 注入 `{lane_scope}` / `{lane_field_whitelist}` /
   `{target_baseline}` 三键
-- `automation/repair_agent/coordinator.py` 或对应 T3 dispatcher
+- `automation/repair_agent/coordinator.py` 或对应 lifecycle dispatcher
   （**实际路径在 `automation/repair_agent/`，非 `persona_extraction/repair_agent/`**）
-  — sub-lane 开启时改为 3 并行重抽 + 注入修复历史 + 错误信息；T3 内
-  rate-limit pause 重跑**不**消耗 `t3_max_per_file` 槽
+  — sub-lane 开启时 lifecycle 2 启动改走 3 sub-lane 并行重新 extract（替代
+  现行单 lane 重抽）+ 每 sub-lane prompt 注入 prior_attempt_context（resolved
+  + remaining 摘要 ≤600 char）+ 错误信息；lifecycle 计数（`max_lifecycles_per_file
+  = 2`）的 +1 时机仅在「T3 真正触发并 reset 进入下一轮」，rate-limit pause
+  重跑**不**消耗 lifecycle 槽（R1）
 - `automation/persona_extraction/progress.py` — disk reconcile 扩展识别
   `.partial/{stage_id}_{lane}.json` 命名（不只是 `<stage>/<lane>` 现有
   约定），PENDING/ERROR lane 的 partial 一律删
@@ -697,8 +730,10 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
 - 每 sub-lane 调用走 `run_with_retry`，自然继承现行 `RateLimitController`
   pause / resume 机制（决策 46）
 - 显式处理 3 点：
-  - **R1 T3 内 rate-limit 不消耗 t3 槽**：t3 计数器只在「LLM 真正成功
-    调用且产出仍失败」时 +1，rate-limit pause 重跑不计数
+  - **R1 lifecycle 内 rate-limit pause 不消耗 lifecycle 槽**（per
+    T-REPAIR-T3-LIFECYCLE-RESET 已废弃 `t3_max_per_file` 计数器，
+    改用 `max_lifecycles_per_file = 2`）：lifecycle 计数只在「T3 真正
+    触发并 reset 进入下一轮」时 +1，rate-limit pause 重跑不计数
   - **R2 hard-stop 时 cancel 同胞 sub-lane**：A 抛 `RateLimitHardStop`
     → orchestrator catch → `executor.shutdown(cancel_futures=True)` +
     删除已写 .partial → exit 2
@@ -714,18 +749,26 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   baseline 校验生效（与三 lane 模式同口径）
 - 3 sub-lane partial 字段集合 ∪ 程序注入 == schema properties 全集（merge
   前置校验，覆盖 schema 所有 required + 非 required 字段，无漂移）
-- failure_modes 4 子类按字段归属表互斥分布 + 全 4 子类覆盖（hard gate，
-  缺一即 partial 失败），merge 后字段完整
+- failure_modes 4 子键按字段归属表互斥分布到 char_expression（tone_traps）/
+  char_cognition（其余 3 子键）+ 全 4 子键覆盖（hard gate，缺一即 partial
+  失败），merge 后字段完整
 - stage_delta 6 子键按字段归属表互斥分布到 char_decision / char_cognition +
   全 6 子键覆盖（hard gate，缺一即 partial 失败）
 - 三方 keys（target_voice_map / target_behavior_map / relationships）==
   baseline.targets[].target_character_id 双向相等（多/少都 cross-file
   hard fail；三态由内容是否填充承载，从未登场 entry 字段空）— 复用现有
   `repair_agent/checkers/targets_keys_eq_baseline.py`
-- T3 触发时 3 sub-lane 并行重抽 + 注入修复历史，re-merge 后 re-validate
+- prompt 模板的 maxItems 统一裁剪规则段对所有 lane 全 inherits（不按
+  lane_scope 过滤），三 lane 主抽取均按"最重要 / 最符合当前 stage 需要"
+  先排序后截断
+- lifecycle 1 末端 T3 触发 → state reset → lifecycle 2 启动时按 sub-lane
+  模式重新 extract（3 sub-lane 并行），re-merge 后 re-validate；lifecycle 2
+  默认禁用 T3，再升 T3 即 T3_EXHAUSTED
+- file-level fingerprint：merge 成功后写入整文件 hash；lifecycle 2 启动
+  前按已 accept fingerprint 过滤（sub-lane 间共享，不各自维护）
 - rate-limit 兼容：R1/R2/R3 在测试场景下行为符合上述描述（含 sub-lane
   pool 与 repair pool 共享 RateLimitController 信号源，任一 hard-stop
-  双池齐落）
+  双池齐落；R1 已对齐 lifecycle 槽语义）
 - disk reconcile 启动时正确清理孤儿 `.partial/{stage_id}_{lane}.json`
 - 文档（architecture / extraction_workflow / README / ai_context / requirements）同步
 
@@ -735,16 +778,24 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   target keys 约束改造）
 - 实施 ~1.5 个工作日；首次跑 1 stage 验证 sub_lanes=true 与
   sub_lanes=false 两套行为 + keys == baseline 校验
-- 以上排期基于 monolithic 底数；light_novel 模式 stage 数量级更高、单
-  stage 更小，sub-lane 默认开关与排期届时按真实 mode 重评
+- 排期基于 monolithic 底数；light_novel 模式排期与开关行为不再"按 mode
+  重评"——保持单 toml bool + CLI 双向 flag，跑 light_novel 时由用户
+  `--no-char-snapshot-sub-lanes` 切换（详见"暂不做的事"）
 
 **依赖**
 
-- **硬前置**：T-PHASE2-TARGET-BASELINE（baseline 是三方 keys 锚点；无
-  baseline 则 D4 硬约束无依据可校验）。**启动门槛 = 先跑 phase 2 runtime
-  验证**——目前 T-PHASE2-TARGET-BASELINE "代码完成、runtime 验证待跑"，
-  在真书上验证 baseline 实际产出 shape 之前不要开 sub-lane prompt 改造，
-  避免 baseline 字段语义后续微调 → sub-lane prompt 全部回炉
+- **硬前置 1**：T-PHASE2-TARGET-BASELINE（baseline 是三方 keys 锚点；无
+  baseline 则 D4 硬约束无依据可校验）
+- **硬前置 2**：T-BASELINE-DEPRECATE（字段归属表把 `failure_modes` 4 子键
+  分到 char_expression / char_cognition，依赖 failure_modes 已在
+  `stage_snapshot.schema` 内——schema 已合并满足，但需 runtime 验证
+  failure_modes 实际产出 + maxItems 裁剪生效后才动 sub-lane prompt；同时
+  本 todo 改动清单要求 prompt "maxItems 统一裁剪规则段对所有 lane 全
+  inherits"，依赖该规则段先在 BASELINE-DEPRECATE 落地）
+- **启动门槛 = phase 2 + BASELINE-DEPRECATE 双方都跑过 runtime 验证**——
+  在真书上验证 baseline 实际产出 shape + failure_modes 实际产出 + maxItems
+  裁剪行为之前不要开 sub-lane prompt 改造，避免上游字段语义后续微调
+  → sub-lane prompt 全部回炉
 - 无其他硬依赖
 
 **暂不做的事**
@@ -757,6 +808,12 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   编辑 baseline + stage 重抽处理，不引入 escape hatch）
 - 当前 work package 切到新模型的时序问题不在本任务内（按用户原则
   「不过度工程，整 lane 重跑」处理）
+- **不引入 mode-aware sub_lanes 默认开关**——`structure_mode` 是 work 级
+  manifest 属性（per T-INGEST-STRUCTURE-MODE），不复制到 phase 3 toml /
+  代码内做分支；保持 toml 单 bool + CLI 双向 flag 设计，light_novel 跑
+  时由用户手动 `--no-char-snapshot-sub-lanes` 切换（单 stage 字符数小，
+  3 sub-lane 启动开销可能 > 抽取耗时收益）。phase 3 extraction 不需要
+  知道 mode
 
 ---
 
