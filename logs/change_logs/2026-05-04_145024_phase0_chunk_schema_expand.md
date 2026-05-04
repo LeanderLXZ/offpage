@@ -202,3 +202,24 @@ Step 7 多线 review，**仅 1 个非阻塞建议**（不在本次 intent 范围
 
 - **Status**: DONE
 - **Finished**: 2026-05-04 15:11:36 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：8/8 项计划 + 6/6 项验证标准（PRE 列的 `ai_context/data_model.md` 文件不存在，已在 PRE 执行偏差段说明跳过；其余全落实）
+- Missed updates: 0 条阻塞性；schemas/README.md 未触（按 conventions.md 行 41 严格意义"schema 改动应同步 schemas/README.md"，但该 README 仅一行目录索引、无字段细节，新加字段不触发实质更新——记 Low finding 留痕）
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=0 / Low=2
+  - L1: PRE log 内 `../../ai_context/data_model.md` 链接失效（同 PRE 笔误，执行偏差已记，残留 broken link）
+  - L2: schemas/README.md 行 9 未触（generic "目录索引"未变 → 实质无需更新；按 alignment 表严格意义留痕）
+- Open Questions: 1 条（observed_impact 空字符串 schema-prompt mismatch；POST log 已记，需用户拍板路径 A vs B）
+- Residual Risks: 1 条（已合并到 extraction/{work_id} 分支的旧 chunk_*.json 在下次 --resume 时被 reconcile 全量重抽；属设计内行为，需用户知悉）
+
+## 复查时状态
+- **Reviewed**: 2026-05-04 15:19:43 EDT
+- **Status**: REVIEWED-PASS
+  - 轨 1 全落实（8/8 计划 + 6/6 验证），轨 2 无 High/Medium，Low 2 条均为非阻塞文档级痕迹
+- **Conversation ref**: 同会话内 /post-check 输出
