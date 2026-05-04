@@ -33,6 +33,13 @@ max_chapter_count    = 15        # 单 stage 最多章节数
 # 影响 phase0 与 phase4，本键提供默认值。
 concurrency              = 10
 
+# Phase 0 单 chunk summarize 子进程超时（秒）。每 chunk 读 25 章 + 写
+# 25× per-summary（100–150 字）+ 5 个 chunk-level 二级聚合字段
+# （chunk_arc_summary / chunk_world_rules / chunk_power_levels /
+# chunk_factions / chunk_regions），opus-4-7 effort=max 单 chunk wall
+# 经验值常 ≥ 600s，给到 1800s 留 3× 余量。
+summarize_timeout_s      = 1800
+
 # Phase 0 内 L2 JSON 修复的 LLM 调用超时（秒）。L2 是"喂坏 JSON 给
 # LLM 修一次"，比正常归纳短得多。
 json_repair_l2_timeout_s = 600

@@ -2211,7 +2211,8 @@ Backend `run()` 接受可选 `lane_name` 参数，用于在 PID 打印和 heartb
 
 **自我保护**：防止进程因异常而无限运行占用资源：
 
-- 每个 LLM 子进程有硬超时（提取 3600s、repair agent 内 LLM 调用 600s）
+- 每个 LLM 子进程有硬超时（Phase 0 summarize 1800s、Phase 3 提取
+  3600s、repair agent 内 LLM 调用 600s）
 - repair agent 每层 fixer 有独立重试次数（T0=1, T1=3, T2=3, T3=1），
   Phase 4 chapter 级别有独立重试（`max_retries`=2）
 - 可选的总运行时间上限
@@ -2496,7 +2497,7 @@ TOML 中的同名键；TOML 缺失键时回落到代码内部 dataclass 默认�
 | Section | 用途 |
 |---------|------|
 | `[stage]` | 阶段规划目标/上下限章节数 |
-| `[phase0]` | 章节归纳并发、JSON 修复超时 |
+| `[phase0]` | 章节归纳并发、summarize 子进程超时、JSON 修复超时 |
 | `[phase1]` | 出口验证重试 |
 | `[phase3]` | 提取/审校超时、`--max-turns` |
 | `[phase4]` | 场景切分并发、circuit breaker |

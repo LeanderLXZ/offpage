@@ -335,6 +335,7 @@ source. Long discussion chains live in `logs/change_logs/`.
     Sections: `stage / phase0 / phase1 / phase3 / phase4 / repair_agent
     / backoff / rate_limit / runtime / logging / git`.
 46. Token-limit auto-pause (subscription model, §11.13) — `RateLimitController` parses DST-aware reset, writes flock-merged `rate_limit_pause.json`, blocks pre-launch + every `run_with_retry`, re-runs failed prompt after reset without consuming a retry slot. Unparseable resets → probe loop (single elected leader). Hard-stops (weekly ≥ `weekly_max_wait_h` default 12h; probe ≥ `probe_max_wait_h` default 6h) → exit 2 + `rate_limit_exit.log`. Pause excluded from `--max-runtime` (deduped by `resume_at`). → `docs/requirements.md` §11.13 + `automation/persona_extraction/rate_limit.py`.
+47. Phase 0 summarize subprocess timeout = `[phase0].summarize_timeout_s` (default 1800s), not the historical borrow of `[phase3].review_timeout_s` (600s). Reason: a Phase 0 chunk reads 25 chapters and produces 25× per-summary (100–150 chars) + 5 chunk-level secondary aggregates (`chunk_arc_summary` / `chunk_world_rules` / `chunk_power_levels` / `chunk_factions` / `chunk_regions`) under opus-4-7 effort=max; runtime evidence shows wall > 600s is normal. `phase3.review_timeout_s` stays 600s for the phase 3 reviewer short-chain it actually serves. → `automation/config.toml` `[phase0]`, `automation/persona_extraction/config.py::Phase0Config`, `automation/persona_extraction/orchestrator.py:_summarize_chunk`.
 
 ## Repository
 

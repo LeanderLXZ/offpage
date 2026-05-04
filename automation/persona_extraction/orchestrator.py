@@ -499,7 +499,7 @@ class ExtractionOrchestrator:
 
         result = run_with_retry(
             self.backend, prompt,
-            timeout_seconds=get_config().phase3.review_timeout_s,
+            timeout_seconds=get_config().phase0.summarize_timeout_s,
             lane_name=f"summarize[chunk_{idx:03d}]",
         )
 

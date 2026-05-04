@@ -73,6 +73,11 @@
 
 ## Completed
 
+### [T-PHASE0-SUMMARIZE-TIMEOUT-BUMP] phase 0 summarize 子进程超时 600s → 1800s 并解耦于 phase3.review_timeout_s · 完成于 2026-05-04 · 完整完成
+
+- 1 行摘要：runtime 验证发现 wave 1 全部 10 chunk 撞 600s 子进程超时（25 章 + chunk-level 5 个二级聚合字段 + opus-4-7 effort=max 单 chunk wall 常 ≥600s）；`Phase0Config` 加 `summarize_timeout_s: int = 1800`、`automation/config.toml [phase0]` 加同名键 + 中文注释、`orchestrator.py:_summarize_chunk` 改用 `phase0.summarize_timeout_s`（原借用 `phase3.review_timeout_s` 不动，仍服务 phase 3 reviewer 短链）；automation/README.md / docs/architecture/extraction_workflow.md / docs/requirements.md 同步硬超时数字与配置分节描述；ai_context/decisions.md 加 #47 durable 决策。smoke 全过：TOML / load_config / orchestrator import / grep 残留 0。
+- 关联 log: [logs/change_logs/2026-05-04_154622_phase0_summarize_timeout_bump.md](../logs/change_logs/2026-05-04_154622_phase0_summarize_timeout_bump.md)
+
 ### [T-CHAPTER-MULTIVOL] chapter_id 格式改 C0001 + chapter_index 加多卷字段 · 完成于 2026-04-30 · 完整完成
 
 - 1 行摘要：(1) `schemas/work/chapter_index.schema.json` `chapter_id` 加 `pattern: "^C[0-9]{4}$"` + 新增 3 个可选字段 `volume_id`（`^V[0-9]{3}$`）/ `volume_title` / `volume_chapter_seq`（多卷书必填三件套，单卷书不填）；(2) `prompts/ingestion/原始资料规范化.md` 例子改 `C0001` / `chapters/C0001.txt` + 多卷书识别条件与三字段填写指引；(3) <character> `sources/works/<work_id>/` 全量迁移 537 章（chapter_index.json 537 条 `chapter_id` / `normalized_path` 字段值改写、`chapters/0001.txt`~`0537.txt` 重命名为 `C####.txt`，epub 内部 `source_path` 保持原样）；(4) `ai_context/conventions.md` § Naming and Identifiers 加 chapter_id / volume_id 命名规则与位宽理由；(5) `ai_context/decisions.md` Work Scope 加 #10a；(6) `docs/architecture/schema_reference.md` 同步描述。`automation.ingestion.validator` 校验通过、jsonschema 校验通过、全库 `chapter[0-9]{4}` 残留为 0。子章节切分约定推到 T-INGEST-STRUCTURE-MODE。

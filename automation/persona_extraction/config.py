@@ -39,6 +39,7 @@ class StageConfig:
 @dataclass(frozen=True)
 class Phase0Config:
     concurrency: int = 10
+    summarize_timeout_s: int = 1800
     json_repair_l2_timeout_s: int = 600
 
 

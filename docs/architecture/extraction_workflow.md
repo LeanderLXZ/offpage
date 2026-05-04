@@ -605,8 +605,9 @@ orchestrator (Python)
   超过 `[logging].extraction_log_backup_count`（默认 3）的最旧一份被删除。
   保证每次启动都是干净日志，磁盘占用有上限。设为 0 关闭滚动
 - `--max-runtime` 总时间限制，到期后在 stage 间优雅停止
-- 子进程硬超时（提取 3600s、repair agent LLM 调用 600s；阈值由
-  `automation/config.toml` 的 `[phase3]` 段控制）
+- 子进程硬超时（Phase 0 summarize 1800s、Phase 3 提取 3600s、repair
+  agent LLM 调用 600s；阈值分别由 `automation/config.toml` 的
+  `[phase0]` / `[phase3]` 段控制）
 - Token/context limit 与 rate limit 区分：前者不重试（相同 prompt 必定再超限），
   后者由 `RateLimitController` 暂停所有新请求直到 reset，再重发同一 prompt
   （**不消耗重试次数**，详见 `docs/requirements.md` §11.13）。订阅模式下

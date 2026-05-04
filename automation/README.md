@@ -59,7 +59,7 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
 主要分段：
 
 - `[stage]` 章节数边界（target/min/max）
-- `[phase0]` chunk 并发、L2 修复超时
+- `[phase0]` chunk 并发、summarize 子进程超时、L2 修复超时
 - `[phase1]` stage_plan 出口验证重试上限
 - `[phase3]` 提取 / 审校超时、`max_turns`
 - `[phase4]` 章节并发、短路熔断阈值
