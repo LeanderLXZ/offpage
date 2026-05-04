@@ -2,9 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/analysis/chapter_summary_chunk.schema.json",
   "title": "ChapterSummaryChunk",
-  "description": "Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳。chunks 联合覆盖 0001..total_chapters 全集，Phase 1 (analysis.md) 把 chunks 作为输入构造 stage_plan / world_overview / candidate_characters；不入运行时。",
+  "description": "Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳；chunk-level 二级字段聚合本 chunk 的世界规则 / 力量体系 / 势力 / 区域 / 剧情弧信号，供 Phase 1/2 综合产 world_overview / foundation。chunks 联合覆盖 0001..total_chapters 全集。不入运行时。",
   "type": "object",
-  "required": ["work_id", "chunk_index", "chapters", "summaries"],
+  "required": [
+    "work_id",
+    "chunk_index",
+    "chapters",
+    "summaries",
+    "chunk_arc_summary"
+  ],
   "additionalProperties": false,
   "properties": {
     "work_id": {
@@ -21,6 +27,114 @@
       "pattern": "^C[0-9]{4}-C[0-9]{4}$",
       "description": "本 chunk 覆盖的章节范围，形如 C0001-C0025（C 前缀 + 4 位零填充 + 连字符 + C 前缀 + 4 位零填充），与 chapter_id 命名一致。"
     },
+    "chunk_arc_summary": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "本 chunk 整体剧情弧概述（≤200 字，required）。Phase 1 综合多 chunk 的弧线产 world_overview.world_lines.core_conflict。"
+    },
+    "chunk_world_rules": {
+      "type": "array",
+      "maxItems": 5,
+      "description": "本 chunk 揭示的世界规则（修炼 / 转世 / 天道 / 契约等结构性规则；最多 5 条）。Phase 2 综合多 chunk 产 foundation.core_rules.{rule,description,impact}。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule"],
+        "properties": {
+          "rule": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "规则名（≤50 字）。"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "规则描述（≤50 字）。本 chunk 无解释时可为空字符串。"
+          },
+          "observed_impact": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "本 chunk 观察到的对剧情 / 角色的影响（≤50 字）。**禁止静默留空**——本 chunk 未直接观察到触发时，必须显式填\"未在本 chunk 直接观察\"或同义短语，作为 Phase 2 综合 foundation.core_rules.impact 的局部锚点。"
+          }
+        }
+      }
+    },
+    "chunk_power_levels": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "本 chunk 出现的力量体系等级 / 阶段名清单。Phase 2 综合多 chunk 产 foundation.power_system.levels.{name,description}。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 15,
+            "description": "等级 / 阶段名（≤15 字，例如\"练气\"\"筑基\"）。"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "等级简要描述（≤30 字）。本 chunk 无解释时可为空字符串。"
+          }
+        }
+      }
+    },
+    "chunk_factions": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "本 chunk 出现的势力 / 组织 / 阵营 / 国家 / 门派清单。Phase 2 综合多 chunk 产 foundation.major_factions.{name,description}；members_present 经 Phase 1.5 跨 chunk 身份合并后映射到 character_id 再喂 foundation.major_factions.key_figures[]。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 15,
+            "description": "势力名（≤15 字）。"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "势力简要描述（≤50 字，对齐 foundation.major_factions.description ≤50 减少 Phase 2 综合截断）。本 chunk 无解释时可为空字符串。"
+          },
+          "members_present": {
+            "type": "array",
+            "maxItems": 20,
+            "description": "本 chunk 中归属此势力的角色名列表（最多 20 条）。**raw 角色名**——化名 / 真名 / 称呼任一形式，**不是 character_id**（chunk-level 阶段 Phase 1.5 跨 chunk 身份合并尚未发生）。",
+            "items": {
+              "type": "string",
+              "maxLength": 10,
+              "description": "单个 raw 角色名（≤10 字）。"
+            }
+          }
+        }
+      }
+    },
+    "chunk_regions": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "本 chunk 出现的地理 / 空间区域清单。Phase 2 综合多 chunk 产 foundation.world_structure.major_regions.{name,description}。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 15,
+            "description": "区域 / 地名（≤15 字，对齐中文长地名常见长度，如\"北方苦寒之地\"\"西北边境蛮荒部族联盟\"）。"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "区域简要描述（≤30 字）。本 chunk 无解释时可为空字符串。"
+          }
+        }
+      }
+    },
     "summaries": {
       "type": "array",
       "minItems": 1,
@@ -33,7 +147,6 @@
           "summary",
           "key_events",
           "characters_present",
-          "location",
           "emotional_tone",
           "identity_notes"
         ],
@@ -50,14 +163,14 @@
           },
           "summary": {
             "type": "string",
-            "minLength": 50,
-            "maxLength": 100,
-            "description": "本章核心剧情概述，1-3 句话，长度 50-100 字。事件描述而非文学评论。"
+            "minLength": 100,
+            "maxLength": 150,
+            "description": "本章核心剧情概述，2-4 句话，长度 100-150 字。事件描述而非文学评论。设定 / 世界规则 / 力量体系 / 势力 / 区域信号写到 chunk-level 二级字段，不写在本 summary。"
           },
           "key_events": {
             "type": "array",
             "maxItems": 5,
-            "description": "推动剧情的关键事件列表，最多 5 条；跳过日常水文。",
+            "description": "推动剧情的关键事件列表，最多 5 条；跳过日常水文。Phase 1 monolithic 模式 stage_plan 边界判定的离散信号。",
             "items": {
               "type": "string",
               "maxLength": 50,
@@ -68,11 +181,6 @@
             "type": "array",
             "description": "本章有实质互动的角色列表（不计背景群演）。化名 / 代称在 key_events 注明，本字段使用最常用名。",
             "items": { "type": "string" }
-          },
-          "location": {
-            "type": "string",
-            "maxLength": 20,
-            "description": "本章主要场景 / 地点（≤20 字）。"
           },
           "emotional_tone": {
             "type": "string",

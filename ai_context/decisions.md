@@ -257,6 +257,47 @@ source. Long discussion chains live in `logs/change_logs/`.
      stage_plan.schema.json` (`stage_title.maxLength`), `prompts/
      ingestion/原始资料规范化.md`, `automation/persona_extraction/
      orchestrator.py::_build_light_novel_stage_plan`.
+27m. **Chunk-level secondary fields on `chapter_summary_chunk`.** Phase 0
+     chunk schema carries five chunk-level secondary fields aggregating
+     the world / power / faction / region / arc signals across each
+     chunk, in addition to the per-summary event facts: `chunk_arc_summary`
+     (required, ≤200 chars), `chunk_world_rules[]` (maxItems 5, items
+     `{rule, description, observed_impact}`, `required: [rule]`),
+     `chunk_power_levels[]` (maxItems 20, items `{name, description}`,
+     `required: [name]`), `chunk_factions[]` (maxItems 20, items
+     `{name, description, members_present[]}` with `members_present`
+     storing **raw** chunk-LLM-visible names — alias / true name / form
+     of address — not `character_id` since identity merge is post-Phase
+     1.5; `required: [name]`), `chunk_regions[]` (maxItems 20, items
+     `{name, description}`, `required: [name]`). All sub-objects
+     `additionalProperties: false`. Per-summary side: `location` removed
+     (covered by `chunk_regions`); `summary` widened from 50–100 to
+     100–150 CJK chars; `key_events` retained (≤5×≤50, the discrete
+     boundary signal Phase 1 monolithic stage_plan relies on —
+     `chunk_arc_summary` 25-chapter granularity is too coarse to
+     replace). `chunk_world_rules.observed_impact` is required-by-prompt
+     to fall back to the literal string "未在本 chunk 直接观察" rather
+     than silently empty, so Phase 2 LLM has a local anchor when
+     synthesising `foundation.core_rules.impact`. Phase 1 mapping:
+     `chunk_world_rules → core_rules` / `chunk_power_levels →
+     power_system.levels` / `chunk_factions → major_factions` /
+     `chunk_regions → world_structure.major_regions` /
+     `chunk_arc_summary → world_lines.core_conflict`. Phase 2
+     `baseline_production.md` reads the chunk-level fields directly
+     (no longer reasoning purely from per-summary natural language).
+     Explicitly **NOT added**: `chunk_fixed_relationships[]` (chunk
+     view ≤25 chapters cannot judge "spans entire book", would
+     contaminate `world/foundation/fixed_relationships.json`);
+     `chunk_setting_features` (overlaps `chunk_world_rules` /
+     `chunk_power_levels` / `chunk_factions` / `chunk_regions` —
+     `world_structure.summary` / `world_lines.setting_features` are
+     synthesised by Phase 1 LLM from those four fields). `members_present`
+     intentionally **not** mapped 1:1 to `foundation.major_factions.key_figures`
+     — Phase 1.5 cross-chunk identity merge maps the raw names to
+     `character_id` first.
+     → `schemas/analysis/chapter_summary_chunk.schema.json`,
+     `automation/prompt_templates/{summarization,analysis,baseline_production}.md`,
+     `docs/architecture/{extraction_workflow,schema_reference}.md`.
 
 ## Memory System
 

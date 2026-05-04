@@ -25,7 +25,18 @@
 
 `{summaries_dir}`
 
-每个文件是一个 chunk 的归纳结果（JSON），包含该 chunk 内每章的 summary、key_events、characters_present、location、emotional_tone、identity_notes 等字段。schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`。
+每个文件是一个 chunk 的归纳结果（JSON），包含两层信息：
+
+**per-summary 层**（每章一条）：`chapter` / `title` / `summary`（100-150 字事件描述）/ `key_events`（≤5×≤50 字关键事件）/ `characters_present` / `emotional_tone` / `identity_notes`。
+
+**chunk-level 二级字段层**（每 chunk 聚合一份，本 chunk 视野下的设定信号）：
+- `chunk_arc_summary`（≤200 字本 chunk 整体剧情弧，required）
+- `chunk_world_rules[]`（≤5 条 × `{{rule, description, observed_impact}}`；本 chunk 揭示的世界规则；observed_impact 可能是具体影响或 fallback "未在本 chunk 直接观察"）
+- `chunk_power_levels[]`（≤20 条 × `{{name, description}}`；本 chunk 出现的力量体系等级）
+- `chunk_factions[]`（≤20 条 × `{{name, description, members_present}}`；势力名 + 本 chunk 归属的 raw 角色名清单——化名 / 真名 / 称呼任一形式，**身份合并由步骤 1.5 完成**）
+- `chunk_regions[]`（≤20 条 × `{{name, description}}`；本 chunk 出现的地理区域）
+
+schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`。
 
 ## 执行步骤
 
@@ -33,11 +44,19 @@
 
 读取 `{summaries_dir}` 下的所有 JSON 文件，按 chunk 顺序建立全书剧情脉络的完整认知。
 
-重点关注：
-- 每章的 `summary` 和 `key_events` — 了解剧情走向
-- `location` 转换 / `emotional_tone` 突变 — 候选阶段边界信号
+per-summary 层重点关注：
+- 每章的 `summary` 和 `key_events` — 了解剧情走向 + stage 边界离散信号
+- `emotional_tone` 突变 — 候选阶段边界信号
 - `characters_present` — 角色出场频率
 - `identity_notes` — 角色身份变化线索（获得新名称、揭示真实身份、化名等）
+
+chunk-level 二级字段层是步骤 1.8（世界观概览）的**直接信号源**，按下方字段映射使用：
+- `chunk_world_rules[]` → `world_overview.core_rules[]`（综合多 chunk 的同一规则、合并描述；observed_impact 给 Phase 2 `foundation.core_rules.impact` 提供局部锚点）
+- `chunk_power_levels[]` → `world_overview.power_system.levels[]`（综合多 chunk 同一等级名 / 阶段名，去重）
+- `chunk_factions[]` → `world_overview.major_factions[]`（综合多 chunk 同一势力，合并描述；members_present 在步骤 1.5 身份合并后再映射到 character_id，**步骤 1.8 不需要**）
+- `chunk_regions[]` → `world_overview.world_structure.major_regions[]`（综合多 chunk 同一地名）；步骤 2 stage_plan 的区域转换信号也来自本字段
+- `chunk_arc_summary` → `world_overview.world_lines.core_conflict`（多 chunk 弧线串成大世界线核心冲突）
+- `world_overview.world_structure.summary` / `world_lines.setting_features` 由你综合 `chunk_regions` / `chunk_power_levels` / `chunk_factions` / `chunk_world_rules` 的信号写出（无 chunk 直供字段，需要综合判断）
 
 ### 步骤 1.5：跨 chunk 角色身份合并
 
@@ -115,7 +134,7 @@ JSON 结构：
 - `stage_id` 使用紧凑英文代号格式 `S###`（三位数字零填充，如 `S001`、`S002`、`S049`），**不使用中文或其他格式**。这是整套 ID 家族（`M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##`）的共同 stage 段。
 - `stage_title` 是人类可读的中文短标题（如"<location_a>初遇"、"<location_b>下山"），作为 bootstrap 阶段选择时展示给用户的阶段名
 - `boundary_reason` 必须说明为什么在此处切分（例如"主角离开某地""重大事件结束""新势力登场"），不能只写"满 10 章"
-- 边界判断从全局剧情结构出发：综合 `summary` / `key_events` / `location` 转换 / `emotional_tone` 突变 / `identity_notes` 中的身份转折等多重信号
+- 边界判断从全局剧情结构出发：综合 `summary` / `key_events` / `chunk_regions` 中的区域转换 / `chunk_arc_summary` 的弧线切换 / `emotional_tone` 突变 / `identity_notes` 中的身份转折等多重信号
 - **自检**：完成 stage plan 后，逐一检查每个 stage 的 `chapter_count`。如有任何一个 ≤4 或 ≥16，必须调整切分点直到全部 stage 满足 5-15 章约束
 
 输出文件：`{work_dir}/analysis/stage_plan.json`

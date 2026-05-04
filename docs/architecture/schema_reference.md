@@ -22,10 +22,18 @@
 
 ### analysis/chapter_summary_chunk.schema.json
 
-**用途**：Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳。
+**用途**：Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳；chunk-level 同时聚合该 chunk 的世界规则 / 力量体系 / 势力 / 区域 / 剧情弧二级信号，供 phase 1/2 综合产 world_overview / foundation。
 **位置**：`works/{work_id}/analysis/chapter_summaries/chunk_NNN.json`（本地生成，不入 git）
-**关键字段**：`work_id` / `chunk_index` / `chapters`（范围 `^C[0-9]{4}-C[0-9]{4}$`） / `summaries[]`（per-summary 含 `chapter` `^C[0-9]{4}$` 与 chapter_index `chapter_id` 一致 / `title` / `summary` / `key_events` / `characters_present` / `location` / `emotional_tone` / `identity_notes`）
-**消费方**：Phase 1 (`automation/prompt_templates/analysis.md`) 把所有 chunk 作为输入构造 stage_plan / world_overview / candidate_characters。
+**关键字段**：
+- 顶层：`work_id` / `chunk_index` / `chapters`（范围 `^C[0-9]{4}-C[0-9]{4}$`） / `summaries[]`
+- chunk-level 二级（设定 / 体系信号，required `chunk_arc_summary`，其余空数组兜底）：
+  - `chunk_arc_summary`（≤200 字，本 chunk 整体剧情弧）
+  - `chunk_world_rules[]`（maxItems 5；items `{rule, description, observed_impact}`，`required: [rule]`，`additionalProperties: false`）
+  - `chunk_power_levels[]`（maxItems 20；items `{name, description}`，`required: [name]`，`additionalProperties: false`）
+  - `chunk_factions[]`（maxItems 20；items `{name, description, members_present[]}`，`required: [name]`，`additionalProperties: false`；`members_present` 是本 chunk LLM 看到的 raw 角色名，化名 / 真名 / 称呼任一，phase 1.5 跨 chunk 身份合并后再映射到 `character_id`）
+  - `chunk_regions[]`（maxItems 20；items `{name, description}`，`required: [name]`，`additionalProperties: false`）
+- per-summary：`chapter`（`^C[0-9]{4}$` 与 chapter_index `chapter_id` 一致）/ `title` / `summary` / `key_events` / `characters_present` / `emotional_tone` / `identity_notes`
+**消费方**：Phase 1 (`automation/prompt_templates/analysis.md`) 把所有 chunk 作为输入构造 stage_plan（key_events 为离散边界信号）/ world_overview（chunk_world_rules → core_rules / chunk_power_levels → power_system.levels / chunk_factions → major_factions / chunk_regions → world_structure.major_regions / chunk_arc_summary → world_lines.core_conflict）/ candidate_characters；Phase 2 (`automation/prompt_templates/baseline_production.md`) 直读 chunk-level 字段综合产 foundation。
 **生成时机**：Phase 0 by `automation/prompt_templates/summarization.md`，分 chunk 并行 LLM 调用。
 
 ---

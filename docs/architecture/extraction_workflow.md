@@ -48,7 +48,7 @@
 
 通用流程：
 
-- 产出每章的结构化摘要（事件、出场角色、地点、情绪基调、身份变化线索）
+- 产出每章的结构化摘要（事件、出场角色、情绪基调、身份变化线索）+ chunk-level 二级聚合字段（剧情弧 / 世界规则 / 力量体系 / 势力 / 区域），后者作为 phase 1 world_overview / phase 2 foundation 的 chunk-level 直接信号源（避免下游 LLM 凭 genre 套模板）
 - JSON 修复：L1 程序化 → L2 LLM（600s）→ L3 全量重跑（最多 1 次）
 - **Schema gate**：每个 chunk 落盘后跑 jsonschema (`schemas/analysis/chapter_summary_chunk.schema.json`) 校验，
   字段 bound + `additionalProperties:false` 违反归入同一 fail 类型（具体数字以 schema 为准）；失败路由到 L3 全量重跑，

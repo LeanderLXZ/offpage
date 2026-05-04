@@ -33,9 +33,40 @@ char_snapshot lane 在每个 stage_snapshot 中直接生成（S001 从原文 + i
 
 ## 产出 1：世界 Foundation
 
-基于世界观概览和全书摘要，产出以下世界基础文件。这些文件记录的是 **全书
-范围内不随阶段变化的基础设定**，阶段性变化由后续提取阶段的 stage_snapshot
-记录。
+### 思考链：从 chunk-level 二级字段综合产 foundation
+
+`world_overview.json` 是 Phase 1 把 chunk-level 信号综合后的结构化精化版，
+**信息源相同 / 可信度同分层**——你的任务**不是基于 world_overview 二次推断**，
+而是回到原始 chunk-level 信号源（`{summaries_dir}` 下所有 chunk 文件的
+`chunk_world_rules` / `chunk_power_levels` / `chunk_factions` /
+`chunk_regions` / `chunk_arc_summary`），按以下映射综合产 foundation：
+
+| foundation 字段 | chunk-level 直供字段 | 综合方式 |
+|---|---|---|
+| `core_rules[].{rule, description, impact}` | `chunk_world_rules[]` | 跨 chunk 合并同一规则；`description` 取最具体表述，**`impact` 综合多 chunks 的 `observed_impact`**（具体观察 + fallback "未观察" 都是局部锚点）判定该规则对剧情 / 角色的整体影响——单 chunk 局部观察不足以判定整体，必须跨 chunk 看模式 |
+| `power_system.levels[].{name, description}` | `chunk_power_levels[]` | 按等级先后顺序排列；`description` 取多 chunk 中最具体的解释 |
+| `power_system.summary` | （综合）`chunk_power_levels[]` 整体覆盖 + `chunk_world_rules[]` 中力量相关的规则 | 一句话概括力量体系类型 + 主要进阶逻辑 |
+| `major_factions[].{name, description}` | `chunk_factions[].{name, description}` | 跨 chunk 合并同一势力；`description` 取最具体表述 |
+| `major_factions[].key_figures[]` | `chunk_factions[].members_present[]`（**经 Phase 1.5 身份合并后映射到 character_id**） | 仅纳入 Phase 1.5 候选角色清单中的 character_id；raw 名（化名 / 称呼）不直接写入 |
+| `world_structure.major_regions[].{name, description}` | `chunk_regions[]` | 跨 chunk 合并同一区域 |
+| `world_structure.summary` | （综合）`chunk_regions[]` + `chunk_factions[]` + `chunk_world_rules[]` 中地理 / 空间相关规则 | 一句话概括世界地理 / 空间结构 |
+| `world_lines[].core_conflict` | `chunk_arc_summary` | 一个 world_line 通常跨多 chunk，串联其 `chunk_arc_summary` 提炼核心冲突 |
+| `world_lines[].setting_features` | （综合）`chunk_regions[]` + `chunk_power_levels[]` + `chunk_factions[]` 在该 world_line 跨度内的子集 | 一句话概括该篇章的环境 / 体系特征差异 |
+| `genre` / `tone` | 沿用 `world_overview.{genre, tone}` | 不二次推断 |
+
+**关键约束**：
+
+- **不要凭 genre 套模板**——如果你发现自己在写"练气筑基金丹元婴"、"修真界
+  分东南西北四大洲"这类范式化内容，停下来回看 chunk-level 字段。如果
+  原文确实出现了这些范式，chunk-level 字段会反映；如果没出现，本作就
+  没有
+- **`core_rules[].impact` 是综合判断，不是直接拷贝**——单条 `chunk_world_rules.observed_impact`
+  是局部观察（"未在本 chunk 直接观察"也是有效信号——意味本 chunk 该规则
+  未触发），foundation.impact 必须综合多 chunks 的局部信号判定**对剧情 /
+  角色的整体影响**；找不到任何 chunk 触发的规则要么删（不是核心规则），
+  要么标 "全书未直接观察到触发"
+- 为空 / 缺失的 chunk-level 信号 = foundation 对应字段也应为空 / 简略，
+  **不要补全**
 
 创建目录结构 `{work_dir}/world/foundation/`，产出：
 
@@ -124,7 +155,9 @@ char_snapshot lane 在每个 stage_snapshot 中直接生成（S001 从原文 + i
 }}
 ```
 
-初稿基于全书摘要推断，后续 stage 读到原文后修正和补充（修正限于补漏、
+初稿基于全书摘要 + chunk-level 二级字段推断（`chunk_factions.members_present`
+经 Phase 1.5 身份合并后可作为势力归属信号；血缘 / 自始即有的师承等结构性
+关系仍需结合摘要确认），后续 stage 读到原文后修正和补充（修正限于补漏、
 订正描述等，不应把 stage-acquired 关系反向迁入此处）。
 
 ## 产出 2：角色 Identity Baseline
