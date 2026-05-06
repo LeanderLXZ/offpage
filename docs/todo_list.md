@@ -15,12 +15,13 @@
 | `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | 2026-05-01 | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
 | `T-PHASE0-CHUNK-SCHEMA-EXPAND` | chapter_summary_chunk schema 二级字段扩展（命中 world_overview / foundation 不可信字段） | 2026-05-04 14:50 EDT | 2026-05-04 | schema/prompt/ai_context/docs 完成 + 静态 gate 全过（jsonschema metaschema OK；样本 chunk 1 valid + 10 negative case 全过；orchestrator + validator import 通过；grep 无 chapter.location 残留）；runtime 验证待跑（与 T-BASELINE-DEPRECATE / T-PHASE2-TARGET-BASELINE / T-INGEST-STRUCTURE-MODE 同批跑） |
 
-### 🟡 Next (2)
+### 🟡 Next (3)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
 | `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | 2026-05-02 | T-PHASE2-TARGET-BASELINE + T-BASELINE-DEPRECATE |
+| `T-LENGTH-TOLERANCE-GATE` | 各 LLM phase（0/1/2/3/3.5/4）strict 修复全耗尽后接 length-bound ±10% tolerance 兜底，覆盖 chunk_011 类 schema 边界毛刺抖动；同步 max_turns 50→80 + chunk_size default 25→20 缓解整体复杂度上限。 | 🟢 High | ✅ Ready | 🟡 Med | 2026-05-06 | 无 |
 
 ### ⚪ Discussing (8)
 
@@ -34,7 +35,7 @@
 | `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
-**Total**: 14 — 🟢 In Progress 4 ｜ 🟡 Next 2 ｜ ⚪ Discussing 8
+**Total**: 15 — 🟢 In Progress 4 ｜ 🟡 Next 3 ｜ ⚪ Discussing 8
 
 ---
 
@@ -920,6 +921,72 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   时由用户手动 `--no-char-snapshot-sub-lanes` 切换（单 stage 字符数小，
   3 sub-lane 启动开销可能 > 抽取耗时收益）。phase 3 extraction 不需要
   知道 mode
+
+---
+
+### [T-LENGTH-TOLERANCE-GATE] 各 LLM phase 终点接 length-bound tolerance（±10%）兜底 + max_turns 50→80 + chunk_size default 25→20
+
+**上下文**
+
+`<work_id>` Phase 0 重跑（`logs/change_logs/2026-05-04_154622_phase0_summarize_timeout_bump.md`）20/22 chunks 通过，2 chunk 终端失败：
+
+- `chunk_011` (C0251-C0275)：`max_turns=51` 用尽。检查残留 `chunk_011.json`：25 个 per-summary 中 15 个长度 97-99（schema bound 100-150 的 minLength），LLM 在 schema 边界 ±1-3 字处反复抖动 50 turns 未收敛。**根因 = schema 100 字下限对中文密集内容过严**，加 max_turns 治标不治本。
+- `chunk_008` (C0176-C0200)：1800s wall-clock timeout ×2。章节字符分布完全正常（6326-7015，全书 mean 2285），无异常长章。怀疑 agent loop 卡死或某次 tool call hang，单纯加 timeout 也未必能救。
+
+decision #27i（schema-gate-as-retry-trigger）已让 L1+L2+L3 严格修复跑全；但抖动在 schema 边界毛刺处时这条路径会反复无效消耗 turn / wall。需要在 strict 修复全跑完后加一个"length 边界 ±10% 容差兜底"出口，把这类无意义抖动收敛掉。
+
+同时 chunk_size 25 + max_turns 50 双约束在该作品上拉爆，决定整体松绑：max_turns 50 → 80（覆盖 schema 修订循环 + 复杂 chunk 收敛 budget），chunk_size default 25 → 20（降低单 chunk 复杂度 + chunk-level 5 字段聚合压力）。
+
+**改动清单**
+
+- `automation/persona_extraction/validator.py` 末尾追加 2 个函数（不动既有 `_validate_schema` / `validate_baseline`）：
+  - `relaxed_schema_for_length(schema, tolerance=0.10)`：深拷贝 schema，递归把 `minLength` 乘 (1−tol) ↓floor，`maxLength` 乘 (1+tol) ↑ceil；其它约束（required / type / enum / pattern / minimum / maximum / minItems / maxItems）原样保留。
+  - `validate_with_length_tolerance(instance, schema, tolerance=0.10) → (bool, list[ValidationIssue])`：先 strict 验证；fail 后过滤违规列表——**仅当所有 violation 都属 minLength/maxLength 类**，再用 `relaxed_schema_for_length` 验一次；relaxed pass → `(True, [])`；夹杂其它约束违规或 relaxed 仍 fail → `(False, errors)`。
+- 5 处 LLM 终点接入 tolerance 兜底（B 方案：strict L1+L2+L3 全跑完后兜底）：
+  - `automation/persona_extraction/orchestrator.py:_summarize_chunk` line 540-567 区域，L3 retry 仍 fail 后调 tolerance；pass → 接受；fail → 标 failed
+  - `automation/persona_extraction/orchestrator.py:run_analysis` line 1047 `exit_validation_max_retry` 耗尽分支（world_overview / stage_plan / candidate_characters 三 schema 各自兜底）
+  - `automation/persona_extraction/orchestrator.py:run_baseline_production`（line 1215+）调 `validate_baseline` 后判失败的分支接 tolerance
+  - `automation/persona_extraction/scene_archive.py:_handle_validation_failure` line 343 `entry.retry_count > entry.max_retries` 路径
+  - `automation/repair_agent/coordinator.py` 在 lifecycle 2 决定 T3_EXHAUSTED 之前的 L3 gate：当剩余 issues 仅为 `category == schema_validation` + 错误描述命中 minLength/maxLength 关键词时调 tolerance；pass → 改判 PASS；fail → 仍 T3_EXHAUSTED。**仅修改终态判定分支，不动 lifecycle 1/2 / T3 cap / fixer 升级**。覆盖 Phase 2 baseline (foundation/target_baseline/fixed_relationships) + Phase 3 (1+2N parallel) + Phase 3.5 (consistency) + Phase 4 (scene split) 的 repair 路径。
+  - `post_processing.py` 三处程序化产物（memory_digest / world_event_digest / stage_catalog）**不接 tolerance**——非 LLM 生成，length 边界毛刺概率为零；接反而掩盖代码 bug。
+- `automation/persona_extraction/config.py:Phase3Config.max_turns` 50 → 80
+- `automation/config.toml [phase3] max_turns` 50 → 80 + 注释更新（说明 50 实测对密集中文小说 chunk 不够）
+- `automation/persona_extraction/cli.py:81-86` `--chunk-size default=25` → `default=20`，help 文案 `"(default: 25)"` → `"(default: 20)"`
+- `automation/persona_extraction/orchestrator.py:361` `chunk_size: int = 25` → `20`
+- 文档同步：`automation/README.md` example、`docs/requirements.md`、`docs/architecture/extraction_workflow.md` 凡含 "25 章" / "chunk_size = 25" / "default: 25" 的描述同步到 20
+- `ai_context/decisions.md`：加 #48 durable 决策（length-bound tolerance B 方案 ±10%；触发 = 各 LLM phase strict retry 全耗尽后；覆盖 5 处 LLM 终点；不带 metadata；仅 minLength/maxLength；其他约束严格；max_turns 50→80 + chunk_size 默认 25→20 顺势）
+- `automation/repair_agent/_smoke_l3_gate.py` 加场景 D：`L1 length-only fail → lifecycle 2 tolerance PASS`（与既有 A/B/C 三场景同形态）
+
+**完成标准**
+
+- 静态 gate
+  - [ ] `validator.py` 3 个手写 unit case 通过：①strict pass→(True,[]) ②仅 minLength 差 ≤10% fail→(True,[])（tolerance pass） ③minLength 差 11% / 或夹杂 enum 不匹配→(False, errors)
+  - [ ] `load_config()` 返回 `phase3.max_turns == 80`
+  - [ ] argparse `--chunk-size` 默认 20，`--help` 显示 `default: 20`
+  - [ ] 不传 `--chunk-size` 时 orchestrator `self.chunk_size == 20`
+  - [ ] `automation/repair_agent/_smoke_l3_gate.py` 4 场景全过（A/B/C 不动 + 新加 D）
+  - [ ] orchestrator + scene_archive + post_processing + repair_agent.coordinator import 通过
+  - [ ] `grep "chunk_size = 25" / "default: 25" / "25 章"` 在 docs / ai_context / automation/ 残留为 0
+- runtime 验证
+  - [ ] 回滚 `works/<work_id>/analysis/`，setsid 重启 phase 0：537 章 / 27 chunks（chunk_size=20）/ 并发 10 / max_turns=80。预期 0 chunks 失败（tolerance + max_turns 双兜底）；若仍有失败，记录 chunk 编号与失败模式分类回贴本条目
+
+**依赖**
+
+无（T-PHASE0-SUMMARIZE-TIMEOUT-BUMP 已完成；T-PHASE0-CHUNK-SCHEMA-EXPAND schema 已稳定）
+
+**预估**
+
+代码改动适中（~150 行新增 + ~80 行修改），单次 /go 落 commit。runtime 验证 phase 0 wall ~45-55 min。
+
+**暂不做的事**
+
+- chunk_008 timeout 根因排查（章节内容正常，疑似 agent loop 卡死或 tool hang）——本轮先靠 max_turns 80 / chunk_size 20 减小复杂度，看是否仍复现；复现则单独立条目深查
+- tolerance metadata 标记（`_validation_tolerance_applied: true`）——这次不写。trade-off 是未来回看产物无法识别哪些是 tolerance 兜底。如未来 phase 1/2 消费方需区分严格 vs 兜底产出再加
+- post_processing.py 程序化产物接 tolerance——非 LLM 生成，反而会掩盖代码 bug，不动
+
+**更新时间**
+
+2026-05-06 11:56 EDT
 
 ---
 
