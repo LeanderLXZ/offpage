@@ -355,7 +355,7 @@ def _run_one_lifecycle(
     current_issues = list(blocking)
     last_gate_issues: list[Issue] | None = None
     gate_ever_ran = False
-    lifecycle_signal = ""  # "" | "T3_TRIGGERED" | "T3_EXHAUSTED"
+    lifecycle_signal = ""  # "" | "T3_TRIGGERED" | "T3_EXHAUSTED" | "LENGTH_TOLERANCE_PASS"
 
     for round_num in range(config.max_rounds):
         logger.info("Fix round %d — %d issues remaining",
@@ -684,7 +684,12 @@ def _run_fixer_with_escalation(
       * ``lifecycle_signal`` — ``""`` for normal completion,
         ``"T3_TRIGGERED"`` when T3 was invoked in lifecycle 1 (caller
         must abort the current lifecycle and reset),
-        ``"T3_EXHAUSTED"`` when T3 was needed but disabled (lifecycle 2).
+        ``"T3_EXHAUSTED"`` when T3 was needed but disabled (lifecycle 2),
+        ``"LENGTH_TOLERANCE_PASS"`` when lifecycle 2 was about to declare
+        T3_EXHAUSTED but every residual issue was a pure
+        ``minLength``/``maxLength`` schema violation that passed the
+        relaxed (×0.9 floor / ×1.1 ceil) re-validation per decision #48
+        — caller treats this as a PASS terminal state for the lifecycle.
     """
     modified_files: set[str] = set()
     remaining = list(issues)
