@@ -2450,7 +2450,13 @@ CLI `--start-phase` 参数（0/1/1.5/2/3/3.5/4），默认 auto（自动检测�
   读取此文件判断跳转，指定具体 phase 时强制重跑该 phase
 - `phase0_summaries.json` — Phase 0 chunk 级显式进度，chunk 完成后
   更新状态；启动时通过 `reconcile_with_disk()` 与磁盘 chunk 文件对账
-  （done 但缺文件 → 回退 pending；pending 但磁盘有文件 → 清掉半成品）
+  （done 但缺文件 → 回退 pending；pending 但磁盘有文件 → 清掉半成品）。
+  每个 chunk 含 `recovery_attempted` 字段（默认 false）：phase 0 主
+  循环结束后扫 `state=='failed'` + error 含 `'timed out'` /
+  `'error_max_turns'` + `recovery_attempted==False` 的 chunk，用
+  `[phase0].recovery_effort`（默认 `'high'`）重跑一次完整流程；不论
+  成败置 `recovery_attempted=true`，`--resume` 跳过（避免无限救火）。
+  详见 `ai_context/decisions.md` #49
 - `phase3_stages.json` — Phase 3 stage 状态机（完整 stage plan +
   per-stage 状态、lane 重试计数、commit SHA、per-lane 完成状态
   `lane_states` 用于 lane 级 resume）

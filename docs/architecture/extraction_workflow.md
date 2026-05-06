@@ -57,6 +57,16 @@
   `len(summaries) == 章节数`** 四条全部满足才视为完成（`_chunk_passes_full_check`
   单一判据，skip 路径 / 最终 gate / `reconcile_with_disk` 三处共用，避免
   partial / stale 文件从任何一道关漏过）；有任意 chunk 不满足 → 阻断并 `sys.exit(1)`
+- **Recovery sweep**（main ThreadPool 之后、最终 gate 之前触发）：扫
+  `phase0_summaries.json` 找 `state=='failed'` 且 error_message 含
+  `'timed out'` 或 `'error_max_turns'` 且 `recovery_attempted==False`
+  的 chunk；用 `LLMBackend.run(effort='high')` per-call kwarg 重跑一次
+  完整 `_summarize_chunk`（含 L1/L2/L3+tolerance），并发复用
+  `phase0.concurrency`。结果不论成败都置 `recovery_attempted=True`，
+  `--resume` 时跳过（避免无限救火）。背景：opus-4-7 effort=max 在多
+  字段 chunk synthesis 偶发服务器端长思考超 1800s wall（runtime 实测
+  effort=high 14 min 完工 schema valid，效果与 max 等价），故"主流程
+  默认 max 保留质量 + sweep 用 high 救撞墙"是精准兜底而非全局降级
 - 输出：`works/{work_id}/analysis/chapter_summaries/`
 
 ### 3. 全书分析（Phase 1）

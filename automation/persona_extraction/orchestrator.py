@@ -474,6 +474,110 @@ class ExtractionOrchestrator:
             return False, f"partial {count}/{expected}"
         return True, ""
 
+    def _run_recovery_sweep(
+        self,
+        phase0: "Phase0Progress",
+        summaries_dir: Path,
+        total_chunks: int,
+        chunks: list[tuple[int, int, int]],
+    ) -> None:
+        """Recovery sweep for chunks that hit timeout or max_turns
+        (decision #49).
+
+        Identifies failed chunks where the error matches ``'timed out'``
+        or ``'error_max_turns'`` and ``recovery_attempted == False``,
+        then reruns each via ``_summarize_chunk`` with
+        ``_recovery_effort = [phase0].recovery_effort`` (default
+        ``'high'``). Concurrency reuses ``self.concurrency`` (the same
+        ThreadPool size as the main phase 0 pass). ``recovery_attempted``
+        is set to True regardless of success — ``--resume`` skips
+        already-swept chunks so we never救火-loop.
+
+        ``chunks`` is the full ``(idx, start, end)`` list from
+        ``run_summarization``; needed to map ``chunk_id`` → chapter
+        range for ``_summarize_chunk``.
+        """
+        recovery_effort = get_config().phase0.recovery_effort
+
+        # Filter candidates: failed + error matches timeout/max_turns
+        # + not yet swept.
+        candidates: list[tuple[int, int, int]] = []
+        chunk_by_idx = {idx: (start, end) for idx, start, end in chunks}
+        for chunk_id, entry in sorted(phase0.chunks.items()):
+            if entry.state != "failed":
+                continue
+            if entry.recovery_attempted:
+                continue
+            err = (entry.error_message or "").lower()
+            if "timed out" not in err and "error_max_turns" not in err:
+                continue
+            try:
+                idx = int(chunk_id.split("_")[-1])
+            except ValueError:
+                continue
+            rng = chunk_by_idx.get(idx)
+            if rng is None:
+                continue
+            candidates.append((idx, rng[0], rng[1]))
+
+        if not candidates:
+            return
+
+        print("\n" + "=" * 60)
+        print(f"  Phase 0 Recovery Sweep "
+              f"(effort={recovery_effort}, {len(candidates)} chunk(s))")
+        print("=" * 60)
+
+        sweep_completed = 0
+        sweep_failed = 0
+        with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
+            futures = {}
+            for idx, start, end in candidates:
+                future = executor.submit(
+                    self._summarize_chunk,
+                    idx, total_chunks, start, end, summaries_dir,
+                    _recovery_effort=recovery_effort,
+                )
+                futures[future] = (idx, start, end)
+
+            for future in as_completed(futures):
+                idx, start, end = futures[future]
+                chunk_id = f"chunk_{idx:03d}"
+                try:
+                    _, success, msg = future.result()
+                except RateLimitHardStop:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    success, msg = False, str(exc)
+
+                entry = phase0.chunks.get(chunk_id)
+                if entry is None:
+                    continue
+                # Mark recovery_attempted=True regardless of outcome —
+                # this is the single-shot救火 contract.
+                entry.recovery_attempted = True
+                entry.retry_count += 1
+                entry.last_updated = ""  # save() updates timestamp
+                if success:
+                    sweep_completed += 1
+                    entry.state = "done"
+                    entry.error_message = ""
+                    print(f"    [OK] {chunk_id} "
+                          f"(C{start:04d}-C{end:04d}) — recovery PASS  "
+                          f"({sweep_completed}/{len(candidates)})")
+                else:
+                    sweep_failed += 1
+                    entry.state = "failed"
+                    entry.error_message = (
+                        f"recovery (effort={recovery_effort}) failed: "
+                        f"{(msg or 'unknown')[:400]}"
+                    )
+                    print(f"    [FAIL] {chunk_id}: {(msg or '')[:120]}")
+                phase0.save(self.project_root)
+
+        print(f"\n  Recovery sweep done: {sweep_completed}/{len(candidates)} "
+              f"recovered, {sweep_failed} still failed")
+
     def _summarize_chunk(
         self,
         idx: int,
@@ -484,6 +588,7 @@ class ExtractionOrchestrator:
         *,
         _is_l3_retry: bool = False,
         _prior_error: str = "",
+        _recovery_effort: str | None = None,
     ) -> tuple[int, bool, str]:
         """Process a single summarization chunk.
 
@@ -493,6 +598,14 @@ class ExtractionOrchestrator:
         not already an L3 retry, the chunk is automatically re-run once from
         scratch (L3) with the previous error injected as ``prior_error`` so
         the LLM is told what to fix.
+
+        ``_recovery_effort`` (decision #49): per-call effort override
+        propagated to ``run_with_retry`` → ``LLMBackend.run`` → claude -p
+        ``--effort``. Used by ``_run_recovery_sweep`` to retry timed-out
+        chunks with effort=high without swapping the backend instance.
+        ``None`` = use backend default. Also propagates into the L3 retry
+        recursive call so both attempts within the sweep use the same
+        downgraded effort.
         """
         output_path = summaries_dir / f"chunk_{idx:03d}.json"
 
@@ -505,6 +618,7 @@ class ExtractionOrchestrator:
             self.backend, prompt,
             timeout_seconds=get_config().phase0.summarize_timeout_s,
             lane_name=f"summarize[chunk_{idx:03d}]",
+            effort=_recovery_effort,
         )
 
         if not result.success:
@@ -534,6 +648,7 @@ class ExtractionOrchestrator:
                         idx, total_chunks, start, end, summaries_dir,
                         _is_l3_retry=True,
                         _prior_error=f"JSON 解析失败: {desc}",
+                        _recovery_effort=_recovery_effort,
                     )
                 return idx, False, f"JSON repair failed (L3 also failed): {desc}"
 
@@ -554,6 +669,7 @@ class ExtractionOrchestrator:
                     _is_l3_retry=True,
                     _prior_error=(f"Schema 校验失败（共 {len(schema_errs)} 处，"
                                   f"首条：{err_summary}）"),
+                    _recovery_effort=_recovery_effort,
                 )
             # L3 strict retry exhausted — try length-bound tolerance gate
             # (decision #48) before declaring failure. Accept ONLY if all
@@ -583,6 +699,7 @@ class ExtractionOrchestrator:
                                   f"必须为 chapter C{start:04d}-C{end:04d} 的"
                                   f"每一章都生成一条 summaries[] 条目，"
                                   f"不得跳过任何章节。"),
+                    _recovery_effort=_recovery_effort,
                 )
             return idx, False, (f"Partial chunk (L3 also failed): "
                                 f"{count}/{expected} summaries")
@@ -946,6 +1063,14 @@ class ExtractionOrchestrator:
               f"Elapsed: {_fmt_duration(elapsed)}")
         if completed > 0:
             print(f"  Avg: {_fmt_duration(elapsed / completed)}/chunk")
+
+        # Recovery sweep (decision #49) — for chunks that timed out or hit
+        # max_turns, retry once with downgraded effort (default high). The
+        # full L1/L2/L3 + tolerance pipeline runs inside _summarize_chunk;
+        # only the per-call effort is changed via run_with_retry's effort
+        # kwarg. Marks recovery_attempted=True regardless so subsequent
+        # --resume skips already-swept chunks (no infinite救火 loop).
+        self._run_recovery_sweep(phase0, summaries_dir, total_chunks, chunks)
 
         # Verify all chunks completed — gate for Phase 1. Schema-gated:
         # file existence alone is not enough; the file must parse, pass

@@ -44,6 +44,15 @@ summarize_timeout_s      = 1800
 # LLM 修一次"，比正常归纳短得多。
 json_repair_l2_timeout_s = 600
 
+# Phase 0 recovery sweep 用的 effort 等级（low/medium/high/max）。主
+# 循环结束后，失败 chunk（error 含 'timed out' / 'error_max_turns'
+# 且 recovery_attempted=False）会用此 effort 单次 sweep 救火。背景：
+# opus-4-7 effort=max 在多字段 chunk synthesis 偶发服务器端长思考
+# 超 1800s wall（runtime 实测 effort=high 14 min 完工 schema 同样
+# valid，质量等价），故"主流程默认 max 保留质量 + sweep 用 high
+# 救撞墙"。详见 ai_context/decisions.md #49。
+recovery_effort          = "high"
+
 
 # ----------------------------------------------------------------
 # [phase1] Phase 1 全书分析

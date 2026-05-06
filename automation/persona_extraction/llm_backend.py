@@ -222,7 +222,13 @@ class LLMBackend(ABC):
     @abstractmethod
     def run(self, prompt: str, *, allowed_tools: list[str] | None = None,
             timeout_seconds: int = 600,
-            lane_name: str | None = None) -> LLMResult:
+            lane_name: str | None = None,
+            effort: str | None = None) -> LLMResult:
+        """Run one LLM call. ``effort`` is a per-call override of the
+        backend instance's default effort (low/medium/high/max); ``None``
+        falls back to the instance default. Used by Phase 0 recovery
+        sweep to downgrade max → high without a separate backend
+        instance. See decision #49."""
         ...
 
     @abstractmethod
@@ -254,9 +260,14 @@ class ClaudeBackend(LLMBackend):
 
     def run(self, prompt: str, *, allowed_tools: list[str] | None = None,
             timeout_seconds: int = 600,
-            lane_name: str | None = None) -> LLMResult:
+            lane_name: str | None = None,
+            effort: str | None = None) -> LLMResult:
         tools = allowed_tools or CLAUDE_DEFAULT_TOOLS
         lane_tag = f"[{lane_name}]" if lane_name else "[lane]"
+
+        # Per-call effort override (decision #49) takes precedence over
+        # the backend instance default. ``None`` keeps instance default.
+        active_effort = effort if effort is not None else self.effort
 
         # Prompt is fed via stdin from a unique tempfile to bypass Linux
         # ARG_MAX (~128 KiB per argv entry). T3 repair prompts carry full
@@ -271,8 +282,8 @@ class ClaudeBackend(LLMBackend):
         ]
         if self.model:
             cmd.extend(["--model", self.model])
-        if self.effort:
-            cmd.extend(["--effort", self.effort])
+        if active_effort:
+            cmd.extend(["--effort", active_effort])
 
         logger.info("Running claude -p  (max_turns=%d, timeout=%ds, lane=%s)",
                      self.max_turns, timeout_seconds, lane_name or "?")
@@ -436,7 +447,11 @@ class CodexBackend(LLMBackend):
 
     def run(self, prompt: str, *, allowed_tools: list[str] | None = None,
             timeout_seconds: int = 600,
-            lane_name: str | None = None) -> LLMResult:
+            lane_name: str | None = None,
+            effort: str | None = None) -> LLMResult:
+        # ``effort`` kwarg accepted for interface parity with
+        # ClaudeBackend.run (decision #49). codex CLI does not currently
+        # expose an effort flag; the kwarg is silently ignored.
         # NOTE: codex CLI still receives the prompt via argv (not stdin).
         # Large prompts (> ~128 KiB) will fail with ARG_MAX; switch this to
         # the stdin+tempfile pattern used in ClaudeBackend once the codex
@@ -591,7 +606,8 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
                    cooldown_seconds: int = 60,
                    timeout_seconds: int = 600,
                    lane_name: str | None = None,
-                   on_failure: Any = None) -> LLMResult:
+                   on_failure: Any = None,
+                   effort: str | None = None) -> LLMResult:
     """Run prompt with automatic retry on fast-fail errors.
 
     Rate-limit handling is **out-of-band**: when ``rate_limit`` is detected,
@@ -602,6 +618,9 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
     ``on_failure`` is called once per failed attempt with the LLMResult, so
     callers can persist per-lane diagnostic logs for every attempt (including
     intermediate retries) rather than only the final one.
+
+    ``effort`` per-call override (decision #49) — passed through to
+    ``backend.run``. ``None`` falls back to backend instance default.
     """
     backoff_cfg = get_config().backoff
     fast_backoff = backoff_cfg.fast_empty_failure_backoff_s
@@ -611,7 +630,8 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
         attempt += 1
         result = backend.run(prompt, allowed_tools=allowed_tools,
                              timeout_seconds=timeout_seconds,
-                             lane_name=lane_name)
+                             lane_name=lane_name,
+                             effort=effort)
         if not result.success and on_failure is not None:
             try:
                 on_failure(result, attempt)

@@ -212,6 +212,11 @@ class ChunkEntry:
     retry_count: int = 0
     error_message: str = ""
     last_updated: str = ""
+    # Set True after Phase 0 recovery sweep tries this chunk once with
+    # `[phase0].recovery_effort`. ``--resume`` skips chunks where this is
+    # already True even if state is still failed (no infinite救火 loop).
+    # See decision #49.
+    recovery_attempted: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -220,6 +225,7 @@ class ChunkEntry:
             "retry_count": self.retry_count,
             "error_message": self.error_message,
             "last_updated": self.last_updated,
+            "recovery_attempted": self.recovery_attempted,
         }
 
     @classmethod
@@ -231,6 +237,8 @@ class ChunkEntry:
             retry_count=d.get("retry_count", 0),
             error_message=d.get("error_message", ""),
             last_updated=d.get("last_updated", ""),
+            # Backward-compat: old progress files (pre-#49) lack the field.
+            recovery_attempted=d.get("recovery_attempted", False),
         )
 
 
