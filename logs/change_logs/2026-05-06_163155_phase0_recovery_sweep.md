@@ -250,3 +250,21 @@ runtime 验证（在真实作品上 sweep 实际触发 + 完工）由后续会�
 
 - **Status**: DONE
 - **Finished**: 2026-05-06 16:45:21 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：13/13 项计划 + 8/8 项静态验证（runtime 验证 PRE 已声明 defer 给后续会话/loop）
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=0 / Low=0
+- Open Questions: 0 条
+- 唯一 Residual Risk：上轮 /post-check 留下的 `coordinator.py:358` inline comment + `:684` docstring 漏列 `LENGTH_TOLERANCE_PASS` 旧 finding 仍未修复（不在本次 intent 范围；属上次 T-LENGTH-TOLERANCE-GATE 遗留）
+
+## 复查时状态
+- **Reviewed**: 2026-05-06 16:52:11 EDT
+- **Status**: REVIEWED-PASS
+- **Conversation ref**: 同会话内 /post-check 输出
