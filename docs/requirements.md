@@ -836,8 +836,9 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 1. **作品入库**：原始文件规范化、章节拆分、元数据生成（见 §八）
 2. **章节归纳**（Phase 0）：双模式调度（由 source manifest `structure_mode` 字段决定，
    schema 必填）：
-   - **monolithic**：将全书按分组（chunk，约 20-25 章一组）逐组归纳，每个 chunk
-     独立处理，多 chunk 并行执行（`--concurrency` 控制，默认 10）
+   - **monolithic**：将全书按分组（chunk，默认 20 章一组，由 `--chunk-size`
+     控制）逐组归纳，每个 chunk 独立处理，多 chunk 并行执行
+     （`--concurrency` 控制，默认 10）
    - **light_novel**：1 sub-section = 1 chunk = 1 chapter，仍按 concurrency 并行；
      不跑 token-budget batch
    产出每章的结构化摘要（事件、出场角色、地点、情绪基调、身份变化线索、
@@ -1785,6 +1786,10 @@ triage**——判断残留的语义问题是否为源文件自带（作者原作
          / gate state 全新), 磁盘文件保留 (T3 写出的内容是 lifecycle 2 的输入)
        → 进入 lifecycle 2: 全新 Phase A→B→C, 但禁用 T3
        → lifecycle 2 升 T3 即 T3_EXHAUSTED, stage FAIL
+         （length-bound tolerance 兜底：若剩余 issues 全为 schema_validation
+         + 命中 minLength/maxLength，调 validate_with_length_tolerance；
+         relaxed schema ×0.9 floor / ×1.1 ceil pass → 改判 PASS。
+         详见 `ai_context/decisions.md` #48）
     4. 每次 fix 后 scoped recheck: 只 L0+L1+L2, 检查被 patch 的子树
     5. 本轮结束后, 若 L3_files 中的任一文件本轮被 patch 过:
        → L3 gate: 对被 patch 的 L3_files 子集重跑 L3

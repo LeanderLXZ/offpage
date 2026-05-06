@@ -1,12 +1,18 @@
 """Smoke test for L3 gate + lifecycle reset.
 
-Three scenarios:
+Four scenarios:
   (A) Single-lifecycle PASS — Phase A finds nothing → run short-circuits.
   (B) Lifecycle 1 T3 → lifecycle 2 PASS — T1/T2 fail, T3 fires, the
       semantic stub flips to "clean" on lifecycle 2 so Phase A passes.
   (C) Lifecycle 1 T3 → lifecycle 2 T3_EXHAUSTED — semantic stub keeps
       reporting the same issue forever; lifecycle 2 hits T3_EXHAUSTED
       because T3 is disabled.
+  (D) Lifecycle 2 length-bound tolerance gate — strict minLength=100
+      fails on a 95-char summary; T0 disabled so programmatic padding
+      can't fix; T1/T2 fail; T3 regen still produces 95-char content;
+      lifecycle 2 hits T3-disabled but tolerance gate (decision #48)
+      relaxes minLength × 0.9 to 90, accepts 95, returns PASS without
+      T3_EXHAUSTED.
 
 Run:  python -m automation.repair_agent._smoke_l3_gate
 """
@@ -138,6 +144,67 @@ def _scenario_c() -> None:
           f"regen={state['regen_calls']}")
 
 
+def _scenario_d() -> None:
+    """Lifecycle 2 length-bound tolerance gate accepts persistent
+    length-only schema fail.
+
+    T0 disabled (``t0_max=0``) so the programmatic length-padder can't
+    auto-fix; T1/T2 patch fixers fail (LLM stub returns malformed); T3
+    regen produces a still-95-char summary. Lifecycle 1 ends with T3
+    fired. Lifecycle 2 Phase A re-flags ``schema_minLength`` (95 < 100).
+    T3 is disabled. Length-bound tolerance gate (decision #48)
+    re-validates against relaxed schema (minLength × 0.9 = 90), 95 ≥ 90
+    → accept. Run PASSES; report has no ``T3_EXHAUSTED``.
+    """
+    target = _new_target({"summary": "x" * 95})
+    state = {"calls": 0, "semantic_calls": 0, "regen_calls": 0, "patch_calls": 0}
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string", "minLength": 100, "maxLength": 150}
+        },
+        "required": ["summary"],
+        "additionalProperties": False,
+    }
+
+    def stub(prompt: str, timeout: int = 600) -> str:
+        state["calls"] += 1
+        if "regeneration tool" in prompt:
+            state["regen_calls"] += 1
+            # Regen produces a 95-char summary again — strict
+            # minLength=100 still fails, but length is within ±10%
+            # tolerance (95 ≥ floor(100 × 0.9) = 90).
+            return json.dumps({"summary": "x" * 95})
+        if "quality reviewer" in prompt:
+            state["semantic_calls"] += 1
+            return json.dumps([])  # no semantic issues
+        state["patch_calls"] += 1
+        return "<<<malformed"  # T1/T2 patch fixers fail
+
+    cfg = RepairConfig(
+        max_rounds=3,
+        run_semantic=True,
+        l3_gate_enabled=True,
+        retry_policy=RetryPolicy(
+            t0_max=0,  # disable T0 padding so length issue persists
+            t1_max=1, t2_max=1, t3_max=1, max_total_rounds=3),
+    )
+    result = run(
+        files=[FileEntry(path=str(target), schema=schema)],
+        config=cfg, source_context=None, llm_call=stub)
+
+    assert result.passed, (
+        f"scenario D should PASS via length-bound tolerance gate; got "
+        f"passed={result.passed}, report=\n{result.report}")
+    assert "T3_EXHAUSTED" not in result.report, (
+        f"tolerance gate should suppress T3_EXHAUSTED; "
+        f"report:\n{result.report}")
+    print(f"  [D] PASS via tolerance — "
+          f"semantic_calls={state['semantic_calls']}, "
+          f"regen={state['regen_calls']}, patch={state['patch_calls']}")
+
+
 def main() -> int:
     print("Scenario A: single-lifecycle PASS")
     _scenario_a()
@@ -145,6 +212,8 @@ def main() -> int:
     _scenario_b()
     print("Scenario C: persistent issue → T3_EXHAUSTED")
     _scenario_c()
+    print("Scenario D: lifecycle 2 length-bound tolerance gate PASS")
+    _scenario_d()
     print("\nOK — lifecycle reset behaves as expected.")
     return 0
 

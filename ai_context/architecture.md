@@ -167,6 +167,7 @@ Phases (full detail → `automation/README.md` +
 - **Token-limit auto-pause** (§11.13) — `RateLimitController` + flock-merged `rate_limit_pause.json`; failed prompt re-runs without consuming a retry slot. Hard-stops exit 2. Pause excluded from `--max-runtime`. → `automation/persona_extraction/rate_limit.py` + `docs/requirements.md` §11.13.
 - `--end-stage` strict prefix: finalization only after all stages `COMMITTED`.
 - `jsonschema` = HARD dep. Disk reconcile self-heal on every startup (Phase 0/3/4); Phase 3 verifies `committed_sha` via `git cat-file -e`.
+- **Length-bound tolerance gate** — final safety valve after every LLM phase exhausts its strict retry budget (Phase 0 L3, Phase 1 `exit_validation_max_retry`, Phase 2 baseline retry, Phase 4 `max_retries_per_chapter`, repair_agent `T3_EXHAUSTED`). If the surviving violations are **only** `minLength`/`maxLength` and a relaxed schema (×0.9 floor / ×1.1 ceil) passes, accept as PASS; otherwise keep the strict failure. All other constraints stay strict. Not applied to `post_processing.py` program-only outputs. → `automation/persona_extraction/validator.py::validate_with_length_tolerance` + decision #48.
 - Config: single-source TOML at `automation/config.toml`; override priority CLI > `config.local.toml` > `config.toml` > dataclass defaults.
 
 Schema docs → `docs/architecture/schema_reference.md`.

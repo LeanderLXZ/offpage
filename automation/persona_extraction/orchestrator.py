@@ -152,7 +152,11 @@ from .rate_limit import (
     set_active as set_active_rl,
 )
 from .scene_archive import run_scene_archive
-from .validator import load_importance_map, validate_baseline
+from .validator import (
+    load_importance_map,
+    validate_baseline,
+    validate_with_length_tolerance,
+)
 from ..repair_agent import (
     FileEntry as RepairFileEntry,
     RepairConfig,
@@ -358,7 +362,7 @@ class ExtractionOrchestrator:
         work_id: str,
         backend: LLMBackend,
         reviewer_backend: LLMBackend | None = None,
-        chunk_size: int = 25,
+        chunk_size: int = 20,
         max_runtime_minutes: int = 0,
         start_phase: str = "auto",
         concurrency: int = 10,
@@ -541,8 +545,8 @@ class ExtractionOrchestrator:
             first = schema_errs[0]
             err_path = "/".join(str(p) for p in first.absolute_path) or "<root>"
             err_summary = f"{err_path}: {first.message[:120]}"
-            output_path.unlink(missing_ok=True)
             if not _is_l3_retry:
+                output_path.unlink(missing_ok=True)
                 logger.info("L3 full re-run for chunk_%03d (schema fail: %s)",
                             idx, err_summary)
                 return self._summarize_chunk(
@@ -551,6 +555,17 @@ class ExtractionOrchestrator:
                     _prior_error=(f"Schema 校验失败（共 {len(schema_errs)} 处，"
                                   f"首条：{err_summary}）"),
                 )
+            # L3 strict retry exhausted — try length-bound tolerance gate
+            # (decision #48) before declaring failure. Accept ONLY if all
+            # surviving violations are minLength/maxLength.
+            ok_tol, _tol_errs = validate_with_length_tolerance(
+                data, _chunk_validator().schema)
+            if ok_tol:
+                logger.info(
+                    "Length-bound tolerance gate accepted chunk_%03d "
+                    "(strict-fail-only-on-length): %s", idx, err_summary)
+                return idx, True, ""
+            output_path.unlink(missing_ok=True)
             return idx, False, (f"Schema validation failed (L3 also failed): "
                                 f"{err_summary}")
 
@@ -1174,6 +1189,41 @@ class ExtractionOrchestrator:
                           f"{len(violating)} stage limit violation(s) "
                           f"(attempt {attempt + 1})...")
                 else:
+                    # Strict-retry budget exhausted. Try length-bound
+                    # tolerance gate (decision #48) before declaring
+                    # FATAL: only schema_failures are tolerable
+                    # (missing_files / stage-limit violations are not
+                    # length-bound, no relaxation can fix them).
+                    tolerance_ok = (
+                        not missing_files
+                        and not violating
+                        and bool(schema_failures)
+                    )
+                    if tolerance_ok:
+                        for fname, _errs in schema_failures:
+                            data_obj = _load_json(inc_dir / fname)
+                            schema_obj = {
+                                "world_overview.json":
+                                    _world_overview_validator().schema,
+                                "stage_plan.json":
+                                    _stage_plan_validator().schema,
+                                "candidate_characters.json":
+                                    _candidate_characters_validator().schema,
+                            }[fname]
+                            ok_tol, _ = validate_with_length_tolerance(
+                                data_obj, schema_obj)
+                            if not ok_tol:
+                                tolerance_ok = False
+                                break
+                    if tolerance_ok:
+                        print(
+                            f"  [LENGTH-TOLERANCE] Phase 1 accepted by "
+                            f"length-bound tolerance gate after "
+                            f"{MAX_ANALYSIS_RETRIES} strict retries "
+                            f"(decision #48): "
+                            f"{len(schema_failures)} file(s) had only "
+                            f"minLength/maxLength violations within ±10%.")
+                        break
                     print(f"  [FATAL] Phase 1 still failing after "
                           f"{MAX_ANALYSIS_RETRIES} retries: "
                           f"{len(missing_files)} missing, "
@@ -1281,9 +1331,24 @@ class ExtractionOrchestrator:
             self.project_root, self.work_id, target_characters)
         print(baseline_report.summary())
         if not baseline_report.passed:
-            print("\n[ERROR] Baseline validation failed. "
-                  "Fix the errors above before proceeding.")
-            sys.exit(1)
+            # Strict validation failed. Phase 2 has no LLM-level retry
+            # budget here (Phase 2 LLM extraction itself happened above);
+            # this is the terminal gate. Try length-bound tolerance
+            # (decision #48): re-validate with each minLength × 0.9 /
+            # maxLength × 1.1 — if every schema failure is purely a
+            # length-bound miss within ±10%, accept; else fatal.
+            tolerance_report = validate_baseline(
+                self.project_root, self.work_id, target_characters,
+                length_tolerance=0.10)
+            if tolerance_report.passed:
+                print("\n[LENGTH-TOLERANCE] Baseline accepted by "
+                      "length-bound tolerance gate (decision #48): all "
+                      "schema failures were minLength/maxLength within "
+                      "±10%.")
+            else:
+                print("\n[ERROR] Baseline validation failed. "
+                      "Fix the errors above before proceeding.")
+                sys.exit(1)
 
         # Mark baseline as done in pipeline so resume skips it
         if self.pipeline:
@@ -1482,7 +1547,22 @@ class ExtractionOrchestrator:
                         self.project_root, self.work_id,
                         pipeline.target_characters)
                     print(baseline_report.summary())
-                    if not baseline_report.passed:
+                    accept = baseline_report.passed
+                    if not accept:
+                        # Length-bound tolerance gate (decision #48).
+                        # Existing baseline may have been written by a
+                        # tolerance-accepted Phase 2 run; re-validate
+                        # with relaxed schema before deciding to re-run.
+                        tolerance_report = validate_baseline(
+                            self.project_root, self.work_id,
+                            pipeline.target_characters,
+                            length_tolerance=0.10)
+                        if tolerance_report.passed:
+                            print("  [LENGTH-TOLERANCE] Existing "
+                                  "baseline accepted by length-bound "
+                                  "tolerance gate (decision #48).")
+                            accept = True
+                    if not accept:
                         print("  [WARN] Existing baseline failed validation. "
                               "Re-running Phase 2 to repair.")
                         self.run_baseline_production(pipeline.target_characters)

@@ -66,8 +66,11 @@ extraction_timeout_s = 3600
 review_timeout_s     = 600
 
 # claude -p --max-turns 上限：单次会话内最多允许的 agentic 轮数。
-# 调高可让 agent 探索更多文件；调低可强制 agent 早返回。
-max_turns            = 50
+# 调高可让 agent 探索更多文件 / 完成更多 schema 修订循环；调低可强制
+# agent 早返回。Phase 0 chunk 25 章 / chunk-level 5 字段聚合 + Phase 3
+# stage_snapshot schema 修订循环单 chunk 实测有时撞 50 上限触发
+# `error_max_turns`，故全局放到 80。
+max_turns            = 80
 
 
 # ----------------------------------------------------------------

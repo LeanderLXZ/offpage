@@ -52,7 +52,7 @@ class Phase1Config:
 class Phase3Config:
     extraction_timeout_s: int = 3600
     review_timeout_s: int = 600
-    max_turns: int = 50
+    max_turns: int = 80
 
 
 @dataclass(frozen=True)

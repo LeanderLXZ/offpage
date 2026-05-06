@@ -135,10 +135,16 @@ def validate_baseline(
     work_id: str,
     character_ids: list[str],
     schema_dir: Path | None = None,
+    length_tolerance: float = 0.0,
 ) -> ValidationReport:
     """Validate Phase 2 baseline outputs (identity, manifest, foundation).
 
     Run after baseline production to catch issues early before Phase 3.
+
+    ``length_tolerance > 0`` enables decision-#48 tolerance gate on every
+    schema check (length-only failures within ±tolerance are accepted).
+    Default 0.0 = pure strict validation. Callers should only set this on
+    the terminal post-strict-retry path.
     """
     issues: list[ValidationIssue] = []
     schema_dir = schema_dir or (project_root / "schemas")
@@ -160,7 +166,7 @@ def validate_baseline(
             issues.extend(_validate_schema(
                 wm_data,
                 schema_dir / "work" / "works_manifest.schema.json",
-                str(works_manifest_path)))
+                str(works_manifest_path), length_tolerance=length_tolerance))
 
     # World manifest (written programmatically at end of Phase 2)
     world_manifest_path = work_dir / "world" / "manifest.json"
@@ -178,7 +184,7 @@ def validate_baseline(
             issues.extend(_validate_schema(
                 wom_data,
                 schema_dir / "world" / "world_manifest.schema.json",
-                str(world_manifest_path)))
+                str(world_manifest_path), length_tolerance=length_tolerance))
 
     # World foundation
     foundation_path = work_dir / "world" / "foundation" / "foundation.json"
@@ -212,7 +218,7 @@ def validate_baseline(
             issues.extend(_validate_schema(
                 fr_data,
                 schema_dir / "world" / "fixed_relationships.schema.json",
-                str(fixed_rel_path)))
+                str(fixed_rel_path), length_tolerance=length_tolerance))
 
     # Per-character baseline checks
     for char_id in character_ids:
@@ -233,7 +239,7 @@ def validate_baseline(
                 # Schema validation
                 issues.extend(_validate_schema(
                     identity, schema_dir / "character" / "identity.schema.json",
-                    str(id_path)))
+                    str(id_path), length_tolerance=length_tolerance))
                 # Required field non-null checks
                 if not identity.get("canonical_name"):
                     issues.append(ValidationIssue(
@@ -261,7 +267,7 @@ def validate_baseline(
                 issues.extend(_validate_schema(
                     manifest,
                     schema_dir / "character" / "character_manifest.schema.json",
-                    str(manifest_path)))
+                    str(manifest_path), length_tolerance=length_tolerance))
 
         # target_baseline.json — required Phase 2 output, anchors phase 3
         # stage_snapshot target keys (set(三结构 keys) ==
@@ -284,7 +290,7 @@ def validate_baseline(
                 issues.extend(_validate_schema(
                     tb_data,
                     schema_dir / "character" / "target_baseline.schema.json",
-                    str(tb_path)))
+                    str(tb_path), length_tolerance=length_tolerance))
                 if tb_data.get("character_id") != char_id:
                     issues.append(ValidationIssue(
                         "error", str(tb_path),
@@ -339,8 +345,17 @@ def _load_json(path: Path, *, auto_repair: bool = True) -> dict | None:
 
 
 def _validate_schema(data: dict, schema_path: Path,
-                     file_label: str) -> list[ValidationIssue]:
-    """Validate data against a JSON Schema (jsonschema is a hard dependency)."""
+                     file_label: str,
+                     length_tolerance: float = 0.0) -> list[ValidationIssue]:
+    """Validate data against a JSON Schema (jsonschema is a hard dependency).
+
+    ``length_tolerance > 0`` enables the decision-#48 tolerance gate: if
+    strict validation fails *only* on ``minLength`` / ``maxLength`` and a
+    relaxed schema (×0.9 floor / ×1.1 ceil at default 0.10) passes, no
+    issues are returned. Non-zero tolerance is meant for the
+    "strict-retry-budget exhausted" terminal path; callers that need a
+    pure strict gate should leave the default 0.0.
+    """
     if not schema_path.exists():
         return [ValidationIssue("warning", file_label,
                                 f"Schema not found: {schema_path.name}")]
@@ -350,6 +365,20 @@ def _validate_schema(data: dict, schema_path: Path,
     except (OSError, ValueError):
         return [ValidationIssue("warning", file_label,
                                 f"Cannot load schema: {schema_path.name}")]
+
+    if length_tolerance > 0.0:
+        try:
+            ok_tol, tol_issues = validate_with_length_tolerance(
+                data, schema, tolerance=length_tolerance)
+        except jsonschema.SchemaError as e:
+            return [ValidationIssue(
+                "warning", file_label,
+                f"Schema itself is invalid: {e.message}")]
+        if ok_tol:
+            return []
+        # Restamp issues with file_label (helper fills "(length_tolerance_gate)")
+        return [ValidationIssue(i.severity, file_label, i.message)
+                for i in tol_issues]
 
     issues: list[ValidationIssue] = []
     try:
@@ -366,3 +395,127 @@ def _validate_schema(data: dict, schema_path: Path,
             f"Schema itself is invalid: {e.message}"))
 
     return issues
+
+
+# ---------------------------------------------------------------------------
+# Length-bound tolerance gate (decision #48)
+#
+# Final safety valve invoked AFTER an LLM phase has exhausted its strict
+# retry budget (Phase 0 L1+L2+L3, Phase 1 ``exit_validation_max_retry``,
+# Phase 2 baseline retry, Phase 4 ``max_retries_per_chapter``,
+# repair_agent ``T3_EXHAUSTED``). Relaxes ONLY ``minLength`` /
+# ``maxLength`` by a per-call tolerance fraction; all other constraints
+# (``required`` / ``type`` / ``enum`` / ``pattern`` / ``minimum`` /
+# ``maximum`` / ``minItems`` / ``maxItems``) stay strict. Acceptance is
+# silent — no metadata is written to the artifact.
+# ---------------------------------------------------------------------------
+
+import copy as _copy
+import math as _math
+
+
+def relaxed_schema_for_length(
+    schema: dict,
+    tolerance: float = 0.10,
+) -> dict:
+    """Deep-copy ``schema`` and recursively widen every ``minLength`` /
+    ``maxLength`` by ``tolerance`` (default 10%):
+
+    - ``minLength`` → ``floor(N * (1 - tolerance))`` (lower bound relaxed)
+    - ``maxLength`` → ``ceil(N * (1 + tolerance))`` (upper bound relaxed)
+
+    All other JSON Schema keywords are left untouched. The returned dict
+    is independent of the input — mutating it does not affect ``schema``.
+    """
+    if not 0.0 <= tolerance < 1.0:
+        raise ValueError(
+            f"tolerance must be in [0.0, 1.0), got {tolerance!r}")
+
+    relaxed = _copy.deepcopy(schema)
+
+    def _walk(node):
+        if isinstance(node, dict):
+            if "minLength" in node and isinstance(node["minLength"], int):
+                node["minLength"] = max(
+                    0, _math.floor(node["minLength"] * (1.0 - tolerance)))
+            if "maxLength" in node and isinstance(node["maxLength"], int):
+                node["maxLength"] = _math.ceil(
+                    node["maxLength"] * (1.0 + tolerance))
+            for v in node.values():
+                _walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                _walk(v)
+
+    _walk(relaxed)
+    return relaxed
+
+
+def _is_length_bound_error(err: jsonschema.ValidationError) -> bool:
+    """True iff a validation error is purely a ``minLength`` / ``maxLength``
+    violation (the kinds the tolerance gate is allowed to relax).
+
+    Uses ``ValidationError.validator`` which is set by jsonschema to the
+    failing keyword name.
+    """
+    return err.validator in ("minLength", "maxLength")
+
+
+def validate_with_length_tolerance(
+    instance,
+    schema: dict,
+    tolerance: float = 0.10,
+) -> tuple[bool, list[ValidationIssue]]:
+    """Strict-first, tolerance-fallback validation.
+
+    1. Validate ``instance`` against ``schema`` strictly.
+    2. If strict pass → return ``(True, [])``.
+    3. If strict fail and **all** errors are ``minLength`` / ``maxLength``
+       violations → re-validate against ``relaxed_schema_for_length(schema,
+       tolerance)``; relaxed pass → return ``(True, [])``.
+    4. Otherwise (relaxed still fails, or strict errors include any other
+       keyword) → return ``(False, [ValidationIssue(...)])`` carrying the
+       original strict errors.
+
+    The tolerance branch is silent: no artifact metadata is added. Callers
+    that need to know whether tolerance was used can compare the boolean
+    result against an additional strict-only check.
+    """
+    if not 0.0 <= tolerance < 1.0:
+        raise ValueError(
+            f"tolerance must be in [0.0, 1.0), got {tolerance!r}")
+
+    strict_validator = jsonschema.Draft202012Validator(schema)
+    strict_errors = list(strict_validator.iter_errors(instance))
+
+    if not strict_errors:
+        return True, []
+
+    # Tolerance is permitted only when EVERY violation is a length bound.
+    # A single ``required`` / ``enum`` / ``pattern`` / etc. violation
+    # blocks the relaxation.
+    if not all(_is_length_bound_error(e) for e in strict_errors):
+        return False, [
+            ValidationIssue(
+                "error", "(length_tolerance_gate)",
+                f"Schema violation at "
+                f"{'.'.join(str(p) for p in e.absolute_path) or '(root)'}: "
+                f"{e.message}")
+            for e in strict_errors
+        ]
+
+    relaxed = relaxed_schema_for_length(schema, tolerance)
+    relaxed_validator = jsonschema.Draft202012Validator(relaxed)
+    relaxed_errors = list(relaxed_validator.iter_errors(instance))
+
+    if not relaxed_errors:
+        return True, []
+
+    return False, [
+        ValidationIssue(
+            "error", "(length_tolerance_gate)",
+            f"Schema violation at "
+            f"{'.'.join(str(p) for p in e.absolute_path) or '(root)'}: "
+            f"{e.message}")
+        for e in strict_errors
+    ]

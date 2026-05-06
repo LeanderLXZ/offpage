@@ -406,6 +406,25 @@ def _run_one_lifecycle(
                 modified_files=modified_files,
                 accepted_notes=accepted_notes,
             )
+        if lifecycle_signal == "LENGTH_TOLERANCE_PASS":
+            # Lifecycle 2 length-bound tolerance gate accepted all
+            # residual schema_validation issues (decision #48). The
+            # lifecycle terminates as PASS without re-running Phase C
+            # — Phase C uses strict pipeline and would re-flag the
+            # same length issues we just intentionally relaxed.
+            logger.info(
+                "Length-bound tolerance gate: lifecycle %d PASS "
+                "(decision #48)", cycle + 1)
+            _emit("complete", status="PASS",
+                  issues_remaining=0,
+                  accepted_notes=len(accepted_notes))
+            return _LifecycleOutcome(
+                terminated_by="PASS",
+                final_issues=[],
+                final_blocking=[],
+                accepted_notes=accepted_notes,
+                tracker_history=tracker.get_history(),
+            )
 
         if not modified_files:
             logger.info("No patches applied in round %d — stopping",
@@ -704,6 +723,62 @@ def _run_fixer_with_escalation(
 
             # Lifecycle 2 forbids T3 entirely.
             if t3_disabled:
+                # Length-bound tolerance gate (decision #48).
+                # Before declaring T3_EXHAUSTED, check if every residual
+                # issue is purely a schema_validation minLength /
+                # maxLength miss; if so, re-validate each affected file
+                # with a relaxed schema (×0.9 floor / ×1.1 ceil) — pass
+                # → drop the issue and keep the lifecycle alive.
+                length_only = remaining and all(
+                    i.category == "schema"
+                    and i.rule in ("schema_minLength", "schema_maxLength")
+                    for i in remaining)
+                if length_only:
+                    from automation.persona_extraction.validator import (
+                        validate_with_length_tolerance)
+                    affected_paths = {i.file for i in remaining}
+                    files_by_path = {f.path: f for f in files}
+                    all_pass = True
+                    for fp in affected_paths:
+                        fe = files_by_path.get(fp)
+                        if fe is None or fe.schema is None:
+                            all_pass = False
+                            break
+                        content = fe.content if fe.content is not None \
+                            else fe.load()
+                        if content is None:
+                            all_pass = False
+                            break
+                        # JSONL files validate per-entry (mirrors
+                        # SchemaChecker._validate_one for is_jsonl_slice).
+                        if isinstance(content, list):
+                            ok_all = True
+                            for entry in content:
+                                ok, _ = validate_with_length_tolerance(
+                                    entry, fe.schema)
+                                if not ok:
+                                    ok_all = False
+                                    break
+                            if not ok_all:
+                                all_pass = False
+                                break
+                        else:
+                            ok, _ = validate_with_length_tolerance(
+                                content, fe.schema)
+                            if not ok:
+                                all_pass = False
+                                break
+                    if all_pass:
+                        logger.info(
+                            "Length-bound tolerance gate accepted %d "
+                            "residual issue(s) across %d file(s) "
+                            "(decision #48); skipping T3_EXHAUSTED.",
+                            len(remaining), len(affected_paths))
+                        remaining = []
+                        lifecycle_signal = "LENGTH_TOLERANCE_PASS"
+                        return (modified_files, t3_self_report,
+                                lifecycle_signal)
+
                 logger.error(
                     "T3_EXHAUSTED: lifecycle 2 has %d residual issue(s) "
                     "that need T3 but T3 is disabled",

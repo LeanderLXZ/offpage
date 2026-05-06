@@ -73,6 +73,11 @@
 
 ## Completed
 
+### [T-LENGTH-TOLERANCE-GATE] 各 LLM phase 终点接 length-bound tolerance（±10%）兜底 + max_turns 50→80 + chunk_size default 25→20 · 完成于 2026-05-06 · 完整完成
+
+- 1 行摘要：`automation/persona_extraction/validator.py` 末尾追加 `relaxed_schema_for_length` + `validate_with_length_tolerance` helper（`_validate_schema` / `validate_baseline` 加 `length_tolerance: float = 0.0` kwarg 透传）；5 处 LLM 终点接 strict-retry-exhausted 兜底——orchestrator._summarize_chunk Phase 0 L3 / orchestrator.run_analysis Phase 1 exit_validation 耗尽 / orchestrator.run_baseline_production Phase 2 / scene_archive Phase 4 final attempt / repair_agent.coordinator T3_EXHAUSTED 改判 `LENGTH_TOLERANCE_PASS` (Phase 2/3/3.5/4)；`config.toml [phase3] max_turns` 50→80 + `cli.py --chunk-size default` + `orchestrator.__init__ chunk_size: int = 20` 默认 25→20；ai_context/architecture.md Key Design 段 + decisions.md #48 + docs/requirements.md / docs/architecture/extraction_workflow.md / 同步描述；`_smoke_l3_gate.py` 加场景 D（lifecycle 2 length-only fail → tolerance PASS）。静态 gate 全过：5 个 unit case (strict pass / minLength 95 vs 100 tol pass / 89 < 90 fail / 95+enum mix fail / maxLength 160 vs 150 tol pass + relaxed_schema deep-copy)；TOML phase3.max_turns=80；argparse default 20；4 场景 _smoke_l3_gate (A/B/C 不动 + D PASS)；orchestrator/scene_archive/post_processing/coordinator import 全过；grep "chunk_size = 25" / "default: 25" / "max_turns = 50" 残留 0。runtime 验证（重跑<character> phase 0 27 chunks）由后续 /loop 跑。
+- 关联 log: [logs/change_logs/2026-05-06_121047_length_tolerance_gate.md](../logs/change_logs/2026-05-06_121047_length_tolerance_gate.md)
+
 ### [T-PHASE0-SUMMARIZE-TIMEOUT-BUMP] phase 0 summarize 子进程超时 600s → 1800s 并解耦于 phase3.review_timeout_s · 完成于 2026-05-04 · 完整完成
 
 - 1 行摘要：runtime 验证发现 wave 1 全部 10 chunk 撞 600s 子进程超时（25 章 + chunk-level 5 个二级聚合字段 + opus-4-7 effort=max 单 chunk wall 常 ≥600s）；`Phase0Config` 加 `summarize_timeout_s: int = 1800`、`automation/config.toml [phase0]` 加同名键 + 中文注释、`orchestrator.py:_summarize_chunk` 改用 `phase0.summarize_timeout_s`（原借用 `phase3.review_timeout_s` 不动，仍服务 phase 3 reviewer 短链）；automation/README.md / docs/architecture/extraction_workflow.md / docs/requirements.md 同步硬超时数字与配置分节描述；ai_context/decisions.md 加 #47 durable 决策。smoke 全过：TOML / load_config / orchestrator import / grep 残留 0。

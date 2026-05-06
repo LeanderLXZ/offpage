@@ -80,8 +80,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--chunk-size",
         type=int,
-        default=25,
-        help="Chapters per summarization chunk (default: 25)",
+        default=20,
+        help="Chapters per summarization chunk (default: 20)",
     )
     parser.add_argument(
         "--end-stage",

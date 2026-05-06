@@ -248,10 +248,15 @@ def validate_scene_split(
     scenes: list[dict[str, Any]],
     total_lines: int,
     known_aliases: set[str] | None = None,
+    length_tolerance: float = 0.0,
 ) -> list[str]:
     """Validate a chapter's scene split output.
 
     Returns a list of error messages (empty = valid).
+
+    ``length_tolerance > 0`` enables decision-#48 length-bound tolerance
+    on the schema gate at the end (manual checks above stay strict). Use
+    only on the terminal post-strict-retry path.
     """
     errors: list[str] = []
 
@@ -327,10 +332,25 @@ def validate_scene_split(
     # Schema enforces all bounds (time/location, summary, maxItems,
     # additionalProperties=false); exact numbers live in the schema.
     # Fail messages are appended to the same errors list so the existing
-    # retry-with-prior-error path picks them up.
-    for err in _scene_split_validator().iter_errors(scenes):
-        path = "/".join(str(p) for p in err.absolute_path) or "<root>"
-        errors.append(f"schema {path}: {err.message[:80]}")
+    # retry-with-prior-error path picks them up. ``length_tolerance > 0``
+    # walks decision-#48 path: if every schema violation is purely a
+    # ``minLength`` / ``maxLength`` miss within ±tolerance, suppress the
+    # schema-gate errors entirely (manual errors above remain).
+    if length_tolerance > 0.0:
+        from .validator import validate_with_length_tolerance
+        ok_tol, _tol_issues = validate_with_length_tolerance(
+            scenes, _scene_split_validator().schema,
+            tolerance=length_tolerance)
+        if not ok_tol:
+            for err in _scene_split_validator().iter_errors(scenes):
+                path = "/".join(
+                    str(p) for p in err.absolute_path) or "<root>"
+                errors.append(f"schema {path}: {err.message[:80]}")
+    else:
+        for err in _scene_split_validator().iter_errors(scenes):
+            path = "/".join(
+                str(p) for p in err.absolute_path) or "<root>"
+            errors.append(f"schema {path}: {err.message[:80]}")
 
     return errors
 
@@ -414,6 +434,19 @@ def _process_chapter(
     entry.last_updated = _now_iso()
 
     errors = validate_scene_split(scenes, total_lines, known_aliases)
+
+    if errors and entry.retry_count + 1 > entry.max_retries:
+        # Final attempt — strict-retry budget would be exhausted by the
+        # next _mark_failed call. Try length-bound tolerance gate
+        # (decision #48): re-run validation with the schema gate
+        # relaxed to ±10% on minLength/maxLength only. Manual checks
+        # (line coverage, missing fields, alias) stay strict.
+        errors_tol = validate_scene_split(
+            scenes, total_lines, known_aliases, length_tolerance=0.10)
+        if not errors_tol:
+            print(f"  [LENGTH-TOLERANCE] Scene split for {chapter_id} "
+                  "accepted by length-bound tolerance gate (#48).")
+            errors = []
 
     if errors:
         msg = "; ".join(errors)

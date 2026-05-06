@@ -545,7 +545,13 @@ orchestrator (Python)
   安全阀：回归保护（introduced ≥ resolved → 停机）、收敛检测（持续集不变 → 升级）、
   **L3 gate 反复**（连续两轮 gate 返回相同 blocking 集合 → 语义层不收敛 → 出 Phase C 报错）、
   Lifecycle 上限（默认 2，lifecycle 2 升 T3 即 T3_EXHAUSTED）、
-  总轮次限制（每 lifecycle 默认 5 轮）
+  总轮次限制（每 lifecycle 默认 5 轮）。**Length-bound tolerance 兜底**：在 lifecycle
+  2 即将判定 `T3_EXHAUSTED` 之前，如果剩余 issues **全部**是 `category ==
+  schema_validation` 且错误描述命中 `minLength` / `maxLength` 关键词，调
+  `validator.validate_with_length_tolerance`：relaxed schema（×0.9 floor /
+  ×1.1 ceil）通过 → 改判 `PASS`；否则保留 `T3_EXHAUSTED`。仅修改终态判定
+  分支，不动 lifecycle 1/2/T3 cap/fixer 升级；详见 `ai_context/decisions.md`
+  #48
 - **源文件问题 triage**（`triage_enabled`）：两条 accept_with_notes 通道，
   共用单文件上限 `accept_cap_per_file=5`。
   （A）**L3 `source_inherent`（LLM）**——某些 L3 残留不是提取错误，而是源小说
