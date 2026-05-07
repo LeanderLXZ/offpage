@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -13,15 +14,32 @@ from .git_utils import preflight_check
 from .llm_backend import create_backend
 from .orchestrator import ExtractionOrchestrator
 from .process_guard import launch_background
-from .progress import (
-    Phase3Progress, PipelineProgress, StageEntry,
-    migrate_legacy_progress,
-)
 from .rate_limit import RateLimitHardStop, WEEKLY_EXIT_CODE
 from .scene_archive import run_scene_archive
 
 # Phase 4 does not need git preflight (no commits) and uses its own lock.
 VALID_PHASES = ("auto", "0", "1", "1.5", "2", "3", "3.5", "4")
+
+
+def _load_pipeline_status(project_root: Path, work_id: str) -> dict | None:
+    """Read pipeline.json for ``--background`` stage-aware validation only.
+
+    Decision #51: ``--background`` must inspect ``phases.phase_1_5`` to
+    decide whether ``--characters`` is required (avoiding stdin deadlock at
+    ``confirm_with_user``). Kept as a thin JSON read so cli.py does not
+    pull the full ``PipelineProgress`` dataclass surface — that lives
+    inside the orchestrator path. Missing / unreadable / malformed file
+    → ``None`` (caller treats this as "phase_1_5 not done").
+    """
+    path = (project_root / "works" / work_id / "analysis"
+            / "progress" / "pipeline.json")
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -110,12 +128,18 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--resume", action="store_true",
-        help="Resume from existing progress (skip analysis)",
+        help="Auto-yes the 'Resume from existing progress?' prompt. "
+             "run_full is the phase-agnostic resume entry point and skips "
+             "/ self-heals already-completed phases on every invocation; "
+             "this flag only silences the interactive confirm "
+             "(decision #51).",
     )
     parser.add_argument(
         "--background", action="store_true",
         help="Run in background (survives SSH disconnect). "
-             "Requires --resume or --characters (no interactive prompts).",
+             "Stage-aware validation: when phase_1_5 is not yet done, "
+             "--characters is required to avoid the Phase 1.5 stdin "
+             "prompt deadlocking the daemon (decision #51).",
     )
     parser.add_argument(
         "--max-runtime",
@@ -183,9 +207,22 @@ def main(argv: list[str] | None = None) -> None:
 
     # --- Background mode (Phase 0-3.5) ---
     if args.background:
-        if not args.resume and not args.characters:
-            print("[ERROR] --background requires --resume or --characters "
-                  "(no interactive prompts in background mode).")
+        # Decision #51: --background can't survive any stdin prompt.
+        # The only one that fires from a fresh-ish state is Phase 1.5's
+        # `confirm_with_user`; --characters short-circuits it. The
+        # "Resume from existing progress? [Y/n]" prompt in run_full is
+        # already auto-yes when --resume is passed (orchestrator side).
+        # So: read pipeline.json — if phase_1_5 already done, no Phase
+        # 1.5 prompt can fire, --characters is optional. Otherwise,
+        # --characters is mandatory.
+        pipeline_status = _load_pipeline_status(project_root, args.work_id)
+        phase15_done = (
+            pipeline_status is not None
+            and pipeline_status.get("phases", {}).get("phase_1_5") == "done")
+        if not phase15_done and not args.characters:
+            print("[ERROR] --background requires --characters when "
+                  "phase_1_5 is not yet done (orchestrator would block "
+                  "on the interactive Phase 1.5 prompt).")
             sys.exit(1)
         extra = [a for a in sys.argv[1:] if a != "--background"]
         launch_background(args.work_id, project_root, extra)
@@ -247,68 +284,18 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     try:
-        if args.resume:
-            # Try new format first, then legacy migration
-            pipeline = PipelineProgress.load(project_root, args.work_id)
-            phase3 = Phase3Progress.load(project_root, args.work_id)
-
-            # Self-heal: rebuild phase3 from stage_plan when pipeline has
-            # phase_1_5 done but phase3_stages.json was deleted/corrupted.
-            if (pipeline and pipeline.is_done("phase_1_5")
-                    and phase3 is None):
-                stage_plan_path = (
-                    project_root / "works" / args.work_id
-                    / "analysis" / "stage_plan.json")
-                if stage_plan_path.exists():
-                    import json as _json
-                    sp = _json.loads(
-                        stage_plan_path.read_text(encoding="utf-8"))
-                    phase3 = Phase3Progress(
-                        work_id=args.work_id,
-                        stage_size=sp.get("default_stage_size", 10),
-                        stages=[
-                            StageEntry(
-                                stage_id=b["stage_id"],
-                                chapters=b["chapters"],
-                                chapter_count=b.get("chapter_count", 10),
-                                stage_title=b.get("stage_title", ""),
-                            )
-                            for b in sp.get("stages", [])
-                        ],
-                    )
-                    phase3.save(project_root)
-                    print(f"[REBUILT] phase3_stages.json from stage_plan "
-                          f"({len(phase3.stages)} stages, all pending).")
-
-            if not pipeline or not phase3:
-                migrated = migrate_legacy_progress(
-                    project_root, args.work_id)
-                if migrated:
-                    pipeline, phase3 = migrated
-                    print("  [MIGRATE] Converted legacy progress to new format.")
-                else:
-                    print(f"[ERROR] No existing progress for '{args.work_id}'.")
-                    sys.exit(1)
-
-            # Self-heal: reconcile phase3 with actual disk state.
-            rec = phase3.reconcile_with_disk(
-                project_root, pipeline.target_characters)
-            if rec["reverted"] or rec["purged_files"]:
-                print(f"[RECONCILE] Phase 3: reverted {rec['reverted']} "
-                      f"stage(s), purged {rec['purged_files']} stale "
-                      f"artifact(s), {rec['sha_missing']} committed_sha "
-                      f"missing from git")
-                phase3.save(project_root)
-
-            orch.pipeline = pipeline
-            orch.phase3 = phase3
-            orch.run_extraction_loop(pipeline, phase3,
-                                     max_stages=args.end_stage)
-        else:
-            orch.run_full(
-                preset_characters=args.characters,
-                preset_end_stage=args.end_stage,
-            )
+        # Decision #51: run_full is the phase-agnostic resume entry point.
+        # It internally does migrate_legacy_progress + load + self-heal
+        # (rebuild phase3_stages.json from stage_plan.json when phase_1_5
+        # done) + reconcile_with_disk + branch on phase_1_5 done →
+        # run_extraction_loop, otherwise drives Phase 0 → 1 → 1.5 → 2 → 3
+        # with each phase already skip-detecting completed work. --resume
+        # only silences the "Resume from existing progress? [Y/n]" prompt.
+        orch.run_full(
+            preset_characters=args.characters,
+            preset_end_stage=args.end_stage,
+            auto_resume=args.resume,
+        )
 
         print("\nDone.")
     except RateLimitHardStop as exc:

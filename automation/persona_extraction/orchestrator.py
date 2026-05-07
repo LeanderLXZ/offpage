@@ -2660,8 +2660,17 @@ class ExtractionOrchestrator:
         *,
         preset_characters: list[str] | None = None,
         preset_end_stage: int | None = None,
+        auto_resume: bool = False,
     ) -> None:
-        """Run the complete pipeline: analysis → confirm → extract."""
+        """Run the complete pipeline: analysis → confirm → extract.
+
+        ``auto_resume`` (decision #51): when True, silence the
+        ``Resume from existing progress? [Y/n]`` interactive prompt and
+        proceed as if the user answered "yes". Phase-level skip /
+        self-heal logic in ``run_summarization`` /
+        ``Phase3Progress.reconcile_with_disk`` / etc. is unchanged —
+        ``--resume`` only mutes this single confirmation.
+        """
         pipeline: PipelineProgress | None
         phase3: Phase3Progress | None
         # Check for legacy progress and migrate if needed
@@ -2718,9 +2727,13 @@ class ExtractionOrchestrator:
             print(f"Found existing progress for {self.work_id}.")
             print(f"  Completed: {phase3.completed_stage_count()}"
                   f"/{len(phase3.stages)}")
-            # Auto-resume when characters are preset (non-interactive mode)
-            if preset_characters:
-                print("  Auto-resuming (preset characters provided).")
+            # Non-interactive paths: preset characters or auto_resume signal
+            # both skip the [Y/n] prompt and continue into the extraction loop.
+            if preset_characters or auto_resume:
+                if auto_resume:
+                    print("  Auto-resuming (--resume passed).")
+                else:
+                    print("  Auto-resuming (preset characters provided).")
                 self.pipeline = pipeline
                 self.phase3 = phase3
                 self.run_extraction_loop(

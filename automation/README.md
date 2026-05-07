@@ -105,6 +105,12 @@ python -m automation.persona_extraction "<work_id>" \
 python -m automation.persona_extraction "<work_id>" --resume
 ```
 
+`--resume` 阶段无关：`run_full` 是 resume entry point，按 phase 顺序自检产物
+（Phase 0 schema-gated 跳过已 done chunk / Phase 1 检测 stage_plan 等已落盘
+产物 / Phase 1.5 用 preset / Phase 3 reconcile_with_disk + 从 stage_plan
+self-heal phase3_stages.json）。`--resume` 本身只 silent 'Resume from existing
+progress? [Y/n]' 这条交互确认；与磁盘上具体哪个 phase 已落盘无关。
+
 ### 使用 Codex
 
 ```bash
@@ -131,7 +137,11 @@ tail -f works/<work_id>/analysis/progress/extraction_logs/extraction.log
 kill <PID>
 ```
 
-`--background` 要求 `--resume` 或 `--characters`（后台无法交互）。
+`--background` 阶段感知校验：读 `works/<work_id>/analysis/progress/pipeline.json`
+的 `phase_1_5` 状态——若**未** done，则强制要求 `--characters`（避免后台撞
+`confirm_with_user` 的 stdin 死锁）；若已 done，无需 `--characters` 即可后台
+启动（Phase 1.5 已过，无 stdin 提示）。`--resume` 与 `--background` 正交：
+`--resume` 控制"silence the resume prompt"，`--background` 控制后台 daemonize。
 
 ### 运行时限制
 

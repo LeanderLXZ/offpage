@@ -482,6 +482,20 @@ voice / behavior / boundary / failure_modes 的状态由 stage_snapshot
 
 详见 `automation/README.md` 和 `docs/requirements.md` §十一。
 
+### CLI `--resume` 阶段无关续跑
+
+`run_full` 是 resume 真正入口，按 phase 顺序自检：Phase 0 (`run_summarization`
+内置 `_chunk_passes_full_check` schema gate skip 已 done chunk) → Phase 1
+(`run_analysis` 检测 stage_plan / candidate_characters 已落盘则跳过) →
+Phase 1.5 (`confirm_with_user` 用 `--characters` 旁路) → Phase 2 → Phase 3
+(`reconcile_with_disk` + 从 stage_plan rebuild `phase3_stages.json` 的 self-heal
+路径) → Phase 3.5 → Phase 4。CLI `--resume` 标志只 silent 'Resume from existing
+progress? [Y/n]' 这条 run_full 内的交互确认；与磁盘上具体哪个 phase 已落盘
+无关——run_full 自检产物状态决定 skip / self-heal / 跳进 run_extraction_loop。
+`--background` 校验阶段感知：读 `pipeline.json::phases.phase_1_5`，未 done 则
+强制要求 `--characters`（避免后台撞 confirm_with_user 的 stdin 死锁）；已 done
+则 `--characters` 可省。`--resume` 与 `--background` 正交。
+
 编排架构：
 
 ```
