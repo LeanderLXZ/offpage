@@ -562,8 +562,10 @@ world_overview 的"结构化精化版"——信息源相同，可信度同分层
   改 4 步骤结构（读章节 → per-summary → chunk-level → 写文件），
   `observed_impact` 强引导"宁可写未在本 chunk 直接观察也不要静默留空"，
   sub-field description "有解释必填 / 无解释写空字符串"明示；
-  [`automation/prompt_templates/analysis.md`](../automation/prompt_templates/analysis.md)
-  步骤 1 加 chunk-level 字段说明 + 字段 → world_overview 映射表，
+  Phase 1 三 lane 模板（[analysis_world_overview.md](../automation/prompt_templates/analysis_world_overview.md)
+  / [analysis_stage_plan.md](../automation/prompt_templates/analysis_stage_plan.md)
+  / [analysis_candidate_characters.md](../automation/prompt_templates/analysis_candidate_characters.md)，
+  决策 #52 拆出）各加 chunk-level 字段说明 + 字段 → world_overview 映射表，
   stage 边界信号源由 per-summary location 替换为 chunk_regions / chunk_arc_summary；
   [`automation/prompt_templates/baseline_production.md`](../automation/prompt_templates/baseline_production.md)
   产出 1 思考链重写——加 chunk-level → foundation 映射表 + "不要凭 genre
@@ -587,7 +589,7 @@ world_overview 的"结构化精化版"——信息源相同，可信度同分层
 - summarization.md 跑 1-2 chunk 验证 LLM 实际能正确填 chunk-level 字段，
   特别 `chunk_world_rules.observed_impact` 是真填具体事件还是 fallback
   写"未在本 chunk 直接观察"——两者都接受，但**不能静默留空**
-- analysis.md 跑 1 个 work 验证 world_overview 质量改善：
+- analysis_world_overview.md 跑 1 个 work 验证 world_overview 质量改善：
   power_system.levels 不再 LLM 套模板（应反映原文真实力量体系）；
   core_rules 不再空泛规则；world_structure.summary 虽仍 🟡 但应反映
   原文真实区域结构（不是仙侠默认拼装）

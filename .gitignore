@@ -2,6 +2,7 @@
 # Locks, progress, summaries, splits — regenerated each run, never tracked.
 works/*/analysis/.extraction.lock
 works/*/analysis/.scene_archive.lock
+works/*/analysis/.phase1_lane_inputs/
 works/*/analysis/progress/
 works/*/analysis/chapter_summaries/
 works/*/analysis/scene_splits/

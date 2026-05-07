@@ -74,51 +74,50 @@
 
 ### 3. 全书分析（Phase 1）
 
+Phase 1 内部 fan-out 成独立 lane，每个 lane = 一次 `claude -p` + 一份预先裁剪的
+chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry（与 Phase 0 / Phase 4 同形态）。
+
 **双模式调度**（沿用 Phase 0 的 `structure_mode`）：
 
-- **monolithic 模式**：基于所有章节摘要（不读原文），LLM 走单次 prompt 串联跑 a/b/c/d 四子任务；stage 边界由 LLM 按 5–15 章规则自主发现；走出口验证（schema + STAGE_MIN/MAX）
-- **light_novel 模式**：跳过 LLM stage 边界发现，由 orchestrator 程序化 1:1 从 chapter_index 派生 stage_plan：
-  - `stage_id = S{n:03d}`（n 从 1 起，对应 chapter_index 顺序）
-  - `chapters = f"{chapter_id}-{chapter_id}"`（degenerate 单章区间，例 `"C0001-C0001"`；与 monolithic 共享 `^C[0-9]{4}-C[0-9]{4}$` 解析路径，phase 2/3/4 消费方零分叉）
-  - `chapter_count = 1`
-  - `stage_title = chapter_index[i].title`（已含卷 / 印刷章 / sub-section 由规范化派生的拼接；超 schema `stage_title.maxLength` 由 orchestrator 软截断 + `…` 兜底，避免对抗性长 title 触发 schema gate fail → 无穷重试 → FATAL）
-  - 跳过 STAGE_MIN / STAGE_MAX `chapter_count` 校验（1:1 派生天然违反 5–15 限制，是预期行为）
-  - `world_overview.json` / `candidate_characters.json` 仍由 LLM 走分析子任务（沿用 monolithic 同一 prompt）
+- **monolithic 模式 = 3 lane 并行**：
+  - **world_overview lane**：题材 / 力量体系 / 主要势力 / 地理结构 / 大世界线划分 / 核心设定规则。输出：`works/{work_id}/analysis/world_overview.json`
+  - **stage_plan lane**：按自然剧情边界切分（拐点先行，章数硬范围 5–15；详见决策 #27m 步骤 2.1/2.2/2.3 反锚定自检）。输出：`works/{work_id}/analysis/stage_plan.json`
+  - **candidate_characters lane**：跨 chunk 角色身份合并 + 候选角色识别 + aliases 归并。输出：`works/{work_id}/analysis/candidate_characters.json`
+- **light_novel 模式 = 2 lane 并行 + 程序化 stage_plan**：
+  - **world_overview lane** + **candidate_characters lane** 同 monolithic（沿用同一 prompt + 同一裁剪契约）
+  - **stage_plan lane 整体跳过 LLM**：由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生：
+    - `stage_id = S{n:03d}`（n 从 1 起，对应 chapter_index 顺序）
+    - `chapters = f"{chapter_id}-{chapter_id}"`（degenerate 单章区间，例 `"C0001-C0001"`；与 monolithic 共享 `^C[0-9]{4}-C[0-9]{4}$` 解析路径，phase 2/3/4 消费方零分叉）
+    - `chapter_count = 1`
+    - `stage_title = chapter_index[i].title`（已含卷 / 印刷章 / sub-section 由规范化派生的拼接；超 schema `stage_title.maxLength` 由 orchestrator 软截断 + `…` 兜底，避免对抗性长 title 触发 schema gate fail → 无穷重试 → FATAL）
+    - 跳过 STAGE_MIN / STAGE_MAX `chapter_count` 校验（1:1 派生天然违反 5–15 限制，是预期行为）
 
 阶段规划是分析阶段**最核心的产出**——每个 stage 边界直接成为系统的 stage 边界，
 世界快照、角色快照、记忆时间线、运行时阶段选择全部建立在此切分之上（monolithic
 路径为剧情边界准确性优先于均匀；light_novel 路径粒度 = sub-section）。
 
-monolithic 子任务（不变）：
+**裁剪后的 chunk 输入**（每 lane 各自一份，写到 `works/{work_id}/analysis/.phase1_lane_inputs/{lane}/chunk_NNN.json`，gitignored，run_analysis 退出时 cleanup）：
 
-a. **跨 chunk 角色身份合并**：不同 chunk 中以不同名称出现的同一角色统一为
-   单一候选条目
-b. **世界观概览**：题材类型、力量体系、主要势力、地理结构、大世界线划分、
-   核心设定规则。输出：`works/{work_id}/analysis/world_overview.json`
-c. **源文件阶段规划**：按自然剧情边界切分（默认目标 10 章，最小 5 章，
-   最大 15 章），剧情边界准确性优先于均匀。
-   输出：`works/{work_id}/analysis/stage_plan.json`
-d. **候选角色识别**：基于身份合并后的角色出场信息。
-   输出：`works/{work_id}/analysis/candidate_characters.json`
+| Lane | per-summary 字段 | chunk-level 二级字段 |
+|---|---|---|
+| world_overview | `chapter`（用于 `world_lines.chapter_range`） | `chunk_arc_summary` / `chunk_world_rules` / `chunk_power_levels` / `chunk_factions`（去 `members_present`） / `chunk_regions` |
+| stage_plan | `chapter` / `summary` / `key_events` / `characters_present` / `emotional_tone` / `identity_notes` | `chunk_arc_summary` / `chunk_regions` |
+| candidate_characters | `chapter` / `characters_present` / `identity_notes` | `chunk_factions[].{name, members_present}` |
 
-**出口验证（硬性门控）**：Phase 1 完成后跑三层校验，**共享同一 retry 预算**
-（`[phase1].exit_validation_max_retry`，默认 2 次）：
+字段保留较宽，给 LLM 留判断空间。三件输出之间无硬数据依赖（唯一交叉 = `chunk_arc_summary` 同时被 world_overview + stage_plan 两 lane 用）。
 
-1. **三件套齐全**：`world_overview.json` / `stage_plan.json` /
-   `candidate_characters.json` 都必须存在；缺一即视作此阶段失败的
-   `missing_files` 类型（与 schema fail 共享 retry 预算）。
-2. **jsonschema 校验**：三件套各自跑 `Draft202012Validator.iter_errors`
-   （`schemas/analysis/{world_overview,stage_plan,candidate_characters}.schema.json`），
-   覆盖结构 / bound / enum / pattern。
-3. **stage `chapter_count` 5-15 限制**（`_check_stage_plan_limits`；schema
-   `chapter_count.minimum=1` 是为 light_novel 让出空间，monolithic 5-15
-   由本代码层强制；light_novel 模式跳过此校验）。
+**出口验证（硬性门控，per-lane）**：每个 lane 的 LLM 产物落盘后，独立跑：
 
-任一层失败 → 把缺失文件清单 + 首条 schema 错误 + stage 限制违规明细合并进
-`correction_feedback`（按 `build_analysis_prompt(correction_feedback=...)`
-追加到 prompt 的"⚠️ 修正要求"段），删除失败的文件让 LLM 重生（通过校验的
-文件保留），重新跑 Phase 1。若重试耗尽仍 fail，流程终止（`sys.exit(1)`）；
-mark_done 之前还有 defense-in-depth 复检，三件套任一缺失也直接 `sys.exit(1)`。
+1. **schema gate**：lane 输出 jsonschema 校验
+   （`schemas/analysis/{world_overview,stage_plan,candidate_characters}.schema.json`）
+2. **stage `chapter_count` 5-15 限制**（仅 stage_plan lane，monolithic 模式；light_novel 模式跳过此校验，因 stage_plan 由程序化派生不走 LLM）
+
+校验失败 → 把首条 schema 错误（含 stage 限制违规）作为 `prior_error` 注入下一次重试 prompt，
+**与 Phase 0 chunk-level / Phase 4 chapter-level prior_error 注入同形态**——失败文件单独删除，重跑该 lane 的 prompt（带 prior_error 段），通过校验的 lane 产物保留。
+**per-lane retry 预算独立**：每 lane 各享 `[phase1].exit_validation_max_retry`（默认 2），
+不再共享池。某 lane 重试耗尽仍 fail → 该 lane 走 length-bound tolerance gate（决策 #48）兜底；仍 fail 则该 lane 标记 ERROR，**其他 lane 已落盘的产物保留**；
+`--resume` 时 `reconcile_with_disk` 检测到 schema-valid 产物即跳过对应 lane，仅重跑失败的。
+若所有 lane 全部 ERROR，流程终止（`sys.exit(1)`）。
 
 ### 4. 活跃角色确认（Phase 1.5）
 

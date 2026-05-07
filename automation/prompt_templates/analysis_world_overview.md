@@ -1,0 +1,105 @@
+# 自动化分析阶段 — World Overview Lane
+
+你现在接手本地项目 Offpage，你没有任何额外背景知识。本次任务**仅产出一件文件**：`world_overview.json`，即作品 `{work_id}` 的世界观概览。
+
+## 作品信息
+
+- work_id: `{work_id}`
+- 书名: `{title}`
+- 语言: `{language}`
+- 总章节数: `{chapter_count}`
+- 作品目录: `{work_dir}`
+
+## 输入：裁剪后的章节摘要（lane 专用）
+
+裁剪后的 chunk JSON 文件已经准备好，存放在：
+
+`{lane_inputs_dir}`
+
+每个文件是一个 chunk 的归纳结果（JSON），**已经按 world_overview lane 的需求做了字段裁剪**——只保留以下字段：
+
+**chunk-level 二级字段（聚合本 chunk 视野下的设定信号）**：
+- `chunk_arc_summary`（≤200 字本 chunk 整体剧情弧）
+- `chunk_world_rules[]`（≤5 条 × `{{rule, description, observed_impact}}`；本 chunk 揭示的世界规则；observed_impact 可能是具体影响或 fallback "未在本 chunk 直接观察"）
+- `chunk_power_levels[]`（≤20 条 × `{{name, description}}`；本 chunk 出现的力量体系等级）
+- `chunk_factions[]`（≤20 条 × `{{name, description}}`；势力名 + 简介；**已剔除 `members_present`** 因 phase 1 world_overview 不需要 raw 角色名映射）
+- `chunk_regions[]`（≤20 条 × `{{name, description}}`；本 chunk 出现的地理区域）
+
+**per-summary 层（仅章号锚点）**：
+- `summaries[].chapter`（用于 `world_lines.chapter_range` 推理）
+
+schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意：lane 输入只是子集；输出 schema 见下方）。
+
+## 执行步骤
+
+### 步骤 1：读取所有裁剪后的 chunk
+
+读取 `{lane_inputs_dir}` 下所有 `chunk_*.json`，按 `chunk_index` 顺序构建全书的世界观信号脉络。重点：
+
+- `chunk_arc_summary` 串起来 = 作品的"大世界线"骨架
+- `chunk_regions` 跨 chunk 出现的地理区域聚合 → `world_overview.world_structure.major_regions`
+- `chunk_power_levels` 跨 chunk 同名等级合并 → `world_overview.power_system.levels`
+- `chunk_factions` 跨 chunk 同名势力合并 → `world_overview.major_factions`
+- `chunk_world_rules` 跨 chunk 同名规则合并 → `world_overview.core_rules`
+- `chunk_arc_summary` 的弧线推进 + `summaries[].chapter` 区段切分 → `world_overview.world_lines[].{{name, chapter_range, core_conflict, setting_features}}`
+
+### 步骤 2：综合产出 world_overview
+
+字段映射：
+
+- `chunk_world_rules → core_rules[]`（综合多 chunk 的同一规则、合并描述）
+- `chunk_power_levels → power_system.levels[]`（综合多 chunk 同一等级 / 阶段名，去重）
+- `chunk_factions → major_factions[]`（综合多 chunk 同一势力，合并描述）
+- `chunk_regions → world_structure.major_regions[]`（综合多 chunk 同一地名）
+- `chunk_arc_summary → world_lines[].core_conflict`（多 chunk 弧线串成大世界线核心冲突）
+- `world_structure.summary` / `world_lines[].setting_features` 由你综合 `chunk_regions` / `chunk_power_levels` / `chunk_factions` / `chunk_world_rules` 的信号写出（无 chunk 直供字段，需要综合判断）
+- `genre` / `tone` 由所有 chunk_arc_summary 的整体语调判断
+
+### 步骤 3：落盘 + 自检
+
+输出文件：`{work_dir}/analysis/world_overview.json`
+schema 契约 → `schemas/analysis/world_overview.schema.json`，长度上下限以 schema 为准。
+
+JSON 结构：
+
+```json
+{{
+  "work_id": "{work_id}",
+  "genre": "...",
+  "tone": "...",
+  "world_structure": {{
+    "summary": "...",
+    "major_regions": ["..."]
+  }},
+  "power_system": {{
+    "summary": "...",
+    "levels": ["..."]
+  }},
+  "major_factions": [
+    {{
+      "name": "...",
+      "description": "..."
+    }}
+  ],
+  "world_lines": [
+    {{
+      "name": "...",
+      "chapter_range": "...",
+      "core_conflict": "...",
+      "setting_features": "..."
+    }}
+  ],
+  "core_rules": ["..."]
+}}
+```
+
+落盘后自检 schema（结构 / bound / enum / pattern）能否通过；若你写的某字段超出长度 / 数量上限，先在生成阶段裁剪到合规再写盘——schema gate 会在落盘后再次校验，违规会回到本 lane 重试。
+
+## 规则
+
+- 中文作品的 work_id、字段值使用中文
+- 产出文件必须是格式良好的 JSON
+- 你**只**负责 world_overview，不要尝试产出 stage_plan / candidate_characters（它们由其他 lane 并行处理）
+- 不要修改 `{lane_inputs_dir}` 下的输入文件
+- 不要读取 `sources/` 下的原始章节正文——本 lane 输入仅基于 chunks 摘要
+{retry_note}

@@ -33,7 +33,7 @@
   - `chunk_factions[]`（maxItems 20；items `{name, description, members_present[]}`，`required: [name]`，`additionalProperties: false`；`members_present` 是本 chunk LLM 看到的 raw 角色名，化名 / 真名 / 称呼任一，phase 1.5 跨 chunk 身份合并后再映射到 `character_id`）
   - `chunk_regions[]`（maxItems 20；items `{name, description}`，`required: [name]`，`additionalProperties: false`）
 - per-summary：`chapter`（`^C[0-9]{4}$` 与 chapter_index `chapter_id` 一致）/ `title` / `summary` / `key_events` / `characters_present` / `emotional_tone` / `identity_notes`
-**消费方**：Phase 1 (`automation/prompt_templates/analysis.md`) 把所有 chunk 作为输入构造 stage_plan（key_events 为离散边界信号）/ world_overview（chunk_world_rules → core_rules / chunk_power_levels → power_system.levels / chunk_factions → major_factions / chunk_regions → world_structure.major_regions / chunk_arc_summary → world_lines.core_conflict）/ candidate_characters；Phase 2 (`automation/prompt_templates/baseline_production.md`) 直读 chunk-level 字段综合产 foundation。
+**消费方**：Phase 1 三 lane（每 lane 各自一份裁剪后 chunks 子集，决策 #52）—— `automation/prompt_templates/analysis_world_overview.md` 用 chunk-level 字段（chunk_world_rules → core_rules / chunk_power_levels → power_system.levels / chunk_factions → major_factions / chunk_regions → world_structure.major_regions / chunk_arc_summary → world_lines.core_conflict）；`automation/prompt_templates/analysis_stage_plan.md` 用 per-summary 全字段 + chunk_arc_summary + chunk_regions（key_events 为离散边界信号）；`automation/prompt_templates/analysis_candidate_characters.md` 用 per-summary identity 字段 + chunk_factions members_present。Phase 2 (`automation/prompt_templates/baseline_production.md`) 直读 chunk-level 字段综合产 foundation。
 **生成时机**：Phase 0 by `automation/prompt_templates/summarization.md`，分 chunk 并行 LLM 调用。
 
 ---
@@ -54,7 +54,7 @@
 **位置**：`works/{work_id}/analysis/world_overview.json`（**入 git**）
 **关键字段**：`work_id` / `genre` / `tone` / `world_structure{summary, major_regions[]}` / `power_system{summary, levels[]}` / `major_factions[]` / `world_lines[]` / `core_rules[]`
 **消费方**：Phase 2 baseline 把它作为世界 foundation 起点。
-**生成时机**：Phase 1 by `automation/prompt_templates/analysis.md`，单次 LLM 调用。
+**生成时机**：Phase 1 world_overview lane by `automation/prompt_templates/analysis_world_overview.md`（与 stage_plan + candidate_characters lane 并行；决策 #52）。
 **形态**：`additionalProperties: true` 顶层（per-work 可扩展）。
 
 ---
@@ -64,7 +64,7 @@
 **用途**：Phase 1 stage 切分计划。下游 Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择都依赖此文件。
 **位置**：`works/{work_id}/analysis/stage_plan.json`（**入 git**）
 **关键字段**：`work_id` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^C[0-9]{4}-C[0-9]{4}$`（与 chapter_id 命名一致；light_novel 模式用 degenerate 单章区间，例 `C0001-C0001`） / `chapter_count` 1-15（schema） / `boundary_reason`）
-**生成时机**：monolithic 模式由 Phase 1 LLM (`automation/prompt_templates/analysis.md`) 产出；light_novel 模式由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生（同次仍跑 LLM 产 world_overview + candidate_characters，stage_plan 在 schema gate 之前被覆写）。
+**生成时机**：monolithic 模式由 Phase 1 stage_plan lane (`automation/prompt_templates/analysis_stage_plan.md`) 产出（与 world_overview + candidate_characters lane 并行；决策 #52）；light_novel 模式由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生，stage_plan lane 整体跳过 LLM（world_overview + candidate_characters lane 仍并行跑 LLM）。
 **契约**：schema `chapter_count.minimum = 1`（为 light_novel 让出空间）；monolithic 的 5–15 上下限由 orchestrator `_check_stage_plan_limits` 在代码层强制（light_novel 模式跳过此校验）。
 
 ---
@@ -75,7 +75,7 @@
 **位置**：`works/{work_id}/analysis/candidate_characters.json`（**入 git**）
 **关键字段**：`work_id` / `candidates[]`（每条 `character_id` / `aliases[]` / `description` / `frequency` 高/中/低 / `importance` 主角/重要配角/次要配角 / `recommended` boolean）；`aliases[].type` 走 10 项中文枚举（本名/化名/代称/称呼/昵称/绰号/封号/道号/武器名/其他）
 **消费方**：Phase 1.5 用户从 candidates 选确认建包对象，feed Phase 2 baseline。
-**生成时机**：Phase 1 by `automation/prompt_templates/analysis.md`。
+**生成时机**：Phase 1 candidate_characters lane by `automation/prompt_templates/analysis_candidate_characters.md`（与 world_overview + stage_plan lane 并行；决策 #52）。
 
 ---
 

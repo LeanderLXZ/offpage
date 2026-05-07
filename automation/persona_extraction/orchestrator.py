@@ -65,10 +65,14 @@ from .progress import (
     PHASE_RUNNING,
 )
 from .prompt_builder import (
-    build_analysis_prompt,
     build_baseline_prompt,
+    build_candidate_characters_prompt,
     build_char_snapshot_prompt,
     build_char_support_prompt,
+    build_stage_plan_prompt,
+    build_world_overview_prompt,
+    cleanup_phase1_lane_inputs,
+    prepare_phase1_lane_inputs,
     build_summarization_prompt,
     build_world_extraction_prompt,
 )
@@ -1166,201 +1170,247 @@ class ExtractionOrchestrator:
         }
 
     def run_analysis(self) -> dict[str, Any]:
-        """Run analysis phase: identity merge + world overview + stage plan + candidates.
+        """Run analysis phase as per-lane fan-out (decision #52).
 
-        If the produced stage plan contains oversized stages (>15 chapters),
-        the plan file is deleted and the LLM is re-run with corrective
-        feedback (up to MAX_ANALYSIS_RETRIES times).
+        Lanes run in parallel, each = one ``claude -p`` + a narrow projection
+        of the chunk JSON inputs (staged at
+        ``works/{work_id}/analysis/.phase1_lane_inputs/{lane}/``) + per-lane
+        schema gate + per-lane ``prior_error``-style retry budget
+        (``[phase1].exit_validation_max_retry`` is per-lane independent —
+        no shared pool). Strict-retry budget exhaustion falls through to
+        length-bound tolerance gate (decision #48); only then FATAL.
 
-        light_novel mode (`structure_mode = "light_novel"`): Phase 1 still
-        runs the LLM analysis prompt (for world_overview + candidate_characters),
-        but the LLM-produced stage_plan is overwritten by a 1:1 derivation
-        from chapter_index before schema gate; STAGE_MIN/MAX validation is
-        bypassed (1:1 derivation of 1-chapter stages would always violate
-        5-15).
+        Lane sets:
+        - **monolithic**: world_overview + stage_plan + candidate_characters
+        - **light_novel**: world_overview + candidate_characters (stage_plan
+          is derived programmatically from chapter_index by
+          ``_build_light_novel_stage_plan``, no LLM call — STAGE_MIN/MAX
+          bypassed since 1:1 derivation always = 1 chapter per stage)
+
+        ``--resume`` skip semantics: any lane whose output is already on disk
+        AND passes its schema gate (and stage-limit check, for stage_plan
+        monolithic) is skipped without rebuilding tmpdir inputs for it.
         """
         structure_mode = read_structure_mode(self.project_root, self.work_id)
         is_light_novel = structure_mode == "light_novel"
 
         cfg = get_config()
-        MAX_ANALYSIS_RETRIES = cfg.phase1.exit_validation_max_retry
+        MAX_RETRIES_PER_LANE = cfg.phase1.exit_validation_max_retry
         STAGE_MIN = cfg.stage.min_chapter_count
         STAGE_MAX = cfg.stage.max_chapter_count
+        LANE_CONCURRENCY = max(1, cfg.phase1.lane_concurrency)
         work_dir = self.project_root / "works" / self.work_id
         inc_dir = work_dir / "analysis"
-        correction_feedback = ""
 
-        for attempt in range(1, MAX_ANALYSIS_RETRIES + 2):
-            print("\n" + "=" * 60)
-            if attempt == 1:
-                print(f"  Phase 1: Analysis (from chapter summaries) "
-                      f"[structure_mode={structure_mode}]")
+        # Lane definitions: (name, output_filename, validator_fn, builder_fn)
+        # stage_plan lane is included only in monolithic — light_novel
+        # derives stage_plan programmatically (no LLM lane).
+        lanes: list[tuple[str, str, Any, Any]] = [
+            ("world_overview", "world_overview.json",
+             _world_overview_validator, build_world_overview_prompt),
+        ]
+        if not is_light_novel:
+            lanes.append((
+                "stage_plan", "stage_plan.json",
+                _stage_plan_validator, build_stage_plan_prompt,
+            ))
+        lanes.append((
+            "candidate_characters", "candidate_characters.json",
+            _candidate_characters_validator, build_candidate_characters_prompt,
+        ))
+
+        def _lane_passes_skip(name: str, fname: str,
+                              validator_fn: Any) -> bool:
+            existing = _load_json(inc_dir / fname)
+            if existing is None:
+                return False
+            if list(validator_fn().iter_errors(existing)):
+                return False
+            if name == "stage_plan" and not is_light_novel:
+                if _check_stage_plan_limits(
+                        existing,
+                        max_stage_size=STAGE_MAX,
+                        min_stage_size=STAGE_MIN):
+                    return False
+            return True
+
+        # Decide which lanes to run vs skip (resume-aware).
+        skip_set: set[str] = set()
+        pending: list[tuple[str, str, Any, Any]] = []
+        for lane in lanes:
+            name, fname, validator_fn, _ = lane
+            if _lane_passes_skip(name, fname, validator_fn):
+                skip_set.add(name)
             else:
-                print(f"  Phase 1: Analysis — retry {attempt - 1}"
-                      f" (correcting stage plan)")
-            print("=" * 60 + "\n")
+                pending.append(lane)
 
-            prompt = build_analysis_prompt(
-                self.project_root, self.work_id,
-                correction_feedback=correction_feedback)
-            result = run_with_retry(
-                self.backend, prompt,
-                timeout_seconds=get_config().phase3.extraction_timeout_s,
-                lane_name="phase1_analysis",
-            )
+        print("\n" + "=" * 60)
+        print(f"  Phase 1: Analysis [structure_mode={structure_mode}]")
+        print("=" * 60)
+        for name, fname, _, _ in lanes:
+            mark = ("[SKIP — schema-valid on disk]"
+                    if name in skip_set else "[run]")
+            print(f"  {mark} {name} → {fname}")
+        if is_light_novel:
+            print("  [run] stage_plan → stage_plan.json "
+                  "(programmatic derivation, no LLM)")
+        if pending:
+            print(f"  Lane concurrency: {LANE_CONCURRENCY}")
 
-            if not result.success:
-                print(f"[ERROR] Analysis failed: {result.error}")
-                sys.exit(1)
+        # light_novel stage_plan is derived BEFORE the LLM lanes run so
+        # downstream phases that read stage_plan (none in this method,
+        # but kept for fail-safety on partial outcomes) always see it.
+        if is_light_novel:
+            derived = self._build_light_novel_stage_plan()
+            _write_json(inc_dir / "stage_plan.json", derived)
+            print(f"  [OK] light_novel stage_plan derived: "
+                  f"{len(derived['stages'])} stages "
+                  f"(1 sub-section = 1 stage)")
 
-            print("[OK] Analysis complete.")
+        # Per-lane retry loop. ``prior_error`` injection is per-lane
+        # (decision #52) — same pattern as Phase 0 chunk-level / Phase 4
+        # chapter-level prior_error retry; not shared across lanes.
+        def _run_one_lane(
+            lane: tuple[str, str, Any, Any],
+            lane_dir: Path,
+        ) -> tuple[str, str, str | None]:
+            name, fname, validator_fn, builder_fn = lane
+            target_path = inc_dir / fname
+            prior_error = ""
 
-            # light_novel: overwrite LLM stage_plan with 1:1 derivation
-            # before any validation reads it.
-            if is_light_novel:
-                derived = self._build_light_novel_stage_plan()
-                _write_json(inc_dir / "stage_plan.json", derived)
-                print(f"  [OK] light_novel stage_plan derived: "
-                      f"{len(derived['stages'])} stages "
-                      f"(1 sub-section = 1 stage)")
+            for attempt in range(1, MAX_RETRIES_PER_LANE + 2):
+                if attempt > 1:
+                    print(f"  [RETRY {attempt - 1}/{MAX_RETRIES_PER_LANE}] "
+                          f"phase1 lane {name}: re-running with prior_error")
 
-            stage_plan = _load_json(inc_dir / "stage_plan.json")
-            candidates = _load_json(inc_dir / "candidate_characters.json")
-            world_overview = _load_json(inc_dir / "world_overview.json")
+                prompt = builder_fn(
+                    self.project_root, self.work_id, lane_dir,
+                    prior_error=prior_error,
+                )
+                result = run_with_retry(
+                    self.backend, prompt,
+                    timeout_seconds=cfg.phase3.extraction_timeout_s,
+                    lane_name=f"phase1_{name}",
+                )
+                if not result.success:
+                    return name, "lane_failed", (
+                        f"claude -p failed: {result.error or 'unknown'}")
 
-            if world_overview:
-                print("  [OK] World overview produced.")
-            else:
-                print("  [WARN] World overview not found.")
-
-            # Phase 1 schema gate (schemas/analysis/{world_overview,stage_plan,
-            # candidate_characters}.schema.json). Schema fails AND missing
-            # files both feed correction_feedback together with stage
-            # limit violations, sharing the existing retry budget. A
-            # missing trio file is fatal — Phase 2/3/4 cannot run on a
-            # partial trio.
-            schema_failures: list[tuple[str, list[Any]]] = []
-            missing_files: list[str] = []
-            for fname, data, validator in (
-                ("world_overview.json", world_overview, _world_overview_validator()),
-                ("stage_plan.json", stage_plan, _stage_plan_validator()),
-                ("candidate_characters.json", candidates, _candidate_characters_validator()),
-            ):
-                if data is None:
-                    missing_files.append(fname)
+                produced = _load_json(target_path)
+                if produced is None:
+                    prior_error = (
+                        f"输出文件 `{fname}` 未生成，请按 prompt 要求"
+                        f"将产物写入 `{target_path}`。"
+                    )
+                    if attempt > MAX_RETRIES_PER_LANE:
+                        return name, "lane_failed", (
+                            f"output file `{fname}` not produced after "
+                            f"{MAX_RETRIES_PER_LANE} retries")
                     continue
-                errs = list(validator.iter_errors(data))
-                if errs:
-                    schema_failures.append((fname, errs))
 
-            # Phase 1 exit validation: check stage chapter_count limits.
-            # light_novel bypasses this — 1:1 derivation always = 1 chapter
-            # per stage which violates the monolithic 5-15 rule by design.
-            violating: list[dict[str, Any]] = []
-            if stage_plan and not is_light_novel:
-                violating = _check_stage_plan_limits(
-                    stage_plan,
-                    max_stage_size=STAGE_MAX,
-                    min_stage_size=STAGE_MIN,
+                errs = list(validator_fn().iter_errors(produced))
+                violating: list[dict[str, Any]] = []
+                if name == "stage_plan" and not is_light_novel:
+                    violating = _check_stage_plan_limits(
+                        produced,
+                        max_stage_size=STAGE_MAX,
+                        min_stage_size=STAGE_MIN,
+                    )
+                if not errs and not violating:
+                    return name, "ok", None
+
+                lines: list[str] = []
+                if errs:
+                    first = errs[0]
+                    err_path = "/".join(
+                        str(p) for p in first.absolute_path) or "<root>"
+                    lines.append(
+                        f"Schema 校验失败：`{fname}` 共 {len(errs)} 处违反，"
+                        f"首条 `{err_path}`: {first.message[:120]}"
+                    )
+                if violating:
+                    details = "; ".join(
+                        f"{b.get('stage_id', '?')}={b.get('chapter_count')}章"
+                        for b in violating)
+                    lines.append(
+                        f"stage_plan 中有 {len(violating)} 个 stage "
+                        f"不满足 {STAGE_MIN}-{STAGE_MAX} 章限制：{details}。"
+                        "对于跨度大的故事弧，必须拆分为多个 stage；"
+                        "对于过短的 stage，应合并到相邻 stage。"
+                    )
+
+                if attempt <= MAX_RETRIES_PER_LANE:
+                    prior_error = (
+                        "\n".join(lines)
+                        + "\n\nschema 契约见 "
+                        f"`schemas/analysis/{fname.replace('.json', '.schema.json')}`。"
+                        "请重新生成本 lane 输出以满足 schema + stage 限制。"
+                    )
+                    target_path.unlink(missing_ok=True)
+                    continue
+
+                # Strict-retry budget exhausted — try length-bound tolerance
+                # gate (decision #48). Only schema bound violations are
+                # tolerable (stage-limit violations are not length-bound).
+                if errs and not violating:
+                    ok_tol, _ = validate_with_length_tolerance(
+                        produced, validator_fn().schema)
+                    if ok_tol:
+                        print(
+                            f"  [LENGTH-TOLERANCE] phase1 lane {name} "
+                            f"accepted by length-bound tolerance gate "
+                            f"after {MAX_RETRIES_PER_LANE} strict retries "
+                            f"(decision #48)")
+                        return name, "ok_tolerance", None
+
+                return name, "lane_failed", (
+                    f"strict-retry exhausted ({MAX_RETRIES_PER_LANE}) + "
+                    f"tolerance gate not applicable: {'; '.join(lines)}")
+
+            return name, "lane_failed", "loop fell through (should not happen)"
+
+        # Project chunks into per-lane tmpdirs (only for pending lanes —
+        # skipped lanes already have valid output). Wrapped in try/finally
+        # so the tmpdir tree is cleaned regardless of success / fatal /
+        # SIGTERM (decision #52 (6)).
+        results: dict[str, tuple[str, str | None]] = {}
+        try:
+            lane_dirs: dict[str, Path] = {}
+            if pending:
+                lane_dirs = prepare_phase1_lane_inputs(
+                    self.project_root, self.work_id,
+                    lanes=tuple(l[0] for l in pending),
                 )
 
-            if schema_failures or violating or missing_files:
-                if attempt <= MAX_ANALYSIS_RETRIES:
-                    feedback_lines: list[str] = []
-                    if missing_files:
-                        feedback_lines.append(
-                            "缺失输出文件（必须三件套齐全）：")
-                        for fname in missing_files:
-                            feedback_lines.append(f"- `{fname}` 未生成")
-                    if schema_failures:
-                        feedback_lines.append("Schema 校验失败：")
-                        for fname, errs in schema_failures:
-                            first = errs[0]
-                            err_path = "/".join(
-                                str(p) for p in first.absolute_path) or "<root>"
-                            feedback_lines.append(
-                                f"- `{fname}`: {len(errs)} 处违反，"
-                                f"首条 `{err_path}`: {first.message[:120]}"
-                            )
-                    if violating:
-                        details = "; ".join(
-                            f"{b.get('stage_id', '?')}={b.get('chapter_count')}章"
-                            for b in violating)
-                        feedback_lines.append(
-                            f"stage_plan 中有 {len(violating)} 个 stage "
-                            f"不满足 {STAGE_MIN}-{STAGE_MAX} 章限制：{details}。"
-                            "对于跨度大的故事弧，必须拆分为多个 stage；"
-                            "对于过短的 stage，应合并到相邻 stage。"
-                        )
-                    correction_feedback = (
-                        "\n".join(feedback_lines)
-                        + "\n\nschema 契约见 "
-                        "`schemas/analysis/{world_overview,stage_plan,"
-                        "candidate_characters}.schema.json`。"
-                        "请重新生成对应文件以满足 schema + stage 限制；"
-                        "其他通过校验的文件如已存在可保留不变。"
-                    )
-                    # Delete failing files so the LLM regenerates only those
-                    for fname, _ in schema_failures:
-                        (inc_dir / fname).unlink(missing_ok=True)
-                    if violating:
-                        plan_path = inc_dir / "stage_plan.json"
-                        if plan_path.exists():
-                            plan_path.unlink()
-                    print(f"  [RETRY] Will re-run Phase 1 to fix "
-                          f"{len(missing_files)} missing file(s) + "
-                          f"{len(schema_failures)} schema fail(s) + "
-                          f"{len(violating)} stage limit violation(s) "
-                          f"(attempt {attempt + 1})...")
-                else:
-                    # Strict-retry budget exhausted. Try length-bound
-                    # tolerance gate (decision #48) before declaring
-                    # FATAL: only schema_failures are tolerable
-                    # (missing_files / stage-limit violations are not
-                    # length-bound, no relaxation can fix them).
-                    tolerance_ok = (
-                        not missing_files
-                        and not violating
-                        and bool(schema_failures)
-                    )
-                    if tolerance_ok:
-                        for fname, _errs in schema_failures:
-                            data_obj = _load_json(inc_dir / fname)
-                            schema_obj = {
-                                "world_overview.json":
-                                    _world_overview_validator().schema,
-                                "stage_plan.json":
-                                    _stage_plan_validator().schema,
-                                "candidate_characters.json":
-                                    _candidate_characters_validator().schema,
-                            }[fname]
-                            ok_tol, _ = validate_with_length_tolerance(
-                                data_obj, schema_obj)
-                            if not ok_tol:
-                                tolerance_ok = False
-                                break
-                    if tolerance_ok:
-                        print(
-                            f"  [LENGTH-TOLERANCE] Phase 1 accepted by "
-                            f"length-bound tolerance gate after "
-                            f"{MAX_ANALYSIS_RETRIES} strict retries "
-                            f"(decision #48): "
-                            f"{len(schema_failures)} file(s) had only "
-                            f"minLength/maxLength violations within ±10%.")
-                        break
-                    print(f"  [FATAL] Phase 1 still failing after "
-                          f"{MAX_ANALYSIS_RETRIES} retries: "
-                          f"{len(missing_files)} missing, "
-                          f"{len(schema_failures)} schema-fail, "
-                          f"{len(violating)} stage-limit. Aborting.")
-                    sys.exit(1)
-            else:
-                break  # trio complete, schema-clean, stage limits OK
+            if pending:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                with ThreadPoolExecutor(
+                        max_workers=LANE_CONCURRENCY) as pool:
+                    futures = {
+                        pool.submit(_run_one_lane, lane, lane_dirs[lane[0]]):
+                            lane[0]
+                        for lane in pending
+                    }
+                    for fut in as_completed(futures):
+                        name, status, err = fut.result()
+                        results[name] = (status, err)
+                        msg = f"  [{status.upper()}] phase 1 lane: {name}"
+                        if err:
+                            msg += f" — {err}"
+                        print(msg)
 
-        # Final guard: defense in depth — `break` above is only reached
-        # when the trio is complete + schema-clean, but any future edit
-        # to that loop must not silently mark phase_1 done with a
-        # missing file. Re-load from disk and abort if anything is gone.
+            failed_lanes = [
+                n for n, (s, _) in results.items() if s == "lane_failed"]
+            if failed_lanes:
+                print(f"\n[FATAL] Phase 1 failed lanes: "
+                      f"{', '.join(failed_lanes)}. Aborting.")
+                sys.exit(1)
+        finally:
+            cleanup_phase1_lane_inputs(self.project_root, self.work_id)
+
+        # Final guard: defense in depth — abort if any of the three trio
+        # files is missing (covers a future code-edit that drops a lane
+        # from the loop without removing the trio guarantee).
         for fname in (
             "stage_plan.json", "world_overview.json",
             "candidate_characters.json",
@@ -1369,6 +1419,10 @@ class ExtractionOrchestrator:
                 print(f"[FATAL] Phase 1 marked complete but `{fname}` "
                       f"missing on disk. Aborting.")
                 sys.exit(1)
+
+        stage_plan = _load_json(inc_dir / "stage_plan.json")
+        candidates = _load_json(inc_dir / "candidate_characters.json")
+        world_overview = _load_json(inc_dir / "world_overview.json")
 
         # Mark pipeline phase_1 done
         if self.pipeline:
@@ -1379,7 +1433,7 @@ class ExtractionOrchestrator:
             "stage_plan": stage_plan,
             "candidates": candidates,
             "world_overview": world_overview,
-            "raw_output": result.text,
+            "raw_output": "",  # no single raw_output anymore (3 lanes)
         }
 
     # ------------------------------------------------------------------

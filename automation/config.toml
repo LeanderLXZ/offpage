@@ -55,11 +55,21 @@ recovery_effort          = "high"
 
 
 # ----------------------------------------------------------------
-# [phase1] Phase 1 全书分析
+# [phase1] Phase 1 全书分析（lane fan-out）
 # ----------------------------------------------------------------
 [phase1]
-# stage_plan 章节数违规时的最大 LLM 重试次数（详见 §11.9 出口验证）。
+# Per-lane 出口验证最大重试次数（决策 #52，每 lane 独立预算，不共享池）。
+# Phase 1 fan-out 成 lane（monolithic = world_overview / stage_plan /
+# candidate_characters 三 lane；light_novel = world_overview +
+# candidate_characters 两 lane，stage_plan 由程序化派生不调 LLM）。
+# Schema 校验失败 / stage 章数违规 → prior_error 注入下一次重试 prompt
+# （与 phase 0 / phase 4 同形态），用尽走 #48 length-tolerance gate 兜底。
 exit_validation_max_retry = 2
+
+# Phase 1 lane fan-out 并发度（ThreadPoolExecutor max_workers）。默认 = 3
+# 即最大 lane 数（monolithic 3 lane 并发；light_novel 2 lane 因 stage_plan
+# 程序化派生）。订阅模式高并发易撞 5h 限额，可调低。
+lane_concurrency          = 3
 
 
 # ----------------------------------------------------------------

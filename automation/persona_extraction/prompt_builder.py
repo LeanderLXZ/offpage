@@ -107,21 +107,194 @@ def build_summarization_prompt(
     return _render_template(template, context)
 
 
-def build_analysis_prompt(
+# ---------------------------------------------------------------------------
+# Phase 1 lane fan-out — chunk projection + per-lane prompt builders
+# ---------------------------------------------------------------------------
+#
+# Phase 1 fans out into 3 lanes (monolithic) or 2 lanes (light_novel; stage_plan
+# is derived programmatically from chapter_index, no LLM call). Each lane runs
+# its own claude -p with a narrow projection of the chunk JSON inputs:
+#
+#   - world_overview lane: chunk-level secondary fields (chunk_arc_summary +
+#     chunk_world_rules + chunk_power_levels + chunk_factions WITHOUT
+#     members_present + chunk_regions) + summaries[].chapter
+#   - stage_plan lane: chunk_arc_summary + chunk_regions + per-summary plot
+#     fields (chapter / summary / key_events / characters_present /
+#     emotional_tone / identity_notes)
+#   - candidate_characters lane: per-summary identity fields (chapter /
+#     characters_present / identity_notes) + chunk_factions[].{name,members_present}
+#
+# The projected chunks are staged at
+#   works/{work_id}/analysis/.phase1_lane_inputs/{lane}/chunk_NNN.json
+# (gitignored; cleaned by orchestrator on run_analysis exit). The prompt
+# template tells the LLM to read from that directory.
+
+PHASE1_LANES: tuple[str, ...] = (
+    "world_overview",
+    "stage_plan",
+    "candidate_characters",
+)
+
+
+def _phase1_lane_inputs_root(project_root: Path, work_id: str) -> Path:
+    return (project_root / "works" / work_id / "analysis"
+            / ".phase1_lane_inputs")
+
+
+def _project_chunk_for_world_overview(chunk: dict) -> dict:
+    """Keep chunk-level secondary fields (faction members_present stripped) +
+    summaries[].chapter only."""
+    factions = []
+    for fac in chunk.get("chunk_factions") or []:
+        clean = {k: v for k, v in fac.items() if k != "members_present"}
+        factions.append(clean)
+    return {
+        "work_id": chunk.get("work_id"),
+        "chunk_index": chunk.get("chunk_index"),
+        "chapters": chunk.get("chapters"),
+        "chunk_arc_summary": chunk.get("chunk_arc_summary", ""),
+        "chunk_world_rules": chunk.get("chunk_world_rules") or [],
+        "chunk_power_levels": chunk.get("chunk_power_levels") or [],
+        "chunk_factions": factions,
+        "chunk_regions": chunk.get("chunk_regions") or [],
+        "summaries": [
+            {"chapter": s.get("chapter")}
+            for s in chunk.get("summaries") or []
+            if s.get("chapter")
+        ],
+    }
+
+
+def _project_chunk_for_stage_plan(chunk: dict) -> dict:
+    """Keep chunk_arc_summary + chunk_regions + per-summary plot-driving fields."""
+    return {
+        "work_id": chunk.get("work_id"),
+        "chunk_index": chunk.get("chunk_index"),
+        "chapters": chunk.get("chapters"),
+        "chunk_arc_summary": chunk.get("chunk_arc_summary", ""),
+        "chunk_regions": chunk.get("chunk_regions") or [],
+        "summaries": [
+            {
+                "chapter": s.get("chapter"),
+                "summary": s.get("summary", ""),
+                "key_events": s.get("key_events") or [],
+                "characters_present": s.get("characters_present") or [],
+                "emotional_tone": s.get("emotional_tone", ""),
+                "identity_notes": s.get("identity_notes", ""),
+            }
+            for s in chunk.get("summaries") or []
+            if s.get("chapter")
+        ],
+    }
+
+
+def _project_chunk_for_candidates(chunk: dict) -> dict:
+    """Keep per-summary identity-tracking fields + chunk_factions[].{name, members_present}."""
+    factions = []
+    for fac in chunk.get("chunk_factions") or []:
+        factions.append({
+            "name": fac.get("name", ""),
+            "members_present": fac.get("members_present") or [],
+        })
+    return {
+        "work_id": chunk.get("work_id"),
+        "chunk_index": chunk.get("chunk_index"),
+        "chapters": chunk.get("chapters"),
+        "chunk_factions": factions,
+        "summaries": [
+            {
+                "chapter": s.get("chapter"),
+                "characters_present": s.get("characters_present") or [],
+                "identity_notes": s.get("identity_notes", ""),
+            }
+            for s in chunk.get("summaries") or []
+            if s.get("chapter")
+        ],
+    }
+
+
+_LANE_PROJECTORS = {
+    "world_overview": _project_chunk_for_world_overview,
+    "stage_plan": _project_chunk_for_stage_plan,
+    "candidate_characters": _project_chunk_for_candidates,
+}
+
+
+def prepare_phase1_lane_inputs(
     project_root: Path,
     work_id: str,
     *,
-    correction_feedback: str = "",
-) -> str:
-    """Build prompt for the analysis phase (from summaries → stage plan + candidates).
+    lanes: tuple[str, ...] = PHASE1_LANES,
+) -> dict[str, Path]:
+    """Project every chapter_summaries/chunk_*.json into a per-lane tmpdir.
 
-    Args:
-        correction_feedback: If non-empty, appended to the prompt to guide
-            the LLM to fix specific issues (e.g. oversized stages).
+    Returns ``{lane_name: lane_inputs_dir}``. Caller is responsible for
+    ``cleanup_phase1_lane_inputs`` after the lane's LLM call completes
+    (run_analysis wraps both in try/finally).
+
+    Each chunk is projected once per lane via ``_LANE_PROJECTORS``; the
+    projector keeps only the fields that lane's prompt actually reads
+    (decision #52 — narrow per-lane field surface keeps lane input tokens
+    proportional to lane scope, not total chunk surface).
     """
-    template = _load_template("analysis.md")
+    summaries_dir = (project_root / "works" / work_id
+                     / "analysis" / "chapter_summaries")
+    if not summaries_dir.exists():
+        raise FileNotFoundError(
+            f"chapter_summaries dir not found: {summaries_dir}; "
+            f"phase 0 must complete before phase 1 lane fan-out")
 
-    # Gather context
+    root = _phase1_lane_inputs_root(project_root, work_id)
+    out: dict[str, Path] = {}
+    for lane in lanes:
+        if lane not in _LANE_PROJECTORS:
+            raise ValueError(f"unknown phase 1 lane: {lane}")
+        lane_dir = root / lane
+        # Wipe any stale projection from a previous (interrupted) run before
+        # writing — projection is deterministic, no state worth preserving.
+        if lane_dir.exists():
+            for f in lane_dir.iterdir():
+                if f.is_file():
+                    f.unlink()
+        lane_dir.mkdir(parents=True, exist_ok=True)
+        projector = _LANE_PROJECTORS[lane]
+        for chunk_file in sorted(summaries_dir.glob("chunk_*.json")):
+            try:
+                chunk = json.loads(chunk_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as exc:
+                raise RuntimeError(
+                    f"failed to read chunk for projection: "
+                    f"{chunk_file} ({exc})") from exc
+            projected = projector(chunk)
+            (lane_dir / chunk_file.name).write_text(
+                json.dumps(projected, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        out[lane] = lane_dir
+    return out
+
+
+def cleanup_phase1_lane_inputs(project_root: Path, work_id: str) -> None:
+    """Remove the .phase1_lane_inputs tmpdir tree (idempotent)."""
+    root = _phase1_lane_inputs_root(project_root, work_id)
+    if not root.exists():
+        return
+    import shutil
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def _phase1_retry_note(prior_error: str) -> str:
+    if not prior_error:
+        return ""
+    return (
+        f"\n## 重试说明\n\n"
+        f"上一次尝试校验失败，错误信息如下：\n\n"
+        f"```\n{prior_error}\n```\n\n"
+        f"请特别注意修正以上问题。"
+    )
+
+
+def _phase1_common_context(project_root: Path, work_id: str) -> dict[str, Any]:
     source_dir = project_root / "sources" / "works" / work_id
     manifest = _read_json(source_dir / "manifest.json")
     chapter_index = _read_json(source_dir / "metadata" / "chapter_index.json")
@@ -133,28 +306,59 @@ def build_analysis_prompt(
         else:
             chapter_count = len(chapter_index.get("chapters", []))
 
-    summaries_dir = (project_root / "works" / work_id
-                     / "analysis" / "chapter_summaries")
-
-    context = {
+    return {
         "work_id": work_id,
         "title": manifest.get("title", work_id) if manifest else work_id,
         "language": manifest.get("language", "zh") if manifest else "zh",
         "chapter_count": chapter_count,
         "work_dir": str(project_root / "works" / work_id),
-        "summaries_dir": str(summaries_dir),
     }
 
-    rendered = _render_template(template, context)
 
-    if correction_feedback:
-        rendered += (
-            "\n\n---\n\n"
-            "## ⚠️ 修正要求（上次产出未通过验证）\n\n"
-            f"{correction_feedback}\n"
-        )
+def build_world_overview_prompt(
+    project_root: Path,
+    work_id: str,
+    lane_inputs_dir: Path,
+    *,
+    prior_error: str = "",
+) -> str:
+    """Phase 1 world_overview lane prompt."""
+    template = _load_template("analysis_world_overview.md")
+    context = _phase1_common_context(project_root, work_id)
+    context["lane_inputs_dir"] = str(lane_inputs_dir)
+    context["retry_note"] = _phase1_retry_note(prior_error)
+    return _render_template(template, context)
 
-    return rendered
+
+def build_stage_plan_prompt(
+    project_root: Path,
+    work_id: str,
+    lane_inputs_dir: Path,
+    *,
+    prior_error: str = "",
+) -> str:
+    """Phase 1 stage_plan lane prompt (monolithic only — light_novel mode
+    derives stage_plan programmatically and does NOT call this builder)."""
+    template = _load_template("analysis_stage_plan.md")
+    context = _phase1_common_context(project_root, work_id)
+    context["lane_inputs_dir"] = str(lane_inputs_dir)
+    context["retry_note"] = _phase1_retry_note(prior_error)
+    return _render_template(template, context)
+
+
+def build_candidate_characters_prompt(
+    project_root: Path,
+    work_id: str,
+    lane_inputs_dir: Path,
+    *,
+    prior_error: str = "",
+) -> str:
+    """Phase 1 candidate_characters lane prompt."""
+    template = _load_template("analysis_candidate_characters.md")
+    context = _phase1_common_context(project_root, work_id)
+    context["lane_inputs_dir"] = str(lane_inputs_dir)
+    context["retry_note"] = _phase1_retry_note(prior_error)
+    return _render_template(template, context)
 
 
 # ---------------------------------------------------------------------------
