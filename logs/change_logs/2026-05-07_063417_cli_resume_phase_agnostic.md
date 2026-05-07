@@ -115,3 +115,23 @@
 
 - **Status**: DONE
 - **Finished**: 2026-05-07 06:43:41 EDT
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+
+- 落实率：12/12 项计划 + 10/10 项验证标准全过
+- Missed updates: 0 条（计划项 + 验证标准两侧都 100% 落实）
+
+### 轨 2 — 影响扩散
+
+- Findings: High=0 / Medium=1 / Low=0
+  - **[M]** `ai_context/architecture.md::Key Design` 段缺一行 CLI `--resume` 阶段无关 + `--background` 阶段感知索引（Cross-File Alignment "Extraction workflow" 行触发）。其他类似条目 Lane-level resume / Phase 0 recovery sweep / Length-bound tolerance gate 都在该段有 1 行 + decision pointer，本次新增 decision #51 没补对应索引。
+- Open Questions: 0 条
+
+## 复查时状态
+
+- **Reviewed**: 2026-05-07 06:51:04 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 理由：轨 1 全落实；轨 2 有 1 Medium（architecture.md "Key Design" 段索引缺失），无 High
+- **Conversation ref**: 同会话内 /post-check 输出
