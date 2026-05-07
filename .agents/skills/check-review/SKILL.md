@@ -55,10 +55,22 @@ description: 复核 review 报告 — 读取 logs/review_reports/ 下最近一�
 
 1. `Source Report`：文件路径、报告模型、生成时间戳
 2. `Per-Finding Review`：逐条带复核结论 / 证据 / 方案草稿
-3. `Revised Priority`：按复核后的严重度重排
-4. `Proposed Execution Plan`：本轮建议做哪些、commit 拆分、先后顺序
-5. `Deferred / Rejected`：推迟或驳回的条目及原因
-6. `Open Questions for User`：需用户拍板的分歧点
+   - **强制沿用 source report 的 finding ID**（`H1` / `M1` / `L1`...）；source report 若缺 ID 则按其顺序补编号并在本轮报告说明 "ID 由本次复核回填"。复核后**保留同 ID**——即使严重度调整或合并，原 ID 不重排（撤回的标 "撤回"，合并的标 "合入 H1"）
+3. `Revised Priority`：按复核后的严重度重排（仍引用原 ID，不改名）
+4. `Proposed Execution Plan`：本轮建议做哪些、commit 拆分、先后顺序（按 ID 引用）
+5. `Deferred / Rejected`：推迟或驳回的条目及原因（按 ID 引用）
+6. `Open Questions for User`：需用户拍板的分歧点；每条编号 `OQ1` / `OQ2`...
+7. `Recommendations`
+   - **性质**：复核 AI 对 Findings + Open Questions 的整改建议，**仅供参考、用户拍板优先**——本节不替用户做决策、不暗中扩范围
+   - **硬性原则**（每轮报告都重申）：
+     - **不超出 source report scope 扩功能**——只对原报告 finding + 复核新发现的 OQ 给建议，不"顺手"建议重构无关代码
+     - **能 1 行修就别写 10 行**——推荐保守路径而非"全部修"；可观察 / 可推迟 / 可降级的，明说"建议留作 todo"
+     - **Open Questions 给方向不替用户做选择**——列 1-2 候选 + 推荐项 + 一句话理由，留拍板权给用户
+     - **诚实标注不确定**——自己也拿不准的就说"建议先观察 / 等用户裁决"，不硬给结论
+   - 段内分三块：
+     - **针对 Findings**：每个 finding ID 给"建议做 / 建议留 todo / 建议跳过"+ 一句话理由
+     - **针对 Open Questions**：每个 OQ 给候选方向 + 推荐 + 理由
+     - **总览**：本轮强烈建议立刻修 / 建议留 todo / 建议跳过 三档汇总
 
 ## 5. 等待确认
 

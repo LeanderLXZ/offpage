@@ -78,14 +78,26 @@
 ## 输出格式
 
 1. `Findings`
-   - 按严重性排序
+   - 按严重性排序：High → Medium → Low
+   - **强制带序号 ID**：同优先级内 1 起递增（`H1` / `H2` / `H3`...；`M1` / `M2`...；`L1` / `L2`...）。后续 `/check-review` / 对话引用必须用此 ID；序号一旦发出不重排（合并 / 撤回时原 ID 保留占位，不重排其他条目）。Markdown 加粗，例：`**H1** path/file.py:42 — ...`
    - 每条都带文件路径和行号
-2. `Open Questions / Ambiguities`
-   - 列出仓库内部无法唯一判断、需要产品 / 架构决策澄清的点
-3. `Alignment Summary`
+2. `Alignment Summary`
    - 简短总结哪些层是对齐的，哪些层最不对齐
-4. `Residual Risks`
+3. `Residual Risks`
    - 即使当前没确认成 bug，也值得警惕的地方
+4. `Open Questions / Ambiguities`
+   - 列出仓库内部无法唯一判断、需要产品 / 架构决策澄清的点；每条 OQ 编号 `OQ1` / `OQ2`...
+5. `Recommendations`
+   - **性质**：AI 对 Findings + Open Questions 的整改建议，**仅供参考、用户拍板优先**——本节不替用户做决策、不暗中扩范围
+   - **硬性原则**（每轮报告都重申）：
+     - **不超出本次 review scope 扩功能**——只针对 Findings / Open Questions 给建议，不"顺手"建议重构无关代码
+     - **能 1 行修就别写 10 行**——推荐保守路径而非"全部修"；可观察 / 可推迟 / 可降级的，明说"建议留作 todo"
+     - **Open Questions 给方向不替用户做选择**——列 1-2 候选 + 推荐项 + 一句话理由，留拍板权给用户
+     - **诚实标注不确定**——自己也拿不准的就说"建议先观察 / 等更多数据"，不硬给结论
+   - 段内分三块：
+     - **针对 Findings**：每个 finding ID（H1 / M1 / L1...）给"建议做 / 建议留作 todo / 建议跳过"+ 一句话理由
+     - **针对 Open Questions**：每个 OQ 给候选方向 + 推荐 + 理由
+     - **总览**：本轮强烈建议立刻修 / 建议留 todo / 建议跳过 三档汇总
 
 ## 结果归档（必做）
 
