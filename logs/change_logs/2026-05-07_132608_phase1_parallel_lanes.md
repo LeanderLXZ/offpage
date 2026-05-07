@@ -136,3 +136,21 @@ todo_list 维护：因 `T-PHASE1-PARALLEL-LANES` 在前一会话由 /todo-add �
 
 - **Status**: DONE
 - **Finished**: 2026-05-07 14:12:28 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：6/6 项计划动作清单 + 8/8 项验证标准
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=3 / Low=3
+- Open Questions: 2 条（详见对话）
+
+## 复查时状态
+- **Reviewed**: 2026-05-07 14:24:34 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全落实，轨 2 发现 3 项 Medium：(1) `ai_context/conventions.md:49` "_build_light_novel_stage_plan overwrite" 措辞过时（新设计是 direct write，#52 落地后未同步该 row）；(2) `orchestrator.py:1300-1303` `_load_json` 吞 JSONDecodeError vs FileNotFoundError 同返 None，prior_error 给"未生成"无法区分文件不存在 vs json bad（PRE 偏差段未点名但 Step 7 review 已识别为已知警告）；(3) `orchestrator.py:1263-1267` light_novel 模式下 stage_plan.json 在 fan-out 前落盘 + cleanup 不动 → mode 切换 light_novel→monolithic 时旧 1-chapter stage_plan 被 `_lane_passes_skip` 误判为"已有产物"跳过 LLM 重生（Step 7 review 已识别）。无 High。
+- **Conversation ref**: 同会话内 /post-check 输出
