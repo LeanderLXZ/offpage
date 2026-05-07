@@ -633,10 +633,21 @@ orchestrator (Python)
   destructive 操作，即使 `[git].auto_squash_merge=true` 也仍交互询问，
   必须用户明确 `y` 才执行
 - 分支纪律落实（见 `ai_context/architecture.md` §Git Branch Model）：
-  - `run_extraction_loop` / `run_full` 把 `create_extraction_branch` +
-    baseline rerun + Phase 3 循环整体包进 `try / finally:
-    checkout_main(...)`，任何退出路径（DONE / BLOCKED / `--end-stage` /
-    Ctrl+C / 异常 / `sys.exit`）工作树都回到 `main`
+  - `run_full` 的外层 `try` 块覆盖**全部 5 个 phase**（0 chunk summaries
+    / 1 analysis fan-out / 1.5 用户确认 + works manifest 写入 / 2
+    baseline / 3+ stage 提取）——`create_extraction_branch` 在第一个
+    `run_summarization()` 调用**之前**就调，phase 0 起就在 extraction
+    分支跑，没有 phase 例外
+  - `pipeline.extraction_branch` 在 run_full 入口就填上
+    `f"{prefix}{work_id}"`（load-from-disk 出来值为空则补填、新建则
+    直接传入），保证 try 块入口能拿到分支名
+  - `run_extraction_loop` 内层 try（phase 1.5 done 的 resume 路径）
+    保持同样不变量；`run_full` 里 baseline rerun + Phase 3 循环都在
+    外层 try 内
+  - 任何退出路径（DONE / BLOCKED / `--end-stage` / Ctrl+C / 异常 /
+    `sys.exit`）`finally: checkout_main(...)` 都把工作树切回 `main`；
+    SIGKILL 绕过 finally → git HEAD 停在 extraction 分支，下次启动
+    通过 `create_extraction_branch` idempotent 检查继续
   - `checkout_main` / `preflight_check` 接受 `scope_paths` 参数，
     orchestrator 传入 `["works/{work_id}/"]`——scope 内有脏文件则拒绝
     切换 / 拒绝启动；scope 外的脏改动（编辑器临时状态等）静默容许，

@@ -135,7 +135,7 @@ Three-branch model — `main` is the only branch ever pushed to remote:
 
 Flow:
 
-- Idle = `main`. Orchestrator auto-checks out `extraction/{work_id}` and returns to `main` on any exit via `try / finally: checkout_main(...)` in `automation/persona_extraction/orchestrator.py`.
+- Idle = `main`. Orchestrator auto-checks out `extraction/{work_id}` **before Phase 0** (the very first LLM call) and returns to `main` on any exit via `try / finally: checkout_main(...)` in `automation/persona_extraction/orchestrator.py::run_full`. All five phases (0 chunk summaries / 1 analysis fan-out / 1.5 user confirmation + works manifest write / 2 baseline / 3+ stage extraction) run on the extraction branch — no phase is exempt. Resume paths inherit the same invariant: phase 1.5 not done → fresh-start path's outer try block switches; phase 1.5 done → `run_extraction_loop`'s inner try block switches.
 - `checkout_main` / `preflight_check` accept `scope_paths`; orchestrator passes `["works/{work_id}/"]` — only scope-internal dirt blocks; scope-external dirt tolerated.
 - Code / schema / prompt / docs / `ai_context/` commits → `main` first, then `git merge main` from extraction and library branches.
 - Extraction-data commits (baseline + Phase 3+ products) belong only on the extraction branch. `_offer_squash_merge` squash-merges to **`library`** (configurable via `[git].squash_merge_target`, default `library`) interactively after all stages `COMMITTED` — never to `main`, so the public-facing branch stays artefact-free.

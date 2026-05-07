@@ -2822,32 +2822,49 @@ class ExtractionOrchestrator:
                     max_stages=preset_end_stage)
                 return
 
-        # Fresh start: summarize → analyze → confirm → baseline → extract
-        # Create pipeline early so Phase 0/1 can track their status
+        # Fresh start: summarize → analyze → confirm → baseline → extract.
+        # Create pipeline early so Phase 0/1 can track their status, and
+        # fill ``extraction_branch`` at run_full entry (not lazily inside
+        # confirm_with_user) so the outer try block below can switch
+        # branches before the very first LLM call.
+        expected_branch = (
+            f"{get_config().git.extraction_branch_prefix}{self.work_id}")
         if not pipeline:
-            pipeline = PipelineProgress(work_id=self.work_id)
+            pipeline = PipelineProgress(
+                work_id=self.work_id,
+                extraction_branch=expected_branch)
+            pipeline.save(self.project_root)
+        elif not pipeline.extraction_branch:
+            # Load-from-disk pipeline written by an older run that did not
+            # fill the field — patch in place so the branch switch below
+            # has a target. Idempotent for already-filled values.
+            pipeline.extraction_branch = expected_branch
             pipeline.save(self.project_root)
         self.pipeline = pipeline
 
-        self.run_summarization()
-        analysis = self.run_analysis()
-        pipeline, phase3 = self.confirm_with_user(
-            analysis,
-            preset_characters=preset_characters,
-            preset_end_stage=preset_end_stage,
-        )
-
-        self.pipeline = pipeline
-        self.phase3 = phase3
-
-        # Create extraction branch, run baseline + extraction. ``finally``
-        # returns to ``main`` if anything raises between switching to
-        # the extraction branch and ``run_extraction_loop`` completing
-        # its own cleanup. See ai_context/architecture.md §Git Branch Model.
+        # Switch to the extraction branch BEFORE the first LLM call so
+        # all five phases (0 chunk summaries / 1 analysis fan-out /
+        # 1.5 user confirmation + works manifest write / 2 baseline /
+        # 3+ stage extraction) run on the extraction branch. ``finally``
+        # returns to ``main`` on any exit path. See
+        # ai_context/architecture.md §Git Branch Model + decision #26a.
         try:
             if pipeline.extraction_branch:
-                create_extraction_branch(self.project_root,
-                                         pipeline.extraction_branch)
+                if not create_extraction_branch(self.project_root,
+                                                pipeline.extraction_branch):
+                    print("[ERROR] Cannot create extraction branch.")
+                    sys.exit(1)
+
+            self.run_summarization()
+            analysis = self.run_analysis()
+            pipeline, phase3 = self.confirm_with_user(
+                analysis,
+                preset_characters=preset_characters,
+                preset_end_stage=preset_end_stage,
+            )
+
+            self.pipeline = pipeline
+            self.phase3 = phase3
 
             self.run_baseline_production(pipeline.target_characters)
 
