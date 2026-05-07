@@ -7,6 +7,7 @@ import logging
 import sys
 from pathlib import Path
 
+from automation.ingestion.validator import validate_source_package
 from .config import get_config
 from .git_utils import preflight_check
 from .llm_backend import create_backend
@@ -232,6 +233,16 @@ def main(argv: list[str] | None = None) -> None:
     if problems:
         for p in problems:
             print(f"[PREFLIGHT] {p}")
+        orch.release_lock()
+        sys.exit(1)
+
+    # --- Ingestion gate: source package must validate before any phase ---
+    # Mirrors `python -m automation.ingestion.validator <work_id>` so users
+    # who skip the manual gate cannot bypass the schema + structure_mode
+    # ⇔ chapter_index profile cross-file assertion (decision #27j).
+    ingest_report = validate_source_package(project_root, args.work_id)
+    if not ingest_report.passed:
+        print(ingest_report.summary())
         orch.release_lock()
         sys.exit(1)
 

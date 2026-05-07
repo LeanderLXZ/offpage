@@ -64,6 +64,16 @@ def write_works_manifest(
     chapter_index = _read_json(source_dir / "metadata" / "chapter_index.json")
     stage_plan = _read_json(work_dir / "analysis" / "stage_plan.json") or {}
 
+    # Decision #27j: structure_mode is required on the source manifest;
+    # write_works_manifest copies it forward verbatim with no implicit
+    # default. Reaching here without it means the ingestion validator
+    # (cli.py preflight) was bypassed.
+    source_mode = source_manifest.get("structure_mode")
+    if not source_mode:
+        raise ValueError(
+            f"source manifest missing 'structure_mode' for work '{work_id}' "
+            f"— refuse to copy-forward an undefined mode")
+
     chapter_count = len(chapter_index) if isinstance(chapter_index, list) else 0
     stages = stage_plan.get("stages", []) if isinstance(stage_plan, dict) else []
     stage_ids = [s["stage_id"] for s in stages if isinstance(s, dict)
@@ -90,7 +100,7 @@ def write_works_manifest(
         "character_count": len(character_ids),
         "stage_ids": stage_ids,
         "character_ids": list(character_ids),
-        "structure_mode": source_manifest.get("structure_mode", "monolithic"),
+        "structure_mode": source_mode,
         "created_at": created_at,
         "updated_at": _now_iso(),
     }
@@ -99,22 +109,43 @@ def write_works_manifest(
 
 
 def read_structure_mode(project_root: Path, work_id: str) -> str:
-    """Read structure_mode for the work, preferring the works manifest.
+    """Read structure_mode for the work, source-manifest authoritative.
 
-    Phase 0/1 dispatch reads this. Source manifest is the authoritative
-    source; works manifest carries a copy populated at Phase 1.5. Both
-    are checked so the value is available even before Phase 1.5 has
-    written the works manifest (Phase 0 runs before Phase 1.5).
+    Phase 0/1 dispatch reads this. Per decision #27j the source manifest is
+    the single source of truth; the works manifest copy populated at Phase
+    1.5 must agree. There is no implicit default — schema marks the field
+    `required`, and `automation.ingestion.validator.validate_source_package`
+    runs in `cli.py` before any phase begins, so reaching this function
+    without a source value is a hard contract violation.
+
+    Raises:
+        ValueError: source manifest is missing / lacks ``structure_mode``;
+            or the works manifest disagrees with the source manifest.
     """
-    work_dir = project_root / "works" / work_id
-    works_manifest = _read_json(work_dir / "manifest.json")
-    if isinstance(works_manifest, dict) and works_manifest.get("structure_mode"):
-        return str(works_manifest["structure_mode"])
     source_dir = project_root / "sources" / "works" / work_id
     source_manifest = _read_json(source_dir / "manifest.json")
-    if isinstance(source_manifest, dict) and source_manifest.get("structure_mode"):
-        return str(source_manifest["structure_mode"])
-    return "monolithic"
+    if not isinstance(source_manifest, dict):
+        raise ValueError(
+            f"source manifest missing or unreadable for work '{work_id}': "
+            f"{source_dir / 'manifest.json'}")
+    source_mode = source_manifest.get("structure_mode")
+    if not source_mode:
+        raise ValueError(
+            f"source manifest missing 'structure_mode' for work '{work_id}' "
+            f"(decision #27j: required field, no implicit default)")
+
+    work_dir = project_root / "works" / work_id
+    works_manifest = _read_json(work_dir / "manifest.json")
+    if isinstance(works_manifest, dict):
+        works_mode = works_manifest.get("structure_mode")
+        if works_mode and works_mode != source_mode:
+            raise ValueError(
+                f"structure_mode mismatch for work '{work_id}': "
+                f"source='{source_mode}', works='{works_mode}' "
+                f"(source is authoritative — re-run Phase 1.5 to refresh "
+                f"the works manifest)")
+
+    return str(source_mode)
 
 
 def write_world_manifest(project_root: Path, work_id: str) -> Path:

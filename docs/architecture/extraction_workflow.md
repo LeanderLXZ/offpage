@@ -36,6 +36,9 @@
 - 交付前 gate：运行 `python -m automation.ingestion.validator <work_id>`，
   任一文件不过 schema 必须回修，才可进入 Phase 0；validator 同时跨文件断言
   `structure_mode` ⇔ `chapter_index` profile 一致（不一致即报错）。
+- 自动 gate：`automation/persona_extraction/cli.py` 在 `acquire_lock()`
+  + git preflight 之后、任何 phase 启动之前调用 `validate_source_package`，
+  失败则释放锁并 `sys.exit(1)`；这层兜底确保人工跳过手动 gate 也无法绕过。
 
 **对应提示词**：`prompts/ingestion/原始资料规范化.md`
 
@@ -376,6 +379,11 @@ schema 失败和手写 fail 一起进 errors list；不做语义审校。
 失败（LLM/解析/校验/schema）同次运行内自动重试（≤2 次），重试时
 LLM 通过 `prior_error` 看到上次 errors 拼接（`build_scene_split_prompt(prior_error=...)`）；
 超限进 ERROR 状态；`--resume` 时 ERROR 重置且 retry_count 清零。
+**输入层确定性失败**（章节文件缺失、空文件等不可能靠重试解决的前置条件
+失败）由 `_mark_input_error` 直接置 `ChapterState.ERROR`（不增 retry_count、
+不进 retry queue），与 LLM/解析路径的 `_mark_failed` 终态分流；ingestion
+validator（见 §1）已在 CLI preflight 阶段挡住 `chapter_index` 漂移的源根，
+此路径主要兜底 source 包人工编辑后的不一致。
 
 产出：
 - `works/{work_id}/retrieval/scene_archive.jsonl`（.gitignore，文件过大）

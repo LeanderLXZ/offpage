@@ -188,6 +188,32 @@ def _load_json(path: Path) -> dict | None:
     return raw
 
 
+def _load_json_array(path: Path) -> list | None:
+    """Read a JSON file whose top-level is an array, returning the list or None.
+
+    Companion to ``_load_json`` for list-shaped schemas. The two cannot share
+    a loader because ``_load_json`` enforces a dict top-level (every consumer
+    expecting an object schema benefits from that shape check). Files whose
+    schema declares a top-level array — currently ``memory_timeline/
+    {stage_id}.json`` — must be read through this helper. Parse errors and
+    non-list top levels return ``None``; callers handle that as the standard
+    "missing / unreadable" branch.
+    """
+    if not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("Failed to load %s: %s", path, exc)
+        return None
+    if not isinstance(raw, list):
+        logger.warning(
+            "Loaded %s but top-level is %s, expected array",
+            path, type(raw).__name__)
+        return None
+    return raw
+
+
 def _load_jsonl(path: Path) -> list[dict]:
     """Read a JSONL file read-only (see _load_json docstring)."""
     if not path.exists():
@@ -388,7 +414,8 @@ def _check_memory_id_correspondence(
         # Collect all memory_ids from timeline files
         timeline_ids: set[str] = set()
         for stage_id in stage_ids:
-            timeline = _load_json(_timeline_path(work_dir, char_id, stage_id))
+            timeline = _load_json_array(
+                _timeline_path(work_dir, char_id, stage_id))
             if isinstance(timeline, list):
                 for entry in timeline:
                     mid = entry.get("memory_id", "")
@@ -436,7 +463,8 @@ def _check_memory_digest_summary_equality(
     for char_id in character_ids:
         timeline_by_id: dict[str, str] = {}
         for stage_id in stage_ids:
-            timeline = _load_json(_timeline_path(work_dir, char_id, stage_id))
+            timeline = _load_json_array(
+                _timeline_path(work_dir, char_id, stage_id))
             if isinstance(timeline, list):
                 for entry in timeline:
                     mid = entry.get("memory_id", "")

@@ -84,7 +84,9 @@ artifact-and-structure track. E.g. example outputs, user templates,
 fixture data.
 
 - `works/`
-- `users/_template/`
+- `users/_template/` (substitution template — literal placeholders like
+  `{user_id}` / `{stage_id}` are by design; not schema-valid until a real
+  user package is created from it. See `users/README.md`.)
 
 ## Core component keywords
 

@@ -371,6 +371,23 @@ def _mark_failed(entry: ChapterEntry, msg: str) -> str:
     return msg
 
 
+def _mark_input_error(entry: ChapterEntry, msg: str) -> str:
+    """Mark a deterministic input-layer failure as terminal ERROR.
+
+    Used when the chapter source file is missing or empty — conditions a
+    retry cannot fix. Bypasses retry budget so we don't waste loops on
+    files that won't materialize, and keeps the entry out of FAILED so
+    `_run_parallel` does not requeue it. The ingestion validator (cli.py
+    preflight) is the primary guard; this exists to give the rare drift
+    that slips past it a clean terminal state instead of leaving the
+    entry stuck in PENDING.
+    """
+    entry.state = ChapterState.ERROR
+    entry.error_message = msg
+    entry.last_updated = _now_iso()
+    return msg
+
+
 def _process_chapter(
     project_root: Path,
     work_id: str,
@@ -385,13 +402,15 @@ def _process_chapter(
                     / "chapters" / f"{chapter_id}.txt")
 
     if not chapter_path.exists():
-        return chapter_id, False, f"Chapter file not found: {chapter_path}"
+        return chapter_id, False, _mark_input_error(
+            entry, f"Chapter file not found: {chapter_path}")
 
     lines = chapter_path.read_text(encoding="utf-8").splitlines()
     total_lines = len(lines)
 
     if total_lines == 0:
-        return chapter_id, False, "Chapter file is empty"
+        return chapter_id, False, _mark_input_error(
+            entry, "Chapter file is empty")
 
     # Build prompt (inject prior error if retrying)
     prior_error = entry.error_message if entry.retry_count > 0 else ""

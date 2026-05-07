@@ -26,7 +26,7 @@
 
 ## 元数据要求
 
-所有字段均 required；schema 契约 → `schemas/analysis/scene_split.schema.json`，长度上下限以 schema 为准。**bound 是硬上限不是配额**：能 30 字写清的 summary 不要为凑 50 字注水。
+所有字段均 required；schema 契约 → `schemas/analysis/scene_split.schema.json`，长度上下限以 schema 为准。**bound 是硬上限不是配额**：能用更少字写清的 summary 不要为凑字数上限而注水。
 
 - `time`：故事内时间，保留原文的时间表述（可以是模糊的，≤ 20 字）
 - `location`：场景发生的地点（≤ 20 字）

@@ -105,9 +105,12 @@ def generate_memory_digest(
         if digest is not None:
             new_entries.append(digest)
 
+    # Decision #50: replace-slice runs even when new_entries is empty so
+    # any existing entries belonging to the current stage are removed
+    # from the JSONL. The warning still fires so callers see "no source
+    # entries this stage" but the IO must happen.
     if not new_entries:
         issues.append(f"No digest entries generated for stage '{stage_id}'")
-        return issues
 
     # --- validate against schema ---
     if schema_dir:
@@ -272,10 +275,16 @@ def generate_world_event_digest(
         return issues
 
     stage_events = snapshot.get("stage_events", [])
-    if not isinstance(stage_events, list) or not stage_events:
+    if not isinstance(stage_events, list):
+        issues.append(
+            f"world snapshot 'stage_events' is not an array (stage '{stage_id}')")
+        return issues
+    # Decision #50: empty stage_events still triggers replace-slice so
+    # stale entries from a prior run are removed; just warn so the caller
+    # sees the empty-stage signal.
+    if not stage_events:
         issues.append(
             f"No stage_events in world snapshot for stage '{stage_id}'")
-        return issues
 
     stage_seg = _stage_segment(stage_id)
     timeline_anchor = snapshot.get("timeline_anchor", "")
@@ -299,9 +308,11 @@ def generate_world_event_digest(
             entry["involved_characters"] = involved
         new_entries.append(entry)
 
-    if not new_entries:
+    # Decision #50: replace-slice runs even when new_entries is empty
+    # (e.g. all stage_events were strings of whitespace, or stage_events
+    # was empty) so stale entries for this stage do not linger.
+    if not new_entries and stage_events:
         issues.append(f"No digest entries generated for stage '{stage_id}'")
-        return issues
 
     # Validate against schema
     if schema_dir:
