@@ -225,9 +225,10 @@ works/{work_id}/world/
   （`schemas/world/fixed_relationships.schema.json`；Phase 2 骨架，
   后续阶段可修正）
 
-计划内容（**schema 未补齐前不是硬门控必需；schema 补全后再升级为必需**，
-见 `ai_context/next_steps.md` 中段 "Refine schemas into directly writable
-instance formats"）：
+计划内容（**schema 未补齐前不是硬门控必需；schema 补全后再升级为必需**——
+当前世界状态主要承载在 `world_stage_snapshot` 的 `timeline_anchor` /
+`location_anchor` 内联字段，独立的 timeline / locations / factions /
+maps schema 仍是未来扩展项）：
 
 - `history/timeline.jsonl` — 世界级历史时间线
 - `events/{event_id}.json` — 作品级共享重大事件

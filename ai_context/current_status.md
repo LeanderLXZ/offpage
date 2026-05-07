@@ -33,7 +33,7 @@ framework-level engineering progress only.
 - No simulation-engine service implementation
 - No terminal adapter implementation
 - No retrieval implementation (design finalized, awaiting extraction output)
-- World schemas partially formal: `foundation` schema exists at `schemas/world/foundation.schema.json` (permissive); timeline / events / locations / maps still need directly writable schemas
+- World schemas formal: `foundation`, `fixed_relationships`, `world_stage_snapshot`, `world_stage_catalog`, `world_event_digest_entry`, `world_manifest` all under `schemas/world/`. Timeline / location info is inlined into `world_stage_snapshot` (`timeline_anchor` / `location_anchor`) and `foundation` rather than living in standalone schemas (decision #27c — no separate `evidence_refs` / `source_type` / `scene_refs`)
 - No final roleplay prompt produced
 
 ## Rules In Effect

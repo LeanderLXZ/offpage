@@ -10,24 +10,16 @@ Shorter is better than longer; push detail into the linked source rather than gr
 
 # Next Steps
 
-## Highest Priority
-
-1. **Refine schemas into directly writable instance formats.**
-   - World package: timeline, events, locations, maps still need
-     directly writable schemas. `foundation` already has a permissive
-     schema at `schemas/world/foundation.schema.json` (see
-     `docs/architecture/schema_reference.md`).
-
 ## Medium Priority
 
-2. Write first-pass code stubs from `simulation/contracts/` and `simulation/flows/`.
-3. Define evidence-record format for traceable canon support.
-4. Define request / response formats for terminal adapters.
-5. Define user-context and session indexes for on-demand transcript recall.
+1. Write first-pass code stubs from `simulation/contracts/` and `simulation/flows/`.
+2. Define evidence-record format for traceable canon support.
+3. Define request / response formats for terminal adapters.
+4. Define user-context and session indexes for on-demand transcript recall.
 
 ## Later
 
-6. Implement the unified character-service interface.
-7. Support richer stage slicing (including relationship-stage slicing).
-8. Add automatic evaluation for roleplay consistency.
-9. Add more complete crawling and import support.
+5. Implement the unified character-service interface.
+6. Support richer stage slicing (including relationship-stage slicing).
+7. Add automatic evaluation for roleplay consistency.
+8. Add more complete crawling and import support.

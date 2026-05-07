@@ -8,12 +8,12 @@ single-source ``maxItems`` for target arrays referenced by
 structures, all of which live in ``schemas/character/``).
 
 Both the orchestrator's repair_agent file-entry loader and validator's
-``_validate_schema`` need ``$ref``-resolved schema dicts. ``referencing``
-is available with jsonschema >= 4.18 but the older Draft7Validator path
-in ``repair_agent/checkers/schema.py`` does not consume it. To keep both
-paths working without forking the validator, we inline relative
-``$ref`` fragments at load time, producing a self-contained schema dict
-that any draft-version validator can consume directly.
+``_validate_schema`` need ``$ref``-resolved schema dicts. Rather than
+depending on ``jsonschema``'s ``referencing`` machinery (which would
+require building a registry of every neighbouring schema at runtime),
+we inline relative ``$ref`` fragments at load time, producing a
+self-contained schema dict that any draft validator can consume
+directly.
 
 Relative refs of the form ``./<file>.schema.json``,
 ``<file>.schema.json`` (sibling), or ``../<dir>/<file>.schema.json``

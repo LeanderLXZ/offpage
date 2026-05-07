@@ -48,7 +48,7 @@ class SchemaChecker(BaseChecker):
     def _validate_one(self, data: dict, schema: dict, file_path: str,
                       prefix: str = "$") -> list[Issue]:
         issues: list[Issue] = []
-        validator = _jsonschema.Draft7Validator(schema)
+        validator = _jsonschema.Draft202012Validator(schema)
         for error in sorted(validator.iter_errors(data),
                             key=lambda e: list(e.absolute_path)):
             path_parts = [str(p) for p in error.absolute_path]

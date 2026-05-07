@@ -247,7 +247,7 @@ class Phase0Progress:
     """Phase 0 chunk-level progress."""
     work_id: str
     total_chapters: int = 0
-    chunk_size: int = 25
+    chunk_size: int = 20
     total_chunks: int = 0
     chunks: dict[str, ChunkEntry] = field(default_factory=dict)
     last_updated: str = ""
@@ -291,7 +291,7 @@ class Phase0Progress:
             prog = cls(
                 work_id=data["work_id"],
                 total_chapters=data.get("total_chapters", 0),
-                chunk_size=data.get("chunk_size", 25),
+                chunk_size=data.get("chunk_size", 20),
                 total_chunks=data.get("total_chunks", 0),
                 last_updated=data.get("last_updated", ""),
             )

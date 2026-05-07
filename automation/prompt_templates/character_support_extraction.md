@@ -109,8 +109,9 @@ memory_timeline 是角色扮演时回忆、联想、情感反应的核心数据�
 - 不要把阶段性变化写入 identity（identity 只记录跨阶段稳定的角色基础事实）
 - 不要写入 stage_snapshot（由独立调用处理）
 - 不要修改 stage_catalog.json 或 memory_digest.jsonl（由编排脚本维护）
-- 不要重新创建已废弃的 voice_rules / behavior_rules / boundaries /
-  failure_modes baseline 文件——这些都已内联进 stage_snapshot
+- 不要新建独立的 voice_rules / behavior_rules / boundaries /
+  failure_modes 文件——voice / behavior / boundary / failure_modes
+  状态都内联在 stage_snapshot 里，这里不写
 
 ## 本阶段输出清单
 
