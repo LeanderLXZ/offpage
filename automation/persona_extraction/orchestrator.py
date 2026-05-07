@@ -1298,14 +1298,39 @@ class ExtractionOrchestrator:
 
                 produced = _load_json(target_path)
                 if produced is None:
-                    prior_error = (
-                        f"输出文件 `{fname}` 未生成，请按 prompt 要求"
-                        f"将产物写入 `{target_path}`。"
-                    )
+                    # Disambiguate file-missing vs json-bad — `_load_json`
+                    # swallows both and returns None, but the LLM needs
+                    # a precise error to fix. Probe the file directly:
+                    # exists() True + json.loads raise → bad JSON; not
+                    # exists → never written. Single read attempt; we
+                    # already know `_load_json` failed, so any exception
+                    # here is the same root cause we want to surface.
+                    if target_path.exists():
+                        try:
+                            json.loads(target_path.read_text(encoding="utf-8"))
+                        except (json.JSONDecodeError, OSError) as exc:
+                            prior_error = (
+                                f"输出文件 `{fname}` 已落盘但 JSON 解析失败："
+                                f"`{exc}`。请检查格式（缺逗号 / 引号未闭合 / "
+                                f"尾随非法字符等）后重写本 lane 输出。"
+                            )
+                        else:
+                            # File parsed fine on direct read but `_load_json`
+                            # returned None — should not happen unless the
+                            # file content is JSON null / empty after parse.
+                            prior_error = (
+                                f"输出文件 `{fname}` 解析为空 (null / 空容器)，"
+                                f"请按 prompt 要求生成实质内容。"
+                            )
+                    else:
+                        prior_error = (
+                            f"输出文件 `{fname}` 未生成，请按 prompt 要求"
+                            f"将产物写入 `{target_path}`。"
+                        )
                     if attempt > MAX_RETRIES_PER_LANE:
                         return name, "lane_failed", (
-                            f"output file `{fname}` not produced after "
-                            f"{MAX_RETRIES_PER_LANE} retries")
+                            f"output `{fname}` failed to load after "
+                            f"{MAX_RETRIES_PER_LANE} retries: {prior_error[:120]}")
                     continue
 
                 errs = list(validator_fn().iter_errors(produced))
