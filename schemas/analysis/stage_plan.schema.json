@@ -4,17 +4,12 @@
   "title": "StagePlan",
   "description": "Phase 1 stage 切分计划。monolithic 模式由 Phase 1 (analysis.md) 一次 LLM 调用产出（同次产 world_overview + candidate_characters），每 stage 5-15 章 hard（schema chapter_count.minimum=1 是为 light_novel 让出空间，monolithic 5-15 由 orchestrator `_check_stage_plan_limits` 强制）。light_novel 模式由 orchestrator 程序化 1:1 从 chapter_index 派生（1 sub-section = 1 stage，chapter_count = 1，chapters 形如 `C0001-C0001` 的 degenerate 区间）。下游：Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择。phase 2/3/4 消费 `chapters` 字段沿用既有 `^C[0-9]{4}-C[0-9]{4}$` 解析，不需为 light_novel 分叉。",
   "type": "object",
-  "required": ["work_id", "default_stage_size", "total_chapters", "stages"],
+  "required": ["work_id", "total_chapters", "stages"],
   "additionalProperties": false,
   "properties": {
     "work_id": {
       "type": "string",
       "description": "作品包命名空间键。"
-    },
-    "default_stage_size": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "默认每 stage 章数（仅作 LLM 输入参考，不强制）。"
     },
     "total_chapters": {
       "type": "integer",
@@ -61,7 +56,7 @@
           "boundary_reason": {
             "type": "string",
             "maxLength": 100,
-            "description": "本 stage 的切分理由（≤100 字）。不能只写\"满 N 章\"。"
+            "description": "本 stage 的切分理由（≤100 字）。必须命名 stage 末尾对应的具体剧情拐点（场景转换 / 弧线切换 / 主要角色登场退场 / 关键身份揭示 / 时间跳跃 / 阵营变动 / 情感转折 / 重大伤亡 中一种或多种），不能写\"满 N 章\"或泛泛剧情概括。"
           }
         }
       }

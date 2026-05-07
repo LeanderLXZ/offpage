@@ -555,7 +555,6 @@ class StageEntry:
 class Phase3Progress:
     """Phase 3 stage extraction progress."""
     work_id: str
-    stage_size: int = 10
     stages: list[StageEntry] = field(default_factory=list)
     last_updated: str = ""
 
@@ -636,7 +635,6 @@ class Phase3Progress:
         self.last_updated = _now_iso()
         data = {
             "work_id": self.work_id,
-            "stage_size": self.stage_size,
             "stages": [b.to_dict() for b in self.stages],
             "last_updated": self.last_updated,
         }
@@ -653,7 +651,6 @@ class Phase3Progress:
             data = json.loads(path.read_text(encoding="utf-8"))
             return cls(
                 work_id=data["work_id"],
-                stage_size=data.get("stage_size", 10),
                 stages=[StageEntry.from_dict(b)
                          for b in data.get("stages", [])],
                 last_updated=data.get("last_updated", ""),
@@ -844,7 +841,6 @@ def migrate_legacy_progress(
 
     phase3 = Phase3Progress(
         work_id=data["work_id"],
-        stage_size=data.get("stage_size", 10),
         stages=[StageEntry.from_dict(b) for b in data.get("stages", [])],
     )
 

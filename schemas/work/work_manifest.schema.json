@@ -90,11 +90,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "default_stage_size": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "默认抽取阶段大小，单位为章节数。若未显式覆盖，推荐默认值为 10。"
-        },
         "stage_is_cumulative": {
           "type": "boolean",
           "description": "若为 true，则阶段 N 的抽取范围默认为累计到 1..N。"

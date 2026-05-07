@@ -63,7 +63,7 @@
 
 **用途**：Phase 1 stage 切分计划。下游 Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择都依赖此文件。
 **位置**：`works/{work_id}/analysis/stage_plan.json`（**入 git**）
-**关键字段**：`work_id` / `default_stage_size` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^C[0-9]{4}-C[0-9]{4}$`（与 chapter_id 命名一致；light_novel 模式用 degenerate 单章区间，例 `C0001-C0001`） / `chapter_count` 1-15（schema） / `boundary_reason`）
+**关键字段**：`work_id` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^C[0-9]{4}-C[0-9]{4}$`（与 chapter_id 命名一致；light_novel 模式用 degenerate 单章区间，例 `C0001-C0001`） / `chapter_count` 1-15（schema） / `boundary_reason`）
 **生成时机**：monolithic 模式由 Phase 1 LLM (`automation/prompt_templates/analysis.md`) 产出；light_novel 模式由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生（同次仍跑 LLM 产 world_overview + candidate_characters，stage_plan 在 schema gate 之前被覆写）。
 **契约**：schema `chapter_count.minimum = 1`（为 light_novel 让出空间）；monolithic 的 5–15 上下限由 orchestrator `_check_stage_plan_limits` 在代码层强制（light_novel 模式跳过此校验）。
 

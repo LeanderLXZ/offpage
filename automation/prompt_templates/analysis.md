@@ -126,34 +126,68 @@ JSON 结构：
 
 **为什么这一步至关重要：** 你划定的每个 stage 边界会直接成为整个系统的 stage 边界。世界快照、角色快照、记忆时间线、运行时阶段选择——全部建立在这个切分之上。切分不合理会导致角色人格转变生硬、世界事件时间线断裂、用户选择某阶段时体验不连贯。请投入足够精力确认剧情节点。
 
-制定详细的 stage plan。要求：
+**核心原则：拐点先行，章数后定。** 不要先决定"每段多少章"再去找剧情边界，必须从全书剧情拐点反推 stage 边界——以下三子步**严格按顺序**执行，**不要跳步、不要倒推**：
 
-- 默认每阶段 10 章，但必须优先贴近自然剧情边界——剧情边界的准确性比章节数量均匀更重要
-- **⚠️ 硬性约束：最小阶段 5 章，最大阶段 15 章。任何超过 15 章的 stage 都是违规的。** 如果一个大故事弧跨度超过 15 章，必须在其中寻找次级剧情节点（如小高潮、场景转换、时间跳跃）将其拆分为多个 stage。绝不允许为了保持剧情完整性而创建超过 15 章的 stage
-- 每个 stage 条目包含：stage_id, stage_title, chapters, chapter_count, boundary_reason
-- `stage_id` 使用紧凑英文代号格式 `S###`（三位数字零填充，如 `S001`、`S002`、`S049`），**不使用中文或其他格式**。这是整套 ID 家族（`M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##`）的共同 stage 段。
+#### 步骤 2.1：全局剧情拐点扫描（必须先于 2.2 完成）
+
+通览所有 chunk 的 `chunk_arc_summary` / `key_events` / `emotional_tone` / `chunk_regions` / `identity_notes` / per-summary `summary`，列出全书所有**剧情拐点候选**（plot inflection points）。每个拐点写一行，包含：
+
+- 章号（如 `C0037`）
+- 拐点类型（**枚举**：场景转换 / 弧线切换 / 主要角色登场退场 / 关键身份揭示 / 时间跳跃 / 阵营变动 / 情感转折 / 重大伤亡）
+- 一句话事件描述
+
+这份候选拐点列表是你的工作记录，**作为推理过程产出**（写在你的思考链 / agent 日志里，不需要进入最终 `stage_plan.json` 文件）；**完成 2.1 候选列表后才允许进入 2.2**。
+
+#### 步骤 2.2：候选拐点分组成 stage
+
+沿章节顺序遍历 2.1 列表，把相邻拐点合并成 stage：
+
+- **章数硬范围 [5, 15] 闭区间**——schema `chapter_count.minimum/maximum` + orchestrator `_check_stage_plan_limits` 双重强制；任何 ≤4 或 ≥16 都是违规
+- 拐点优先级（高 → 低）：场景转换 > 弧线切换 > 阵营变动 > 重大伤亡 > 关键身份揭示 > 主要角色登场退场 > 时间跳跃 > 情感转折
+- 同优先级取舍：选能让前后两段都更接近"拐点驱动而非数量驱动"的落点；不要为了让章数靠近某个数字而硬挪边界
+- 每个 stage 条目包含：`stage_id` / `stage_title` / `chapters` / `chapter_count` / `boundary_reason`
+- `stage_id` 使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`、`S049`），**不使用中文或其他格式**。这是整套 ID 家族（`M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##`）的共同 stage 段
 - `stage_title` 是人类可读的中文短标题（如"<location_a>初遇"、"<location_b>下山"），作为 bootstrap 阶段选择时展示给用户的阶段名
-- `boundary_reason` 必须说明为什么在此处切分（例如"主角离开某地""重大事件结束""新势力登场"），不能只写"满 10 章"
-- 边界判断从全局剧情结构出发：综合 `summary` / `key_events` / `chunk_regions` 中的区域转换 / `chunk_arc_summary` 的弧线切换 / `emotional_tone` 突变 / `identity_notes` 中的身份转折等多重信号
-- **自检**：完成 stage plan 后，逐一检查每个 stage 的 `chapter_count`。如有任何一个 ≤4 或 ≥16，必须调整切分点直到全部 stage 满足 5-15 章约束
+- `boundary_reason` 必须直接对应 2.1 列表里的某个具体拐点（命名拐点类型 + 关键事件），不能只写"满 N 章"或泛泛剧情概括
+
+#### 步骤 2.3：反锚定自检（完成 2.2 后必跑，不允许跳过）
+
+依次检查产出的 stage_plan：
+
+1. **章数分布反锚定检查**：把所有 stage 的 `chapter_count` 列出来；若有 **≥3 个连续 stage 章数完全相等**（如连续 5 个 stage 都是 10 章），说明大概率落入了"按章数等分、再给每段挑剧情节点写理由"的偷懒模式——**回到 2.1 重审拐点列表是否覆盖完整、回到 2.2 重新切分**，直到该模式不再出现
+2. **boundary_reason 实质检查**：每个 stage 的 `boundary_reason` 必须能指回 2.1 列表里的某个具体拐点（章号 + 类型）；如果某个 boundary_reason 只是"叙事过渡"、"剧情推进"、"主角成长"这类泛泛描述，说明该 stage 边界不是从拐点反推出来的——回到 2.2 重切
+3. **章数硬范围检查**：任意 stage 的 `chapter_count` ≤4 或 ≥16 必须调整切分点直到全部 stage 落在 [5, 15] 闭区间
 
 输出文件：`{work_dir}/analysis/stage_plan.json`
-schema 契约 → `schemas/analysis/stage_plan.schema.json`（chapter_count 5-15 hard、stage_id `^S\d{3}$` 等以 schema 为准）。
+schema 契约 → `schemas/analysis/stage_plan.schema.json`（`chapter_count` 5-15 hard、`stage_id` `^S\d{3}$`、字段集合以 schema 为准）。
 
-JSON 结构：
+JSON 结构（**注意：示例中的 `chapter_count` 故意用非整数倍数字，避免暗示某个章数是"甜区"**）：
 
 ```json
 {{
   "work_id": "{work_id}",
-  "default_stage_size": 10,
   "total_chapters": {chapter_count},
   "stages": [
     {{
       "stage_id": "S001",
       "stage_title": "主角初登场",
-      "chapters": "C0001-C0010",
-      "chapter_count": 10,
-      "boundary_reason": "..."
+      "chapters": "C0001-C0008",
+      "chapter_count": 8,
+      "boundary_reason": "场景转换：主角离开起始村落赴下一城"
+    }},
+    {{
+      "stage_id": "S002",
+      "stage_title": "城中遭遇",
+      "chapters": "C0009-C0021",
+      "chapter_count": 13,
+      "boundary_reason": "弧线切换：主线从入城任务转为势力对抗"
+    }},
+    {{
+      "stage_id": "S003",
+      "stage_title": "结义与远行",
+      "chapters": "C0022-C0032",
+      "chapter_count": 11,
+      "boundary_reason": "关键身份揭示：盟友真实身份曝光迫使主角离城"
     }}
   ]
 }}

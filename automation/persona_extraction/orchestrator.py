@@ -1161,7 +1161,6 @@ class ExtractionOrchestrator:
 
         return {
             "work_id": self.work_id,
-            "default_stage_size": 1,
             "total_chapters": len(chapter_index),
             "stages": stages,
         }
@@ -1542,8 +1541,6 @@ class ExtractionOrchestrator:
                         f"0 or empty = all): ").strip()
             preset_end_stage = int(raw) if raw else 0
 
-        stage_size = stage_plan.get("default_stage_size", 10)
-
         pipeline = PipelineProgress(
             work_id=self.work_id,
             extraction_branch=(
@@ -1561,7 +1558,6 @@ class ExtractionOrchestrator:
 
         phase3 = Phase3Progress(
             work_id=self.work_id,
-            stage_size=stage_size,
             stages=[
                 StageEntry(
                     stage_id=b["stage_id"],
@@ -2697,8 +2693,6 @@ class ExtractionOrchestrator:
                 stage_plan_data = _load_json(stage_plan_path) or {}
                 phase3 = Phase3Progress(
                     work_id=self.work_id,
-                    stage_size=stage_plan_data.get(
-                        "default_stage_size", 10),
                     stages=[
                         StageEntry(
                             stage_id=b["stage_id"],

@@ -298,6 +298,26 @@ source. Long discussion chains live in `logs/change_logs/`.
      → `schemas/analysis/chapter_summary_chunk.schema.json`,
      `automation/prompt_templates/{summarization,analysis,baseline_production}.md`,
      `docs/architecture/{extraction_workflow,schema_reference}.md`.
+27m. **stage_plan 切分语义 = 拐点先行，章数硬范围；prompt 反锚定 +
+     `default_stage_size` 字段下线。** 旧设计在 `analysis.md` §步骤 2 +
+     JSON 示例 + schema 字段三处同时锚定 "10 章"，LLM 实际产出落入
+     "先按 10 章等分、再给每段挑剧情节点写 boundary_reason" 的偷懒
+     模式（实证：537 章 / 53 stage 中前 38 个全是恰好 10 章）。新设计：
+     (1) 程序式三子步流程——2.1 通览 chunk 输出列出全书所有剧情拐点
+     候选（章号 + 类型 + 一句话事件）；2.2 沿章序把相邻拐点合并成
+     stage（章数 5-15 hard，由 `chapter_count.minimum/maximum` schema
+     强制 + orchestrator `_check_stage_plan_limits` 兜底 5-15
+     monolithic）；2.3 反锚定自检（≥3 连等章数视为机械等分必须重审 +
+     `boundary_reason` 必须对应 2.1 拐点章号）。(2) JSON 示例改为非
+     整数倍混合（8 章 + 13 章），打破 "10 是甜区" 暗示。(3) schema
+     字段 `default_stage_size` 整体删除——单一真源 = `chapter_count`
+     bounds；连带删 `Phase3Progress.stage_size` dead metadata 字段
+     与 orchestrator 三处读写位、`work_manifest.schema.json::extraction.default_stage_size`
+     孤立字段。Plumbing → `schemas/analysis/stage_plan.schema.json`、
+     `schemas/work/work_manifest.schema.json`、
+     `automation/prompt_templates/analysis.md` §步骤 2、
+     `automation/persona_extraction/{orchestrator,progress}.py`、
+     `docs/architecture/schema_reference.md`。
 
 ## Memory System
 
