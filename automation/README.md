@@ -137,11 +137,17 @@ tail -f works/<work_id>/analysis/progress/extraction_logs/extraction.log
 kill <PID>
 ```
 
-`--background` 阶段感知校验：读 `works/<work_id>/analysis/progress/pipeline.json`
-的 `phase_1_5` 状态——若**未** done，则强制要求 `--characters`（避免后台撞
-`confirm_with_user` 的 stdin 死锁）；若已 done，无需 `--characters` 即可后台
-启动（Phase 1.5 已过，无 stdin 提示）。`--resume` 与 `--background` 正交：
-`--resume` 控制"silence the resume prompt"，`--background` 控制后台 daemonize。
+`--background` 阶段感知校验双分支：读 `works/<work_id>/analysis/progress/pipeline.json`
+的 `phase_1_5` 状态——
+- **未 done**：强制要求 `--characters`（避免 daemon 撞 `confirm_with_user`
+  的 stdin 死锁）
+- **已 done**：强制要求 `--resume` 或 `--characters` 二选一（避免 daemon
+  撞 run_full 内 `'Resume from existing progress?'` 的 stdin 死锁——`--resume`
+  silent 该 prompt，`--characters` 走 preset 旁路同样 silent）
+
+两分支共同保证 daemon 路径上**没有任何**可触发的 stdin prompt。`--resume` 与
+`--background` 正交：`--resume` 控制"silence the resume prompt"，`--background`
+控制后台 daemonize。
 
 ### 运行时限制
 

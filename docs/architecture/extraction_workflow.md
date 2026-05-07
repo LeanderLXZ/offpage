@@ -492,9 +492,12 @@ Phase 1.5 (`confirm_with_user` 用 `--characters` 旁路) → Phase 2 → Phase 
 路径) → Phase 3.5 → Phase 4。CLI `--resume` 标志只 silent 'Resume from existing
 progress? [Y/n]' 这条 run_full 内的交互确认；与磁盘上具体哪个 phase 已落盘
 无关——run_full 自检产物状态决定 skip / self-heal / 跳进 run_extraction_loop。
-`--background` 校验阶段感知：读 `pipeline.json::phases.phase_1_5`，未 done 则
-强制要求 `--characters`（避免后台撞 confirm_with_user 的 stdin 死锁）；已 done
-则 `--characters` 可省。`--resume` 与 `--background` 正交。
+`--background` 校验阶段感知双分支：读 `pipeline.json::phases.phase_1_5`——未
+done 则强制要求 `--characters`（避免 daemon 撞 `confirm_with_user` 的 stdin
+死锁）；已 done 则强制要求 `--resume` 或 `--characters` 二选一（避免 daemon
+撞 run_full 内 `'Resume from existing progress?'` 的 stdin 死锁）。两分支共同
+保证 daemon 路径上没有任何可触发的 stdin prompt。`--resume` 与 `--background`
+正交。
 
 编排架构：
 

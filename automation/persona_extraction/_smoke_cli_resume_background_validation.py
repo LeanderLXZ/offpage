@@ -1,19 +1,20 @@
 """Smoke test for cli.py --background stage-aware validation (decision #51).
 
 The validation logic at cli.py's `if args.background:` block reads
-``works/{work_id}/analysis/progress/pipeline.json`` and decides whether
-``--characters`` is required:
+``works/{work_id}/analysis/progress/pipeline.json`` and rejects any
+combination that lets a stdin prompt reach the daemon. Two prompt sites
+must be covered:
 
-  - phase_1_5 == "done" → no Phase 1.5 stdin prompt awaits, --characters
-    is optional; CLI proceeds to launch_background.
-  - phase_1_5 != "done" (or pipeline.json missing / unreadable) →
-    --characters mandatory; without it, sys.exit(1) with a specific
-    error message.
+  - Phase 1.5 not done → ``confirm_with_user`` stdin (character list +
+    end-stage); only ``--characters`` preset bypasses it.
+  - Phase 1.5 done    → run_full's ``"Resume from existing progress?"``
+    prompt; ``--resume`` (auto_resume signal) or ``--characters``
+    (preset path) both bypass it.
 
-Four scenarios cover the matrix:
+Six scenarios cover the truth table:
 
   (A) phase_1_5 done + --resume --background, no --characters
-        → accept (proceed to launch_background)
+        → accept (--resume bypasses the resume prompt)
   (B) phase_1_5 pending + --resume --background, no --characters
         → reject with sys.exit(1) + "phase_1_5 is not yet done"
   (C) phase_1_5 pending + --background --characters X
@@ -21,6 +22,12 @@ Four scenarios cover the matrix:
   (D) pipeline.json absent + --background --characters X
         → accept (no pipeline → treated as phase_1_5 not done, but
           --characters satisfies the requirement)
+  (E) phase_1_5 done + --background, no --resume / no --characters
+        → reject with sys.exit(1) + "phase_1_5 is done" (would
+          deadlock on the 'Resume from existing progress?' prompt)
+  (F) phase_1_5 done + --background --characters X, no --resume
+        → accept (--characters alone bypasses the resume prompt via
+          the preset_characters branch)
 
 The smoke patches ``launch_background`` so accepted paths exit 0 without
 actually daemonizing, and patches ``validate_source_package`` /
@@ -170,6 +177,36 @@ def _scenario_d(root: Path) -> bool:
     return ok
 
 
+def _scenario_e(root: Path) -> bool:
+    """phase_1_5 done + --background, no --resume / no --characters → reject."""
+    project = _make_project(root, phase_1_5="done")
+    code, text = _run([
+        WORK_ID, "--project-root", str(project),
+        "--background",
+    ])
+    ok = code == 1 and "phase_1_5 is done" in text
+    print(f"[E] phase_1_5=done + --background no --resume no --characters: "
+          f"exit={code} expect 1 + msg → {'OK' if ok else 'FAIL'}")
+    if not ok:
+        print(f"  stdout/stderr: {text!r}")
+    return ok
+
+
+def _scenario_f(root: Path) -> bool:
+    """phase_1_5 done + --background --characters X (no --resume) → accept."""
+    project = _make_project(root, phase_1_5="done")
+    code, text = _run([
+        WORK_ID, "--project-root", str(project),
+        "--background", "--characters", "char_a",
+    ])
+    ok = code == 0 and "phase_1_5 is done" not in text
+    print(f"[F] phase_1_5=done + --background --characters X (no --resume): "
+          f"exit={code} → {'OK' if ok else 'FAIL'}")
+    if not ok:
+        print(f"  stdout/stderr: {text!r}")
+    return ok
+
+
 def main() -> int:
     results: list[bool] = []
     for fn, name in [
@@ -177,6 +214,8 @@ def main() -> int:
         (_scenario_b, "B"),
         (_scenario_c, "C"),
         (_scenario_d, "D"),
+        (_scenario_e, "E"),
+        (_scenario_f, "F"),
     ]:
         with tempfile.TemporaryDirectory(prefix=f"smoke_cli_bg_{name}_") as td:
             results.append(fn(Path(td)))

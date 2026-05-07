@@ -137,9 +137,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--background", action="store_true",
         help="Run in background (survives SSH disconnect). "
-             "Stage-aware validation: when phase_1_5 is not yet done, "
-             "--characters is required to avoid the Phase 1.5 stdin "
-             "prompt deadlocking the daemon (decision #51).",
+             "Stage-aware validation (decision #51): phase_1_5 not done "
+             "→ --characters required (else Phase 1.5 stdin prompt "
+             "deadlocks the daemon); phase_1_5 done → --resume or "
+             "--characters required (else 'Resume from existing "
+             "progress?' stdin prompt deadlocks the daemon).",
     )
     parser.add_argument(
         "--max-runtime",
@@ -207,23 +209,34 @@ def main(argv: list[str] | None = None) -> None:
 
     # --- Background mode (Phase 0-3.5) ---
     if args.background:
-        # Decision #51: --background can't survive any stdin prompt.
-        # The only one that fires from a fresh-ish state is Phase 1.5's
-        # `confirm_with_user`; --characters short-circuits it. The
-        # "Resume from existing progress? [Y/n]" prompt in run_full is
-        # already auto-yes when --resume is passed (orchestrator side).
-        # So: read pipeline.json — if phase_1_5 already done, no Phase
-        # 1.5 prompt can fire, --characters is optional. Otherwise,
-        # --characters is mandatory.
+        # Decision #51: --background can't survive any stdin prompt; the
+        # validator must cover both prompt sites in run_full.
+        #
+        #   * Phase 1.5 not done → confirm_with_user fires stdin prompts;
+        #     --characters preset is the only bypass.
+        #   * Phase 1.5 done    → run_full asks "Resume from existing
+        #     progress? [Y/n]"; --resume (auto_resume signal) silences it,
+        #     --characters takes the preset branch which also skips it.
+        #
+        # Either way both branches must reject any combination that lets
+        # a stdin prompt reach the daemon.
         pipeline_status = _load_pipeline_status(project_root, args.work_id)
         phase15_done = (
             pipeline_status is not None
             and pipeline_status.get("phases", {}).get("phase_1_5") == "done")
-        if not phase15_done and not args.characters:
-            print("[ERROR] --background requires --characters when "
-                  "phase_1_5 is not yet done (orchestrator would block "
-                  "on the interactive Phase 1.5 prompt).")
-            sys.exit(1)
+        if not phase15_done:
+            if not args.characters:
+                print("[ERROR] --background requires --characters when "
+                      "phase_1_5 is not yet done (orchestrator would block "
+                      "on the interactive Phase 1.5 prompt).")
+                sys.exit(1)
+        else:
+            if not args.resume and not args.characters:
+                print("[ERROR] --background requires --resume or "
+                      "--characters when phase_1_5 is done (orchestrator "
+                      "would block on the 'Resume from existing "
+                      "progress?' prompt).")
+                sys.exit(1)
         extra = [a for a in sys.argv[1:] if a != "--background"]
         launch_background(args.work_id, project_root, extra)
         sys.exit(0)
