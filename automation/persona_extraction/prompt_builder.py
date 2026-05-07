@@ -142,8 +142,9 @@ def _phase1_lane_inputs_root(project_root: Path, work_id: str) -> Path:
 
 
 def _project_chunk_for_world_overview(chunk: dict) -> dict:
-    """Keep chunk-level secondary fields (faction members_present stripped) +
-    summaries[].chapter only."""
+    """Chunk-level secondary fields only (faction members_present stripped).
+    summaries[] dropped — full-book setting writeup does not depend on
+    per-chapter anchors."""
     factions = []
     for fac in chunk.get("chunk_factions") or []:
         clean = {k: v for k, v in fac.items() if k != "members_present"}
@@ -157,16 +158,14 @@ def _project_chunk_for_world_overview(chunk: dict) -> dict:
         "chunk_power_levels": chunk.get("chunk_power_levels") or [],
         "chunk_factions": factions,
         "chunk_regions": chunk.get("chunk_regions") or [],
-        "summaries": [
-            {"chapter": s.get("chapter")}
-            for s in chunk.get("summaries") or []
-            if s.get("chapter")
-        ],
     }
 
 
 def _project_chunk_for_stage_plan(chunk: dict) -> dict:
-    """Keep chunk_arc_summary + chunk_regions + per-summary plot-driving fields."""
+    """chunk_arc_summary + chunk_regions + per-summary chapter+summary only.
+    key_events / characters_present / emotional_tone / identity_notes dropped —
+    orthogonal to chapter-boundary plot-arc merging task; their token surface
+    fed LLM thinking long-tail without informing turning-point detection."""
     return {
         "work_id": chunk.get("work_id"),
         "chunk_index": chunk.get("chunk_index"),
@@ -177,10 +176,6 @@ def _project_chunk_for_stage_plan(chunk: dict) -> dict:
             {
                 "chapter": s.get("chapter"),
                 "summary": s.get("summary", ""),
-                "key_events": s.get("key_events") or [],
-                "characters_present": s.get("characters_present") or [],
-                "emotional_tone": s.get("emotional_tone", ""),
-                "identity_notes": s.get("identity_notes", ""),
             }
             for s in chunk.get("summaries") or []
             if s.get("chapter")
@@ -189,7 +184,10 @@ def _project_chunk_for_stage_plan(chunk: dict) -> dict:
 
 
 def _project_chunk_for_candidates(chunk: dict) -> dict:
-    """Keep per-summary identity-tracking fields + chunk_factions[].{name, members_present}."""
+    """Per-summary identity-tracking fields + chunk_factions[].{name, members_present}.
+    Includes summary — cross-chunk identity merging needs event context to
+    surface implicit identity links (e.g. Character A is Character B's
+    incarnation) beyond what short identity_notes captures."""
     factions = []
     for fac in chunk.get("chunk_factions") or []:
         factions.append({
@@ -204,6 +202,7 @@ def _project_chunk_for_candidates(chunk: dict) -> dict:
         "summaries": [
             {
                 "chapter": s.get("chapter"),
+                "summary": s.get("summary", ""),
                 "characters_present": s.get("characters_present") or [],
                 "identity_notes": s.get("identity_notes", ""),
             }

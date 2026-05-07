@@ -16,17 +16,14 @@
 
 `{lane_inputs_dir}`
 
-每个文件是一个 chunk 的归纳结果（JSON），**已经按 world_overview lane 的需求做了字段裁剪**——只保留以下字段：
+每个文件是一个 chunk 的归纳结果（JSON），**已经按 world_overview lane 的需求做了字段裁剪**——**只保留 chunk-level 二级字段**（`summaries[]` 整段已删除，全书设定不依赖逐章锚点）：
 
-**chunk-level 二级字段（聚合本 chunk 视野下的设定信号）**：
+- `work_id` / `chunk_index` / `chapters`（chunk 元信息——`chapters` 是 `C####-C####` 范围串，可用于 `world_lines.chapter_range` 推理）
 - `chunk_arc_summary`（≤200 字本 chunk 整体剧情弧）
 - `chunk_world_rules[]`（≤5 条 × `{{rule, description, observed_impact}}`；本 chunk 揭示的世界规则；observed_impact 可能是具体影响或 fallback "未在本 chunk 直接观察"）
 - `chunk_power_levels[]`（≤20 条 × `{{name, description}}`；本 chunk 出现的力量体系等级）
 - `chunk_factions[]`（≤20 条 × `{{name, description}}`；势力名 + 简介；**已剔除 `members_present`** 因 phase 1 world_overview 不需要 raw 角色名映射）
 - `chunk_regions[]`（≤20 条 × `{{name, description}}`；本 chunk 出现的地理区域）
-
-**per-summary 层（仅章号锚点）**：
-- `summaries[].chapter`（用于 `world_lines.chapter_range` 推理）
 
 schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意：lane 输入只是子集；输出 schema 见下方）。
 
@@ -41,7 +38,7 @@ schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意�
 - `chunk_power_levels` 跨 chunk 同名等级合并 → `world_overview.power_system.levels`
 - `chunk_factions` 跨 chunk 同名势力合并 → `world_overview.major_factions`
 - `chunk_world_rules` 跨 chunk 同名规则合并 → `world_overview.core_rules`
-- `chunk_arc_summary` 的弧线推进 + `summaries[].chapter` 区段切分 → `world_overview.world_lines[].{{name, chapter_range, core_conflict, setting_features}}`
+- `chunk_arc_summary` 的弧线推进 + `chapters` 范围切分 → `world_overview.world_lines[].{{name, chapter_range, core_conflict, setting_features}}`（`chapter_range` 来源是 chunk 元信息的 `chapters` 字段，非每章 summary）
 
 ### 步骤 2：综合产出 world_overview
 

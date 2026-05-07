@@ -100,11 +100,19 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 
 | Lane | per-summary 字段 | chunk-level 二级字段 |
 |---|---|---|
-| world_overview | `chapter`（用于 `world_lines.chapter_range`） | `chunk_arc_summary` / `chunk_world_rules` / `chunk_power_levels` / `chunk_factions`（去 `members_present`） / `chunk_regions` |
-| stage_plan | `chapter` / `summary` / `key_events` / `characters_present` / `emotional_tone` / `identity_notes` | `chunk_arc_summary` / `chunk_regions` |
-| candidate_characters | `chapter` / `characters_present` / `identity_notes` | `chunk_factions[].{name, members_present}` |
+| world_overview | （无——纯 chunk-level 视角，不依赖逐章锚点） | `chunk_arc_summary` / `chunk_world_rules` / `chunk_power_levels` / `chunk_factions`（去 `members_present`） / `chunk_regions` |
+| stage_plan | `chapter` / `summary` | `chunk_arc_summary` / `chunk_regions` |
+| candidate_characters | `chapter` / `summary` / `characters_present` / `identity_notes` | `chunk_factions[].{name, members_present}` |
 
-字段保留较宽，给 LLM 留判断空间。三件输出之间无硬数据依赖（唯一交叉 = `chunk_arc_summary` 同时被 world_overview + stage_plan 两 lane 用）。
+裁剪原则：每 lane 只接收任务直接需要的字段，token surface 与 lane scope 成正比——
+**world_overview** 写全书设定（题材 / 力量 / 势力 / 地理 / 设定规则），仅依赖 chunk-level
+聚合，删去 `summaries[]` 整段；**stage_plan** 拐点先行 + 5–15 章硬范围合并，依据是
+`chunk_arc_summary` 的 chunk-级弧光 + per-summary `summary` 的事件描述，`key_events` /
+`characters_present` / `emotional_tone` / `identity_notes` 与"按章序合并相邻拐点"任务正交，
+裁掉避免 LLM thinking 长尾；**candidate_characters** 跨 chunk 身份合并需要事件上下文判断
+隐含身份链（如"Character A 实际是 Character B 化身"），保留 `summary` + `characters_present` +
+`identity_notes` + `chunk_factions[].members_present`。三件输出之间无硬数据依赖
+（唯一交叉 = `chunk_arc_summary` 同时被 world_overview + stage_plan 两 lane 用）。
 
 **出口验证（硬性门控，per-lane）**：每个 lane 的 LLM 产物落盘后，独立跑：
 

@@ -18,8 +18,9 @@
 
 每个文件是一个 chunk 的归纳结果（JSON），**已经按 candidate_characters lane 的需求做了字段裁剪**——只保留以下字段：
 
-**per-summary 层（每章一条，角色出场 + 身份变化的主要信号）**：
+**per-summary 层（每章一条，角色出场 + 事件上下文 + 身份变化的主要信号）**：
 - `chapter`（章号锚点，用于 aliases 的 `first_appearance` 推断）
+- `summary`（100-150 字本章核心剧情概述——为身份合并提供事件上下文，例如"主角 A 被告知自己其实是势力 X 的转世"这类隐含身份链通常在 `summary` 里完整描述，光读 `identity_notes` 短句无法还原）
 - `characters_present`（本章实质互动角色，最常用名形式）
 - `identity_notes`（≤50 字本章身份相关线索：化名建立、真名揭示、封号赋予等）
 
@@ -36,7 +37,7 @@ schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意�
 
 - 全书出现过的所有角色名（来自 `characters_present` + `identity_notes` + `chunk_factions[].members_present`）
 - 每个名字的出现章号区间
-- 身份变化线索（来自 `identity_notes`）
+- 身份变化线索（来自 `identity_notes` 短句 + `summary` 的事件上下文——后者覆盖隐含身份链，例如"昨日剑客原来是大长老转世"这类只在事件描述里完整出现的链路）
 
 ### 步骤 2：跨 chunk 角色身份合并
 
@@ -50,6 +51,7 @@ schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意�
 
 - 相同叙事位置出现的角色特征一致
 - `identity_notes` 中明确记录了身份揭示或名称变更
+- `summary` 的事件上下文揭示的隐含身份链（如"角色 A 在某 chunk 被披露为另一势力的转世 / 化身 / 卧底"——这种链路通常只在 `summary` 中完整描述，`identity_notes` 短句不一定覆盖）
 - 角色行为模式、能力、与其他角色的关系在前后一致
 - 其他角色对其的反应 / 态度延续
 - `chunk_factions[].members_present` 中归属同一势力且语境匹配

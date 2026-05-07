@@ -20,16 +20,14 @@
 
 每个文件是一个 chunk 的归纳结果（JSON），**已经按 stage_plan lane 的需求做了字段裁剪**——只保留以下字段：
 
-**per-summary 层（每章一条，stage 边界判定的主要离散信号）**：
+**per-summary 层（每章一条，章序锚点 + 事件描述）**：
 - `chapter` / `summary`（100-150 字本章核心剧情概述）
-- `key_events`（≤5×≤50 字本章关键事件，跳过日常水文）
-- `characters_present`（本章实质互动角色，用于"主要角色登场退场"边界判断）
-- `emotional_tone`（≤20 字本章情绪基调，突变即候选边界信号）
-- `identity_notes`（≤50 字本章身份相关线索，作为"关键身份揭示"边界信号）
 
-**chunk-level 二级字段（场景转换 / 弧线切换的辅助信号）**：
-- `chunk_arc_summary`（≤200 字本 chunk 整体剧情弧）
+**chunk-level 二级字段（chunk 弧光 + 地理切换信号）**：
+- `chunk_arc_summary`（≤200 字本 chunk 整体剧情弧——chunk 跨度内的剧情走向骨架）
 - `chunk_regions[]`（≤20 条 × `{{name, description}}`；本 chunk 出现的地理区域，作为"场景转换"边界信号）
+
+裁剪原则：拐点合并依据 = `chunk_arc_summary` chunk 弧光 + per-summary `summary` 事件描述 + `chunk_regions` 地理切换。`key_events` / `characters_present` / `emotional_tone` / `identity_notes` 是身份 / 角色 / 情绪粒度，与"按章序合并相邻拐点"任务正交，已删除。
 
 schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意：lane 输入只是子集；输出 schema 见下方）。
 
@@ -39,7 +37,7 @@ schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意�
 
 ### 步骤 1：全局剧情拐点扫描（必须先于步骤 2 完成）
 
-通览所有 chunk 的 `chunk_arc_summary` / per-summary `summary` / `key_events` / `emotional_tone` / `chunk_regions` / `identity_notes` / `characters_present`，列出全书所有**剧情拐点候选**（plot inflection points）。每个拐点写一行，包含：
+通览所有 chunk 的 `chunk_arc_summary` + per-summary `summary` + `chunk_regions`，从中读出全书所有**剧情拐点候选**（plot inflection points）——拐点信息都浓缩在 `summary` 的事件描述里（如"主角离开起始村落"、"盟友真实身份曝光"、"势力阵营变动"），由 `chunk_arc_summary` 提供 chunk 级宏观骨架辅助判断、`chunk_regions` 提供地理转场信号。每个拐点写一行，包含：
 
 - 章号（如 `C0037`）
 - 拐点类型（**枚举**：场景转换 / 弧线切换 / 主要角色登场退场 / 关键身份揭示 / 时间跳跃 / 阵营变动 / 情感转折 / 重大伤亡）
