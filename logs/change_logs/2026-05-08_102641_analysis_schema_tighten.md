@@ -101,7 +101,7 @@ todo: T-ANALYSIS-SCHEMA-TIGHTEN（已登记到 docs/todo_list.md `## Next` 段�
 
 ## 执行偏差
 
-无
+- **todo_list 处理路径调整**：PRE 「背景 / 触发」line 17 写"本次 commit 一并归档移到 archived `## Completed`"，**实际改为 Next → In Progress（status: schema/prompt/code/ai_context/docs 完成 + 静态 gate 全过；e2e 验证待跑）**。理由：本任务的「完成标准」末项是 e2e 重跑（清掉 untracked works/<work_id>/ 后从 phase 0 全新跑过 schema gate），属端到端运行时验证，本 commit 内不执行。直接归档完结会让 todo 状态与实际不符；进 In Progress 与现有 4 个"代码完成 / runtime 待跑"entries 形态一致（虽然 In Progress 段单槽规则名义被 5-entry 占用，是项目级 governance 问题，不在本 commit scope）。该 deviation 已在 POST 段「TODO 维护」 + commit message 「docs/todo_list.md（T-ANALYSIS-SCHEMA-TIGHTEN Next→In Progress ...）」如实记录；本段补登补全 PRE→POST 偏差链路（/post-check finding M4 修复）。
 
 <!-- POST 阶段填写 -->
 

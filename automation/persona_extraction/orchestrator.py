@@ -1611,6 +1611,11 @@ class ExtractionOrchestrator:
 
         if not selected:
             print("[ERROR] No characters selected.")
+            print("       No candidates have importance=='主角' — phase 1 "
+                  "LLM produced no main-tier candidates, so empty input "
+                  "had no default to fall back to. Re-run with "
+                  "--characters <id> [<id> ...] to manually pick from the "
+                  "list above.")
             sys.exit(1)
 
         # Show stage plan summary
