@@ -115,3 +115,22 @@
 
 - **Status**: DONE
 - **Finished**: 2026-05-08 15:42:42 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：13/13 项计划 + 5/5 项验证（动作 #7 architecture.md 未触动是 PRE log 已注明的合理通过 decisions.md 转接路径，4 个 sub-agent 一致认定为 ✅）
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=4 / Low=3
+- Open Questions: 2 条（详见对话）
+
+## 复查时状态
+- **Reviewed**: 2026-05-08 16:13:44 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全落实（13+5 ✅）
+  - 轨 2 无 H，有 M ×4（confirm_with_user 防御不对称 / `--end-stage` 负数未挡 / 小型 work ≤7 章 early sanity check 缺失 / 决策 #51 措辞优化）+ L ×3（confirm int() ValueError / 历史 stage_plan 重跑 stage_id 错位风险 / change_log "一行修补"措辞精度）
+- **Conversation ref**: 同会话内 /post-check 输出
