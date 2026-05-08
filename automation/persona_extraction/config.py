@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class StageConfig:
     target_chapter_count: int = 10
-    min_chapter_count: int = 5
+    min_chapter_count: int = 8
     max_chapter_count: int = 15
 
 

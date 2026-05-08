@@ -46,4 +46,4 @@ framework-level engineering progress only.
   - `works/*/world/`, `works/*/characters/`, `works/*/indexes/` tracked; `works/*/retrieval/` local
 - `logs/change_logs/` + `logs/review_reports/` write-mostly — do not proactively read
 - No per-stage report files; progress updated in-place
-- Stages split by natural story boundaries (target 10, min 5, max 15)
+- Stages split by natural story boundaries (target 10, min 8, max 15)

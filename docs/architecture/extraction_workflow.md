@@ -81,7 +81,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 
 - **monolithic 模式 = 3 lane 并行**：
   - **world_overview lane**：题材 / 力量体系 / 主要势力 / 地理结构 / 大世界线划分 / 核心设定规则。输出：`works/{work_id}/analysis/world_overview.json`
-  - **stage_plan lane**：按自然剧情边界切分（拐点先行，章数硬范围 5–15；详见决策 #27m 步骤 2.1/2.2/2.3 反锚定自检）。输出：`works/{work_id}/analysis/stage_plan.json`
+  - **stage_plan lane**：按自然剧情边界切分（拐点先行，章数硬范围 8–15；详见决策 #27m 步骤 2.1/2.2/2.3 反锚定自检）。输出：`works/{work_id}/analysis/stage_plan.json`
   - **candidate_characters lane**：跨 chunk 角色身份合并 + 候选角色识别 + aliases 归并。输出：`works/{work_id}/analysis/candidate_characters.json`
 - **light_novel 模式 = 2 lane 并行 + 程序化 stage_plan**：
   - **world_overview lane** + **candidate_characters lane** 同 monolithic（沿用同一 prompt + 同一裁剪契约）
@@ -90,7 +90,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
     - `chapters = f"{chapter_id}-{chapter_id}"`（degenerate 单章区间，例 `"C0001-C0001"`；与 monolithic 共享 `^C[0-9]{4}-C[0-9]{4}$` 解析路径，phase 2/3/4 消费方零分叉）
     - `chapter_count = 1`
     - `stage_title = chapter_index[i].title`（已含卷 / 印刷章 / sub-section 由规范化派生的拼接；超 schema `stage_title.maxLength` 由 orchestrator 软截断 + `…` 兜底，避免对抗性长 title 触发 schema gate fail → 无穷重试 → FATAL）
-    - 跳过 STAGE_MIN / STAGE_MAX `chapter_count` 校验（1:1 派生天然违反 5–15 限制，是预期行为）
+    - 跳过 STAGE_MIN / STAGE_MAX `chapter_count` 校验（1:1 派生天然违反 8–15 限制，是预期行为）
 
 阶段规划是分析阶段**最核心的产出**——每个 stage 边界直接成为系统的 stage 边界，
 世界快照、角色快照、记忆时间线、运行时阶段选择全部建立在此切分之上（monolithic
@@ -106,7 +106,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 
 裁剪原则：每 lane 只接收任务直接需要的字段，token surface 与 lane scope 成正比——
 **world_overview** 写全书设定（题材 / 力量 / 势力 / 地理 / 设定规则），仅依赖 chunk-level
-聚合，删去 `summaries[]` 整段；**stage_plan** 拐点先行 + 5–15 章硬范围合并，依据是
+聚合，删去 `summaries[]` 整段；**stage_plan** 拐点先行 + 8–15 章硬范围合并，依据是
 `chunk_arc_summary` 的 chunk-级弧光 + per-summary `summary` 的事件描述（150-200 字承载事件 + 设定上下文），
 `characters_present` / `emotional_tone` / `identity_notes` 与"按章序合并相邻拐点"任务正交，
 裁掉避免 LLM thinking 长尾；**candidate_characters** 跨 chunk 身份合并需要事件上下文判断
@@ -118,7 +118,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 
 1. **schema gate**：lane 输出 jsonschema 校验
    （`schemas/analysis/{world_overview,stage_plan,candidate_characters}.schema.json`）
-2. **stage `chapter_count` 5-15 限制**（仅 stage_plan lane，monolithic 模式；light_novel 模式跳过此校验，因 stage_plan 由程序化派生不走 LLM）
+2. **stage `chapter_count` 8-15 限制**（仅 stage_plan lane，monolithic 模式；light_novel 模式跳过此校验，因 stage_plan 由程序化派生不走 LLM）
 
 校验失败 → 把首条 schema 错误（含 stage 限制违规）作为 `prior_error` 注入下一次重试 prompt，
 **与 Phase 0 chunk-level / Phase 4 chapter-level prior_error 注入同形态**——失败文件单独删除，重跑该 lane 的 prompt（带 prior_error 段），通过校验的 lane 产物保留。

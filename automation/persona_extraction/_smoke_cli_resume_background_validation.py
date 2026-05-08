@@ -2,32 +2,38 @@
 
 The validation logic at cli.py's `if args.background:` block reads
 ``works/{work_id}/analysis/progress/pipeline.json`` and rejects any
-combination that lets a stdin prompt reach the daemon. Two prompt sites
-must be covered:
+combination that lets a stdin prompt reach the daemon. Phase 1.5 not
+done has TWO stdin prompt sites — character list (bypassed by
+``--characters``) AND end-stage (bypassed by ``--end-stage``); both
+must be covered. Phase 1.5 done has one stdin prompt site —
+``"Resume from existing progress?"`` — bypassed by ``--resume``
+(auto_resume signal) or ``--characters`` (preset path).
 
-  - Phase 1.5 not done → ``confirm_with_user`` stdin (character list +
-    end-stage); only ``--characters`` preset bypasses it.
-  - Phase 1.5 done    → run_full's ``"Resume from existing progress?"``
-    prompt; ``--resume`` (auto_resume signal) or ``--characters``
-    (preset path) both bypass it.
-
-Six scenarios cover the truth table:
+Eight scenarios cover the truth table:
 
   (A) phase_1_5 done + --resume --background, no --characters
         → accept (--resume bypasses the resume prompt)
   (B) phase_1_5 pending + --resume --background, no --characters
-        → reject with sys.exit(1) + "phase_1_5 is not yet done"
-  (C) phase_1_5 pending + --background --characters X
-        → accept (--characters short-circuits the Phase 1.5 prompt)
-  (D) pipeline.json absent + --background --characters X
-        → accept (no pipeline → treated as phase_1_5 not done, but
-          --characters satisfies the requirement)
+        → reject with sys.exit(1) + "character-selection prompt"
+          (missing --characters)
+  (C) phase_1_5 pending + --background --characters X (no --end-stage)
+        → reject with sys.exit(1) + "Extract up to stage N" prompt msg
+          (missing --end-stage)
+  (D) pipeline.json absent + --background --characters X (no --end-stage)
+        → reject (no pipeline → treated as phase_1_5 not done, both
+          --characters AND --end-stage required)
   (E) phase_1_5 done + --background, no --resume / no --characters
         → reject with sys.exit(1) + "phase_1_5 is done" (would
           deadlock on the 'Resume from existing progress?' prompt)
   (F) phase_1_5 done + --background --characters X, no --resume
         → accept (--characters alone bypasses the resume prompt via
-          the preset_characters branch)
+          the preset_characters branch; --end-stage not required on
+          this branch since run_extraction_loop accepts max_stages=None)
+  (G) phase_1_5 pending + --background --characters X --end-stage 0
+        → accept (both presets cover both Phase 1.5 stdin prompts)
+  (H) pipeline.json absent + --background --characters X --end-stage 50
+        → accept (no pipeline → treated as phase_1_5 not done, both
+          presets given so daemon path is stdin-prompt-free)
 
 The smoke patches ``launch_background`` so accepted paths exit 0 without
 actually daemonizing, and patches ``validate_source_package`` /
@@ -133,13 +139,13 @@ def _scenario_a(root: Path) -> bool:
 
 
 def _scenario_b(root: Path) -> bool:
-    """phase_1_5 pending + --resume --background → reject."""
+    """phase_1_5 pending + --resume --background (no --characters) → reject."""
     project = _make_project(root, phase_1_5="pending")
     code, text = _run([
         WORK_ID, "--project-root", str(project),
         "--resume", "--background",
     ])
-    ok = code == 1 and "phase_1_5 is not yet done" in text
+    ok = code == 1 and "character-selection prompt" in text
     print(f"[B] phase_1_5=pending + --resume --background no --characters: "
           f"exit={code} expect 1 + msg → {'OK' if ok else 'FAIL'}")
     if not ok:
@@ -148,30 +154,30 @@ def _scenario_b(root: Path) -> bool:
 
 
 def _scenario_c(root: Path) -> bool:
-    """phase_1_5 pending + --background --characters X → accept."""
+    """phase_1_5 pending + --background --characters X (no --end-stage) → reject."""
     project = _make_project(root, phase_1_5="pending")
     code, text = _run([
         WORK_ID, "--project-root", str(project),
         "--background", "--characters", "char_a",
     ])
-    ok = code == 0 and "phase_1_5 is not yet done" not in text
-    print(f"[C] phase_1_5=pending + --background --characters X: "
-          f"exit={code} → {'OK' if ok else 'FAIL'}")
+    ok = code == 1 and "Extract up to stage N" in text
+    print(f"[C] phase_1_5=pending + --background --characters X (no --end-stage): "
+          f"exit={code} expect 1 + msg → {'OK' if ok else 'FAIL'}")
     if not ok:
         print(f"  stdout/stderr: {text!r}")
     return ok
 
 
 def _scenario_d(root: Path) -> bool:
-    """pipeline.json absent + --background --characters X → accept."""
+    """pipeline.json absent + --background --characters X (no --end-stage) → reject."""
     project = _make_project(root, phase_1_5=None)
     code, text = _run([
         WORK_ID, "--project-root", str(project),
         "--background", "--characters", "char_a",
     ])
-    ok = code == 0 and "phase_1_5 is not yet done" not in text
-    print(f"[D] no pipeline.json + --background --characters X: "
-          f"exit={code} → {'OK' if ok else 'FAIL'}")
+    ok = code == 1 and "Extract up to stage N" in text
+    print(f"[D] no pipeline.json + --background --characters X (no --end-stage): "
+          f"exit={code} expect 1 + msg → {'OK' if ok else 'FAIL'}")
     if not ok:
         print(f"  stdout/stderr: {text!r}")
     return ok
@@ -207,6 +213,40 @@ def _scenario_f(root: Path) -> bool:
     return ok
 
 
+def _scenario_g(root: Path) -> bool:
+    """phase_1_5 pending + --background --characters X --end-stage 0 → accept."""
+    project = _make_project(root, phase_1_5="pending")
+    code, text = _run([
+        WORK_ID, "--project-root", str(project),
+        "--background", "--characters", "char_a",
+        "--end-stage", "0",
+    ])
+    ok = code == 0 and "character-selection prompt" not in text \
+        and "Extract up to stage N" not in text
+    print(f"[G] phase_1_5=pending + --background --characters X --end-stage 0: "
+          f"exit={code} → {'OK' if ok else 'FAIL'}")
+    if not ok:
+        print(f"  stdout/stderr: {text!r}")
+    return ok
+
+
+def _scenario_h(root: Path) -> bool:
+    """pipeline.json absent + --background --characters X --end-stage 50 → accept."""
+    project = _make_project(root, phase_1_5=None)
+    code, text = _run([
+        WORK_ID, "--project-root", str(project),
+        "--background", "--characters", "char_a",
+        "--end-stage", "50",
+    ])
+    ok = code == 0 and "character-selection prompt" not in text \
+        and "Extract up to stage N" not in text
+    print(f"[H] no pipeline.json + --background --characters X --end-stage 50: "
+          f"exit={code} → {'OK' if ok else 'FAIL'}")
+    if not ok:
+        print(f"  stdout/stderr: {text!r}")
+    return ok
+
+
 def main() -> int:
     results: list[bool] = []
     for fn, name in [
@@ -216,6 +256,8 @@ def main() -> int:
         (_scenario_d, "D"),
         (_scenario_e, "E"),
         (_scenario_f, "F"),
+        (_scenario_g, "G"),
+        (_scenario_h, "H"),
     ]:
         with tempfile.TemporaryDirectory(prefix=f"smoke_cli_bg_{name}_") as td:
             results.append(fn(Path(td)))

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/analysis/stage_plan.schema.json",
   "title": "StagePlan",
-  "description": "Phase 1 stage 切分计划。monolithic 模式由 Phase 1 (analysis.md) 一次 LLM 调用产出（同次产 world_overview + candidate_characters），每 stage 5-15 章 hard（schema chapter_count.minimum=1 是为 light_novel 让出空间，monolithic 5-15 由 orchestrator `_check_stage_plan_limits` 强制）。light_novel 模式由 orchestrator 程序化 1:1 从 chapter_index 派生（1 sub-section = 1 stage，chapter_count = 1，chapters 形如 `C0001-C0001` 的 degenerate 区间）。下游：Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择。phase 2/3/4 消费 `chapters` 字段沿用既有 `^C[0-9]{4}-C[0-9]{4}$` 解析，不需为 light_novel 分叉。",
+  "description": "Phase 1 stage 切分计划。monolithic 模式由 Phase 1 stage_plan lane (`automation/prompt_templates/analysis_stage_plan.md`) 单 lane LLM 调用产出（与 world_overview / candidate_characters 两 lane 并行；决策 #52），每 stage 8-15 章 hard（schema chapter_count.maximum=15 强制上限，schema chapter_count.minimum=1 是为 light_novel 让出空间，monolithic 下限 8 由 orchestrator `_check_stage_plan_limits` 强制双向门控）。light_novel 模式由 orchestrator 程序化 1:1 从 chapter_index 派生（1 sub-section = 1 stage，chapter_count = 1，chapters 形如 `C0001-C0001` 的 degenerate 区间）。下游：Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择。phase 2/3/4 消费 `chapters` 字段沿用既有 `^C[0-9]{4}-C[0-9]{4}$` 解析，不需为 light_novel 分叉。",
   "type": "object",
   "required": ["work_id", "total_chapters", "stages"],
   "additionalProperties": false,
@@ -51,7 +51,7 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 15,
-            "description": "本 stage 章节数。monolithic 模式 5-15 hard 由 orchestrator `_check_stage_plan_limits` 强制（schema 不再硬挡 5 下限是为 light_novel 让出空间）；light_novel 模式恒为 1。"
+            "description": "本 stage 章节数。monolithic 模式 8-15 hard 由 orchestrator `_check_stage_plan_limits` 双向强制（schema chapter_count.maximum=15 强制上限；schema 不挡 minimum=8 是为 light_novel 1:1 派生让出空间，仅放到 minimum=1）；light_novel 模式恒为 1。"
           },
           "boundary_reason": {
             "type": "string",

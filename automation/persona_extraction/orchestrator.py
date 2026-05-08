@@ -2830,7 +2830,13 @@ class ExtractionOrchestrator:
                     pipeline, phase3,
                     max_stages=preset_end_stage)
                 return
-            resume = input("Resume from existing progress? [Y/n]: ").strip()
+            try:
+                resume = input("Resume from existing progress? [Y/n]: ").strip()
+            except EOFError:
+                # Daemon path with stdin=DEVNULL — CLI background validator
+                # should have intercepted, but defend in depth: treat empty
+                # stdin as "yes resume" (the [Y/n] default) so we don't crash.
+                resume = ""
             if resume.lower() != "n":
                 self.pipeline = pipeline
                 self.phase3 = phase3
@@ -2909,7 +2915,7 @@ def _check_stage_plan_limits(
     stage_plan: dict[str, Any],
     *,
     max_stage_size: int = 15,
-    min_stage_size: int = 5,
+    min_stage_size: int = 8,
 ) -> list[dict[str, Any]]:
     """Check stage chapter counts against limits.
 

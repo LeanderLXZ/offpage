@@ -22,7 +22,7 @@ characters, stage-based state, multi-terminal.
 
 ## §2 Stage Model
 
-- Natural story-boundary splits (target 10, min 5, max 15). Every
+- Natural story-boundary splits (target 10, min 8, max 15). Every
   boundary propagates to world / character / memory / retrieval.
 - Stage N cumulative through 1..N; latest stage = "now".
 - Shared `stage_id` (`S###`, 3-digit zero-pad) across world / character /

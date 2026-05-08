@@ -20,7 +20,7 @@
 # stage 时，删除 stage_plan.json 并重跑 LLM（最多 phase1.exit_validation_max_retry
 # 次），仍违规则 abort。
 target_chapter_count = 10        # 典型目标章节数
-min_chapter_count    = 5         # 单 stage 最少章节数
+min_chapter_count    = 8         # 单 stage 最少章节数
 max_chapter_count    = 15        # 单 stage 最多章节数
 
 

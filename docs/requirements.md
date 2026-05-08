@@ -27,7 +27,7 @@
   记忆时间线、运行时阶段选择的切分方式。切分质量直接决定角色体验的连贯性。
 - 阶段按自然剧情边界切分，边界准确性优先于章节数量均匀，
   每个阶段的章节数可以不同
-  （默认目标 10 章，最小 5 章，最大 15 章，可在作品 config 中调整）
+  （默认目标 10 章，最小 8 章，最大 15 章，可在作品 config 中调整）
 - 阶段 N 是累积的：选择阶段 N 意味着提取阶段 1..N 的全部内容
 
 ### 2.2 时间性原则
@@ -821,7 +821,7 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 │  └───────────────────────────────────────────────────┘              │
 │                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
-│  颗粒度层级:  stage (5-15章) ▸ chapter (单章) ▸ scene                │
+│  颗粒度层级:  stage (8-15章) ▸ chapter (单章) ▸ scene                │
 │  数据流向:    原文 → 摘要 → 分析 → baseline → 逐阶段提取            │
 │              → 跨阶段一致性检查 → 逐章场景切分                        │
 │  质量保障:    L1程序修复 → schema自修 → 程序校验 → 语义审核 → git提交/回滚 │
@@ -846,7 +846,7 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 3. **全书分析**（Phase 1）：双模式调度：
    - **monolithic**：基于所有章节摘要单次 LLM 调用产出 a/b/c/d 四子任务
      （a 跨 chunk 角色身份合并 / b 世界观概览 / c 源文件阶段规划 / d 候选角色识别）；
-     stage 边界由 LLM 按自然剧情切分（默认目标 10 章，最小 5 章，最大 15 章）
+     stage 边界由 LLM 按自然剧情切分（默认目标 10 章，最小 8 章，最大 15 章）
    - **light_novel**：LLM 调用照旧（产出 world_overview + candidate_characters），
      但 stage_plan 由 orchestrator 程序化 1:1 从 chapter_index 派生
      （`stage_id = S{n:03d}`、`chapters = f"{chapter_id}-{chapter_id}"`
@@ -2077,7 +2077,7 @@ issue 重新走 triage 流程。**本次实现不包含该自动 resume 逻辑**
 | Phase | 调用方式 | 说明 |
 |-------|---------|------|
 | Phase 0 (summarization) | `repair(files=[chunk], config=RepairConfig(run_semantic=False))` | 每个 chunk JSON 格式正确、非空 |
-| Phase 1 (analysis) | 程序化验证（stage plan 章节数硬性门控 5-15，违规重跑 LLM） | 沿用现有逻辑 |
+| Phase 1 (analysis) | 程序化验证（stage plan 章节数硬性门控 8-15，违规重跑 LLM） | 沿用现有逻辑 |
 | Phase 2 (baseline) | `repair(files=[identity, manifest, foundation, ...], config=...)` | 关键文件（identity/manifest/foundation）缺失 = error 阻断 |
 | Phase 3 (extraction) | 每文件独立调用 `repair(files=[single_file], config=RepairConfig(run_semantic=True), source_context=...)`，orchestrator 用 `ThreadPoolExecutor(max_workers=[repair_agent].repair_concurrency)` 并发分发 | 完整四层检查 + 四层修复，per-file 独立事务，全部文件 PASS 才进 commit |
 | Phase 3.5 (consistency) | `validate_only(files=all_stages, checkers=["structural"])` | 跨阶段程序化检查，不自动修复 |
@@ -2233,7 +2233,7 @@ Backend `run()` 接受可选 `lane_name` 参数，用于在 PID 打印和 heartb
 分析阶段的阶段规划应遵循：
 
 - 尽量贴近自然剧情边界
-- 最小阶段 5 章，最大阶段 15 章，默认 10 章
+- 最小阶段 8 章，最大阶段 15 章，默认 10 章
 - `stage_id` 使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`），与
   `M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##` 家族对齐
 - `stage_title` 是人类可读的中文短标题（如"主角初登场"，长度由 schema
@@ -2245,7 +2245,7 @@ Backend `run()` 接受可选 `lane_name` 参数，用于在 PID 打印和 heartb
 LLM 产出的 stage plan 可能违反章节数上限（实测常见）。Phase 1 出口验证
 检测到超限 stage 后，删除 `stage_plan.json` 并带修正反馈重跑 LLM：
 
-1. 扫描所有 stage，检查 `chapter_count` 是否在 5-15 范围内
+1. 扫描所有 stage，检查 `chapter_count` 是否在 8-15 范围内
 2. 如有超限，打印违规 stage 列表，删除 `stage_plan.json`
 3. 构建修正反馈（列出具体违规 stage 和章节数），追加到下次 analysis prompt
 4. 重跑 Phase 1 LLM（最多重试 2 次），其他已产出文件（world_overview、
