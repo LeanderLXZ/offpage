@@ -21,6 +21,25 @@ from .scene_archive import run_scene_archive
 VALID_PHASES = ("auto", "0", "1", "1.5", "2", "3", "3.5", "4")
 
 
+def _nonneg_int(s: str) -> int:
+    """argparse type for --end-stage: int >= 0.
+
+    Rejects negative values at argparse stage so they never reach the
+    background validator's ``args.end_stage is None`` check (which only
+    distinguishes None from not-None and would let -1 pass through).
+    Negative ``max_stages`` makes ``run_extraction_loop``'s line 1853
+    ``tracker.completed >= max_stages`` immediately True after the first
+    stage, silently truncating extraction — friendly argparse error
+    surfaces the issue instead.
+    """
+    v = int(s)
+    if v < 0:
+        raise argparse.ArgumentTypeError(
+            f"--end-stage must be >= 0 (got {v}; 0 = baseline only, "
+            f"positive = stage count to extract).")
+    return v
+
+
 def _load_pipeline_status(project_root: Path, work_id: str) -> dict | None:
     """Read pipeline.json for ``--background`` stage-aware validation only.
 
@@ -104,9 +123,10 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--end-stage",
-        type=int,
+        type=_nonneg_int,
         default=None,
-        help="Stop after stage N completes (0 = baseline only, omit = all)",
+        help="Stop after stage N completes (0 = baseline only, omit = all). "
+             "Negative values rejected at argparse.",
     )
     parser.add_argument(
         "--start-phase",

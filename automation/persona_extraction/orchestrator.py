@@ -1604,8 +1604,16 @@ class ExtractionOrchestrator:
             selected = preset_characters
             print(f"Pre-selected characters: {selected}")
         else:
-            raw = input("Enter character IDs to extract (comma-separated, "
-                        "empty = default): ")
+            try:
+                raw = input("Enter character IDs to extract (comma-separated, "
+                            "empty = default): ")
+            except EOFError:
+                # Daemon path with stdin=DEVNULL — cli.py background validator
+                # requires --characters preset on phase_1_5-pending path so
+                # we shouldn't reach here, but defend in depth: empty falls
+                # through to recommended_ids default below (or sys.exit(1)
+                # if no recommended_ids).
+                raw = ""
             typed = [c.strip() for c in raw.split(",") if c.strip()]
             selected = typed if typed else recommended_ids
 
@@ -1633,8 +1641,16 @@ class ExtractionOrchestrator:
         # --end-stage is a runtime limit only; progress always contains
         # the full stage plan (same pattern as Phase 4).
         if preset_end_stage is None:
-            raw = input(f"Extract up to stage N (total {total_stages}, "
-                        f"0 or empty = all): ").strip()
+            try:
+                raw = input(f"Extract up to stage N (total {total_stages}, "
+                            f"0 or empty = all): ").strip()
+            except EOFError:
+                # Daemon path with stdin=DEVNULL — cli.py background validator
+                # requires --end-stage preset on phase_1_5-pending path so
+                # we shouldn't reach here. Defend in depth: fallback to 0
+                # (= baseline only) so phase 2 still completes; daemon
+                # operator should re-run with --end-stage <N> for phase 3+.
+                raw = ""
             preset_end_stage = int(raw) if raw else 0
 
         pipeline = PipelineProgress(

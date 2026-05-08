@@ -9,7 +9,7 @@ must be covered. Phase 1.5 done has one stdin prompt site —
 ``"Resume from existing progress?"`` — bypassed by ``--resume``
 (auto_resume signal) or ``--characters`` (preset path).
 
-Eight scenarios cover the truth table:
+Nine scenarios cover the truth table:
 
   (A) phase_1_5 done + --resume --background, no --characters
         → accept (--resume bypasses the resume prompt)
@@ -34,6 +34,11 @@ Eight scenarios cover the truth table:
   (H) pipeline.json absent + --background --characters X --end-stage 50
         → accept (no pipeline → treated as phase_1_5 not done, both
           presets given so daemon path is stdin-prompt-free)
+  (I) --end-stage -1 → argparse reject (exit 2 + ">= 0" in stderr)
+        → ``_nonneg_int`` argparse type guards against negative values
+          that would otherwise pass ``args.end_stage is None`` check and
+          reach run_extraction_loop with max_stages=-1 (silent truncation
+          via line 1853 ``tracker.completed >= max_stages``)
 
 The smoke patches ``launch_background`` so accepted paths exit 0 without
 actually daemonizing, and patches ``validate_source_package`` /
@@ -247,6 +252,30 @@ def _scenario_h(root: Path) -> bool:
     return ok
 
 
+def _scenario_i(root: Path) -> bool:
+    """--end-stage -1 → argparse reject (exit 2 + ">= 0" in stderr).
+
+    Validates the ``_nonneg_int`` argparse type guards against negative
+    values that would otherwise pass the ``args.end_stage is None`` check
+    and reach run_extraction_loop with max_stages=-1, where line 1853's
+    ``tracker.completed >= max_stages`` would immediately be True after
+    the first stage (silent truncation).
+    """
+    project = _make_project(root, phase_1_5="pending")
+    code, text = _run([
+        WORK_ID, "--project-root", str(project),
+        "--background", "--characters", "char_a",
+        "--end-stage", "-1",
+    ])
+    # argparse error → SystemExit(2); stderr should mention ">= 0"
+    ok = code == 2 and ">= 0" in text
+    print(f"[I] --end-stage -1 → argparse reject: "
+          f"exit={code} expect 2 + msg → {'OK' if ok else 'FAIL'}")
+    if not ok:
+        print(f"  stdout/stderr: {text!r}")
+    return ok
+
+
 def main() -> int:
     results: list[bool] = []
     for fn, name in [
@@ -258,6 +287,7 @@ def main() -> int:
         (_scenario_f, "F"),
         (_scenario_g, "G"),
         (_scenario_h, "H"),
+        (_scenario_i, "I"),
     ]:
         with tempfile.TemporaryDirectory(prefix=f"smoke_cli_bg_{name}_") as td:
             results.append(fn(Path(td)))
