@@ -44,10 +44,10 @@ schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意�
 
 字段映射：
 
-- `chunk_world_rules → core_rules[]`（综合多 chunk 的同一规则、合并描述）
-- `chunk_power_levels → power_system.levels[]`（综合多 chunk 同一等级 / 阶段名，去重）
+- `chunk_world_rules → core_rules[]`（**字符串数组**，maxItems 30 / 每条 ≤150 字。**重新整理**——把多 chunk 的同一规则合并为完整描述，含规则名 + 机制 + 影响一句话写出；不要照搬 chunk 行的 `rule` / `description` / `observed_impact` 三字段拼接）
+- `chunk_power_levels → power_system.levels[]`（**对象数组**，每项 `{name (≤15 字), description (≤30 字)}`，对齐 chunk_power_levels.items 形态。综合多 chunk 同一等级名，合并 description）
 - `chunk_factions → major_factions[]`（综合多 chunk 同一势力，合并描述）
-- `chunk_regions → world_structure.major_regions[]`（综合多 chunk 同一地名）
+- `chunk_regions → world_structure.major_regions[]`（**对象数组**，每项 `{name (≤15 字), description (≤30 字)}`，对齐 chunk_regions.items 形态。综合多 chunk 同一地名，合并 description）
 - `chunk_arc_summary → world_lines[].core_conflict`（多 chunk 弧线串成大世界线核心冲突）
 - `world_structure.summary` / `world_lines[].setting_features` 由你综合 `chunk_regions` / `chunk_power_levels` / `chunk_factions` / `chunk_world_rules` 的信号写出（无 chunk 直供字段，需要综合判断）
 - `genre` / `tone` 由所有 chunk_arc_summary 的整体语调判断
@@ -66,11 +66,15 @@ JSON 结构：
   "tone": "...",
   "world_structure": {{
     "summary": "...",
-    "major_regions": ["..."]
+    "major_regions": [
+      {{ "name": "...", "description": "..." }}
+    ]
   }},
   "power_system": {{
     "summary": "...",
-    "levels": ["..."]
+    "levels": [
+      {{ "name": "...", "description": "..." }}
+    ]
   }},
   "major_factions": [
     {{

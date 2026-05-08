@@ -118,11 +118,12 @@ def build_summarization_prompt(
 #   - world_overview lane: chunk-level secondary fields (chunk_arc_summary +
 #     chunk_world_rules + chunk_power_levels + chunk_factions WITHOUT
 #     members_present + chunk_regions) + summaries[].chapter
-#   - stage_plan lane: chunk_arc_summary + chunk_regions + per-summary plot
-#     fields (chapter / summary / key_events / characters_present /
-#     emotional_tone / identity_notes)
-#   - candidate_characters lane: per-summary identity fields (chapter /
-#     characters_present / identity_notes) + chunk_factions[].{name,members_present}
+#   - stage_plan lane: chunk_arc_summary + chunk_regions + per-summary
+#     chapter + summary only (the 150-200 CJK-char summary now carries the
+#     turning-point text signal directly; characters_present / emotional_tone
+#     / identity_notes are orthogonal to plot-arc merging and dropped)
+#   - candidate_characters lane: per-summary chapter + summary +
+#     characters_present + identity_notes + chunk_factions[].{name,members_present}
 #
 # The projected chunks are staged at
 #   works/{work_id}/analysis/.phase1_lane_inputs/{lane}/chunk_NNN.json
@@ -163,9 +164,12 @@ def _project_chunk_for_world_overview(chunk: dict) -> dict:
 
 def _project_chunk_for_stage_plan(chunk: dict) -> dict:
     """chunk_arc_summary + chunk_regions + per-summary chapter+summary only.
-    key_events / characters_present / emotional_tone / identity_notes dropped —
+    characters_present / emotional_tone / identity_notes dropped —
     orthogonal to chapter-boundary plot-arc merging task; their token surface
-    fed LLM thinking long-tail without informing turning-point detection."""
+    fed LLM thinking long-tail without informing turning-point detection.
+    The 150-200 CJK-char `summary` now carries the turning-point text signal
+    directly (decision #53 — original key_events field deleted from chunk
+    schema)."""
     return {
         "work_id": chunk.get("work_id"),
         "chunk_index": chunk.get("chunk_index"),

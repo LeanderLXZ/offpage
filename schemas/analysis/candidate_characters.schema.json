@@ -23,8 +23,7 @@
           "aliases",
           "description",
           "frequency",
-          "importance",
-          "recommended"
+          "importance"
         ],
         "additionalProperties": false,
         "properties": {
@@ -39,7 +38,7 @@
             "description": "已知别名列表（≤30 项；不含 character_id 本身）。",
             "items": {
               "type": "object",
-              "required": ["name", "type", "first_appearance"],
+              "required": ["name", "type"],
               "additionalProperties": false,
               "properties": {
                 "name": {
@@ -51,11 +50,6 @@
                   "type": "string",
                   "enum": ["本名", "化名", "代称", "称呼", "昵称", "绰号", "封号", "道号", "武器名", "其他"],
                   "description": "别名类型（10 项枚举）。"
-                },
-                "first_appearance": {
-                  "type": "string",
-                  "maxLength": 30,
-                  "description": "首次出现位置描述（≤30 字，例如\"约第 0042 章\"）。"
                 }
               }
             }
@@ -74,11 +68,7 @@
           "importance": {
             "type": "string",
             "enum": ["主角", "重要配角", "次要配角"],
-            "description": "预估重要程度。"
-          },
-          "recommended": {
-            "type": "boolean",
-            "description": "是否建议建包（true=建议，false=不建议或待定；Phase 1.5 用户会最终确认）。"
+            "description": "预估重要程度。Phase 1.5 默认勾选 = importance == \"主角\" 的 candidate（程序判定，用户仍可手选追加 / 取消）。"
           }
         }
       }

@@ -21,13 +21,13 @@
 每个文件是一个 chunk 的归纳结果（JSON），**已经按 stage_plan lane 的需求做了字段裁剪**——只保留以下字段：
 
 **per-summary 层（每章一条，章序锚点 + 事件描述）**：
-- `chapter` / `summary`（100-150 字本章核心剧情概述）
+- `chapter` / `summary`（150-200 字本章核心剧情概述 + 关键剧情节点）
 
 **chunk-level 二级字段（chunk 弧光 + 地理切换信号）**：
 - `chunk_arc_summary`（≤200 字本 chunk 整体剧情弧——chunk 跨度内的剧情走向骨架）
 - `chunk_regions[]`（≤20 条 × `{{name, description}}`；本 chunk 出现的地理区域，作为"场景转换"边界信号）
 
-裁剪原则：拐点合并依据 = `chunk_arc_summary` chunk 弧光 + per-summary `summary` 事件描述 + `chunk_regions` 地理切换。`key_events` / `characters_present` / `emotional_tone` / `identity_notes` 是身份 / 角色 / 情绪粒度，与"按章序合并相邻拐点"任务正交，已删除。
+裁剪原则：拐点合并依据 = `chunk_arc_summary` chunk 弧光 + per-summary `summary` 事件描述（150-200 字承载事件 + 节奏 / 转折）+ `chunk_regions` 地理切换。`characters_present` / `emotional_tone` / `identity_notes` 是身份 / 角色 / 情绪粒度，与"按章序合并相邻拐点"任务正交，已删除。
 
 schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意：lane 输入只是子集；输出 schema 见下方）。
 

@@ -19,8 +19,8 @@
 每个文件是一个 chunk 的归纳结果（JSON），**已经按 candidate_characters lane 的需求做了字段裁剪**——只保留以下字段：
 
 **per-summary 层（每章一条，角色出场 + 事件上下文 + 身份变化的主要信号）**：
-- `chapter`（章号锚点，用于 aliases 的 `first_appearance` 推断）
-- `summary`（100-150 字本章核心剧情概述——为身份合并提供事件上下文，例如"主角 A 被告知自己其实是势力 X 的转世"这类隐含身份链通常在 `summary` 里完整描述，光读 `identity_notes` 短句无法还原）
+- `chapter`（章号锚点）
+- `summary`（150-200 字本章核心剧情概述 + 关键剧情节点——为身份合并提供事件上下文，例如"主角 A 被告知自己其实是势力 X 的转世"这类隐含身份链通常在 `summary` 里完整描述，光读 `identity_notes` 短句无法还原）
 - `characters_present`（本章实质互动角色，最常用名形式）
 - `identity_notes`（≤50 字本章身份相关线索：化名建立、真名揭示、封号赋予等）
 
@@ -67,17 +67,16 @@ schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意�
 为每个候选角色提供：
 
 - `character_id`（中文名，选择最终 / 最通用的名称）
-- `aliases`（所有已知的其他名称列表，标注类型和首次出现的大致章节范围）
+- `aliases`（所有已知的其他名称列表，每条仅 `name` + `type` 两字段——不再记录首次出现章节）
   - **type 必须使用以下枚举值之一**：本名 / 化名 / 代称 / 称呼 / 昵称 / 绰号 / 封号 / 道号 / 武器名 / 其他。不要使用自由描述（如"易容伪装"→应为"化名"，"前世称号"→应为"封号"，"天道对其称呼"→应为"称呼"）
 - `description`（角色简介，2-3 句）
 - `frequency`（预估出场频率：高 / 中 / 低）
-- `importance`（预估重要程度：主角 / 重要配角 / 次要配角）
-- `recommended`（建议是否建包，boolean: true 或 false；不确定时取 false 让 Phase 1.5 用户最终决定）
+- `importance`（预估重要程度：主角 / 重要配角 / 次要配角）。**不需要再判断"是否建议建包"**——Phase 1.5 默认勾选基于 `importance == "主角"` 程序判定，用户仍可手选追加 / 取消，所以你只需要把 importance 判准即可。
 
 ### 步骤 4：落盘
 
 输出文件：`{work_dir}/analysis/candidate_characters.json`
-schema 契约 → `schemas/analysis/candidate_characters.schema.json`（aliases[].type / frequency / importance 三处 enum、recommended 为 boolean、长度上下限以 schema 为准）。
+schema 契约 → `schemas/analysis/candidate_characters.schema.json`（aliases[].type / frequency / importance 三处 enum、长度上下限以 schema 为准）。
 
 JSON 结构：
 
@@ -90,14 +89,12 @@ JSON 结构：
       "aliases": [
         {{
           "name": "别名",
-          "type": "代称",
-          "first_appearance": "约第XX章"
+          "type": "代称"
         }}
       ],
       "description": "简介",
       "frequency": "高",
-      "importance": "主角",
-      "recommended": true
+      "importance": "主角"
     }}
   ]
 }}

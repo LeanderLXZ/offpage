@@ -44,8 +44,16 @@
         "major_regions": {
           "type": "array",
           "maxItems": 30,
-          "items": { "type": "string", "maxLength": 30 },
-          "description": "主要区域名列表（≤30 项，每项 ≤30 字）。"
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "maxLength": 15, "description": "区域 / 地名（≤15 字，对齐 chunk_regions.items.name）。" },
+              "description": { "type": "string", "maxLength": 30, "description": "区域简要描述（≤30 字，对齐 chunk_regions.items.description）。" }
+            }
+          },
+          "description": "主要区域列表（≤30 项）。形态对齐 chunk_regions.items，Phase 2 baseline 直接读用。"
         }
       }
     },
@@ -63,8 +71,16 @@
         "levels": {
           "type": "array",
           "maxItems": 20,
-          "items": { "type": "string", "maxLength": 30 },
-          "description": "等级 / 阶段名列表（≤20 项，每项 ≤30 字）。"
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "maxLength": 15, "description": "等级 / 阶段名（≤15 字，对齐 chunk_power_levels.items.name，例如\"练气\"\"筑基\"）。" },
+              "description": { "type": "string", "maxLength": 30, "description": "等级简要描述（≤30 字，对齐 chunk_power_levels.items.description）。" }
+            }
+          },
+          "description": "力量体系等级列表（≤20 项）。形态对齐 chunk_power_levels.items，Phase 2 baseline 直接读用。"
         }
       }
     },
@@ -104,9 +120,9 @@
     },
     "core_rules": {
       "type": "array",
-      "maxItems": 20,
-      "items": { "type": "string", "maxLength": 100 },
-      "description": "影响剧情走向的关键世界规则（≤20 条，每条 ≤100 字）。"
+      "maxItems": 30,
+      "items": { "type": "string", "maxLength": 150 },
+      "description": "影响剧情走向的关键世界规则（≤30 条，每条 ≤150 字）。保留字符串数组形态——LLM 在 phase 1 综合 N chunk 的 chunk_world_rules 时去重 + 重新整理为完整规则描述，而非照搬 chunk 行。"
     }
   }
 }

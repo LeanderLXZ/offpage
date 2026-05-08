@@ -30,8 +30,7 @@
 
 - `chapter`: 章节标识，与 `chapter_index.json` 的 `chapter_id` 一致（C 前缀 + 4 位零填充，如 `"C0001"`）
 - `title`: 章节标题（从原文提取；原文无明确标题时为空字符串）
-- `summary`: 2-4 句话概括本章核心剧情（事件描述，不是文学评论）。长度 100-150 字。**设定 / 世界规则 / 力量体系 / 势力 / 区域信号写到 chunk-level 二级字段（步骤 3），不要塞进 summary**
-- `key_events`: 本章推动剧情的关键事件列表，**最多 5 条**，每条 ≤ 50 字，跳过日常水文。Phase 1 stage_plan 边界判定的离散信号
+- `summary`: 3-5 句话概括本章核心剧情（事件描述 + 关键剧情节点）。长度 150-200 字。Phase 1 monolithic stage_plan 边界判定的主要文本信号——既要把推动剧情的关键事件写进去（不要为凑长度水），也要把场景 / 节奏 / 转折交代清楚。**设定 / 世界规则 / 力量体系 / 势力 / 区域信号写到 chunk-level 二级字段（步骤 3），不要塞进 summary**
 - `characters_present`: 本章有实质互动的角色列表（不计背景群演）
 - `emotional_tone`: 本章主要情绪基调（≤ 20 字，例如"紧张" / "温馨" / "搞笑" / "悲伤"）
 - `identity_notes`: 本章中的角色身份相关线索（化名建立、真名揭示、封号赋予等），≤ 50 字。无此类事件时为空字符串
@@ -92,7 +91,6 @@ JSON 结构（不要添加 schema 之外的字段；**严格遵循 `additionalPr
       "chapter": "C0001",
       "title": "...",
       "summary": "...",
-      "key_events": ["...", "..."],
       "characters_present": ["...", "..."],
       "emotional_tone": "...",
       "identity_notes": ""
@@ -105,8 +103,8 @@ JSON 结构（不要添加 schema 之外的字段；**严格遵循 `additionalPr
 
 - 中文作品使用中文产出内容
 - 摘要要简洁但信息量充分，重点在于 **剧情事件**，不是文学分析
-- `key_events` 只记录推动剧情的事件，跳过日常水文
-- `characters_present` 只记录有实质互动的角色，不记背景群演。**注意角色可能以化名、代称、昵称等出现**——如果你能判断某个名称实际上是已知角色的别名，在 `characters_present` 中使用其最常用的名称，并在 `key_events` 中注明化名关系（如"角色A以XX身份潜入"）；**chunk_factions[].members_present 内不做合并**，按 raw 角色名记
+- `summary` 必须把本章的关键事件 + 场景 + 节奏 / 转折一并写进去（不留独立 key_events 字段了），跳过日常水文
+- `characters_present` 只记录有实质互动的角色，不记背景群演。**注意角色可能以化名、代称、昵称等出现**——如果你能判断某个名称实际上是已知角色的别名，在 `characters_present` 中使用其最常用的名称，并在 `identity_notes` 中注明化名关系（如"角色A以XX身份潜入"）；**chunk_factions[].members_present 内不做合并**，按 raw 角色名记
 - 你只负责归纳，不要开始提取世界或角色信息（chunk-level 二级字段是给下游 Phase 1/2 用的素材，不是世界 / 角色提取）
 - 读取所有章节后再开始写摘要，确保对整个 chunk 的剧情脉络有完整认知
 {retry_note}

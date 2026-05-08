@@ -145,7 +145,6 @@
           "chapter",
           "title",
           "summary",
-          "key_events",
           "characters_present",
           "emotional_tone",
           "identity_notes"
@@ -163,23 +162,13 @@
           },
           "summary": {
             "type": "string",
-            "minLength": 100,
-            "maxLength": 150,
-            "description": "本章核心剧情概述，2-4 句话，长度 100-150 字。事件描述而非文学评论。设定 / 世界规则 / 力量体系 / 势力 / 区域信号写到 chunk-level 二级字段，不写在本 summary。"
-          },
-          "key_events": {
-            "type": "array",
-            "maxItems": 5,
-            "description": "推动剧情的关键事件列表，最多 5 条；跳过日常水文。Phase 1 monolithic 模式 stage_plan 边界判定的离散信号。",
-            "items": {
-              "type": "string",
-              "maxLength": 50,
-              "description": "单条关键事件，≤50 字。"
-            }
+            "minLength": 150,
+            "maxLength": 200,
+            "description": "本章核心剧情概述，3-5 句话，长度 150-200 字。事件描述 + 关键剧情节点，作为 Phase 1 monolithic stage_plan 边界判定的主要文本信号。设定 / 世界规则 / 力量体系 / 势力 / 区域信号写到 chunk-level 二级字段，不写在本 summary。"
           },
           "characters_present": {
             "type": "array",
-            "description": "本章有实质互动的角色列表（不计背景群演）。化名 / 代称在 key_events 注明，本字段使用最常用名。",
+            "description": "本章有实质互动的角色列表（不计背景群演）。化名 / 代称在 identity_notes 注明，本字段使用最常用名。",
             "items": { "type": "string" }
           },
           "emotional_tone": {

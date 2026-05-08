@@ -6,14 +6,15 @@
 
 > 本段是三张子表的渲染缓存，由维护本文件的人（包括 Claude）在**每次对正文条目增 / 改 / 移段 / 完成 / 废弃后**顺手刷新——具体规则见下方"## File guide → Index maintenance"。`/todo` skill 不解析正文，只读这一段，所以这里的内容必须与正文同步；不同步会让 `/todo` 给出错误结论。
 
-### 🟢 In Progress (4)
+### 🟢 In Progress (5)
 
 | ID | Title | Start time | Updated | Status |
 |---|---|---|---|---|
 | `T-BASELINE-DEPRECATE` | 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载 | 2026-04-29 14:42 EDT | — | 代码完成、runtime 验证待跑 |
 | `T-PHASE2-TARGET-BASELINE` | phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点 | 2026-04-29 20:54 EDT | — | 代码完成、runtime 验证待跑（与 BASELINE-DEPRECATE 同形态，可同批跑） |
 | `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | 2026-05-01 | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
-| `T-PHASE0-CHUNK-SCHEMA-EXPAND` | chapter_summary_chunk schema 二级字段扩展（命中 world_overview / foundation 不可信字段） | 2026-05-04 14:50 EDT | 2026-05-04 | schema/prompt/ai_context/docs 完成 + 静态 gate 全过（jsonschema metaschema OK；样本 chunk 1 valid + 10 negative case 全过；orchestrator + validator import 通过；grep 无 chapter.location 残留）；runtime 验证待跑（与 T-BASELINE-DEPRECATE / T-PHASE2-TARGET-BASELINE / T-INGEST-STRUCTURE-MODE 同批跑） |
+| `T-PHASE0-CHUNK-SCHEMA-EXPAND` | chapter_summary_chunk schema 二级字段扩展（命中 world_overview / foundation 不可信字段） | 2026-05-04 14:50 EDT | 2026-05-04 | schema/prompt/ai_context/docs 完成 + 静态 gate 全过（jsonschema metaschema OK；样本 chunk 1 valid + 10 negative case 全过；orchestrator + validator import 通过；grep 无 chapter.location 残留）；runtime 验证待跑（与 T-BASELINE-DEPRECATE / T-PHASE2-TARGET-BASELINE / T-INGEST-STRUCTURE-MODE 同批跑）。**注**：本任务的 per-summary 字段计划（key_events 保留 + summary 100-150）已由 T-ANALYSIS-SCHEMA-TIGHTEN 进一步收紧（key_events 删 + summary 150-200） |
+| `T-ANALYSIS-SCHEMA-TIGHTEN` | 收紧 phase 0 chunk + phase 1 candidate / world_overview schema 字段（chunk 删 `key_events` + `summary` 100-150→150-200；candidate 删 `recommended` + `aliases.first_appearance` + Phase 1.5 默认勾选改基于 `importance==主角`；world_overview `major_regions` / `levels` item 升对象 + `core_rules` 20→30 / 100→150） | 2026-05-08 10:26 EDT | 2026-05-08 11:06 EDT | schema/prompt/code/ai_context/docs 完成 + 静态 gate 全过（3 件 schema metaschema OK；正样本 + 多 negative case 全过；orchestrator + prompt_builder + validator + scene_archive import 通过；grep 无 key_events / first_appearance / recommended 残留主动引用）；e2e 验证待跑（清掉现有 untracked `works/<work_id>/` 后从 phase 0 全新跑——schema gate 不报红 + phase 0/1/1.5/2 全过为标准） |
 
 ### 🟡 Next (2)
 
@@ -34,7 +35,7 @@
 | `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
-**Total**: 14 — 🟢 In Progress 4 ｜ 🟡 Next 2 ｜ ⚪ Discussing 8
+**Total**: 15 — 🟢 In Progress 5 ｜ 🟡 Next 2 ｜ ⚪ Discussing 8
 
 ---
 
@@ -621,6 +622,117 @@ world_overview 的"结构化精化版"——信息源相同，可信度同分层
 
 ---
 
+### [T-ANALYSIS-SCHEMA-TIGHTEN] 收紧 phase 0 chunk + phase 1 candidate / world_overview schema 字段
+
+**开始时间**：2026-05-08 10:26 EDT
+
+**更新时间**：2026-05-08 11:06 EDT
+
+**当前状态**：schema/prompt/code/ai_context/docs 完成 + 静态 gate 全过
+（3 件 schema metaschema OK；正样本 + 多个 negative case 全过——chunk
+拒 key_events / summary 长度双向边界、candidate 拒 first_appearance /
+recommended、world_overview 拒 string major_regions/levels item +
+core_rules > 30 + items > 150；orchestrator + prompt_builder + validator +
+scene_archive import 通过；grep 全仓库无 key_events / first_appearance /
+recommended 残留主动引用）；e2e 验证待跑（清掉现有 untracked
+`works/<work_id>/` 后从 phase 0 全新跑——schema gate 不报红 + phase 0/1/
+1.5/2 全过为标准）
+
+**上下文**
+
+2026-05-08 03:54-04:30 EDT 跑 work_id=`<work_id>` phase 0/1/1.5 + phase 2
+部分（被 SIGTERM 中止）后，看到实际产物决定收紧三组 schema：
+
+- chunk per-summary `key_events`：经 #52 lane 拆分后，三个 phase 1 lane
+  都不投这字段（[prompt_builder.py:122,166](../automation/persona_extraction/prompt_builder.py)
+  当前只在注释里提）+ Phase 2 baseline 也不读，是死字段；同时 `summary`
+  100-150 字范围装不下事件 + 设定二者，需要扩到 150-200。
+- candidate `recommended`：是 LLM 自报推荐意愿（拍脑袋打 boolean），不
+  可靠；改为 phase 1.5 基于 `importance == 主角` 程序推荐（用户仍可手
+  选追加）。
+- candidate `aliases.first_appearance`：字符串描述（"约第 0042 章"），
+  既不参与下游也不能用于程序检索，是冗余。
+- world_overview `major_regions` / `power_system.levels`：当前是字符串
+  数组，与 chunk_regions / chunk_power_levels 的 `{name, description}`
+  对象形态不对齐，Phase 2 baseline 时需要再拼对象，是 churn。
+- world_overview `core_rules`：maxItems 20 对应 N chunk × ≤5 条原始规则
+  去重合并到 30 比较合理；同时 maxLength 100→150 强制 LLM 重新整理而
+  不是照搬 chunk 行。
+
+**改动清单**
+
+1. [chapter_summary_chunk.schema.json](../schemas/analysis/chapter_summary_chunk.schema.json)
+   — `summaries.items.required` 删 `key_events`；删 `properties.key_events`；
+   `properties.summary.minLength` 100→150，`maxLength` 150→200；
+   `characters_present.description` 改"化名 / 代称在 identity_notes 注明"
+2. [candidate_characters.schema.json](../schemas/analysis/candidate_characters.schema.json)
+   — `candidates.items.required` 删 `recommended`；删 `properties.recommended`；
+   `aliases.items.required` 删 `first_appearance`；删
+   `aliases.items.properties.first_appearance`；
+   `importance.description` 加"Phase 1.5 默认勾选 = importance == 主角"
+3. [world_overview.schema.json](../schemas/analysis/world_overview.schema.json)
+   — `world_structure.major_regions.items` 由 string 改 `{name (≤15),
+   description (≤30)}` 对象（对齐 `chunk_regions.items`）；
+   `power_system.levels.items` 同上对齐 `chunk_power_levels.items`；
+   `core_rules.maxItems` 20→30；`core_rules.items.maxLength` 100→150
+   （保留字符串数组形态）
+4. [summarization.md](../automation/prompt_templates/summarization.md)
+   — 删 key_events 教学（per-章字段 + JSON 示例 + 规则段落 3 处）+ 把
+   summary 长度教学从 100-150 改 150-200 + 教 LLM 把关键事件写进 summary
+5. [analysis_world_overview.md](../automation/prompt_templates/analysis_world_overview.md)
+   — 字段映射表：`major_regions` / `levels` 升对象 + `core_rules` 30 条
+   字符串教学；JSON 示例同步
+6. [analysis_stage_plan.md](../automation/prompt_templates/analysis_stage_plan.md)
+   — per-summary 字段集 100-150 → 150-200；裁剪原则段落删 `key_events`
+   提及（chunk schema 已删）
+7. [analysis_candidate_characters.md](../automation/prompt_templates/analysis_candidate_characters.md)
+   — 删 `aliases.first_appearance` / `recommended` 字段教学；改"不需要再
+   判断是否建议建包" + JSON 示例同步
+8. [prompt_builder.py:118-124,165-172](../automation/persona_extraction/prompt_builder.py)
+   — module-level 注释 + `_project_chunk_for_stage_plan` docstring：
+   key_events 描述改为"已从 chunk schema 删除（决策 #53）"；
+   prompt_builder 自身 projector 本就不投 key_events 无代码改动
+9. [orchestrator.py:1582-1612](../automation/persona_extraction/orchestrator.py)
+   — `confirm_with_user` Phase 1.5：`RECOMMENDED` 标签从 `c.get("recommended")`
+   改为 `c.get("importance") == "主角"`；新增 `recommended_ids` 程序计算
+   + 默认勾选行 `(Press Enter to accept default, or type IDs to override)`
+   + 空输入回退到 `recommended_ids`（preset_characters 路径不变）
+10. [schema_reference.md](architecture/schema_reference.md)
+    + [extraction_workflow.md](architecture/extraction_workflow.md)
+    — chunk per-summary 字段表删 key_events / 改 summary 长度；
+    candidate 关键字段表删 recommended + first_appearance；
+    world_overview 关键字段表 major_regions / levels 形态升级 + core_rules
+    bound；Phase 1.5 默认勾选规则化描述
+11. [architecture.md](../ai_context/architecture.md) Phase 0 chunk 字段
+    集 + Phase 1 lane 投影（删 key_events）+ Phase 1.5 默认规则化；
+    [decisions.md](../ai_context/decisions.md) 修订 #27m（key_events 段删
+    + summary 长度更新）+ 修订 #52（lane 投影 key_events 提及修订）+
+    新增 #53（本次三组 schema 收紧 + Phase 1.5 推荐规则化总条目）
+
+**完成标准**
+
+- 三个 schema 文件改完，Draft202012 metaschema 校验通过 ✅
+- 9 个下游文件文字 / 代码同步 ✅
+- Phase 1.5 推荐逻辑改为基于规则（程序判定 `importance == "主角"`）✅
+- grep 全仓库无 `key_events` / `first_appearance` / `recommended` 残留
+  主动引用（除 logs / works / users / archived）✅
+- 现有 `works/<work_id>/` 整 untracked 目录清掉，从 phase 0 全新跑 e2e
+  验证 schema gate 不报红 → phase 0 + phase 1 + phase 1.5 + phase 2 全过
+  ⏳（待跑）
+
+**依赖**
+
+无（schema 改动属 framework 层；不阻塞其他 In Progress 任务，可立即
+启动）
+
+**预估**
+
+schema + prompt + ai_context + docs 改动 ~30 min（**已完成**）；e2e 重跑
+phase 0（~1.5h wall）+ phase 1（~30min）+ phase 1.5 + phase 2（~10-20min）
+≈ 2.5h（不含可能的 retry / debug）
+
+---
+
 ## Next
 
 ### [T-PLUGIN-README] 写 .agents/skills 的 plugin README
@@ -923,7 +1035,6 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   3 sub-lane 启动开销可能 > 抽取耗时收益）。phase 3 extraction 不需要
   知道 mode
 
----
 
 ## Discussing (Undecided)
 

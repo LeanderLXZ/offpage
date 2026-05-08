@@ -32,8 +32,8 @@
   - `chunk_power_levels[]`（maxItems 20；items `{name, description}`，`required: [name]`，`additionalProperties: false`）
   - `chunk_factions[]`（maxItems 20；items `{name, description, members_present[]}`，`required: [name]`，`additionalProperties: false`；`members_present` 是本 chunk LLM 看到的 raw 角色名，化名 / 真名 / 称呼任一，phase 1.5 跨 chunk 身份合并后再映射到 `character_id`）
   - `chunk_regions[]`（maxItems 20；items `{name, description}`，`required: [name]`，`additionalProperties: false`）
-- per-summary：`chapter`（`^C[0-9]{4}$` 与 chapter_index `chapter_id` 一致）/ `title` / `summary` / `key_events` / `characters_present` / `emotional_tone` / `identity_notes`
-**消费方**：Phase 1 三 lane（每 lane 各自一份裁剪后 chunks 子集，决策 #52）—— `automation/prompt_templates/analysis_world_overview.md` 用 chunk-level 字段（chunk_world_rules → core_rules / chunk_power_levels → power_system.levels / chunk_factions → major_factions / chunk_regions → world_structure.major_regions / chunk_arc_summary → world_lines.core_conflict）；`automation/prompt_templates/analysis_stage_plan.md` 用 per-summary 全字段 + chunk_arc_summary + chunk_regions（key_events 为离散边界信号）；`automation/prompt_templates/analysis_candidate_characters.md` 用 per-summary identity 字段 + chunk_factions members_present。Phase 2 (`automation/prompt_templates/baseline_production.md`) 直读 chunk-level 字段综合产 foundation。
+- per-summary：`chapter`（`^C[0-9]{4}$` 与 chapter_index `chapter_id` 一致）/ `title` / `summary`（150-200 CJK 字）/ `characters_present` / `emotional_tone` / `identity_notes`
+**消费方**：Phase 1 三 lane（每 lane 各自一份裁剪后 chunks 子集，决策 #52）—— `automation/prompt_templates/analysis_world_overview.md` 用 chunk-level 字段（chunk_world_rules → core_rules / chunk_power_levels → power_system.levels / chunk_factions → major_factions / chunk_regions → world_structure.major_regions / chunk_arc_summary → world_lines.core_conflict）；`automation/prompt_templates/analysis_stage_plan.md` 用 per-summary `chapter` + `summary` + chunk_arc_summary + chunk_regions（事件描述由 `summary` 150-200 字承载，原 `key_events` 已删除——决策 #53）；`automation/prompt_templates/analysis_candidate_characters.md` 用 per-summary identity 字段 + chunk_factions members_present。Phase 2 (`automation/prompt_templates/baseline_production.md`) 直读 chunk-level 字段综合产 foundation。
 **生成时机**：Phase 0 by `automation/prompt_templates/summarization.md`，分 chunk 并行 LLM 调用。
 
 ---
@@ -52,7 +52,7 @@
 
 **用途**：Phase 1 全书世界观概览。基于全部 chapter_summary chunks 由 LLM 一次产出（与 stage_plan / candidate_characters 同次调用）。
 **位置**：`works/{work_id}/analysis/world_overview.json`（**入 git**）
-**关键字段**：`work_id` / `genre` / `tone` / `world_structure{summary, major_regions[]}` / `power_system{summary, levels[]}` / `major_factions[]` / `world_lines[]` / `core_rules[]`
+**关键字段**：`work_id` / `genre` / `tone` / `world_structure{summary, major_regions[]}`（`major_regions.items` 为 `{name (≤15), description (≤30)}` 对象，对齐 `chunk_regions.items`） / `power_system{summary, levels[]}`（`levels.items` 为 `{name (≤15), description (≤30)}` 对象，对齐 `chunk_power_levels.items`） / `major_factions[]` / `world_lines[]` / `core_rules[]`（字符串数组，maxItems 30 / items maxLength 150；强制 LLM 重新整理而非照搬 chunk 行）
 **消费方**：Phase 2 baseline 把它作为世界 foundation 起点。
 **生成时机**：Phase 1 world_overview lane by `automation/prompt_templates/analysis_world_overview.md`（与 stage_plan + candidate_characters lane 并行；决策 #52）。
 **形态**：`additionalProperties: true` 顶层（per-work 可扩展）。
@@ -73,8 +73,8 @@
 
 **用途**：Phase 1 候选角色识别结果。同一角色不同名称合并到一个 candidate（aliases 承载化名 / 代称等）。
 **位置**：`works/{work_id}/analysis/candidate_characters.json`（**入 git**）
-**关键字段**：`work_id` / `candidates[]`（每条 `character_id` / `aliases[]` / `description` / `frequency` 高/中/低 / `importance` 主角/重要配角/次要配角 / `recommended` boolean）；`aliases[].type` 走 10 项中文枚举（本名/化名/代称/称呼/昵称/绰号/封号/道号/武器名/其他）
-**消费方**：Phase 1.5 用户从 candidates 选确认建包对象，feed Phase 2 baseline。
+**关键字段**：`work_id` / `candidates[]`（每条 `character_id` / `aliases[]` / `description` / `frequency` 高/中/低 / `importance` 主角/重要配角/次要配角）；`aliases[].items` = `{name, type}`，`type` 走 10 项中文枚举（本名/化名/代称/称呼/昵称/绰号/封号/道号/武器名/其他）。原 `recommended` boolean 与 `aliases.first_appearance` 字段已删除（决策 #53）——LLM 自报推荐不可靠 + first_appearance 字符串无下游消费。
+**消费方**：Phase 1.5 用户从 candidates 选确认建包对象，feed Phase 2 baseline；默认勾选 = 程序按 `importance == "主角"` 判定（用户仍可手选追加 / 取消）。
 **生成时机**：Phase 1 candidate_characters lane by `automation/prompt_templates/analysis_candidate_characters.md`（与 world_overview + stage_plan lane 并行；决策 #52）。
 
 ---

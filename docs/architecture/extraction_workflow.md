@@ -107,7 +107,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 裁剪原则：每 lane 只接收任务直接需要的字段，token surface 与 lane scope 成正比——
 **world_overview** 写全书设定（题材 / 力量 / 势力 / 地理 / 设定规则），仅依赖 chunk-level
 聚合，删去 `summaries[]` 整段；**stage_plan** 拐点先行 + 5–15 章硬范围合并，依据是
-`chunk_arc_summary` 的 chunk-级弧光 + per-summary `summary` 的事件描述，`key_events` /
+`chunk_arc_summary` 的 chunk-级弧光 + per-summary `summary` 的事件描述（150-200 字承载事件 + 设定上下文），
 `characters_present` / `emotional_tone` / `identity_notes` 与"按章序合并相邻拐点"任务正交，
 裁掉避免 LLM thinking 长尾；**candidate_characters** 跨 chunk 身份合并需要事件上下文判断
 隐含身份链（如"Character A 实际是 Character B 化身"），保留 `summary` + `characters_present` +
@@ -130,6 +130,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 ### 4. 活跃角色确认（Phase 1.5）
 
 - **用户参与**：用户从候选中选择要建包的目标角色
+- **默认勾选**：基于规则的程序判定——只勾选 `importance == "主角"` 的 candidate；其他 importance 等级（重要配角 / 次要配角）默认不勾选，用户可手选追加。`RECOMMENDED` 标签字符串的渲染逻辑从原 `candidates.recommended` boolean 改为读 `importance`（决策 #53；原 `recommended` 字段已从 candidate schema 删除）
 - 确认完成后 orchestrator 程序化写出
   `works/{work_id}/manifest.json`（schema：
   `schemas/work/works_manifest.schema.json`；写入器：

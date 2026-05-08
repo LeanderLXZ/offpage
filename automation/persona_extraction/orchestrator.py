@@ -1579,23 +1579,35 @@ class ExtractionOrchestrator:
         candidates = analysis.get("candidates") or {}
         stage_plan = analysis.get("stage_plan") or {}
 
-        # Show candidates
+        # Show candidates. RECOMMENDED label = importance == "主角" (rule-based;
+        # decision #53 replaced the LLM-self-reported `recommended` boolean).
+        recommended_ids: list[str] = []
         if candidates and candidates.get("candidates"):
             print("Candidate characters:\n")
             for i, c in enumerate(candidates["candidates"], 1):
-                rec = "RECOMMENDED" if c.get("recommended") else ""
+                is_recommended = c.get("importance") == "主角"
+                rec = "RECOMMENDED" if is_recommended else ""
+                if is_recommended:
+                    recommended_ids.append(c["character_id"])
                 print(f"  {i}. {c['character_id']} — {c.get('description', '')}")
                 print(f"     Frequency: {c.get('frequency', '?')}, "
                       f"Importance: {c.get('importance', '?')} {rec}")
             print()
+            if recommended_ids:
+                print(f"Default selection (importance=主角): "
+                      f"{', '.join(recommended_ids)}")
+                print("(Press Enter to accept default, or type IDs to "
+                      "override / extend.)\n")
 
         # Select characters
         if preset_characters:
             selected = preset_characters
             print(f"Pre-selected characters: {selected}")
         else:
-            raw = input("Enter character IDs to extract (comma-separated): ")
-            selected = [c.strip() for c in raw.split(",") if c.strip()]
+            raw = input("Enter character IDs to extract (comma-separated, "
+                        "empty = default): ")
+            typed = [c.strip() for c in raw.split(",") if c.strip()]
+            selected = typed if typed else recommended_ids
 
         if not selected:
             print("[ERROR] No characters selected.")
