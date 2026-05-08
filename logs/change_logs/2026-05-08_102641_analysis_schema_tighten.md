@@ -152,3 +152,22 @@ todo: T-ANALYSIS-SCHEMA-TIGHTEN（已登记到 docs/todo_list.md `## Next` 段�
 
 - **Status**: DONE
 - **Finished**: 2026-05-08 11:37:41 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：14/14 项计划（含 baseline_production.md "verified-no-change" 子项）+ 7/7 项验证
+- Missed updates: 2 条（详见对话）—— PRE「执行偏差」段未登记 todo_list 状态变更（PRE line 17 说"归档"实际进 In Progress）；Index 段 T-PHASE0-CHUNK-SCHEMA-EXPAND 行 Updated 字段未随正文 2026-05-08 注释同步刷新
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=4 / Low=2
+- Open Questions: 3 条（详见对话）
+
+## 复查时状态
+- **Reviewed**: 2026-05-08 11:56:26 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全落实，但 2 条 Missed updates（log + Index 字段刷新滞后）
+  - 轨 2 4 条 Medium（无 High）：char_id 输入无校验 / In Progress 5-entry 单槽违规 / 无主角 case sys.exit 信息退化 / PRE 执行偏差漏登记
+- **Conversation ref**: 同会话内 /post-check 输出
