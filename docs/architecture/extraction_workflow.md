@@ -118,7 +118,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 
 1. **schema gate**：lane 输出 jsonschema 校验
    （`schemas/analysis/{world_overview,stage_plan,candidate_characters}.schema.json`）
-2. **stage `chapter_count` 8-15 限制**（仅 stage_plan lane，monolithic 模式；light_novel 模式跳过此校验，因 stage_plan 由程序化派生不走 LLM）
+2. **stage `chapter_count` 8-15 限制**（仅 stage_plan lane，monolithic 模式）：schema `chapter_count.minimum=8` / `maximum=15` 直接硬挡 LLM 输出（决策 #27i schema-gate-as-retry-trigger 注入 prior_error），orchestrator `_check_stage_plan_limits` 代码层 belt-and-suspenders 二次兜底；light_novel 模式整体跳过 schema gate（stage_plan 由 `_build_light_novel_stage_plan` 程序派生不走 LLM 也不走 phase 1 lanes 列表，`chapter_count=1` 在新 schema 下 schema-invalid 是已知 trade-off，详见决策 #27m）
 
 校验失败 → 把首条 schema 错误（含 stage 限制违规）作为 `prior_error` 注入下一次重试 prompt，
 **与 Phase 0 chunk-level / Phase 4 chapter-level prior_error 注入同形态**——失败文件单独删除，重跑该 lane 的 prompt（带 prior_error 段），通过校验的 lane 产物保留。

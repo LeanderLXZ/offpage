@@ -63,9 +63,9 @@
 
 **用途**：Phase 1 stage 切分计划。下游 Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择都依赖此文件。
 **位置**：`works/{work_id}/analysis/stage_plan.json`（**入 git**）
-**关键字段**：`work_id` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^C[0-9]{4}-C[0-9]{4}$`（与 chapter_id 命名一致；light_novel 模式用 degenerate 单章区间，例 `C0001-C0001`） / `chapter_count` 1-15（schema） / `boundary_reason`）
+**关键字段**：`work_id` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^C[0-9]{4}-C[0-9]{4}$`（与 chapter_id 命名一致；light_novel 模式用 degenerate 单章区间，例 `C0001-C0001`） / `chapter_count` 8-15（schema 硬挡） / `boundary_reason`）
 **生成时机**：monolithic 模式由 Phase 1 stage_plan lane (`automation/prompt_templates/analysis_stage_plan.md`) 产出（与 world_overview + candidate_characters lane 并行；决策 #52）；light_novel 模式由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生，stage_plan lane 整体跳过 LLM（world_overview + candidate_characters lane 仍并行跑 LLM）。
-**契约**：schema `chapter_count.minimum = 1` / `maximum = 15`（minimum 是为 light_novel 1:1 派生让出空间；monolithic 上限由 schema maximum 强制）；monolithic 的 8–15 双向门控由 orchestrator `_check_stage_plan_limits` 在代码层强制（light_novel 模式跳过此校验）。
+**契约**：schema `chapter_count.minimum = 8` / `maximum = 15` 双向硬挡 LLM 输出（monolithic 路径，决策 #27i schema-gate-as-retry-trigger 注入 prior_error）+ orchestrator `_check_stage_plan_limits` 代码层 belt-and-suspenders 二次兜底。light_novel 派生路径事实上不走 schema validate（既不在 phase 1 `lanes` 列表也无主动 validate 调用，程序产出可信）；`chapter_count=1` 在新 schema 下 schema-invalid 是已知 trade-off，详见 decisions.md #27m。
 
 ---
 

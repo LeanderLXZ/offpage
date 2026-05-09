@@ -49,7 +49,7 @@ schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意�
 
 沿章节顺序遍历步骤 1 列表，把相邻拐点合并成 stage：
 
-- **章数硬范围 [8, 15] 闭区间**——schema `chapter_count.maximum=15` 强制上限 + orchestrator `_check_stage_plan_limits` 强制下限 8（schema `chapter_count.minimum=1` 是为 light_novel 1:1 派生让出空间，monolithic 下限走代码层）；任何 ≤7 或 ≥16 都是违规
+- **章数硬范围 [8, 15] 闭区间**——schema `chapter_count.minimum=8` / `maximum=15` 双向硬挡（决策 #27i schema-gate-as-retry-trigger，违规作为 prior_error 注入下次 retry prompt）+ orchestrator `_check_stage_plan_limits` 代码层 belt-and-suspenders 二次兜底；任何 ≤7 或 ≥16 都是违规
 - 拐点优先级（高 → 低）：场景转换 > 弧线切换 > 阵营变动 > 重大伤亡 > 关键身份揭示 > 主要角色登场退场 > 时间跳跃 > 情感转折
 - 同优先级取舍：选能让前后两段都更接近"拐点驱动而非数量驱动"的落点；不要为了让章数靠近某个数字而硬挪边界
 - 每个 stage 条目包含：`stage_id` / `stage_title` / `chapters` / `chapter_count` / `boundary_reason`
@@ -68,7 +68,7 @@ schema 契约 → `schemas/analysis/chapter_summary_chunk.schema.json`（注意�
 ### 步骤 4：落盘
 
 输出文件：`{work_dir}/analysis/stage_plan.json`
-schema 契约 → `schemas/analysis/stage_plan.schema.json`（`chapter_count` 8-15 hard，schema `maximum=15` + orchestrator `_check_stage_plan_limits` 强制下限 8；`stage_id` `^S\d{{3}}$`、字段集合以 schema 为准）。
+schema 契约 → `schemas/analysis/stage_plan.schema.json`（`chapter_count` 8-15 hard，schema `minimum=8` + `maximum=15` 双向硬挡 + orchestrator `_check_stage_plan_limits` 代码层兜底；`stage_id` `^S\d{{3}}$`、字段集合以 schema 为准）。
 
 JSON 结构（**注意：示例中的 `chapter_count` 故意用非整数倍数字，避免暗示某个章数是"甜区"**）：
 
