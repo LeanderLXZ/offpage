@@ -1725,12 +1725,16 @@ class ExtractionOrchestrator:
         # Expand stages from stage plan if --end-stage increased
         self._ensure_stages_from_plan(phase3, max_stages)
 
-        # --end-stage 0 means baseline only — skip extraction loop
-        if max_stages is not None and max_stages == 0:
-            # Still need baseline
-            force_baseline = True
-        else:
-            force_baseline = self.start_phase == "2"
+        # Force baseline only when --start-phase 2 is explicitly requested.
+        # --end-stage 0 ("baseline only, stop") is handled by the [STOP]
+        # branch below — it must NOT force-rerun an already-validated
+        # baseline that the fresh-start path's run_baseline_production just
+        # produced + committed (would waste a full LLM call + emit a
+        # redundant "Phase 2 baseline (recovery)" commit). When phase_2 is
+        # genuinely incomplete on resume, the line 1760 `not is_done`
+        # check still triggers the recovery path with force_baseline=False,
+        # which routes through the "files present, validating" branch.
+        force_baseline = self.start_phase == "2"
 
         # Force baseline if --start-phase 2
         if force_baseline:
