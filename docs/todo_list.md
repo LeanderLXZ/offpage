@@ -6,15 +6,12 @@
 
 > 本段是三张子表的渲染缓存，由维护本文件的人（包括 Claude）在**每次对正文条目增 / 改 / 移段 / 完成 / 废弃后**顺手刷新——具体规则见下方"## File guide → Index maintenance"。`/todo` skill 不解析正文，只读这一段，所以这里的内容必须与正文同步；不同步会让 `/todo` 给出错误结论。
 
-### 🟢 In Progress (5)
+### 🟢 In Progress (2)
 
 | ID | Title | Start time | Updated | Status |
 |---|---|---|---|---|
 | `T-BASELINE-DEPRECATE` | 废弃 voice_rules / behavior_rules / boundaries / failure_modes 4 件套，identity 重定位为模拟时加载 | 2026-04-29 14:42 EDT | — | 代码完成、runtime 验证待跑 |
-| `T-PHASE2-TARGET-BASELINE` | phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点 | 2026-04-29 20:54 EDT | — | 代码完成、runtime 验证待跑（与 BASELINE-DEPRECATE 同形态，可同批跑） |
 | `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | 2026-05-01 | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
-| `T-PHASE0-CHUNK-SCHEMA-EXPAND` | chapter_summary_chunk schema 二级字段扩展（命中 world_overview / foundation 不可信字段） | 2026-05-04 14:50 EDT | 2026-05-08 | schema/prompt/ai_context/docs 完成 + 静态 gate 全过（jsonschema metaschema OK；样本 chunk 1 valid + 10 negative case 全过；orchestrator + validator import 通过；grep 无 chapter.location 残留）；runtime 验证待跑（与 T-BASELINE-DEPRECATE / T-PHASE2-TARGET-BASELINE / T-INGEST-STRUCTURE-MODE 同批跑）。**注**：本任务的 per-summary 字段计划（key_events 保留 + summary 100-150）已由 T-ANALYSIS-SCHEMA-TIGHTEN 进一步收紧（key_events 删 + summary 150-200） |
-| `T-ANALYSIS-SCHEMA-TIGHTEN` | 收紧 phase 0 chunk + phase 1 candidate / world_overview schema 字段（chunk 删 `key_events` + `summary` 100-150→150-200；candidate 删 `recommended` + `aliases.first_appearance` + Phase 1.5 默认勾选改基于 `importance==主角`；world_overview `major_regions` / `levels` item 升对象 + `core_rules` 20→30 / 100→150） | 2026-05-08 10:26 EDT | 2026-05-08 11:06 EDT | schema/prompt/code/ai_context/docs 完成 + 静态 gate 全过（3 件 schema metaschema OK；正样本 + 多 negative case 全过；orchestrator + prompt_builder + validator + scene_archive import 通过；grep 无 key_events / first_appearance / recommended 残留主动引用）；e2e 验证待跑（清掉现有 untracked `works/<work_id>/` 后从 phase 0 全新跑——schema gate 不报红 + phase 0/1/1.5/2 全过为标准） |
 
 ### 🟡 Next (3)
 
@@ -22,7 +19,7 @@
 |---|---|---|---|---|---|---|
 | `T-PHASE2-REPAIR-AGENT` | phase 2 baseline production 整体接入 repair_agent lifecycle（4 件产物 foundation key_figures patch + fixed_relationships + identity + target_baseline 各自包装 SourceContext + 写 phase 2 专属 checkers）。当前 phase 2 仅"裸单次 LLM + tolerance gate"为遗留缺陷（决策 #54 拆出），decision #25 + decision #48 措辞修正后已明确 repair_agent 仅在 phase 3。 | 🟡 Med | ⏸ Blocked | 🔴 Large·Arch | 2026-05-11 EDT | 无（与本次 foundation 重构正交） |
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
-| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | 2026-05-02 | T-PHASE2-TARGET-BASELINE + T-BASELINE-DEPRECATE |
+| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | 2026-05-02 | T-BASELINE-DEPRECATE |
 
 ### ⚪ Discussing (8)
 
@@ -36,7 +33,7 @@
 | `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
-**Total**: 16 — 🟢 In Progress 5 ｜ 🟡 Next 3 ｜ ⚪ Discussing 8
+**Total**: 13 — 🟢 In Progress 2 ｜ 🟡 Next 3 ｜ ⚪ Discussing 8
 
 ---
 
@@ -337,96 +334,6 @@ any node ─────────────────(abandoned)───
 
 ---
 
-### [T-PHASE2-TARGET-BASELINE] phase 2 产出 per-character target_baseline，作为 phase 3 全模式的 target keys 锚点
-
-**开始时间**：2026-04-29 20:54 EDT
-
-**当前状态**：代码完成、runtime 验证待跑（schema / 代码 / prompt / docs 全部落地，jsonschema + import + validate_baseline 静态验证通过；下一步需在 extraction 分支跑一遍 phase 2 验证 LLM 实际产出 target_baseline.json schema 合规 + 与 BASELINE-DEPRECATE 同批跑 runtime）
-
-**上下文**
-
-当前 phase 3 char_snapshot 由 LLM 在 stage-local 视角自主决定
-target_voice_map / target_behavior_map / relationships 的 keys。三个痛点：
-
-1. stage-local 视角看不到全书关系网络，可能漏判跨章节的隐性重要关系
-   （反派只前/后期出场但贯穿主线等）
-2. 单 lane 模式下三方 keys 名义上由同一 LLM 写入应一致，实际是否真的
-   对齐尚未 0 token 验证（被替代的 T-CHAR-SNAPSHOT-TARGET-LIST 决策项 2
-   提的疑点）
-3. T-CHAR-SNAPSHOT-SUB-LANES 拆 3 lane 后三方 keys 必须 == 同一基线才能
-   合并（双向相等约束，三态由内容承载），否则需每 stage 额外算 active
-   target list（原 step 0 LLM 调用，占串行卡口）
-
-新方案：phase 2 全书视野一次性拍每角色 `target_baseline.json`，列全书所有
-重要 target（含 tier + 关系类型），后续 phase 3 各 stage 严格 == baseline
-写 keys。三方一致 by-construction，跟 identity / fixed_relationships 同源
-思路（结构性 + 跨 stage 不变 → phase 2 一次拍，后续 stage 只读不写）。
-
-**改动清单**
-
-新增：
-- `schemas/character/target_baseline.schema.json` — 字段：`schema_version`
-  / `work_id` / `character_id` / `targets[]`，每条 target =
-  `target_character_id`（用 identity.id，规避化名 / 隐藏身份歧义）+
-  `relationship_type`（中文短词，柔性 string 非 enum；14 候选：至亲 /
-  恋人 / 挚友 / 师长 / 弟子 / 朋友 / 同僚 / 主人 / 下属 / 宠物 / 武器 /
-  对手 / 敌人 / 路人；候选无法准确描述时允许使用列表外更精确中文短词，
-  需在 description 字段说明差异）+ `tier`（核心 / 重要 / 次要 / 普通）+
-  `description`（≤100 字）；`targets` 数组容量上限通过
-  `schemas/character/targets_cap.schema.json` $ref 共享继承（下游
-  stage_snapshot 三 map 通过同一份 $ref 单源同步）
-
-修改：
-- `automation/prompt_templates/baseline_production.md` — 新增「产出 3：
-  角色 Target Baseline」章节；manifest.json 段加 `target_baseline_path`
-  填写指引
-- `automation/persona_extraction/prompt_builder.py`
-  `build_baseline_prompt` — schemas 读列表加
-  `character/target_baseline.schema.json`
-- `schemas/character/character_manifest.schema.json` — `paths` 对象加
-  `target_baseline_path` 字段
-- `automation/persona_extraction/validator.py` `validate_baseline()` —
-  加 target_baseline.json 校验：必须存在 + schema 合规 + character_id
-  与目录名一致；缺失 / 违规 → error
-- `ai_context/decisions.md` #13 — 改写为含 target_baseline 产出 + D4 硬
-  约束（phase 3 keys == baseline，违规 hard fail）+ baseline 在 phase 3
-  全程只读不写
-- `ai_context/architecture.md` § Automated Extraction Pipeline — Phase 2
-  行补充 target_baseline 产出
-- `ai_context/requirements.md` § §7 Information Layering — immutable 层
-  补 target_baseline
-- `docs/architecture/extraction_workflow.md` § 5 Baseline 产出（Phase 2）
-  — 加 target_baseline 描述 + immutable 约束 + 出口验证补充
-- `docs/requirements.md` § 角色层 baseline — 加 target_baseline 条目 +
-  immutable 约束 + phase 2 宁可多列不可漏列原则
-
-**完成标准**
-
-- target_baseline.schema.json 落地 + jsonschema 校验通过 ✓ done
-- character_manifest 含 target_baseline_path ✓ done
-- validate_baseline() 把 target_baseline 列为必须文件，缺失 / 违规阻断
-  phase 3 ✓ done（smoke 验证通过：missing → error / mismatch → error /
-  schema 违规 → error）
-- ai_context / docs 同步更新 ✓ done
-- phase 2 跑通至少一个 work：每个 candidate character 产出
-  target_baseline.json，schema 合规 ⏳ 待 runtime（与 BASELINE-DEPRECATE
-  可同批跑）
-
-**预估**
-
-- 中量改动（新增 1 schema + phase 2 prompt 改造 + 几处 ai_context / docs
-  更新）
-- 代码实施已完成；首次跑 1 个 work 验证待用户在 extraction 分支触发
-
-**依赖**
-
-- T-BASELINE-DEPRECATE 已落地（runtime 验证通过后归档）
-- 无其他硬依赖
-- 是 T-CHAR-SNAPSHOT-SUB-LANES 的硬前置（sub-lane 三方 keys == baseline
-  的锚点）
-
----
-
 ### [T-INGEST-STRUCTURE-MODE] Phase 0/1 双模式（monolithic / light_novel）调度
 
 **开始时间**：2026-05-01 07:04 EDT
@@ -513,224 +420,6 @@ phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapt
 - light_novel 模式 phase 0/1 LLM call 合并优化 — take 这份冗余成本
 - 上/下卷合并、短篇集粒度细化 — 由 normalization 阶段控制 volume_id
   （同卷给同 id）；不在 phase 0/1 处理
-
----
-
-### [T-PHASE0-CHUNK-SCHEMA-EXPAND] chapter_summary_chunk schema 二级字段扩展（命中 world_overview / foundation 不可信字段）
-
-**开始时间**：2026-05-04 14:50 EDT
-
-**更新时间**：2026-05-04 14:50 EDT
-
-**当前状态**：schema/prompt/ai_context/docs 完成 + 静态 gate 全过
-（jsonschema metaschema OK；样本 chunk 1 个 valid + 10 个 negative case
-全过，含 spurious sub-key / 缺 name|rule entry / observed_impact 兜底
-字符串接受 / 删除的 location 复现拒绝 / summary < 100 与 > 150 双向拒绝
-/ chunk_world_rules > 5 拒绝；orchestrator + validator import 通过；
-全库 grep 无 chapter.location 残留代码）；runtime 验证待跑（与
-T-BASELINE-DEPRECATE / T-PHASE2-TARGET-BASELINE / T-INGEST-STRUCTURE-MODE
-同批跑——本 todo 完成后 baseline 不再被 chunk 信息密度限制，是 phase 2
-runtime 验证质量改善的前置）
-
-**上下文**
-
-Phase 1 [world_overview.json](../schemas/analysis/world_overview.schema.json) 与 phase 2 [foundation.json](../schemas/world/foundation.schema.json) 多字段被 chunk schema 信息密度不足约束，实际质量分层：
-
-- ✅ genre / tone / world_lines.{name,chapter_range} — chunk 字段直接可信
-- 🟡 world_structure.summary / major_regions / world_lines.core_conflict — 半可信
-- 🟠 power_system.summary / major_factions.description / world_lines.setting_features —
-  chunk 信号稀疏，LLM 多按 genre 推断
-- 🔴 power_system.levels / core_rules / core_rules.impact — chunk 完全无信息源，
-  LLM 凭 genre 套常见模板（仙侠 → 练气筑基金丹元婴）
-
-根因：旧 [chapter_summary_chunk.schema.json](../schemas/analysis/chapter_summary_chunk.schema.json)
-只有 per-章字段，且 prompt 明令"事件描述而非文学评论"——所有"设定 / 体系 /
-规则"信号被主动过滤。chunk-level 没有二级合成字段，phase 1 LLM 拿到的是
-~22 chunks × 25 章扁平堆，无法挖出力量体系 / 世界规则细节。foundation 是
-world_overview 的"结构化精化版"——信息源相同，可信度同分层。
-
-**已落地（schema/prompt/ai_context/docs，2026-05-04）**
-
-- schema：[`schemas/analysis/chapter_summary_chunk.schema.json`](../schemas/analysis/chapter_summary_chunk.schema.json)
-  顶层加 5 chunk-level 二级字段（`chunk_arc_summary` ≤200 required；
-  `chunk_world_rules` maxItems 5 × `{rule≤50, description≤50, observed_impact≤50}`、
-  `chunk_power_levels` maxItems 20 × `{name≤15, description≤30}`、
-  `chunk_factions` maxItems 20 × `{name≤15, description≤50, members_present ≤20×items≤10}`、
-  `chunk_regions` maxItems 20 × `{name≤15, description≤30}`；items 全标
-  `additionalProperties:false` + `required:[name|rule]`）；per-章删
-  `location`、`summary` 50-100→100-150、保留 `key_events` ≤5×≤50 作为
-  monolithic stage_plan 边界判定离散信号
-- prompt：[`automation/prompt_templates/summarization.md`](../automation/prompt_templates/summarization.md)
-  改 4 步骤结构（读章节 → per-summary → chunk-level → 写文件），
-  `observed_impact` 强引导"宁可写未在本 chunk 直接观察也不要静默留空"，
-  sub-field description "有解释必填 / 无解释写空字符串"明示；
-  Phase 1 三 lane 模板（[analysis_world_overview.md](../automation/prompt_templates/analysis_world_overview.md)
-  / [analysis_stage_plan.md](../automation/prompt_templates/analysis_stage_plan.md)
-  / [analysis_candidate_characters.md](../automation/prompt_templates/analysis_candidate_characters.md)，
-  决策 #52 拆出）各加 chunk-level 字段说明 + 字段 → world_overview 映射表，
-  stage 边界信号源由 per-summary location 替换为 chunk_regions / chunk_arc_summary；
-  [`automation/prompt_templates/baseline_production.md`](../automation/prompt_templates/baseline_production.md)
-  产出 1 思考链重写——加 chunk-level → foundation 映射表 + "不要凭 genre
-  套模板" / "core_rules.impact 是综合判断不是直接拷贝" 关键约束；fixed_relationships
-  注脚加"chunk_factions.members_present 经 phase 1.5 身份合并后可作势力归属信号"
-- ai_context：[`decisions.md`](../ai_context/decisions.md) 加 27m
-  （chunk-level 二级字段决策 + 显式不加 chunk_fixed_relationships /
-  chunk_setting_features 理由）；[`architecture.md`](../ai_context/architecture.md)
-  Phase 0 段加 chunk-level 字段说明；[`conventions.md`](../ai_context/conventions.md)
-  Cross-File Alignment 加 `chapter_summary_chunk.schema.json` → 三 prompt 同步行
-- docs：[`docs/architecture/schema_reference.md`](architecture/schema_reference.md)
-  chapter_summary_chunk 章节重写关键字段表 + 消费方映射；
-  [`docs/architecture/extraction_workflow.md`](architecture/extraction_workflow.md)
-  Phase 0 通用流程加 chunk-level 二级聚合字段说明
-- smoke：jsonschema metaschema 校验通过；手写 sample chunk JSON 1 valid +
-  10 negative case 全过；orchestrator + validator import 通过；
-  grep 全库无 `chapter.location` / 旧 chunk 字段残留
-
-**待跑（runtime 验证）**
-
-- summarization.md 跑 1-2 chunk 验证 LLM 实际能正确填 chunk-level 字段，
-  特别 `chunk_world_rules.observed_impact` 是真填具体事件还是 fallback
-  写"未在本 chunk 直接观察"——两者都接受，但**不能静默留空**
-- analysis_world_overview.md 跑 1 个 work 验证 world_overview 质量改善：
-  power_system.levels 不再 LLM 套模板（应反映原文真实力量体系）；
-  core_rules 不再空泛规则；world_structure.summary 虽仍 🟡 但应反映
-  原文真实区域结构（不是仙侠默认拼装）
-- baseline_production.md 跑 1 个 work 验证 foundation 改善：
-  core_rules.impact 字段不再 LLM 编（应反映本作真实"对剧情/角色的
-  影响"，源自 chunk_world_rules.observed_impact 的多 chunks 综合）
-
-**暂不做的事**
-
-- 不加 `chunk_fixed_relationships[]`——chunk-level 视野无法判定"贯穿
-  全书"，会污染 phase 2 fixed_relationships.json + phase 3
-  character_snapshot.relationships 的 fixed_relationship 例外。
-  fixed_relationships 全书判定留 phase 2 baseline_production 全书视野
-- 不加 `chunk_setting_features`——杂物收纳字段，与其他 4 chunk-level
-  字段职责重叠；world_structure.summary / world_lines.setting_features
-  让 phase 1 LLM 综合 4 个专门字段写出
-- per-chapter `location` 不拆 `region` + `scene`（chunk_regions[] 已直接
-  覆盖 region 维度，不必再 per-章细化）
-- per-chapter `summary` 不扩到 200-300（保留 100-150；扩太长会鼓励 LLM
-  把设定信息塞进 summary——chunk-level 字段才是设定信号正轨）
-- per-chapter `key_events` 不删（≤5×≤50 字保留——phase 1 monolithic 模式
-  stage_plan 边界判定靠它做离散事件信号）
-- foundation.core_rules.impact 不要求"完全可信"——chunk_world_rules[].observed_impact
-  是局部锚点（每 chunk 局部观察 / fallback "未观察"标注），phase 2 LLM
-  综合多 chunks 判定"对剧情/角色的整体影响"仍需推断（从 🔴 升到 🟡，
-  本 todo 不追求升到 ✅）
-- 不单独加 chunk-level "key_figures of faction" 字段（已由
-  chunk_factions[].members_present 间接覆盖）
-
----
-
-### [T-ANALYSIS-SCHEMA-TIGHTEN] 收紧 phase 0 chunk + phase 1 candidate / world_overview schema 字段
-
-**开始时间**：2026-05-08 10:26 EDT
-
-**更新时间**：2026-05-08 11:06 EDT
-
-**当前状态**：schema/prompt/code/ai_context/docs 完成 + 静态 gate 全过
-（3 件 schema metaschema OK；正样本 + 多个 negative case 全过——chunk
-拒 key_events / summary 长度双向边界、candidate 拒 first_appearance /
-recommended、world_overview 拒 string major_regions/levels item +
-core_rules > 30 + items > 150；orchestrator + prompt_builder + validator +
-scene_archive import 通过；grep 全仓库无 key_events / first_appearance /
-recommended 残留主动引用）；e2e 验证待跑（清掉现有 untracked
-`works/<work_id>/` 后从 phase 0 全新跑——schema gate 不报红 + phase 0/1/
-1.5/2 全过为标准）
-
-**上下文**
-
-2026-05-08 03:54-04:30 EDT 跑 work_id=`<work_id>` phase 0/1/1.5 + phase 2
-部分（被 SIGTERM 中止）后，看到实际产物决定收紧三组 schema：
-
-- chunk per-summary `key_events`：经 #52 lane 拆分后，三个 phase 1 lane
-  都不投这字段（[prompt_builder.py:122,166](../automation/persona_extraction/prompt_builder.py)
-  当前只在注释里提）+ Phase 2 baseline 也不读，是死字段；同时 `summary`
-  100-150 字范围装不下事件 + 设定二者，需要扩到 150-200。
-- candidate `recommended`：是 LLM 自报推荐意愿（拍脑袋打 boolean），不
-  可靠；改为 phase 1.5 基于 `importance == 主角` 程序推荐（用户仍可手
-  选追加）。
-- candidate `aliases.first_appearance`：字符串描述（"约第 0042 章"），
-  既不参与下游也不能用于程序检索，是冗余。
-- world_overview `major_regions` / `power_system.levels`：当前是字符串
-  数组，与 chunk_regions / chunk_power_levels 的 `{name, description}`
-  对象形态不对齐，Phase 2 baseline 时需要再拼对象，是 churn。
-- world_overview `core_rules`：maxItems 20 对应 N chunk × ≤5 条原始规则
-  去重合并到 30 比较合理；同时 maxLength 100→150 强制 LLM 重新整理而
-  不是照搬 chunk 行。
-
-**改动清单**
-
-1. [chapter_summary_chunk.schema.json](../schemas/analysis/chapter_summary_chunk.schema.json)
-   — `summaries.items.required` 删 `key_events`；删 `properties.key_events`；
-   `properties.summary.minLength` 100→150，`maxLength` 150→200；
-   `characters_present.description` 改"化名 / 代称在 identity_notes 注明"
-2. [candidate_characters.schema.json](../schemas/analysis/candidate_characters.schema.json)
-   — `candidates.items.required` 删 `recommended`；删 `properties.recommended`；
-   `aliases.items.required` 删 `first_appearance`；删
-   `aliases.items.properties.first_appearance`；
-   `importance.description` 加"Phase 1.5 默认勾选 = importance == 主角"
-3. [world_overview.schema.json](../schemas/analysis/world_overview.schema.json)
-   — `world_structure.major_regions.items` 由 string 改 `{name (≤15),
-   description (≤30)}` 对象（对齐 `chunk_regions.items`）；
-   `power_system.levels.items` 同上对齐 `chunk_power_levels.items`；
-   `core_rules.maxItems` 20→30；`core_rules.items.maxLength` 100→150
-   （保留字符串数组形态）
-4. [summarization.md](../automation/prompt_templates/summarization.md)
-   — 删 key_events 教学（per-章字段 + JSON 示例 + 规则段落 3 处）+ 把
-   summary 长度教学从 100-150 改 150-200 + 教 LLM 把关键事件写进 summary
-5. [analysis_world_overview.md](../automation/prompt_templates/analysis_world_overview.md)
-   — 字段映射表：`major_regions` / `levels` 升对象 + `core_rules` 30 条
-   字符串教学；JSON 示例同步
-6. [analysis_stage_plan.md](../automation/prompt_templates/analysis_stage_plan.md)
-   — per-summary 字段集 100-150 → 150-200；裁剪原则段落删 `key_events`
-   提及（chunk schema 已删）
-7. [analysis_candidate_characters.md](../automation/prompt_templates/analysis_candidate_characters.md)
-   — 删 `aliases.first_appearance` / `recommended` 字段教学；改"不需要再
-   判断是否建议建包" + JSON 示例同步
-8. [prompt_builder.py:118-124,165-172](../automation/persona_extraction/prompt_builder.py)
-   — module-level 注释 + `_project_chunk_for_stage_plan` docstring：
-   key_events 描述改为"已从 chunk schema 删除（决策 #53）"；
-   prompt_builder 自身 projector 本就不投 key_events 无代码改动
-9. [orchestrator.py:1582-1612](../automation/persona_extraction/orchestrator.py)
-   — `confirm_with_user` Phase 1.5：`RECOMMENDED` 标签从 `c.get("recommended")`
-   改为 `c.get("importance") == "主角"`；新增 `recommended_ids` 程序计算
-   + 默认勾选行 `(Press Enter to accept default, or type IDs to override)`
-   + 空输入回退到 `recommended_ids`（preset_characters 路径不变）
-10. [schema_reference.md](architecture/schema_reference.md)
-    + [extraction_workflow.md](architecture/extraction_workflow.md)
-    — chunk per-summary 字段表删 key_events / 改 summary 长度；
-    candidate 关键字段表删 recommended + first_appearance；
-    world_overview 关键字段表 major_regions / levels 形态升级 + core_rules
-    bound；Phase 1.5 默认勾选规则化描述
-11. [architecture.md](../ai_context/architecture.md) Phase 0 chunk 字段
-    集 + Phase 1 lane 投影（删 key_events）+ Phase 1.5 默认规则化；
-    [decisions.md](../ai_context/decisions.md) 修订 #27m（key_events 段删
-    + summary 长度更新）+ 修订 #52（lane 投影 key_events 提及修订）+
-    新增 #53（本次三组 schema 收紧 + Phase 1.5 推荐规则化总条目）
-
-**完成标准**
-
-- 三个 schema 文件改完，Draft202012 metaschema 校验通过 ✅
-- 9 个下游文件文字 / 代码同步 ✅
-- Phase 1.5 推荐逻辑改为基于规则（程序判定 `importance == "主角"`）✅
-- grep 全仓库无 `key_events` / `first_appearance` / `recommended` 残留
-  主动引用（除 logs / works / users / archived）✅
-- 现有 `works/<work_id>/` 整 untracked 目录清掉，从 phase 0 全新跑 e2e
-  验证 schema gate 不报红 → phase 0 + phase 1 + phase 1.5 + phase 2 全过
-  ⏳（待跑）
-
-**依赖**
-
-无（schema 改动属 framework 层；不阻塞其他 In Progress 任务，可立即
-启动）
-
-**预估**
-
-schema + prompt + ai_context + docs 改动 ~30 min（**已完成**）；e2e 重跑
-phase 0（~1.5h wall）+ phase 1（~30min）+ phase 1.5 + phase 2（~10-20min）
-≈ 2.5h（不含可能的 retry / debug）
 
 ---
 
@@ -1056,18 +745,18 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
 
 **依赖**
 
-- **硬前置 1**：T-PHASE2-TARGET-BASELINE（baseline 是三方 keys 锚点；无
-  baseline 则 D4 硬约束无依据可校验）
-- **硬前置 2**：T-BASELINE-DEPRECATE（字段归属表把 `failure_modes` 4 子键
+- **依赖物已就位**：T-PHASE2-TARGET-BASELINE 已完成于 2026-05-11（baseline
+  是三方 keys 锚点；本 todo 启动时直接消费已落盘的 target_baseline.json，
+  无 baseline 则 D4 硬约束无依据可校验）
+- **硬前置**：T-BASELINE-DEPRECATE（字段归属表把 `failure_modes` 4 子键
   分到 char_expression / char_cognition，依赖 failure_modes 已在
   `stage_snapshot.schema` 内——schema 已合并满足，但需 runtime 验证
   failure_modes 实际产出 + maxItems 裁剪生效后才动 sub-lane prompt；同时
   本 todo 改动清单要求 prompt "maxItems 统一裁剪规则段对所有 lane 全
   inherits"，依赖该规则段先在 BASELINE-DEPRECATE 落地）
-- **启动门槛 = phase 2 + BASELINE-DEPRECATE 双方都跑过 runtime 验证**——
-  在真书上验证 baseline 实际产出 shape + failure_modes 实际产出 + maxItems
-  裁剪行为之前不要开 sub-lane prompt 改造，避免上游字段语义后续微调
-  → sub-lane prompt 全部回炉
+- **启动门槛 = BASELINE-DEPRECATE 跑过 runtime 验证**——在真书上验证
+  failure_modes 实际产出 + maxItems 裁剪行为之前不要开 sub-lane prompt 改造，
+  避免上游字段语义后续微调 → sub-lane prompt 全部回炉
 - 无其他硬依赖
 
 **暂不做的事**
