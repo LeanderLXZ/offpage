@@ -1522,6 +1522,24 @@ class ExtractionOrchestrator:
 
         foundation.json 主体由 phase 1 foundation lane 直接产出，phase 2
         不再二次综合 foundation。
+
+        ⚠️ **Phase 3 cascade warning (decision #54 + #13)**：本函数重跑
+        会改写 ``target_baseline.json``（决策 #54 的 dialogue/action 准入
+        门槛使 baseline.targets 集合可能缩水）。决策 #13 双向 set-equal
+        约束要求 phase 3 stage_snapshot 的三结构 keys 必须等于
+        ``baseline.targets[].target_character_id`` 全集——baseline 一旦
+        变化，**所有已落盘的 phase 3 stage_snapshot 都将与新 baseline
+        集合不一致**，下一次 phase 3 跑 cross-file validate 会硬 fail。
+
+        所以**重跑 phase 2 必须配套清空所有 phase 3 产物**：
+        ``works/{work_id}/world/stage_snapshots/`` +
+        ``works/{work_id}/characters/*/canon/stage_snapshots/`` +
+        ``memory_timeline/`` + ``memory_digest.jsonl`` +
+        ``world_event_digest.jsonl`` + ``analysis/progress/phase3_stages.json``。
+        清空后从 phase 3 stage 1 重抽。
+
+        本函数不自动清理 phase 3 产物——清理是破坏性动作，需用户
+        显式执行（例如 ``rm -rf`` + ``git rm``）。
         """
         print("\n" + "=" * 60)
         print("  Phase 2: Baseline Production")

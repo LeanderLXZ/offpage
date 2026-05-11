@@ -9,6 +9,14 @@ extraction.
 
 Stage-level validation lives in ``repair_agent`` (L0–L3 checkers +
 T0–T3 fixers), driven by ``orchestrator.run_stage_extraction``.
+
+**L1/L2/L3 disambiguation** (see ``ai_context/decisions.md`` #25 + #40):
+``repair_agent``'s ``L0–L3`` here are the **checker hierarchy** for phase
+3 stage extraction (L0=schema / L1=structural / L2=cross-check / L3=
+semantic LLM). They are **not** the same as the phase 0 JSON-format
+repair ``L1/L2/L3`` (regex / LLM-on-broken-JSON / full re-run) used only
+inside ``orchestrator._summarize_chunk``. Same字面, different semantics;
+互不依赖。
 """
 
 from __future__ import annotations
@@ -410,13 +418,18 @@ def _validate_schema(data: dict, schema_path: Path,
 # Length-bound tolerance gate (decision #48)
 #
 # Final safety valve invoked AFTER an LLM phase has exhausted its strict
-# retry budget (Phase 0 L1+L2+L3, Phase 1 ``exit_validation_max_retry``,
-# Phase 2 baseline retry, Phase 4 ``max_retries_per_chapter``,
-# repair_agent ``T3_EXHAUSTED``). Relaxes ONLY ``minLength`` /
-# ``maxLength`` by a per-call tolerance fraction; all other constraints
-# (``required`` / ``type`` / ``enum`` / ``pattern`` / ``minimum`` /
-# ``maximum`` / ``minItems`` / ``maxItems``) stay strict. Acceptance is
-# silent — no metadata is written to the artifact.
+# retry budget (Phase 0 L1+L2+L3 — decision #40 JSON-format repair tiers,
+# applies only inside ``orchestrator._summarize_chunk``; Phase 1
+# ``exit_validation_max_retry``; Phase 2 baseline retry; Phase 4
+# ``max_retries_per_chapter``; **Phase 3 only** ``repair_agent``
+# ``T3_EXHAUSTED`` — decision #25 + #48 disambiguation: repair_agent
+# itself is the phase 3 checker/fixer matrix, not phase 0's three-tier
+# JSON repair ladder; same字面 ``L1/L2/L3`` but different semantics
+# across #25 and #40). Relaxes ONLY ``minLength`` / ``maxLength`` by a
+# per-call tolerance fraction; all other constraints (``required`` /
+# ``type`` / ``enum`` / ``pattern`` / ``minimum`` / ``maximum`` /
+# ``minItems`` / ``maxItems``) stay strict. Acceptance is silent — no
+# metadata is written to the artifact.
 # ---------------------------------------------------------------------------
 
 import copy as _copy

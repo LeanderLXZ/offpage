@@ -12,7 +12,9 @@ behavior_state.target_behavior_map, relationships}`` keys ==
 ``target_baseline.targets[].target_character_id``) is enforced by the
 **phase 3 single-stage validate layer** through
 ``automation/repair_agent/checkers/targets_keys_eq_baseline.py``;
-violations route into the file-level repair lifecycle (L1/L2/L3). This
+violations route into the file-level repair lifecycle (L1/L2/L3 here =
+**repair_agent checker tiers**, decision #25 — NOT phase 0's JSON-format
+``L1/L2/L3`` from decision #40; same字面, different semantics). This
 phase 3.5 module no longer owns that rule.
 """
 

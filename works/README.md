@@ -49,7 +49,6 @@ works/{work_id}/
         stage_snapshots/{stage_id}.json
 
   analysis/
-    world_overview.json
     stage_plan.json
     candidate_characters.json
     consistency_report.json
@@ -191,9 +190,8 @@ works/{work_id}/
     由下次启动清理——**误删会丢失失败现场**
 - `chapter_summaries/` — Phase 0 章节摘要（每 chunk 一个 JSON）
 - `scene_splits/` — Phase 4 中间产物（每章一个 JSON，.gitignore）
-- `world_overview.json` — Phase 1 世界观概览
 - `stage_plan.json` — Phase 1 阶段规划
-- `candidate_characters.json` — Phase 1 候选角色
+- `candidate_characters.json` — Phase 1 候选角色（决策 #54：原 `world_overview.json` 路径已废弃；foundation 由 phase 1 foundation lane 直接落 `world/foundation/foundation.json`）
 - `consistency_report.json` — Phase 3.5 一致性检查报告
 - `evidence/` — 证据引用材料
 - `conflicts/` — 矛盾与修订记录
