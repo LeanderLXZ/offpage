@@ -93,7 +93,7 @@
               "type": "string",
               "maxLength": 30
             },
-            "description": "关键人物 character_id 列表（≤10 项，每项 ≤30 字）。phase 1 foundation lane 留空 / 不写本字段；phase 2 baseline 补齐 LLM call 填充。character_id 必须 ∈ candidate_characters.json 已合并身份集（含 phase 1.5 确认的目标角色 ∪ 全部 candidates 的 character_id）。"
+            "description": "关键人物列表（≤10 项，每项 ≤30 字），**character_id + raw 名混合**。双阶段填充：(1) phase 1 foundation lane 用 `chunk_factions[].members_present[]` 跨 chunk 合并去重产出 raw 名（化名 / 真名 / 称呼 / 未合并身份任一字符串）；(2) phase 2 baseline LLM 替换——对每个 raw 名 lookup `candidate_characters.json::candidates[*].aliases[*].name`，命中则换为该 candidate 的 `character_id`，未命中保留 raw 名不动（不报错、不删除）。最终内容混合 character_id（已合并身份，runtime 可绑定角色包）+ raw 名（未合并身份，作为字符串显示提示）。schema 不做 character_id 合法性硬卡——LLM 不能匹配的 raw 名作为合法字符串保留。"
           }
         }
       }

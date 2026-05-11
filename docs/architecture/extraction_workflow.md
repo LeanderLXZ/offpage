@@ -114,7 +114,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 `identity_notes` + `chunk_factions[].members_present`。三件输出之间无硬数据依赖
 （唯一交叉 = `chunk_arc_summary` 同时被 foundation + stage_plan 两 lane 用）。
 
-**foundation lane 不写 `major_factions[].key_figures`**——该字段由 phase 2 baseline 单独 LLM call 补齐（输入 phase 1 落盘的 foundation + candidate_characters + 已确认目标清单；补丁式 `{faction_name: [character_id, ...]}` 输出后程序 merge into foundation.json）。Phase 1 阶段身份合并尚未完成（candidate_characters lane 与 foundation lane 并行），foundation lane 拿不到 character_id 终态。
+**foundation lane 写 `major_factions[].key_figures` 的 raw 名**（决策 #54 修订段）——chunk_factions[].members_present[] 跨 chunk 合并去重直接写入 key_figures（化名 / 真名 / 称呼任一，不做身份合并）。phase 1 阶段身份合并尚未完成（candidate_characters lane 与 foundation lane 并行），foundation lane 拿不到 character_id 终态，所以只写 raw 名。phase 2 baseline LLM 在同一次 baseline_prompt LLM call 内 lookup candidate_characters.aliases 把能匹配的 raw 名替换为 character_id，匹配不上保留 raw 名。最终 key_figures 是 character_id + 未合并 raw 名混合。
 
 **出口验证（硬性门控，per-lane）**：每个 lane 的 LLM 产物落盘后，独立跑：
 
@@ -149,9 +149,9 @@ Phase 1 foundation lane 已落 `world/foundation/foundation.json`；phase 2 基�
   baseline（per-character，全书视野下的目标关系全集）
 - `characters/{character_id}/manifest.json` — 角色包 manifest（`paths`
   对象含 `target_baseline_path` 指向上条文件）
-- **补齐 `world/foundation/foundation.json::major_factions[].key_figures`**——单独一个轻量 LLM call，输入 phase 1 落盘 foundation + candidate_characters + 已确认目标清单；补丁式输出 `{faction_name: [character_id, ...]}`；程序 merge into foundation.json；character_id 必须 ∈ 已确认目标 ∪ candidate_characters 已合并身份集（决策 #54）
+- **替换 `world/foundation/foundation.json::major_factions[].key_figures` 内 raw 名为 character_id**（决策 #54 修订段）——在同一次 baseline_prompt LLM call 内（与 fixed_relationships / identity / target_baseline / manifest 同步），LLM 对 phase 1 lane 写入的每个 key_figures raw 名 lookup `candidate_characters.candidates[*].aliases[*].name`，能匹配的换为对应 `candidates[].character_id`，匹配不上保留 raw 名（不报错、不删除）。最终 key_figures 是 character_id + 未合并 raw 名混合；schema 不抓 character_id 合法性（key_figures 字符串数组无 enum 硬卡）
 
-**`foundation.json` 已不再是 phase 2 LLM 产出**（决策 #54——foundation 前移到 phase 1 foundation lane 直接产，phase 2 缩水到仅补 `key_figures`）；`fixed_relationships.json` 仍由 phase 2 baseline 一次性产出，因为它需要 phase 1.5 后的 character_id 集合。
+**`foundation.json` 已不再是 phase 2 LLM 产出**（决策 #54——foundation 前移到 phase 1 foundation lane 直接产；phase 2 仅在同一次 baseline LLM 内替换 `key_figures` 内 raw 名为 character_id）；`fixed_relationships.json` 仍由 phase 2 baseline 一次性产出，因为它需要 phase 1.5 后的 character_id 集合。
 
 identity 与 target_baseline 都是 character-level 恒定文件——identity 记录
 角色基础事实（aliases / core_wounds / key_relationships 等），target_baseline

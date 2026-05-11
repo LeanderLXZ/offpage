@@ -116,7 +116,7 @@ def build_summarization_prompt(
 # its own claude -p with a narrow projection of the chunk JSON inputs:
 #
 #   - foundation lane: chunk-level secondary fields (chunk_arc_summary +
-#     chunk_world_rules + chunk_power_levels + chunk_factions WITHOUT
+#     chunk_world_rules + chunk_power_levels + chunk_factions INCLUDING
 #     members_present + chunk_regions). summaries[] dropped — full-book
 #     setting writeup does not depend on per-chapter anchors. (Decision #54 —
 #     lane renamed from `world_overview`; output path moved from
@@ -124,8 +124,11 @@ def build_summarization_prompt(
 #     `works/{work_id}/world/foundation/foundation.json`; schema moved from
 #     `schemas/analysis/world_overview.schema.json` to
 #     `schemas/world/foundation.schema.json`. `major_factions[].key_figures`
-#     is NOT produced by this lane — phase 2 baseline補 produces it via a
-#     separate LLM call after phase 1.5 identity merge.)
+#     IS produced by this lane as raw names — chunk_factions[].members_present[]
+#     是 chunk-LLM 视野下的角色 raw 名（化名 / 真名 / 称呼任一），foundation
+#     lane 跨 chunk 合并去重直接写入 key_figures 不做身份合并。phase 2 baseline
+#     LLM 后续 lookup candidate_characters.aliases 把能匹配的 raw 名替换为
+#     character_id，匹配不上保留 raw 名 — 双阶段语义，详见决策 #54 修订段。)
 #   - stage_plan lane: chunk_arc_summary + chunk_regions + per-summary
 #     chapter + summary only (the 150-200 CJK-char summary now carries the
 #     turning-point text signal directly; characters_present / emotional_tone
@@ -151,20 +154,23 @@ def _phase1_lane_inputs_root(project_root: Path, work_id: str) -> Path:
 
 
 def _project_chunk_for_foundation(chunk: dict) -> dict:
-    """Chunk-level secondary fields only (faction members_present stripped).
+    """Chunk-level secondary fields only (INCLUDING faction members_present).
     summaries[] dropped — full-book setting writeup does not depend on
     per-chapter anchors.
 
-    Decision #54 — lane renamed from `world_overview` (the projector body is
-    unchanged; we strip members_present from chunk_factions since the
-    foundation lane does NOT write major_factions[].key_figures — phase 2
-    baseline produces that field via a separate LLM call after phase 1.5
-    identity merge).
+    Decision #54 修订段：foundation lane writes `major_factions[].key_figures`
+    as raw names (chunk_factions[].members_present[] 跨 chunk 合并去重)。
+    Phase 2 baseline LLM 后续替换能匹配 candidate_characters.aliases 的
+    raw 名为 character_id，匹配不上保留 raw 名。所以 foundation lane 需要
+    members_present 字段透传——不再 strip。
     """
     factions = []
     for fac in chunk.get("chunk_factions") or []:
-        clean = {k: v for k, v in fac.items() if k != "members_present"}
-        factions.append(clean)
+        factions.append({
+            "name": fac.get("name", ""),
+            "description": fac.get("description", ""),
+            "members_present": fac.get("members_present") or [],
+        })
     return {
         "work_id": chunk.get("work_id"),
         "chunk_index": chunk.get("chunk_index"),

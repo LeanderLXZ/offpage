@@ -37,30 +37,38 @@ char_snapshot lane 在每个 stage_snapshot 中直接生成（S001 从原文 + i
 
 {files_to_read}
 
-## 产出 1：补齐 `foundation.major_factions[].key_figures`
+## 产出 1：替换 `foundation.major_factions[].key_figures` 内 raw 名为 character_id
 
-phase 1 foundation lane 已经落盘 `{work_dir}/world/foundation/foundation.json`，但 `major_factions[].key_figures` 字段被刻意留空——因为 phase 1 阶段身份合并（由 candidate_characters lane 并行处理）尚未完成，foundation lane 拿不到 character_id 终态。phase 2 在身份合并完成后单独一个轻量 LLM call 补齐该字段。
+phase 1 foundation lane 已经落盘 `{work_dir}/world/foundation/foundation.json`，`major_factions[].key_figures` 字段含 phase 1 写入的 **raw 名**（chunk_factions[].members_present[] 跨 chunk 合并去重产出的化名 / 真名 / 称呼任一）。phase 1 阶段身份合并由 candidate_characters lane 并行处理，foundation lane 拿不到 character_id 终态，所以只能写 raw 名。phase 2 在身份合并完成后做"替换"工作：能匹配的 raw 名换为 character_id，匹配不上的保留 raw 名。
 
 ### 读取契约
 
-- 输入：`{work_dir}/world/foundation/foundation.json`（phase 1 foundation lane 已产）+ `{work_dir}/analysis/candidate_characters.json`（phase 1 candidate_characters lane 已产）+ 目标角色清单（`{target_characters}`，phase 1.5 用户已确认）
-- 合法 character_id 集 = **`candidate_characters.candidates[].character_id` 全集**（phase 1.5 已确认的目标角色清单是其子集；非目标角色但合法的 candidate 仍可作为 faction 关键人物）
+- 输入：`{work_dir}/world/foundation/foundation.json`（phase 1 foundation lane 已产，含 raw 名 key_figures）+ `{work_dir}/analysis/candidate_characters.json`（phase 1 candidate_characters lane 已产，含 `candidates[].character_id` + `candidates[].aliases[].name`，aliases 是身份合并的所有别名）+ 目标角色清单（`{target_characters}`，phase 1.5 用户已确认）
+- 合法 character_id 集 = **`candidate_characters.candidates[].character_id` 全集**（phase 1.5 已确认的目标角色清单是其子集；非目标角色但合法的 candidate 也可作为势力 key_figures）
 
-### 输出形态
+### 替换规则
 
 读取 `foundation.json` 后，**仅修改 `major_factions[]` 数组的 `key_figures` 字段**——其他字段（`work_id` / `genre` / `tone` / `world_structure` / `power_system` / `core_rules` / `world_lines` / `major_factions[].name` / `major_factions[].description`）**一字不动**直接保留。
 
-为每个 `major_factions[i]`：
-- 阅读其 `name` + `description`
-- 在 `candidate_characters.candidates[]` 里找到该势力的关键人物（核心成员 / 领袖 / 代表人物等），用 `character_id` 列出
-- 写到 `major_factions[i].key_figures` 数组里（≤10 项，每项 ≤30 字）
-- **每个 character_id 必须 ∈ `candidate_characters.candidates[].character_id` 全集**——非法 character_id 会触发 schema gate 失败 + tolerance gate 兜底 + 失败则 `sys.exit(1)`
+为每个 `major_factions[i].key_figures[]` 内每个 raw 名 `R`：
 
-如果某势力在 candidates 中找不到对应关键人物（势力存在但全是 raw 名未在身份合并中出现 / 或势力只在 chunk-level 提到但无主要角色归属），`key_figures` 写空数组 `[]`。
+1. **匹配查找**：遍历 `candidate_characters.candidates[*]`，对每个 candidate `C`，检查 `R` 是否等于 `C.character_id` 或 `R` 是否出现在 `C.aliases[*].name` 列表里
+   - 命中（exact match 或 alias name match）→ 把 `R` 替换为 `C.character_id`
+   - 没命中（任何 candidate 的 character_id / aliases.name 都不等于 `R`）→ **保留 `R` 不动**（不报错、不删除）
+2. **去重**：替换后若同一势力 key_figures 内出现重复 character_id（多个 raw 名映射到同一 character_id），保留一份去重
+3. **不新增、不删除**：替换是 1-to-1 映射；不要因为 description 推断某 candidate 应该属于某势力而**额外**加 character_id；也不要因为某 raw 名"看起来不像主要角色"而删除——phase 1 lane 写入的就是 chunk-LLM 视野下的关键人物 raw 名，全部保留
+
+### Fuzzy 匹配建议（LLM 优势区）
+
+raw 名通常是化名 / 真名 / 称呼 / 称号；aliases 也含这些类型。优先 exact match；若没 exact match 但确信是同一人（如 raw 名 "李大爷" / alias name "李老" 都指向角色 X，对方有"长辈称谓"的称呼类型 alias），可视作匹配——但**必须谨慎**，宁可保留 raw 名不动也不要错配（错配会让 runtime 加载时绑错角色包）。
 
 ### 落盘
 
 把修改后的整份 foundation 写回原路径 `{work_dir}/world/foundation/foundation.json`，覆盖原文件。schema 契约 → `schemas/world/foundation.schema.json`，bound 以 schema 为准。
+
+### 失败处理
+
+key_figures 内合法字符串混合（character_id + raw 名）— schema 不抓 character_id 合法性（无 enum 硬卡），任何字符串都合法。即使你完全没替换（所有 raw 名保留），schema 仍然 pass——但运行时绑定能力会受限（runtime 看到 raw 名只能字符串显示，不绑角色包）。**请尽力替换能匹配的项**。
 
 ## 产出 2：fixed_relationships.json
 
