@@ -47,7 +47,7 @@ class Phase0Config:
 @dataclass(frozen=True)
 class Phase1Config:
     # Per-lane retry budget (decision #52). Each lane in the run_analysis
-    # fan-out (world_overview / stage_plan / candidate_characters) gets
+    # fan-out (foundation / stage_plan / candidate_characters) gets
     # its own independent allowance — no shared pool.
     exit_validation_max_retry: int = 2
     # Lane fan-out concurrency. Default = 3 = max number of LLM lanes

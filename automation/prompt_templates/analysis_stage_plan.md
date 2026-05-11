@@ -106,7 +106,7 @@ JSON 结构（**注意：示例中的 `chapter_count` 故意用非整数倍数�
 
 - 中文作品的 work_id 使用中文；`stage_id` 使用紧凑英文代号 `S###`（如 `S001`），`stage_title` 使用中文短标题
 - 产出文件必须是格式良好的 JSON
-- 你**只**负责 stage_plan，不要尝试产出 world_overview / candidate_characters（它们由其他 lane 并行处理）
+- 你**只**负责 stage_plan，不要尝试产出 foundation / candidate_characters（它们由其他 lane 并行处理）
 - 不要修改 `{lane_inputs_dir}` 下的输入文件
 - 不要读取 `sources/` 下的原始章节正文——本 lane 输入仅基于 chunks 摘要
 {retry_note}

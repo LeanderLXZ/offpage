@@ -232,7 +232,7 @@ automation/
 ├── README.md
 ├── prompt_templates/               ← 提取的 prompt 模板
 │   ├── summarization.md                       ← Phase 0 章节归纳
-│   ├── analysis_world_overview.md             ← Phase 1 lane: world_overview
+│   ├── analysis_foundation.md                 ← Phase 1 lane: foundation (decision #54)
 │   ├── analysis_stage_plan.md                 ← Phase 1 lane: stage_plan (monolithic only)
 │   ├── analysis_candidate_characters.md       ← Phase 1 lane: candidate_characters
 │   ├── baseline_production.md                 ← Phase 2 baseline 产出
@@ -383,8 +383,8 @@ orchestrator `_build_light_novel_stage_plan` 程序化 1:1 派生（zero LLM cal
 
 Phase 1 内部 fan-out 成独立 lane（详见决策 #52）：
 
-- **monolithic = 3 lane 并行**：world_overview / stage_plan / candidate_characters，每 lane 一次 `claude -p` + 预先裁剪的 chunks 子集 + 独立 schema gate + 独立 `prior_error` 注入式 retry（与 Phase 0 / Phase 4 同形态）
-- **light_novel = 2 lane 并行 + 程序化 stage_plan**：world_overview + candidate_characters 走 LLM lane；stage_plan 由 orchestrator `_build_light_novel_stage_plan` 直接落盘，**stage_plan lane 不调 LLM**
+- **monolithic = 3 lane 并行**：foundation / stage_plan / candidate_characters，每 lane 一次 `claude -p` + 预先裁剪的 chunks 子集 + 独立 schema gate + 独立 `prior_error` 注入式 retry（与 Phase 0 / Phase 4 同形态）。**foundation lane 输出 `works/<work_id>/world/foundation/foundation.json`**（决策 #54——原 `analysis/world_overview.json` 路径已废弃，foundation 由 phase 1 直接产，phase 2 仅补 `major_factions[].key_figures`）；stage_plan + candidate_characters 仍输出 `works/<work_id>/analysis/`。
+- **light_novel = 2 lane 并行 + 程序化 stage_plan**：foundation + candidate_characters 走 LLM lane；stage_plan 由 orchestrator `_build_light_novel_stage_plan` 直接落盘，**stage_plan lane 不调 LLM**
 - per-lane retry 预算 = `[phase1].exit_validation_max_retry`（默认 2，per-lane 独立，不共享池）
 - 单 lane fail 不影响其他 lane 已落盘产物；`--resume` 时 reconcile 跳过 schema-valid 产物，仅重跑失败 lane
 - 裁剪 chunks 写到 `works/{work_id}/analysis/.phase1_lane_inputs/{lane}/chunk_NNN.json`（gitignored，run_analysis 退出时 cleanup）
@@ -407,7 +407,7 @@ retry 通路接住，不引入新模块：
 | Phase | 校验装置 | retry 通路 |
 |---|---|---|
 | Phase 0 | `_chunk_validator()` in `orchestrator._summarize_chunk` ([schemas/analysis/chapter_summary_chunk.schema.json](../schemas/analysis/chapter_summary_chunk.schema.json)) | L3 全 chunk 重跑（max 1 次）；`build_summarization_prompt(prior_error=...)` 的 `{retry_note}` 槽注入 |
-| Phase 1 | `_world_overview_validator()` / `_stage_plan_validator()` / `_candidate_characters_validator()` per-lane in `orchestrator.run_analysis` fan-out ([schemas/analysis/{world_overview,stage_plan,candidate_characters}.schema.json](../schemas/analysis/)) | 失败 lane 把首条违规作为 `prior_error` 注入下一次重试 prompt（与 Phase 0 / Phase 4 同形态）；per-lane 独立 `[phase1].exit_validation_max_retry` 预算（不共享池）；用尽走 #48 length-tolerance 兜底 |
+| Phase 1 | `_foundation_validator()` ([schemas/world/foundation.schema.json](../schemas/world/foundation.schema.json)) / `_stage_plan_validator()` / `_candidate_characters_validator()` per-lane in `orchestrator.run_analysis` fan-out ([schemas/analysis/{stage_plan,candidate_characters}.schema.json](../schemas/analysis/)) — foundation schema lives under `schemas/world/` per decision #54 (foundation 前移到 phase 1 + schema 合并入 world domain) | 失败 lane 把首条违规作为 `prior_error` 注入下一次重试 prompt（与 Phase 0 / Phase 4 同形态）；per-lane 独立 `[phase1].exit_validation_max_retry` 预算（不共享池）；用尽走 #48 length-tolerance 兜底 |
 | Phase 4 | `_scene_split_validator()` in `scene_archive.validate_scene_split` ([schemas/analysis/scene_split.schema.json](../schemas/analysis/scene_split.schema.json)) | per-chapter 重跑（`[phase4].max_retries_per_chapter`）；`build_scene_split_prompt(prior_error=...)` 注入 |
 
 详细决策依据 → `ai_context/decisions.md` #27b（Bounds-only-in-schema） + #27i（schema-gate-as-retry-trigger pattern）。

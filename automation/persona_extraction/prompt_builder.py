@@ -115,9 +115,17 @@ def build_summarization_prompt(
 # is derived programmatically from chapter_index, no LLM call). Each lane runs
 # its own claude -p with a narrow projection of the chunk JSON inputs:
 #
-#   - world_overview lane: chunk-level secondary fields (chunk_arc_summary +
+#   - foundation lane: chunk-level secondary fields (chunk_arc_summary +
 #     chunk_world_rules + chunk_power_levels + chunk_factions WITHOUT
-#     members_present + chunk_regions) + summaries[].chapter
+#     members_present + chunk_regions). summaries[] dropped — full-book
+#     setting writeup does not depend on per-chapter anchors. (Decision #54 —
+#     lane renamed from `world_overview`; output path moved from
+#     `works/{work_id}/analysis/world_overview.json` to
+#     `works/{work_id}/world/foundation/foundation.json`; schema moved from
+#     `schemas/analysis/world_overview.schema.json` to
+#     `schemas/world/foundation.schema.json`. `major_factions[].key_figures`
+#     is NOT produced by this lane — phase 2 baseline補 produces it via a
+#     separate LLM call after phase 1.5 identity merge.)
 #   - stage_plan lane: chunk_arc_summary + chunk_regions + per-summary
 #     chapter + summary only (the 150-200 CJK-char summary now carries the
 #     turning-point text signal directly; characters_present / emotional_tone
@@ -131,7 +139,7 @@ def build_summarization_prompt(
 # template tells the LLM to read from that directory.
 
 PHASE1_LANES: tuple[str, ...] = (
-    "world_overview",
+    "foundation",
     "stage_plan",
     "candidate_characters",
 )
@@ -142,10 +150,17 @@ def _phase1_lane_inputs_root(project_root: Path, work_id: str) -> Path:
             / ".phase1_lane_inputs")
 
 
-def _project_chunk_for_world_overview(chunk: dict) -> dict:
+def _project_chunk_for_foundation(chunk: dict) -> dict:
     """Chunk-level secondary fields only (faction members_present stripped).
     summaries[] dropped — full-book setting writeup does not depend on
-    per-chapter anchors."""
+    per-chapter anchors.
+
+    Decision #54 — lane renamed from `world_overview` (the projector body is
+    unchanged; we strip members_present from chunk_factions since the
+    foundation lane does NOT write major_factions[].key_figures — phase 2
+    baseline produces that field via a separate LLM call after phase 1.5
+    identity merge).
+    """
     factions = []
     for fac in chunk.get("chunk_factions") or []:
         clean = {k: v for k, v in fac.items() if k != "members_present"}
@@ -217,7 +232,7 @@ def _project_chunk_for_candidates(chunk: dict) -> dict:
 
 
 _LANE_PROJECTORS = {
-    "world_overview": _project_chunk_for_world_overview,
+    "foundation": _project_chunk_for_foundation,
     "stage_plan": _project_chunk_for_stage_plan,
     "candidate_characters": _project_chunk_for_candidates,
 }
@@ -318,15 +333,19 @@ def _phase1_common_context(project_root: Path, work_id: str) -> dict[str, Any]:
     }
 
 
-def build_world_overview_prompt(
+def build_foundation_prompt(
     project_root: Path,
     work_id: str,
     lane_inputs_dir: Path,
     *,
     prior_error: str = "",
 ) -> str:
-    """Phase 1 world_overview lane prompt."""
-    template = _load_template("analysis_world_overview.md")
+    """Phase 1 foundation lane prompt (decision #54 — renamed from
+    build_world_overview_prompt; output path moved from
+    `analysis/world_overview.json` to `world/foundation/foundation.json`;
+    schema moved to `schemas/world/foundation.schema.json`).
+    """
+    template = _load_template("analysis_foundation.md")
     context = _phase1_common_context(project_root, work_id)
     context["lane_inputs_dir"] = str(lane_inputs_dir)
     context["retry_note"] = _phase1_retry_note(prior_error)
@@ -373,7 +392,11 @@ def build_baseline_prompt(
     work_id: str,
     target_characters: list[str],
 ) -> str:
-    """Build prompt for baseline production (world foundation + character identity)."""
+    """Build prompt for phase 2 baseline production (decision #54 — phase 2
+    缩水到 5 件：foundation.major_factions[].key_figures 补齐 +
+    fixed_relationships + identity + target_baseline + manifest + 空
+    stage_catalog；foundation 主体由 phase 1 foundation lane 直接产出，
+    phase 2 不再二次综合)."""
     template = _load_template("baseline_production.md")
 
     source_dir = project_root / "sources" / "works" / work_id
@@ -384,18 +407,27 @@ def build_baseline_prompt(
     files: list[str] = []
 
     # Schemas needed — includes the two stage_catalog schemas the
-    # baseline must produce empty instances of.
+    # baseline must produce empty instances of, plus foundation schema
+    # (decision #54 — phase 2 reads foundation.json to补齐 key_figures).
     for schema in ("character/identity.schema.json",
                    "character/character_manifest.schema.json",
                    "character/target_baseline.schema.json",
+                   "world/foundation.schema.json",
                    "world/fixed_relationships.schema.json",
                    "world/world_stage_catalog.schema.json",
                    "character/stage_catalog.schema.json"):
         files.append(f"- `{project_root / 'schemas' / schema}`")
 
-    # Analysis outputs
-    for name in ("world_overview.json", "candidate_characters.json",
-                 "stage_plan.json"):
+    # Phase 1 foundation lane output (decision #54 — foundation.json is now
+    # produced by phase 1 foundation lane at world/foundation/foundation.json;
+    # phase 2 reads it to补齐 major_factions[].key_figures via a separate LLM
+    # call within this same baseline_production run).
+    foundation_path = work_dir / "world" / "foundation" / "foundation.json"
+    if foundation_path.exists():
+        files.append(f"- `{foundation_path}`")
+
+    # Other phase 1 analysis outputs
+    for name in ("candidate_characters.json", "stage_plan.json"):
         p = work_dir / "analysis" / name
         if p.exists():
             files.append(f"- `{p}`")
@@ -415,6 +447,7 @@ def build_baseline_prompt(
             target_characters, ensure_ascii=False),
         "work_dir": str(work_dir),
         "schemas_dir": str(project_root / "schemas"),
+        "summaries_dir": str(summaries_dir),
         "files_to_read": "\n".join(files),
     }
 

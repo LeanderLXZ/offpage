@@ -51,7 +51,7 @@
 
 通用流程：
 
-- 产出每章的结构化摘要（事件、出场角色、情绪基调、身份变化线索）+ chunk-level 二级聚合字段（剧情弧 / 世界规则 / 力量体系 / 势力 / 区域），后者作为 phase 1 world_overview / phase 2 foundation 的 chunk-level 直接信号源（避免下游 LLM 凭 genre 套模板）
+- 产出每章的结构化摘要（事件、出场角色、情绪基调、身份变化线索）+ chunk-level 二级聚合字段（剧情弧 / 世界规则 / 力量体系 / 势力 / 区域），后者作为 phase 1 foundation lane 综合产 `world/foundation/foundation.json` 的 chunk-level 直接信号源（避免下游 LLM 凭 genre 套模板；决策 #54——phase 2 不再二次综合 foundation）
 - JSON 修复：L1 程序化 → L2 LLM（600s）→ L3 全量重跑（最多 1 次）
 - **Schema gate**：每个 chunk 落盘后跑 jsonschema (`schemas/analysis/chapter_summary_chunk.schema.json`) 校验，
   字段 bound + `additionalProperties:false` 违反归入同一 fail 类型（具体数字以 schema 为准）；失败路由到 L3 全量重跑，
@@ -80,11 +80,11 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 **双模式调度**（沿用 Phase 0 的 `structure_mode`）：
 
 - **monolithic 模式 = 3 lane 并行**：
-  - **world_overview lane**：题材 / 力量体系 / 主要势力 / 地理结构 / 大世界线划分 / 核心设定规则。输出：`works/{work_id}/analysis/world_overview.json`
+  - **foundation lane**：题材 / 力量体系 / 主要势力 / 地理结构 / 大世界线划分 / 核心设定规则。输出：`works/{work_id}/world/foundation/foundation.json`（决策 #54——原 `analysis/world_overview.json` 路径已废弃，foundation 由 phase 1 直接产，phase 2 仅补 `major_factions[].key_figures`）
   - **stage_plan lane**：按自然剧情边界切分（拐点先行，章数硬范围 8–15；详见决策 #27m 步骤 2.1/2.2/2.3 反锚定自检）。输出：`works/{work_id}/analysis/stage_plan.json`
   - **candidate_characters lane**：跨 chunk 角色身份合并 + 候选角色识别 + aliases 归并。输出：`works/{work_id}/analysis/candidate_characters.json`
 - **light_novel 模式 = 2 lane 并行 + 程序化 stage_plan**：
-  - **world_overview lane** + **candidate_characters lane** 同 monolithic（沿用同一 prompt + 同一裁剪契约）
+  - **foundation lane** + **candidate_characters lane** 同 monolithic（沿用同一 prompt + 同一裁剪契约）
   - **stage_plan lane 整体跳过 LLM**：由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生：
     - `stage_id = S{n:03d}`（n 从 1 起，对应 chapter_index 顺序）
     - `chapters = f"{chapter_id}-{chapter_id}"`（degenerate 单章区间，例 `"C0001-C0001"`；与 monolithic 共享 `^C[0-9]{4}-C[0-9]{4}$` 解析路径，phase 2/3/4 消费方零分叉）
@@ -100,24 +100,26 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 
 | Lane | per-summary 字段 | chunk-level 二级字段 |
 |---|---|---|
-| world_overview | （无——纯 chunk-level 视角，不依赖逐章锚点） | `chunk_arc_summary` / `chunk_world_rules` / `chunk_power_levels` / `chunk_factions`（去 `members_present`） / `chunk_regions` |
+| foundation | （无——纯 chunk-level 视角，不依赖逐章锚点） | `chunk_arc_summary` / `chunk_world_rules` / `chunk_power_levels` / `chunk_factions`（去 `members_present`） / `chunk_regions` |
 | stage_plan | `chapter` / `summary` | `chunk_arc_summary` / `chunk_regions` |
 | candidate_characters | `chapter` / `summary` / `characters_present` / `identity_notes` | `chunk_factions[].{name, members_present}` |
 
 裁剪原则：每 lane 只接收任务直接需要的字段，token surface 与 lane scope 成正比——
-**world_overview** 写全书设定（题材 / 力量 / 势力 / 地理 / 设定规则），仅依赖 chunk-level
+**foundation** 写全书设定（题材 / 力量 / 势力 / 地理 / 设定规则），仅依赖 chunk-level
 聚合，删去 `summaries[]` 整段；**stage_plan** 拐点先行 + 8–15 章硬范围合并，依据是
 `chunk_arc_summary` 的 chunk-级弧光 + per-summary `summary` 的事件描述（150-200 字承载事件 + 设定上下文），
 `characters_present` / `emotional_tone` / `identity_notes` 与"按章序合并相邻拐点"任务正交，
 裁掉避免 LLM thinking 长尾；**candidate_characters** 跨 chunk 身份合并需要事件上下文判断
 隐含身份链（如"Character A 实际是 Character B 化身"），保留 `summary` + `characters_present` +
 `identity_notes` + `chunk_factions[].members_present`。三件输出之间无硬数据依赖
-（唯一交叉 = `chunk_arc_summary` 同时被 world_overview + stage_plan 两 lane 用）。
+（唯一交叉 = `chunk_arc_summary` 同时被 foundation + stage_plan 两 lane 用）。
+
+**foundation lane 不写 `major_factions[].key_figures`**——该字段由 phase 2 baseline 单独 LLM call 补齐（输入 phase 1 落盘的 foundation + candidate_characters + 已确认目标清单；补丁式 `{faction_name: [character_id, ...]}` 输出后程序 merge into foundation.json）。Phase 1 阶段身份合并尚未完成（candidate_characters lane 与 foundation lane 并行），foundation lane 拿不到 character_id 终态。
 
 **出口验证（硬性门控，per-lane）**：每个 lane 的 LLM 产物落盘后，独立跑：
 
 1. **schema gate**：lane 输出 jsonschema 校验
-   （`schemas/analysis/{world_overview,stage_plan,candidate_characters}.schema.json`）
+   （`schemas/world/foundation.schema.json` for foundation lane + `schemas/analysis/{stage_plan,candidate_characters}.schema.json`）
 2. **stage `chapter_count` 8-15 限制**（仅 stage_plan lane，monolithic 模式）：schema `chapter_count.minimum=8` / `maximum=15` 直接硬挡 LLM 输出（决策 #27i schema-gate-as-retry-trigger 注入 prior_error），orchestrator `_check_stage_plan_limits` 代码层 belt-and-suspenders 二次兜底；light_novel 模式整体跳过 schema gate（stage_plan 由 `_build_light_novel_stage_plan` 程序派生不走 LLM 也不走 phase 1 lanes 列表，`chapter_count=1` 在新 schema 下 schema-invalid 是已知 trade-off，详见决策 #27m）
 
 校验失败 → 把首条 schema 错误（含 stage 限制违规）作为 `prior_error` 注入下一次重试 prompt，
@@ -139,15 +141,17 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 
 ### 5. Baseline 产出（Phase 2）
 
-基于全书摘要上下文和确认的角色，产出：
+Phase 1 foundation lane 已落 `world/foundation/foundation.json`；phase 2 基于全书摘要上下文和确认的角色，产出：
 
-- `world/foundation/foundation.json` — 世界基础设定初稿
 - `world/foundation/fixed_relationships.json` — 世界级固定关系骨架
 - `characters/{character_id}/canon/identity.json` — 角色身份初稿
 - `characters/{character_id}/canon/target_baseline.json` — 角色 target
   baseline（per-character，全书视野下的目标关系全集）
 - `characters/{character_id}/manifest.json` — 角色包 manifest（`paths`
   对象含 `target_baseline_path` 指向上条文件）
+- **补齐 `world/foundation/foundation.json::major_factions[].key_figures`**——单独一个轻量 LLM call，输入 phase 1 落盘 foundation + candidate_characters + 已确认目标清单；补丁式输出 `{faction_name: [character_id, ...]}`；程序 merge into foundation.json；character_id 必须 ∈ 已确认目标 ∪ candidate_characters 已合并身份集（决策 #54）
+
+**`foundation.json` 已不再是 phase 2 LLM 产出**（决策 #54——foundation 前移到 phase 1 foundation lane 直接产，phase 2 缩水到仅补 `key_figures`）；`fixed_relationships.json` 仍由 phase 2 baseline 一次性产出，因为它需要 phase 1.5 后的 character_id 集合。
 
 identity 与 target_baseline 都是 character-level 恒定文件——identity 记录
 角色基础事实（aliases / core_wounds / key_relationships 等），target_baseline
@@ -155,8 +159,16 @@ identity 与 target_baseline 都是 character-level 恒定文件——identity �
 次要 / 普通} + `relationship_type` 中文短词柔性 string，14 候选 +
 fallback 详见 `baseline_production.md` + ≤100 字描述）。`targets` 数组
 容量上限通过 `schemas/character/targets_cap.schema.json` $ref 共享继承
-（下游 stage_snapshot 三结构通过同一份 $ref 单源同步）。两者都是后续
-stage 的修正锚点；voice / behavior / boundary / failure_modes 不在
+（下游 stage_snapshot 三结构通过同一份 $ref 单源同步）。
+
+**target_baseline 准入门槛**（决策 #54）：**本角色与目标角色在 chapter_summaries
+摘要描述中被反映为有过 dialogue / action 交互**（如"X 对 Y 说……" / "X
+救/打/教 Y" / "X 与 Y 联手……"等动作或对话描述）才纳入 baseline。删除
+原 prompt 中"宁可多列、不可漏列、被点名提及即纳入"原则——血亲不再默认
+核心 tier，按准入门槛 + 实际剧情驱动力分级；tier 4 档 (核心 / 重要 /
+次要 / 普通) 不动，准入门槛与 tier 分级正交。
+
+两者都是后续 stage 的修正锚点；voice / behavior / boundary / failure_modes 不在
 Phase 2 产出——由 Phase 3 char_snapshot lane 在每个 stage_snapshot 中
 直接生成（S001 从原文 + identity 推演基线种子，S002+ 从前一
 stage_snapshot 演变）。

@@ -106,7 +106,7 @@ JSON 结构：
 - 产出文件必须是格式良好的 JSON
 - **同一角色的不同名称不得作为独立候选条目出现**——必须合并
 - 如果不确定两个名称是否为同一角色，在 `description` 中标注推测并说明依据
-- 你**只**负责 candidate_characters，不要尝试产出 world_overview / stage_plan（它们由其他 lane 并行处理）
+- 你**只**负责 candidate_characters，不要尝试产出 foundation / stage_plan（它们由其他 lane 并行处理）
 - 不要修改 `{lane_inputs_dir}` 下的输入文件
 - 不要读取 `sources/` 下的原始章节正文——本 lane 输入仅基于 chunks 摘要
 {retry_note}

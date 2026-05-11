@@ -186,12 +186,16 @@ def validate_baseline(
                 schema_dir / "world" / "world_manifest.schema.json",
                 str(world_manifest_path), length_tolerance=length_tolerance))
 
-    # World foundation
+    # World foundation — phase 1 foundation lane 产出主体，phase 2 baseline 补齐
+    # `major_factions[].key_figures`。schema validate 是 decision #54 显式要求
+    # （character_id 合法性 + bound + 结构完整性都走 schema gate；fixed_relationships
+    # / identity / target_baseline 同形态都走 _validate_schema）。
     foundation_path = work_dir / "world" / "foundation" / "foundation.json"
     if not foundation_path.exists():
         issues.append(ValidationIssue(
             "error", str(foundation_path), "foundation.json missing"))
     else:
+        try_repair_json_file(foundation_path)
         data = _load_json(foundation_path)
         if data is None:
             issues.append(ValidationIssue(
@@ -199,6 +203,11 @@ def validate_baseline(
         elif not data.get("work_id"):
             issues.append(ValidationIssue(
                 "error", str(foundation_path), "work_id is empty"))
+        else:
+            issues.extend(_validate_schema(
+                data,
+                schema_dir / "world" / "foundation.schema.json",
+                str(foundation_path), length_tolerance=length_tolerance))
 
     # fixed_relationships.json — required output of Phase 2
     fixed_rel_path = (work_dir / "world" / "foundation"

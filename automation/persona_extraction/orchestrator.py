@@ -7,7 +7,12 @@ Flow:
        a. Git preflight
        b. World + char_snapshot + char_support extraction (1+2N LLM calls)
        c. Programmatic post-processing (memory_digest + stage_catalog)
-       d. Repair agent (L0–L3 check → T0–T3 fix loop → final verify)
+       d. Repair agent (L0–L3 check → T0–T3 fix loop → final verify).
+          Note: this `L0–L3` is the repair_agent checker hierarchy
+          (decision #25), NOT the phase 0 JSON-format-repair三档 `L1/L2/L3`
+          (decision #40 = regex / LLM-on-broken-JSON / full re-run, used
+          only by `_summarize_chunk`). Same字面 L#, different semantics —
+          see ai_context/decisions.md #25 + #40 disambiguation notes.
        e. Git commit
   3.5 Cross-stage consistency check (programmatic, zero tokens)
   4. Scene archive (per-chapter parallel, programmatic validation only)
@@ -69,8 +74,8 @@ from .prompt_builder import (
     build_candidate_characters_prompt,
     build_char_snapshot_prompt,
     build_char_support_prompt,
+    build_foundation_prompt,
     build_stage_plan_prompt,
-    build_world_overview_prompt,
     cleanup_phase1_lane_inputs,
     prepare_phase1_lane_inputs,
     build_summarization_prompt,
@@ -89,6 +94,14 @@ def _load_analysis_schema(name: str) -> _jsonschema.Draft202012Validator:
     return _jsonschema.Draft202012Validator(schema)
 
 
+def _load_world_schema(name: str) -> _jsonschema.Draft202012Validator:
+    from .schema_loader import load_schema as _load_schema_inlined
+    schema_path = (Path(__file__).resolve().parents[2]
+                   / "schemas/world" / name)
+    schema = _load_schema_inlined(schema_path)
+    return _jsonschema.Draft202012Validator(schema)
+
+
 @_lru_cache(maxsize=1)
 def _chunk_validator() -> _jsonschema.Draft202012Validator:
     """Lazy-load schemas/analysis/chapter_summary_chunk.schema.json once."""
@@ -96,9 +109,11 @@ def _chunk_validator() -> _jsonschema.Draft202012Validator:
 
 
 @_lru_cache(maxsize=1)
-def _world_overview_validator() -> _jsonschema.Draft202012Validator:
-    """Lazy-load schemas/analysis/world_overview.schema.json once."""
-    return _load_analysis_schema("world_overview.schema.json")
+def _foundation_validator() -> _jsonschema.Draft202012Validator:
+    """Lazy-load schemas/world/foundation.schema.json once (decision #54 —
+    foundation 前移到 phase 1，schema 从 schemas/analysis/world_overview.schema.json
+    迁移到 schemas/world/foundation.schema.json)."""
+    return _load_world_schema("foundation.schema.json")
 
 
 @_lru_cache(maxsize=1)
@@ -1114,9 +1129,9 @@ class ExtractionOrchestrator:
         """Programmatically derive stage_plan 1:1 from chapter_index.
 
         light_novel mode: 1 sub-section = 1 phase 0 chunk = 1 phase 1
-        stage. The LLM analysis call still runs (for world_overview +
-        candidate_characters), but its stage_plan output is overwritten
-        by this derivation before schema gate.
+        stage. The LLM analysis call still runs (for foundation +
+        candidate_characters lanes), but stage_plan is derived
+        programmatically here without an LLM call.
         """
         chapter_index = _load_json(
             self.project_root / "sources" / "works" / self.work_id
@@ -1180,9 +1195,11 @@ class ExtractionOrchestrator:
         no shared pool). Strict-retry budget exhaustion falls through to
         length-bound tolerance gate (decision #48); only then FATAL.
 
-        Lane sets:
-        - **monolithic**: world_overview + stage_plan + candidate_characters
-        - **light_novel**: world_overview + candidate_characters (stage_plan
+        Lane sets (decision #54 — `world_overview` lane renamed to
+        `foundation` and output path moved from
+        `analysis/world_overview.json` to `world/foundation/foundation.json`):
+        - **monolithic**: foundation + stage_plan + candidate_characters
+        - **light_novel**: foundation + candidate_characters (stage_plan
           is derived programmatically from chapter_index by
           ``_build_light_novel_stage_plan``, no LLM call — STAGE_MIN/MAX
           bypassed since 1:1 derivation always = 1 chapter per stage)
@@ -1202,26 +1219,29 @@ class ExtractionOrchestrator:
         work_dir = self.project_root / "works" / self.work_id
         inc_dir = work_dir / "analysis"
 
-        # Lane definitions: (name, output_filename, validator_fn, builder_fn)
-        # stage_plan lane is included only in monolithic — light_novel
+        # Lane definitions: (name, output_relpath, validator_fn, builder_fn)
+        # — output_relpath is relative to work_dir (e.g. "analysis/stage_plan.json"
+        # for analysis-layer lanes; "world/foundation/foundation.json" for the
+        # foundation lane after decision #54 moved foundation production to
+        # phase 1). stage_plan lane is included only in monolithic — light_novel
         # derives stage_plan programmatically (no LLM lane).
         lanes: list[tuple[str, str, Any, Any]] = [
-            ("world_overview", "world_overview.json",
-             _world_overview_validator, build_world_overview_prompt),
+            ("foundation", "world/foundation/foundation.json",
+             _foundation_validator, build_foundation_prompt),
         ]
         if not is_light_novel:
             lanes.append((
-                "stage_plan", "stage_plan.json",
+                "stage_plan", "analysis/stage_plan.json",
                 _stage_plan_validator, build_stage_plan_prompt,
             ))
         lanes.append((
-            "candidate_characters", "candidate_characters.json",
+            "candidate_characters", "analysis/candidate_characters.json",
             _candidate_characters_validator, build_candidate_characters_prompt,
         ))
 
-        def _lane_passes_skip(name: str, fname: str,
+        def _lane_passes_skip(name: str, relpath: str,
                               validator_fn: Any) -> bool:
-            existing = _load_json(inc_dir / fname)
+            existing = _load_json(work_dir / relpath)
             if existing is None:
                 return False
             if list(validator_fn().iter_errors(existing)):
@@ -1238,8 +1258,8 @@ class ExtractionOrchestrator:
         skip_set: set[str] = set()
         pending: list[tuple[str, str, Any, Any]] = []
         for lane in lanes:
-            name, fname, validator_fn, _ = lane
-            if _lane_passes_skip(name, fname, validator_fn):
+            name, relpath, validator_fn, _ = lane
+            if _lane_passes_skip(name, relpath, validator_fn):
                 skip_set.add(name)
             else:
                 pending.append(lane)
@@ -1247,12 +1267,12 @@ class ExtractionOrchestrator:
         print("\n" + "=" * 60)
         print(f"  Phase 1: Analysis [structure_mode={structure_mode}]")
         print("=" * 60)
-        for name, fname, _, _ in lanes:
+        for name, relpath, _, _ in lanes:
             mark = ("[SKIP — schema-valid on disk]"
                     if name in skip_set else "[run]")
-            print(f"  {mark} {name} → {fname}")
+            print(f"  {mark} {name} → {relpath}")
         if is_light_novel:
-            print("  [run] stage_plan → stage_plan.json "
+            print("  [run] stage_plan → analysis/stage_plan.json "
                   "(programmatic derivation, no LLM)")
         if pending:
             print(f"  Lane concurrency: {LANE_CONCURRENCY}")
@@ -1270,12 +1290,27 @@ class ExtractionOrchestrator:
         # Per-lane retry loop. ``prior_error`` injection is per-lane
         # (decision #52) — same pattern as Phase 0 chunk-level / Phase 4
         # chapter-level prior_error retry; not shared across lanes.
+        # Map lane name → schema reference path (for prior_error messages).
+        # foundation lane lives under schemas/world/; the other two under
+        # schemas/analysis/ (decision #54 — foundation schema migrated from
+        # schemas/analysis/world_overview.schema.json to
+        # schemas/world/foundation.schema.json).
+        _LANE_SCHEMA_REF = {
+            "foundation": "schemas/world/foundation.schema.json",
+            "stage_plan": "schemas/analysis/stage_plan.schema.json",
+            "candidate_characters":
+                "schemas/analysis/candidate_characters.schema.json",
+        }
+
         def _run_one_lane(
             lane: tuple[str, str, Any, Any],
             lane_dir: Path,
         ) -> tuple[str, str, str | None]:
-            name, fname, validator_fn, builder_fn = lane
-            target_path = inc_dir / fname
+            name, relpath, validator_fn, builder_fn = lane
+            target_path = work_dir / relpath
+            # Ensure parent dir exists (foundation lane writes into
+            # works/{work_id}/world/foundation/ which may not exist yet).
+            target_path.parent.mkdir(parents=True, exist_ok=True)
             prior_error = ""
 
             for attempt in range(1, MAX_RETRIES_PER_LANE + 2):
@@ -1310,7 +1345,7 @@ class ExtractionOrchestrator:
                             json.loads(target_path.read_text(encoding="utf-8"))
                         except (json.JSONDecodeError, OSError) as exc:
                             prior_error = (
-                                f"输出文件 `{fname}` 已落盘但 JSON 解析失败："
+                                f"输出文件 `{relpath}` 已落盘但 JSON 解析失败："
                                 f"`{exc}`。请检查格式（缺逗号 / 引号未闭合 / "
                                 f"尾随非法字符等）后重写本 lane 输出。"
                             )
@@ -1319,17 +1354,17 @@ class ExtractionOrchestrator:
                             # returned None — should not happen unless the
                             # file content is JSON null / empty after parse.
                             prior_error = (
-                                f"输出文件 `{fname}` 解析为空 (null / 空容器)，"
+                                f"输出文件 `{relpath}` 解析为空 (null / 空容器)，"
                                 f"请按 prompt 要求生成实质内容。"
                             )
                     else:
                         prior_error = (
-                            f"输出文件 `{fname}` 未生成，请按 prompt 要求"
+                            f"输出文件 `{relpath}` 未生成，请按 prompt 要求"
                             f"将产物写入 `{target_path}`。"
                         )
                     if attempt > MAX_RETRIES_PER_LANE:
                         return name, "lane_failed", (
-                            f"output `{fname}` failed to load after "
+                            f"output `{relpath}` failed to load after "
                             f"{MAX_RETRIES_PER_LANE} retries: {prior_error[:120]}")
                     continue
 
@@ -1350,7 +1385,7 @@ class ExtractionOrchestrator:
                     err_path = "/".join(
                         str(p) for p in first.absolute_path) or "<root>"
                     lines.append(
-                        f"Schema 校验失败：`{fname}` 共 {len(errs)} 处违反，"
+                        f"Schema 校验失败：`{relpath}` 共 {len(errs)} 处违反，"
                         f"首条 `{err_path}`: {first.message[:120]}"
                     )
                 if violating:
@@ -1365,10 +1400,14 @@ class ExtractionOrchestrator:
                     )
 
                 if attempt <= MAX_RETRIES_PER_LANE:
+                    schema_ref = _LANE_SCHEMA_REF.get(
+                        name,
+                        f"schemas/analysis/{Path(relpath).name.replace('.json', '.schema.json')}",
+                    )
                     prior_error = (
                         "\n".join(lines)
                         + "\n\nschema 契约见 "
-                        f"`schemas/analysis/{fname.replace('.json', '.schema.json')}`。"
+                        f"`{schema_ref}`。"
                         "请重新生成本 lane 输出以满足 schema + stage 限制。"
                     )
                     target_path.unlink(missing_ok=True)
@@ -1435,19 +1474,25 @@ class ExtractionOrchestrator:
 
         # Final guard: defense in depth — abort if any of the three trio
         # files is missing (covers a future code-edit that drops a lane
-        # from the loop without removing the trio guarantee).
-        for fname in (
-            "stage_plan.json", "world_overview.json",
-            "candidate_characters.json",
-        ):
-            if not (inc_dir / fname).exists():
-                print(f"[FATAL] Phase 1 marked complete but `{fname}` "
+        # from the loop without removing the trio guarantee). foundation
+        # lives under world/foundation/ (decision #54); stage_plan +
+        # candidate_characters under analysis/.
+        trio_relpaths = (
+            "analysis/stage_plan.json",
+            "world/foundation/foundation.json",
+            "analysis/candidate_characters.json",
+        )
+        for relpath in trio_relpaths:
+            if not (work_dir / relpath).exists():
+                print(f"[FATAL] Phase 1 marked complete but `{relpath}` "
                       f"missing on disk. Aborting.")
                 sys.exit(1)
 
-        stage_plan = _load_json(inc_dir / "stage_plan.json")
-        candidates = _load_json(inc_dir / "candidate_characters.json")
-        world_overview = _load_json(inc_dir / "world_overview.json")
+        stage_plan = _load_json(work_dir / "analysis" / "stage_plan.json")
+        candidates = _load_json(
+            work_dir / "analysis" / "candidate_characters.json")
+        foundation = _load_json(
+            work_dir / "world" / "foundation" / "foundation.json")
 
         # Mark pipeline phase_1 done
         if self.pipeline:
@@ -1457,7 +1502,7 @@ class ExtractionOrchestrator:
         return {
             "stage_plan": stage_plan,
             "candidates": candidates,
-            "world_overview": world_overview,
+            "foundation": foundation,
             "raw_output": "",  # no single raw_output anymore (3 lanes)
         }
 
@@ -1468,13 +1513,37 @@ class ExtractionOrchestrator:
     def run_baseline_production(
         self, target_characters: list[str]
     ) -> None:
-        """Produce world foundation + character identity baselines."""
+        """Produce phase 2 baseline (decision #54 — phase 2 缩水):
+        - foundation.major_factions[].key_figures 补齐（phase 1 foundation
+          lane 已落 foundation.json 主体，仅 key_figures 字段留空待补）
+        - fixed_relationships.json
+        - per-character identity.json + manifest.json + target_baseline.json
+        - 空 stage_catalog.json
+
+        foundation.json 主体由 phase 1 foundation lane 直接产出，phase 2
+        不再二次综合 foundation。
+        """
         print("\n" + "=" * 60)
         print("  Phase 2: Baseline Production")
         print("=" * 60 + "\n")
 
         print(f"  Characters: {target_characters}")
-        print("  Producing: world/foundation + character identity baselines\n")
+        print("  Producing: foundation.key_figures 补齐 + fixed_relationships + "
+              "identity + target_baseline + manifest\n")
+
+        # Pre-check: foundation.json must exist (phase 1 foundation lane
+        # output). Phase 2 reads + 补齐 key_figures, never re-creates the
+        # file from scratch (decision #54). If missing, phase 1 must be
+        # re-run before phase 2 can proceed.
+        work_dir = self.project_root / "works" / self.work_id
+        foundation_path = work_dir / "world" / "foundation" / "foundation.json"
+        if not foundation_path.exists():
+            print(f"[ERROR] phase 1 foundation lane output missing: "
+                  f"{foundation_path}.")
+            print("  Phase 2 cannot run baseline production without "
+                  "phase 1 foundation.json (decision #54).")
+            print("  Re-run with --resume to retry phase 1 foundation lane.")
+            sys.exit(1)
 
         prompt = build_baseline_prompt(
             self.project_root, self.work_id, target_characters)
@@ -1489,15 +1558,15 @@ class ExtractionOrchestrator:
             sys.exit(1)
 
         # Verify outputs — these are critical for extraction
-        work_dir = self.project_root / "works" / self.work_id
         missing_critical: list[str] = []
 
-        foundation = work_dir / "world" / "foundation" / "foundation.json"
-        if foundation.exists():
-            print("  [OK] World foundation produced.")
+        # foundation.json must still exist after phase 2 LLM call — phase 2
+        # only edits key_figures field in-place, never deletes the file.
+        if foundation_path.exists():
+            print("  [OK] World foundation present (phase 1 produced; phase 2 补齐 key_figures).")
         else:
             missing_critical.append("world/foundation/foundation.json")
-            print("  [MISS] World foundation not found.")
+            print("  [MISS] World foundation gone after phase 2 — should not happen.")
 
         fixed_rel = (work_dir / "world" / "foundation"
                      / "fixed_relationships.json")

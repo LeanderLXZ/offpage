@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/analysis/chapter_summary_chunk.schema.json",
   "title": "ChapterSummaryChunk",
-  "description": "Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳；chunk-level 二级字段聚合本 chunk 的世界规则 / 力量体系 / 势力 / 区域 / 剧情弧信号，供 Phase 1/2 综合产 world_overview / foundation。chunks 联合覆盖 0001..total_chapters 全集。不入运行时。",
+  "description": "Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳；chunk-level 二级字段聚合本 chunk 的世界规则 / 力量体系 / 势力 / 区域 / 剧情弧信号，供 Phase 1 foundation lane 综合产 `world/foundation/foundation.json`（决策 #54——phase 2 不再二次综合 foundation）。chunks 联合覆盖 0001..total_chapters 全集。不入运行时。",
   "type": "object",
   "required": [
     "work_id",
@@ -30,12 +30,12 @@
     "chunk_arc_summary": {
       "type": "string",
       "maxLength": 200,
-      "description": "本 chunk 整体剧情弧概述（≤200 字，required）。Phase 1 综合多 chunk 的弧线产 world_overview.world_lines.core_conflict。"
+      "description": "本 chunk 整体剧情弧概述（≤200 字，required）。Phase 1 foundation lane 综合多 chunk 的弧线产 foundation.world_lines.core_conflict（决策 #54）。"
     },
     "chunk_world_rules": {
       "type": "array",
       "maxItems": 5,
-      "description": "本 chunk 揭示的世界规则（修炼 / 转世 / 天道 / 契约等结构性规则；最多 5 条）。Phase 2 综合多 chunk 产 foundation.core_rules.{rule,description,impact}。",
+      "description": "本 chunk 揭示的世界规则（修炼 / 转世 / 天道 / 契约等结构性规则；最多 5 条）。Phase 1 foundation lane 综合多 chunk 产 foundation.core_rules（字符串数组，决策 #54——`core_rules` 形态由原 phase 2 的 `{rule,description,impact}` 对象改为 phase 1 的字符串数组，user 决策 1 明确不改 core_rules 结构）。",
       "items": {
         "type": "object",
         "additionalProperties": false,

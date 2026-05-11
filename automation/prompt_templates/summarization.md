@@ -37,7 +37,7 @@
 
 ### 步骤 3：chunk-level 二级聚合字段
 
-读完整个 chunk 后，从全 chunk 视野填以下五个 chunk-level 字段。它们承载世界规则 / 力量体系 / 势力 / 区域 / 剧情弧信号——Phase 1 综合多 chunk 产 `world_overview`，Phase 2 综合多 chunk 产 `foundation`。**没有这些字段下游 LLM 只能凭 genre 套模板**。
+读完整个 chunk 后，从全 chunk 视野填以下五个 chunk-level 字段。它们承载世界规则 / 力量体系 / 势力 / 区域 / 剧情弧信号——Phase 1 foundation lane 综合多 chunk 直接产出 `world/foundation/foundation.json`（决策 #54——phase 2 baseline 不再二次综合 foundation，仅补 `major_factions[].key_figures`）。**没有这些字段下游 LLM 只能凭 genre 套模板**。
 
 - `chunk_arc_summary`（**required**）：本 chunk 整体剧情弧的概述（≤200 字）。例如"主角进入<location_a>遭遇<faction_b>截杀，逃亡过程中习得<power_level_c>，最终与<character_d>缔结契约离开<location_a>"。Phase 1 综合多 chunk 弧线产出 `world_lines.core_conflict`
 - `chunk_world_rules[]`（最多 5 条）：本 chunk 揭示的世界规则（修炼 / 转世 / 天道 / 契约 / 因果等结构性规则）。每条：

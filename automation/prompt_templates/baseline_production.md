@@ -4,9 +4,15 @@
 
 ## 任务
 
-基于全书分析阶段的产出（世界观概览、候选角色列表、章节摘要），为作品
-`{work_id}` 产出 **世界 foundation baseline**（含固定关系网络）和
-**角色 identity baseline**。
+基于全书分析阶段的产出（phase 1 已落 `world/foundation/foundation.json`、`analysis/candidate_characters.json`、`analysis/stage_plan.json`、`analysis/chapter_summaries/`），为作品 `{work_id}` 产出 phase 2 baseline 5 件：
+
+1. **补齐 `world/foundation/foundation.json` 的 `major_factions[].key_figures`**——phase 1 foundation lane 不写该字段（身份合并未完成），phase 2 单独 LLM 补丁式补齐
+2. **世界级 fixed_relationships baseline**——`world/foundation/fixed_relationships.json`
+3. **每角色 identity baseline**——`characters/{char_id}/canon/identity.json` + `manifest.json`
+4. **每角色 target_baseline**——`characters/{char_id}/canon/target_baseline.json`（**准入门槛收紧**，详见产出 4）
+5. **世界与角色 stage_catalog 初始化**——空数组占位
+
+**foundation 不再由 phase 2 产出**——决策 #54 把 foundation 前移到 phase 1 foundation lane 直接产，phase 2 仅补 `key_figures` 字段。
 
 identity 与 target_baseline 都是 character-level 恒定文件——identity 记录
 角色基础事实（aliases / core_wounds / key_relationships 等），target_baseline
@@ -31,98 +37,32 @@ char_snapshot lane 在每个 stage_snapshot 中直接生成（S001 从原文 + i
 
 {files_to_read}
 
-## 产出 1：世界 Foundation
+## 产出 1：补齐 `foundation.major_factions[].key_figures`
 
-### 思考链：从 chunk-level 二级字段综合产 foundation
+phase 1 foundation lane 已经落盘 `{work_dir}/world/foundation/foundation.json`，但 `major_factions[].key_figures` 字段被刻意留空——因为 phase 1 阶段身份合并（由 candidate_characters lane 并行处理）尚未完成，foundation lane 拿不到 character_id 终态。phase 2 在身份合并完成后单独一个轻量 LLM call 补齐该字段。
 
-`world_overview.json` 是 Phase 1 把 chunk-level 信号综合后的结构化精化版，
-**信息源相同 / 可信度同分层**——你的任务**不是基于 world_overview 二次推断**，
-而是回到原始 chunk-level 信号源（`{summaries_dir}` 下所有 chunk 文件的
-`chunk_world_rules` / `chunk_power_levels` / `chunk_factions` /
-`chunk_regions` / `chunk_arc_summary`），按以下映射综合产 foundation：
+### 读取契约
 
-| foundation 字段 | chunk-level 直供字段 | 综合方式 |
-|---|---|---|
-| `core_rules[].{rule, description, impact}` | `chunk_world_rules[]` | 跨 chunk 合并同一规则；`description` 取最具体表述，**`impact` 综合多 chunks 的 `observed_impact`**（具体观察 + fallback "未观察" 都是局部锚点）判定该规则对剧情 / 角色的整体影响——单 chunk 局部观察不足以判定整体，必须跨 chunk 看模式 |
-| `power_system.levels[].{name, description}` | `chunk_power_levels[]` | 按等级先后顺序排列；`description` 取多 chunk 中最具体的解释 |
-| `power_system.summary` | （综合）`chunk_power_levels[]` 整体覆盖 + `chunk_world_rules[]` 中力量相关的规则 | 一句话概括力量体系类型 + 主要进阶逻辑 |
-| `major_factions[].{name, description}` | `chunk_factions[].{name, description}` | 跨 chunk 合并同一势力；`description` 取最具体表述 |
-| `major_factions[].key_figures[]` | `chunk_factions[].members_present[]`（**经 Phase 1.5 身份合并后映射到 character_id**） | 仅纳入 Phase 1.5 候选角色清单中的 character_id；raw 名（化名 / 称呼）不直接写入 |
-| `world_structure.major_regions[].{name, description}` | `chunk_regions[]` | 跨 chunk 合并同一区域 |
-| `world_structure.summary` | （综合）`chunk_regions[]` + `chunk_factions[]` + `chunk_world_rules[]` 中地理 / 空间相关规则 | 一句话概括世界地理 / 空间结构 |
-| `world_lines[].core_conflict` | `chunk_arc_summary` | 一个 world_line 通常跨多 chunk，串联其 `chunk_arc_summary` 提炼核心冲突 |
-| `world_lines[].setting_features` | （综合）`chunk_regions[]` + `chunk_power_levels[]` + `chunk_factions[]` 在该 world_line 跨度内的子集 | 一句话概括该篇章的环境 / 体系特征差异 |
-| `genre` / `tone` | 沿用 `world_overview.{genre, tone}` | 不二次推断 |
+- 输入：`{work_dir}/world/foundation/foundation.json`（phase 1 foundation lane 已产）+ `{work_dir}/analysis/candidate_characters.json`（phase 1 candidate_characters lane 已产）+ 目标角色清单（`{target_characters}`，phase 1.5 用户已确认）
+- 合法 character_id 集 = **`candidate_characters.candidates[].character_id` 全集**（phase 1.5 已确认的目标角色清单是其子集；非目标角色但合法的 candidate 仍可作为 faction 关键人物）
 
-**关键约束**：
+### 输出形态
 
-- **不要凭 genre 套模板**——如果你发现自己在写"练气筑基金丹元婴"、"修真界
-  分东南西北四大洲"这类范式化内容，停下来回看 chunk-level 字段。如果
-  原文确实出现了这些范式，chunk-level 字段会反映；如果没出现，本作就
-  没有
-- **`core_rules[].impact` 是综合判断，不是直接拷贝**——单条 `chunk_world_rules.observed_impact`
-  是局部观察（"未在本 chunk 直接观察"也是有效信号——意味本 chunk 该规则
-  未触发），foundation.impact 必须综合多 chunks 的局部信号判定**对剧情 /
-  角色的整体影响**；找不到任何 chunk 触发的规则要么删（不是核心规则），
-  要么标 "全书未直接观察到触发"
-- 为空 / 缺失的 chunk-level 信号 = foundation 对应字段也应为空 / 简略，
-  **不要补全**
+读取 `foundation.json` 后，**仅修改 `major_factions[]` 数组的 `key_figures` 字段**——其他字段（`work_id` / `genre` / `tone` / `world_structure` / `power_system` / `core_rules` / `world_lines` / `major_factions[].name` / `major_factions[].description`）**一字不动**直接保留。
 
-创建目录结构 `{work_dir}/world/foundation/`，产出：
+为每个 `major_factions[i]`：
+- 阅读其 `name` + `description`
+- 在 `candidate_characters.candidates[]` 里找到该势力的关键人物（核心成员 / 领袖 / 代表人物等），用 `character_id` 列出
+- 写到 `major_factions[i].key_figures` 数组里（≤10 项，每项 ≤30 字）
+- **每个 character_id 必须 ∈ `candidate_characters.candidates[].character_id` 全集**——非法 character_id 会触发 schema gate 失败 + tolerance gate 兜底 + 失败则 `sys.exit(1)`
 
-### foundation.json
+如果某势力在 candidates 中找不到对应关键人物（势力存在但全是 raw 名未在身份合并中出现 / 或势力只在 chunk-level 提到但无主要角色归属），`key_figures` 写空数组 `[]`。
 
-世界基础设定文件：
+### 落盘
 
-```json
-{{
-  "work_id": "{work_id}",
-  "genre": "...",
-  "tone": "...",
-  "world_structure": {{
-    "summary": "世界的整体结构描述",
-    "major_regions": [
-      {{
-        "name": "区域名",
-        "description": "简要描述"
-      }}
-    ]
-  }},
-  "power_system": {{
-    "summary": "力量体系概述",
-    "levels": [
-      {{
-        "name": "等级名",
-        "description": "简要描述"
-      }}
-    ]
-  }},
-  "core_rules": [
-    {{
-      "rule": "规则名",
-      "description": "规则描述",
-      "impact": "对剧情的影响"
-    }}
-  ],
-  "world_lines": [
-    {{
-      "name": "篇章名",
-      "chapter_range": "起止章节",
-      "core_conflict": "核心冲突",
-      "setting_features": "环境特征"
-    }}
-  ],
-  "major_factions": [
-    {{
-      "name": "势力名",
-      "description": "简要描述",
-      "key_figures": ["相关角色名"]
-    }}
-  ]
-}}
-```
+把修改后的整份 foundation 写回原路径 `{work_dir}/world/foundation/foundation.json`，覆盖原文件。schema 契约 → `schemas/world/foundation.schema.json`，bound 以 schema 为准。
 
-### fixed_relationships.json
+## 产出 2：fixed_relationships.json
 
 世界级固定关系网络——**仅记录全书从开始到结束都未改变的结构性纽带**。
 
@@ -160,7 +100,7 @@ char_snapshot lane 在每个 stage_snapshot 中直接生成（S001 从原文 + i
 关系仍需结合摘要确认），后续 stage 读到原文后修正和补充（修正限于补漏、
 订正描述等，不应把 stage-acquired 关系反向迁入此处）。
 
-## 产出 2：角色 Identity Baseline
+## 产出 3：角色 Identity Baseline
 
 为每个目标角色产出 `identity.json` 和 `manifest.json`。
 
@@ -202,13 +142,14 @@ core_wounds 和 key_relationships 基于全书摘要可以产出较准确的初�
 - `aliases`：从 identity.json 的结构化 aliases 中提取名称的扁平字符串数组
 - `paths`：填入正确的相对路径。**注意**：
   - `stage_snapshot_root` 必须指向 `characters/{{char_id}}/canon/stage_snapshots`（不是 `canon/stages`）
-  - `target_baseline_path` 必须指向 `characters/{{char_id}}/canon/target_baseline.json`（即下方"产出 3"所产文件）
+  - `target_baseline_path` 必须指向 `characters/{{char_id}}/canon/target_baseline.json`（即下方"产出 4"所产文件）
 
-## 产出 3：角色 Target Baseline
+## 产出 4：角色 Target Baseline
 
 为每个目标角色产出 `target_baseline.json`——全书视野下该角色与其它
-角色之间的全部 target 关系列表（character-level 恒定文件，与 identity /
-fixed_relationships 同源思路：phase 2 一次拍，phase 3 各 stage 只读不写）。
+角色之间的**有过 dialogue / action 交互的** target 关系列表
+（character-level 恒定文件，与 identity / fixed_relationships 同源思路：
+phase 2 一次拍，phase 3 各 stage 只读不写）。
 
 ### target_baseline.json
 
@@ -216,7 +157,20 @@ fixed_relationships 同源思路：phase 2 一次拍，phase 3 各 stage 只读�
 
 必须遵循 `schemas/character/target_baseline.schema.json`。
 
-字段：
+### 准入门槛（决策 #54，重要）
+
+**只有当本角色（baseline 主角，character_id = `{{char_id}}`）与目标角色在 `chapter_summaries/` 摘要描述中**被反映为有过 dialogue / action 交互**时，才纳入 baseline。**
+
+具体判定（依据 phase 0 chunk 摘要——`{summaries_dir}` 下所有 chunk 文件的 `summaries[]` 内容，而非原文）：
+
+- ✅ **有 dialogue / action 交互**：摘要里出现"X 对 Y 说……" / "X 救 / 打 / 教 / 责备 Y" / "X 与 Y 联手……" / "X 杀 Y" / "X 救起 Y" 等动作或对话描述——双方至少一方对另一方有具体动作 / 对话
+- ❌ **仅被提及但无交互**：摘要里只出现"……提到 Y" / "……听说 Y 的事" / "Y 在远方做某事"——本角色与 Y 没有发生在同一场景的具体动作或对话
+- ❌ **末章/局部短暂出生 + 引发异象 + 无后续互动**：纯被动客体（如刚出生即引发异象，本身无主动 dialogue / action）不纳入
+- ✅ **关键路人**：即使只有一次交互，但该交互对本角色后续剧情驱动力极大（如关键命运转折 / 命运伏笔），仍纳入并标 `tier=核心`
+
+**血亲 / 师承等结构性关系不再默认核心 tier**——按准入门槛 + 实际剧情驱动力分级。若血亲无 dialogue / action 交互（如末章才出生的婴儿、远房从未谋面的亲属），同样不纳入 baseline。
+
+### 字段
 
 - `character_id`：本 baseline 描述的角色 ID（与 identity.character_id /
   目录名 / manifest.character_id 三者一致）
@@ -245,7 +199,7 @@ fixed_relationships 同源思路：phase 2 一次拍，phase 3 各 stage 只读�
     的"操作者""容器""契约者"等特殊语境角色），允许使用列表外更精确的
     中文短词，但**必须在 `description` 字段说明该词与候选 14 项的差异**；
     不要硬塞进相近候选。
-  - `tier`：重要程度（站在本角色视角看对方的相对重要性）：
+  - `tier`：重要程度（站在本角色视角看对方的相对重要性）。**准入门槛与 tier 分级正交**——准入门槛决定"纳入与否"，tier 决定"重要度梯度"。
     - `核心` = 亲密圈 / 关键宿敌（驱动主要剧情线）
     - `重要` = 对角色行为有显著影响
     - `次要` = 偶有交互
@@ -268,9 +222,8 @@ cross-file hard fail（多 = 写出 baseline 之外的角色；少 = 漏写 base
 repair lifecycle。
 
 phase 2 一旦漏判某 target，phase 3 不会自动补救——需要人工编辑 baseline
-后重抽该 stage。所以 phase 2 产出时**宁可多列、不可漏列**——任何在全书
-摘要里出现过、与本角色有过互动 / 涉及关系演变 / 即使只是泛弱关联但被
-点名提及的角色，都应纳入。
+后重抽该 stage。**所以准入门槛要严格遵守**——严格执行"dialogue / action
+交互"判定，不要补"宁可多列"的泛弱关联角色（决策 #54 已废除此原则）。
 
 **容量上限（targets 数组）**通过 `schemas/character/targets_cap.schema.json`
 单源约束。下游 stage_snapshot 三结构通过同一份 $ref 共享继承——调整
@@ -287,7 +240,7 @@ character_snapshot_extraction prompt 的 D4 三态规则）。
 （青梅竹马）或 `次要`（点头之交）；同样是 `路人`，可能是 `普通`
 （街头偶遇）也可能是 `核心`（命运伏笔的关键路人）。
 
-## 产出 4：世界与角色 Stage Catalog 初始化
+## 产出 5：世界与角色 Stage Catalog 初始化
 
 为世界包和每个目标角色创建空的 stage_catalog.json，后续提取时逐阶段追加。
 
@@ -327,8 +280,8 @@ baseline 阶段**不需要**创建任何占位文件：
 - `{work_dir}/characters/{{char_id}}/canon/memory_digest.jsonl` — 从角色
   memory_timeline 生成；同样由首阶段 post-processing 首次创建。
 
-baseline 阶段只需完成上文列出的 foundation / fixed_relationships /
-identity / target_baseline / manifest / 空 stage_catalog。
+baseline 阶段只需完成上文列出的 foundation.key_figures 补齐 /
+fixed_relationships / identity / target_baseline / manifest / 空 stage_catalog。
 
 ## 规则
 

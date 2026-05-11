@@ -59,8 +59,8 @@ recovery_effort          = "high"
 # ----------------------------------------------------------------
 [phase1]
 # Per-lane 出口验证最大重试次数（决策 #52，每 lane 独立预算，不共享池）。
-# Phase 1 fan-out 成 lane（monolithic = world_overview / stage_plan /
-# candidate_characters 三 lane；light_novel = world_overview +
+# Phase 1 fan-out 成 lane（monolithic = foundation / stage_plan /
+# candidate_characters 三 lane；light_novel = foundation +
 # candidate_characters 两 lane，stage_plan 由程序化派生不调 LLM）。
 # Schema 校验失败 / stage 章数违规 → prior_error 注入下一次重试 prompt
 # （与 phase 0 / phase 4 同形态），用尽走 #48 length-tolerance gate 兜底。

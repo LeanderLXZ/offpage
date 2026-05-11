@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/world/foundation.schema.json",
   "title": "WorldFoundation",
-  "description": "Phase 2 产出的世界基础设定，作为运行时 Tier 0 的静态背景加载。不含任何 stage-scoped 信息（阶段化内容归 world_stage_snapshot）。顶层 additionalProperties=true 以兼容 per-work 扩展字段，子对象按需收紧。",
+  "description": "世界基础设定 baseline——genre / tone / world_structure / power_system / core_rules / world_lines / major_factions。作为运行时 Tier 0 静态背景加载，不含 stage-scoped 信息（阶段化内容归 world_stage_snapshot）。**由 Phase 1 foundation lane 直接产出**（决策 #54——原 `schemas/analysis/world_overview.schema.json` 已删除，内容合并入本 schema；phase 2 baseline 仅负责单独 LLM call 补齐 `major_factions[].key_figures` 字段，输入是 phase 1 落盘 foundation + candidate_characters + 已确认目标清单，补丁式 merge into foundation.json）。后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。顶层 additionalProperties=true 以兼容 per-work 扩展字段；子对象按需收紧。",
   "type": "object",
   "required": ["work_id"],
   "additionalProperties": true,
@@ -13,92 +13,87 @@
     },
     "genre": {
       "type": "string",
-      "description": "题材短标签（例如：玄幻修仙 / 都市悬疑 / 武侠）。"
+      "maxLength": 30,
+      "description": "题材类型（≤30 字，例如\"东方玄幻\" / \"都市修真\"）。"
     },
     "tone": {
       "type": "string",
-      "maxLength": 100,
-      "description": "整体基调描述（一到两句话概括，≤100 字，供运行时加载时做氛围提示）。"
+      "maxLength": 50,
+      "description": "整体基调（≤50 字）。"
     },
     "world_structure": {
       "type": "object",
-      "description": "世界宏观结构：整体概览 + 关键地域清单。",
-      "additionalProperties": true,
+      "required": ["summary", "major_regions"],
+      "additionalProperties": false,
       "properties": {
         "summary": {
           "type": "string",
+          "minLength": 100,
           "maxLength": 200,
-          "description": "世界宏观结构整体概览，≤200 字。"
+          "description": "世界结构概述（100-200 字）。"
         },
         "major_regions": {
           "type": "array",
-          "maxItems": 20,
-          "description": "关键地域清单，≤20 条。",
+          "maxItems": 30,
           "items": {
             "type": "object",
             "required": ["name"],
-            "additionalProperties": true,
+            "additionalProperties": false,
             "properties": {
-              "name": { "type": "string" },
-              "description": {
-                "type": "string",
-                "maxLength": 50,
-                "description": "地域描述，≤50 字。"
-              }
+              "name": { "type": "string", "maxLength": 15, "description": "区域 / 地名（≤15 字，对齐 chunk_regions.items.name）。" },
+              "description": { "type": "string", "maxLength": 30, "description": "区域简要描述（≤30 字，对齐 chunk_regions.items.description）。" }
             }
-          }
+          },
+          "description": "主要区域列表（≤30 项）。形态对齐 chunk_regions.items，phase 1 foundation lane 直接读 chunk 综合。"
         }
       }
     },
     "power_system": {
       "type": "object",
-      "description": "力量/修炼/科技体系说明；levels 列出可枚举的层级序列。",
-      "additionalProperties": true,
+      "required": ["summary", "levels"],
+      "additionalProperties": false,
       "properties": {
         "summary": {
           "type": "string",
+          "minLength": 100,
           "maxLength": 200,
-          "description": "体系整体说明，≤200 字。"
+          "description": "力量体系概述（100-200 字）。"
         },
         "levels": {
           "type": "array",
-          "maxItems": 15,
-          "description": "层级序列，≤15 条。",
+          "maxItems": 20,
           "items": {
             "type": "object",
             "required": ["name"],
-            "additionalProperties": true,
+            "additionalProperties": false,
             "properties": {
-              "name": { "type": "string" },
-              "description": {
-                "type": "string",
-                "maxLength": 50,
-                "description": "层级描述，≤50 字。"
-              }
+              "name": { "type": "string", "maxLength": 15, "description": "等级 / 阶段名（≤15 字，对齐 chunk_power_levels.items.name，例如\"练气\"\"筑基\"）。" },
+              "description": { "type": "string", "maxLength": 30, "description": "等级简要描述（≤30 字，对齐 chunk_power_levels.items.description）。" }
             }
-          }
+          },
+          "description": "力量体系等级列表（≤20 项）。形态对齐 chunk_power_levels.items，phase 1 foundation lane 直接读 chunk 综合。"
         }
       }
     },
-    "core_rules": {
+    "major_factions": {
       "type": "array",
       "maxItems": 20,
-      "description": "世界运行的核心规则/机制清单，≤20 条。每条规则应说明规则本身 + 对剧情/角色的影响。",
+      "description": "主要势力（≤20 项）。`name` / `description` 由 phase 1 foundation lane 综合 chunk_factions 产出；`key_figures` 由 phase 2 baseline 单独 LLM call 补齐（输入 phase 1 落盘 foundation + candidate_characters + 已确认目标清单；映射 raw 角色名 → character_id；character_id 必须 ∈ candidate_characters 已合并身份集；决策 #54）。",
       "items": {
         "type": "object",
-        "required": ["rule"],
-        "additionalProperties": true,
+        "required": ["name", "description"],
+        "additionalProperties": false,
         "properties": {
-          "rule": { "type": "string" },
-          "description": {
-            "type": "string",
-            "maxLength": 50,
-            "description": "规则说明，≤50 字。"
-          },
-          "impact": {
-            "type": "string",
-            "maxLength": 50,
-            "description": "对剧情/角色的影响，≤50 字。"
+          "name": { "type": "string", "maxLength": 30 },
+          "description": { "type": "string", "maxLength": 100 },
+          "key_figures": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "description": "关键人物 character_id 列表（≤10 项，每项 ≤30 字）。phase 1 foundation lane 留空 / 不写本字段；phase 2 baseline 补齐 LLM call 填充。character_id 必须 ∈ candidate_characters.json 已合并身份集（含 phase 1.5 确认的目标角色 ∪ 全部 candidates 的 character_id）。"
           }
         }
       }
@@ -106,50 +101,28 @@
     "world_lines": {
       "type": "array",
       "maxItems": 20,
-      "description": "作品的世界线/篇章线划分（粗粒度，与 stage_plan 区分：stage 是提取颗粒度，world_line 是叙事弧度），≤20 条。",
+      "description": "大世界线 / 篇章划分（≤20 项）。",
       "items": {
         "type": "object",
-        "required": ["name"],
-        "additionalProperties": true,
+        "required": ["name", "chapter_range", "core_conflict", "setting_features"],
+        "additionalProperties": false,
         "properties": {
-          "name": { "type": "string" },
-          "chapter_range": { "type": "string" },
-          "core_conflict": {
+          "name": { "type": "string", "maxLength": 30 },
+          "chapter_range": {
             "type": "string",
-            "maxLength": 50,
-            "description": "核心冲突，≤50 字。"
+            "pattern": "^C[0-9]{4}-C[0-9]{4}$",
+            "description": "章节范围（C 前缀 + 4 位零填充 + 连字符 + C 前缀 + 4 位零填充，例如 C0001-C0010），与 chapter_id 命名一致。"
           },
-          "setting_features": {
-            "type": "string",
-            "maxLength": 50,
-            "description": "设定特征，≤50 字。"
-          }
+          "core_conflict": { "type": "string", "maxLength": 100 },
+          "setting_features": { "type": "string", "maxLength": 100 }
         }
       }
     },
-    "major_factions": {
+    "core_rules": {
       "type": "array",
-      "maxItems": 20,
-      "description": "主要势力/组织清单（首次出场至作品结束均需收录），≤20 条。key_figures 使用 character_id 字符串。",
-      "items": {
-        "type": "object",
-        "required": ["name"],
-        "additionalProperties": true,
-        "properties": {
-          "name": { "type": "string" },
-          "description": {
-            "type": "string",
-            "maxLength": 50,
-            "description": "势力描述，≤50 字。"
-          },
-          "key_figures": {
-            "type": "array",
-            "maxItems": 10,
-            "description": "关键人物，≤10 条。",
-            "items": { "type": "string" }
-          }
-        }
-      }
+      "maxItems": 30,
+      "items": { "type": "string", "maxLength": 150 },
+      "description": "影响剧情走向的关键世界规则（≤30 条，每条 ≤150 字）。**字符串数组形态**——phase 1 foundation lane 综合 N chunk 的 chunk_world_rules 时去重 + 重新整理为完整规则描述，而非照搬 chunk 行。"
     }
   }
 }

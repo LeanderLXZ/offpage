@@ -22,7 +22,7 @@
 
 ### analysis/chapter_summary_chunk.schema.json
 
-**用途**：Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳；chunk-level 同时聚合该 chunk 的世界规则 / 力量体系 / 势力 / 区域 / 剧情弧二级信号，供 phase 1/2 综合产 world_overview / foundation。
+**用途**：Phase 0 章节归纳的 chunk 输出。每个 chunk 覆盖一段连续章节区间，per-summary 是该 chunk 内每章的结构化归纳；chunk-level 同时聚合该 chunk 的世界规则 / 力量体系 / 势力 / 区域 / 剧情弧二级信号，供 phase 1 foundation lane 综合产 `world/foundation/foundation.json`（决策 #54 — phase 2 不再二次综合 foundation）。
 **位置**：`works/{work_id}/analysis/chapter_summaries/chunk_NNN.json`（本地生成，不入 git）
 **关键字段**：
 - 顶层：`work_id` / `chunk_index` / `chapters`（范围 `^C[0-9]{4}-C[0-9]{4}$`） / `summaries[]`
@@ -33,7 +33,7 @@
   - `chunk_factions[]`（maxItems 20；items `{name, description, members_present[]}`，`required: [name]`，`additionalProperties: false`；`members_present` 是本 chunk LLM 看到的 raw 角色名，化名 / 真名 / 称呼任一，phase 1.5 跨 chunk 身份合并后再映射到 `character_id`）
   - `chunk_regions[]`（maxItems 20；items `{name, description}`，`required: [name]`，`additionalProperties: false`）
 - per-summary：`chapter`（`^C[0-9]{4}$` 与 chapter_index `chapter_id` 一致）/ `title` / `summary`（150-200 CJK 字）/ `characters_present` / `emotional_tone` / `identity_notes`
-**消费方**：Phase 1 三 lane（每 lane 各自一份裁剪后 chunks 子集，决策 #52）—— `automation/prompt_templates/analysis_world_overview.md` 用 chunk-level 字段（chunk_world_rules → core_rules / chunk_power_levels → power_system.levels / chunk_factions → major_factions / chunk_regions → world_structure.major_regions / chunk_arc_summary → world_lines.core_conflict）；`automation/prompt_templates/analysis_stage_plan.md` 用 per-summary `chapter` + `summary` + chunk_arc_summary + chunk_regions（事件描述由 `summary` 150-200 字承载，原 `key_events` 已删除——决策 #53）；`automation/prompt_templates/analysis_candidate_characters.md` 用 per-summary identity 字段 + chunk_factions members_present。Phase 2 (`automation/prompt_templates/baseline_production.md`) 直读 chunk-level 字段综合产 foundation。
+**消费方**：Phase 1 三 lane（每 lane 各自一份裁剪后 chunks 子集，决策 #52 + #54）—— `automation/prompt_templates/analysis_foundation.md` 用 chunk-level 字段（chunk_world_rules → core_rules / chunk_power_levels → power_system.levels / chunk_factions → major_factions / chunk_regions → world_structure.major_regions / chunk_arc_summary → world_lines.core_conflict），直接落 `world/foundation/foundation.json`；`automation/prompt_templates/analysis_stage_plan.md` 用 per-summary `chapter` + `summary` + chunk_arc_summary + chunk_regions（事件描述由 `summary` 150-200 字承载，原 `key_events` 已删除——决策 #53）；`automation/prompt_templates/analysis_candidate_characters.md` 用 per-summary identity 字段 + chunk_factions members_present。**Phase 2 不再消费 chunk-level 字段产 foundation**（decision #54 — foundation 由 phase 1 foundation lane 直接落盘；phase 2 仅补 `foundation.major_factions.key_figures`，输入是 phase 1 落盘的 foundation + candidate_characters）。
 **生成时机**：Phase 0 by `automation/prompt_templates/summarization.md`，分 chunk 并行 LLM 调用。
 
 ---
@@ -48,23 +48,12 @@
 
 ---
 
-### analysis/world_overview.schema.json
-
-**用途**：Phase 1 全书世界观概览。基于全部 chapter_summary chunks 由 LLM 一次产出（与 stage_plan / candidate_characters 同次调用）。
-**位置**：`works/{work_id}/analysis/world_overview.json`（**入 git**）
-**关键字段**：`work_id` / `genre` / `tone` / `world_structure{summary, major_regions[]}`（`major_regions.items` 为 `{name (≤15), description (≤30)}` 对象，对齐 `chunk_regions.items`） / `power_system{summary, levels[]}`（`levels.items` 为 `{name (≤15), description (≤30)}` 对象，对齐 `chunk_power_levels.items`） / `major_factions[]` / `world_lines[]` / `core_rules[]`（字符串数组，maxItems 30 / items maxLength 150；强制 LLM 重新整理而非照搬 chunk 行）
-**消费方**：Phase 2 baseline 把它作为世界 foundation 起点。
-**生成时机**：Phase 1 world_overview lane by `automation/prompt_templates/analysis_world_overview.md`（与 stage_plan + candidate_characters lane 并行；决策 #52）。
-**形态**：`additionalProperties: true` 顶层（per-work 可扩展）。
-
----
-
 ### analysis/stage_plan.schema.json
 
 **用途**：Phase 1 stage 切分计划。下游 Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择都依赖此文件。
 **位置**：`works/{work_id}/analysis/stage_plan.json`（**入 git**）
 **关键字段**：`work_id` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^C[0-9]{4}-C[0-9]{4}$`（与 chapter_id 命名一致；light_novel 模式用 degenerate 单章区间，例 `C0001-C0001`） / `chapter_count` 8-15（schema 硬挡） / `boundary_reason`）
-**生成时机**：monolithic 模式由 Phase 1 stage_plan lane (`automation/prompt_templates/analysis_stage_plan.md`) 产出（与 world_overview + candidate_characters lane 并行；决策 #52）；light_novel 模式由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生，stage_plan lane 整体跳过 LLM（world_overview + candidate_characters lane 仍并行跑 LLM）。
+**生成时机**：monolithic 模式由 Phase 1 stage_plan lane (`automation/prompt_templates/analysis_stage_plan.md`) 产出（与 foundation + candidate_characters lane 并行；决策 #52 + #54）；light_novel 模式由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生，stage_plan lane 整体跳过 LLM（foundation + candidate_characters lane 仍并行跑 LLM）。
 **契约**：schema `chapter_count.minimum = 8` / `maximum = 15` 双向硬挡 LLM 输出（monolithic 路径，决策 #27i schema-gate-as-retry-trigger 注入 prior_error）+ orchestrator `_check_stage_plan_limits` 代码层 belt-and-suspenders 二次兜底。light_novel 派生路径事实上不走 schema validate（既不在 phase 1 `lanes` 列表也无主动 validate 调用，程序产出可信）；`chapter_count=1` 在新 schema 下 schema-invalid 是已知 trade-off，详见 decisions.md #27m。
 
 ---
@@ -74,8 +63,8 @@
 **用途**：Phase 1 候选角色识别结果。同一角色不同名称合并到一个 candidate（aliases 承载化名 / 代称等）。
 **位置**：`works/{work_id}/analysis/candidate_characters.json`（**入 git**）
 **关键字段**：`work_id` / `candidates[]`（每条 `character_id` / `aliases[]` / `description` / `frequency` 高/中/低 / `importance` 主角/重要配角/次要配角）；`aliases[].items` = `{name, type}`，`type` 走 10 项中文枚举（本名/化名/代称/称呼/昵称/绰号/封号/道号/武器名/其他）。原 `recommended` boolean 与 `aliases.first_appearance` 字段已删除（决策 #53）——LLM 自报推荐不可靠 + first_appearance 字符串无下游消费。
-**消费方**：Phase 1.5 用户从 candidates 选确认建包对象，feed Phase 2 baseline；默认勾选 = 程序按 `importance == "主角"` 判定（用户仍可手选追加 / 取消）。
-**生成时机**：Phase 1 candidate_characters lane by `automation/prompt_templates/analysis_candidate_characters.md`（与 world_overview + stage_plan lane 并行；决策 #52）。
+**消费方**：Phase 1.5 用户从 candidates 选确认建包对象，feed Phase 2 baseline；默认勾选 = 程序按 `importance == "主角"` 判定（用户仍可手选追加 / 取消）。Phase 2 baseline `key_figures` 补齐 LLM call 把本文件作为 character_id ∪ aliases 来源（合法身份集），foundation.major_factions.key_figures 必须 ∈ 已确认目标 ∪ candidate 全集。
+**生成时机**：Phase 1 candidate_characters lane by `automation/prompt_templates/analysis_candidate_characters.md`（与 foundation + stage_plan lane 并行；决策 #52 + #54）。
 
 ---
 
@@ -189,7 +178,9 @@ gate 承担 self-contained 契约而非仅依赖 prompt + L2/L3。
 
 **用途**：世界基础设定（genre / tone / world_structure / power_system / core_rules / world_lines / major_factions）。不含 stage-scoped 信息，作为运行时 Tier 0 的静态背景加载。
 **位置**：`works/{work_id}/world/foundation/foundation.json`
-**生命周期**：Phase 2 基线产出；后续阶段可通过 world_stage_snapshot.foundation_corrections 增量修正。
+**关键字段**：`work_id` / `genre` / `tone` / `world_structure{summary, major_regions[]}`（`major_regions.items` 为 `{name (≤15), description (≤30)}` 对象，对齐 `chunk_regions.items`） / `power_system{summary, levels[]}`（`levels.items` 为 `{name (≤15), description (≤30)}` 对象，对齐 `chunk_power_levels.items`） / `major_factions[]`（每项 `{name, description, key_figures[]}`，`key_figures` items: character_id 字符串 ≤30 字 / maxItems 10，由 phase 2 baseline 补齐 LLM call 填充——phase 1 foundation lane 不写此字段） / `world_lines[]` / `core_rules[]`（**字符串数组**，maxItems 30 / items maxLength 150；强制 LLM 重新整理而非照搬 chunk 行）。
+**生命周期**：**Phase 1 foundation lane 落盘**（决策 #54——原 `analysis/world_overview.schema.json` 已删除，内容合并入 foundation schema；phase 1 LLM 产出除 `major_factions[].key_figures` 外所有字段）；**Phase 2 baseline 补齐 `major_factions[].key_figures`**（单独一个轻量 LLM call，输入 phase 1 落盘的 foundation + candidate_characters + 已确认目标清单；补丁式输出 `{faction_name: [character_id, ...]}`；程序 merge into foundation.json）；后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。
+**生成时机**：Phase 1 foundation lane by `automation/prompt_templates/analysis_foundation.md`（与 stage_plan + candidate_characters lane 并行；决策 #52 + #54）；Phase 2 `key_figures` 补齐 by `automation/prompt_templates/baseline_production.md` 的「产出 X：补齐 foundation.major_factions.key_figures」段。
 **形态**：`additionalProperties: true`（顶层与子对象），容纳 per-work 扩展字段；`required` 仅 `work_id`。字段级上下限以 schema 为准。
 
 ---
@@ -288,10 +279,13 @@ phase 3 各 stage 只读不写。
 走 file-level repair lifecycle（L1 json_repair → L2 repair_agent
 cross-file checker `targets_keys_eq_baseline` → L3 re-extract）。
 若 phase 2 漏判某 target，phase 3 不会自动补救——需要人工编辑 baseline
-后重抽对应 stage。所以 phase 2 产出时**宁可多列、不可漏列**：任何在
-全书摘要里出现过、与本角色有过互动 / 涉及关系演变 / 即使只是泛弱关联
-但被点名提及的角色，都应纳入。**触顶 maxItems 时按 `tier` 优先级裁剪**：
-核心 > 重要 > 次要 > 普通，普通先弃。
+后重抽对应 stage。**Phase 2 准入门槛**（决策 #54，废除原"宁可多列、
+不可漏列"原则）：**本角色与目标角色在 chapter_summaries 摘要描述中被
+反映为有过 dialogue / action 交互**（如"X 对 Y 说……" / "X 救/打/教 Y"
+/ "X 与 Y 联手……"等动作或对话描述）才纳入 baseline。仅被点名提及但
+无双向 dialogue / action 不纳入；血亲不再默认核心 tier。tier 4 档
+（核心 / 重要 / 次要 / 普通）不动，准入门槛与 tier 分级正交。**触顶
+maxItems 时按 `tier` 优先级裁剪**：核心 > 重要 > 次要 > 普通，普通先弃。
 
 **生成时机**：Phase 2 baseline 由 LLM 按 `baseline_production.md` 产出
 （产出 3 段）。Phase 3 全程不重新生成。

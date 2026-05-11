@@ -16,10 +16,11 @@
 | `T-PHASE0-CHUNK-SCHEMA-EXPAND` | chapter_summary_chunk schema 二级字段扩展（命中 world_overview / foundation 不可信字段） | 2026-05-04 14:50 EDT | 2026-05-08 | schema/prompt/ai_context/docs 完成 + 静态 gate 全过（jsonschema metaschema OK；样本 chunk 1 valid + 10 negative case 全过；orchestrator + validator import 通过；grep 无 chapter.location 残留）；runtime 验证待跑（与 T-BASELINE-DEPRECATE / T-PHASE2-TARGET-BASELINE / T-INGEST-STRUCTURE-MODE 同批跑）。**注**：本任务的 per-summary 字段计划（key_events 保留 + summary 100-150）已由 T-ANALYSIS-SCHEMA-TIGHTEN 进一步收紧（key_events 删 + summary 150-200） |
 | `T-ANALYSIS-SCHEMA-TIGHTEN` | 收紧 phase 0 chunk + phase 1 candidate / world_overview schema 字段（chunk 删 `key_events` + `summary` 100-150→150-200；candidate 删 `recommended` + `aliases.first_appearance` + Phase 1.5 默认勾选改基于 `importance==主角`；world_overview `major_regions` / `levels` item 升对象 + `core_rules` 20→30 / 100→150） | 2026-05-08 10:26 EDT | 2026-05-08 11:06 EDT | schema/prompt/code/ai_context/docs 完成 + 静态 gate 全过（3 件 schema metaschema OK；正样本 + 多 negative case 全过；orchestrator + prompt_builder + validator + scene_archive import 通过；grep 无 key_events / first_appearance / recommended 残留主动引用）；e2e 验证待跑（清掉现有 untracked `works/<work_id>/` 后从 phase 0 全新跑——schema gate 不报红 + phase 0/1/1.5/2 全过为标准） |
 
-### 🟡 Next (2)
+### 🟡 Next (3)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
+| `T-PHASE2-REPAIR-AGENT` | phase 2 baseline production 整体接入 repair_agent lifecycle（4 件产物 foundation key_figures patch + fixed_relationships + identity + target_baseline 各自包装 SourceContext + 写 phase 2 专属 checkers）。当前 phase 2 仅"裸单次 LLM + tolerance gate"为遗留缺陷（决策 #54 拆出），decision #25 + decision #48 措辞修正后已明确 repair_agent 仅在 phase 3。 | 🟡 Med | ⏸ Blocked | 🔴 Large·Arch | 2026-05-11 EDT | 无（与本次 foundation 重构正交） |
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
 | `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ⏸ Blocked | 🔴 Large·Arch | 2026-05-02 | T-PHASE2-TARGET-BASELINE + T-BASELINE-DEPRECATE |
 
@@ -35,7 +36,7 @@
 | `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
-**Total**: 15 — 🟢 In Progress 5 ｜ 🟡 Next 2 ｜ ⚪ Discussing 8
+**Total**: 16 — 🟢 In Progress 5 ｜ 🟡 Next 3 ｜ ⚪ Discussing 8
 
 ---
 
@@ -734,6 +735,57 @@ phase 0（~1.5h wall）+ phase 1（~30min）+ phase 1.5 + phase 2（~10-20min）
 ---
 
 ## Next
+
+### [T-PHASE2-REPAIR-AGENT] phase 2 baseline production 整体接入 repair_agent lifecycle
+
+**开始时间**：2026-05-11 EDT（决策 #54 落地时拆出）
+
+**当前状态**：Blocked（设计未拍板）。本任务从决策 #54 的 foundation 重构 /go 中拆出来作单独 todo，工程量大、与 foundation 重构正交。
+
+**上下文**
+
+会话深挖发现 phase 2 baseline production 当前形态 = "**裸单次 LLM + jsonschema gate + length-bound tolerance gate**"，不经 repair_agent lifecycle（[orchestrator.py:run_baseline_production](../automation/persona_extraction/orchestrator.py)）。代码注释自己承认："Phase 2 has no LLM-level retry budget here ... this is the terminal gate."
+
+repair_agent 实际接入点 grep 全仓库**只有 1 处** = `orchestrator.py` 内 phase 3 stage loop 的 `_repair_one(f)` 调用（per-file 并行 lifecycle，每 stage 1+2N files 各自独立跑 L0-L3 × T0-T3 checker/fixer 矩阵）。phase 0 / 1 / 1.5 / 2 / 3.5 / 4 都没接 repair_agent。
+
+历史误解源头：
+1. [decisions.md #48](../ai_context/decisions.md) 原措辞 "Phase 2/3/3.5/4 via repair_agent T3_EXHAUSTED"——把 phase 2/3.5/4 的兜底也写成"经由 repair_agent"，但实际只有 phase 3 走 repair_agent。已在 foundation 重构 /go 同批修正。
+2. commit `e644886 phase1_parallel_lanes` 归档条目 paper trail："原计划集成 `repair_agent.run` 走 L1/L2/L3 + T0/T1/T2/T3 lifecycle，盘点后发现 phase 2 实际不调 repair_agent + phase 1 输出非 stage-anchored，改用更轻的 `prior_error` 注入式 retry"——当时做 phase 1 lane 改造时也误以为 phase 2 接了 repair_agent，盘点后才发现没接。
+
+**改动清单**
+
+设计未拍板，待启动时定。预期改动量 ≈ phase 3 接入当年的工作量：
+
+新增：
+- `automation/repair_agent/checkers/phase2_*.py`（专属 checkers，预估 4-5 个）：
+  - `foundation_factions_legal`：foundation.major_factions[].key_figures character_id 合法性（必须 ∈ candidate_characters 已合并身份集）
+  - `fixed_relationships_legal`：parties[] character_id 必须 ∈ 已确认目标 ∪ candidate_characters
+  - `identity_required_fields`：identity.json 含 character_id / canonical_name / aliases 等必填
+  - `target_baseline_admission_rule`：targets[] 准入门槛（dialogue/action 交互判定，可能需 LLM）
+  - `target_baseline_keys_set`：targets[].target_character_id 集合校验
+- `automation/persona_extraction/orchestrator.py` `run_baseline_production`：包装 SourceContext + 调 `run_repair(...)`，per-file 并行 + lifecycle dispatch
+- baseline 产物 per-file 拆分：4 件产物（foundation patch / fixed_relationships / identity / target_baseline）各自独立 file-level repair entry
+
+修改：
+- `automation/repair_agent/coordinator.py`：可能需要扩 fixer T0-T3 适配 phase 2 产物形态
+- `ai_context/decisions.md` #25：repair_agent 接入点扩到 phase 2
+- `ai_context/decisions.md` #48：length tolerance gate 接入点同步更新
+
+**完成标准**
+
+- phase 2 baseline production 4 件产物 + foundation.key_figures 补齐都走 repair_agent file-level lifecycle，与 phase 3 同形态
+- 现有 phase 2 测试通过（含 length-tolerance gate 兜底）
+- ai_context 措辞 disambiguation 完成（不再把 phase 2/4 描述成"经 repair_agent"）
+- 端到端跑一个 work：phase 2 任意环节产物 schema 违规 → repair_agent 自动修复（无需 user 重跑）
+
+**依赖**：无技术依赖（与 foundation 重构正交，可独立启动）；设计前置：先盘点 phase 2 4 件产物的常见违规模式 + 决定 checker / fixer 切分粒度
+
+**暂不做的事**
+
+- 不在 foundation 重构 /go（2026-05-11）一并做——拆出来作独立 todo，避免 PR/log 爆炸
+- 不动 phase 3 现有 repair_agent 接入（已稳定运行多个 stage）
+
+---
 
 ### [T-PLUGIN-README] 写 .agents/skills 的 plugin README
 

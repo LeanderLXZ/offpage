@@ -218,9 +218,10 @@ works/{work_id}/world/
   对话 / 设局 / 交易、单角色内心决定 / 情绪起伏、个人经济活动（这些归
   对应角色的 memory_timeline 或 character `stage_events`）。不累积历史。
   跨阶段事件时间线由 `world_event_digest.jsonl` 承担（1:1 复制 stage_events）。
-- `foundation/foundation.json` — Phase 2 产出的统一基础设定
-  （`schemas/world/foundation.schema.json`；未来可拆分为 setting.json、
-  cosmology.json、power_system.json 等）
+- `foundation/foundation.json` — **Phase 1 foundation lane 直接产出**的统一基础设定
+  （决策 #54——原 phase 2 baseline 不再二次综合 foundation，phase 2 仅补
+  `major_factions[].key_figures` 字段；`schemas/world/foundation.schema.json`；
+  未来可拆分为 setting.json、cosmology.json、power_system.json 等）
 - `foundation/fixed_relationships.json` — 世界级固定关系网络
   （`schemas/world/fixed_relationships.schema.json`；Phase 2 骨架，
   后续阶段可修正）

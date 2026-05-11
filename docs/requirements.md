@@ -774,13 +774,12 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 │  │              并行归纳 ──→ 每章结构化摘要            │              │
 │  └───────────────────────┬───────────────────────────┘              │
 │                          ▼                                          │
-│  Phase 1 ─ 全书分析（基于摘要，不读原文）                             │
+│  Phase 1 ─ 全书分析（基于摘要，不读原文；3 lane 并行）                │
 │  ┌───────────────────────────────────────────────────┐              │
-│  │ a. 跨 chunk 角色身份合并                            │              │
-│  │ b. 世界观概览 (world_overview.json)                 │              │
-│  │ c. 阶段规划 (stage_plan.json)                       │              │
-│  │    └─ 按剧情边界切分: stage > chapter > scene       │              │
-│  │ d. 候选角色识别 (candidate_characters.json)         │              │
+│  │ foundation lane ──→ world/foundation/foundation.json│              │
+│  │ stage_plan lane ──→ analysis/stage_plan.json        │              │
+│  │ candidate_characters lane ──→ candidate_characters.json│           │
+│  │   └─ 跨 chunk 角色身份合并 + 候选识别               │              │
 │  └───────────────────────┬───────────────────────────┘              │
 │                          ▼                                          │
 │  Phase 1.5 ─ 用户确认                                                 │
@@ -788,10 +787,11 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 │  │ 用户选择目标角色 + 确认 stage 边界                   │              │
 │  └───────────────────────┬───────────────────────────┘              │
 │                          ▼                                          │
-│  Phase 2 ─ Baseline 产出（全书视野）                               │
+│  Phase 2 ─ Baseline 产出（全书视野；foundation 由 phase 1 已落）      │
 │  ┌───────────────────────────────────────────────────┐              │
-│  │ 世界: foundation.json + fixed_relationships.json   │              │
-│  │ 角色: identity.json + manifest.json + 4 骨架       │              │
+│  │ 世界: fixed_relationships.json + foundation        │              │
+│  │       .major_factions[].key_figures 补齐 LLM call   │              │
+│  │ 角色: identity.json + target_baseline.json + manifest│             │
 │  │ └─ 初稿，后续 stage 可修正                          │              │
 │  └───────────────────────┬───────────────────────────┘              │
 │                          ▼                                          │
@@ -843,19 +843,11 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
      不跑 token-budget batch
    产出每章的结构化摘要（事件、出场角色、地点、情绪基调、身份变化线索、
    候选阶段边界标记）；落盘 schema / 路径不区分模式
-3. **全书分析**（Phase 1）：双模式调度：
-   - **monolithic**：基于所有章节摘要单次 LLM 调用产出 a/b/c/d 四子任务
-     （a 跨 chunk 角色身份合并 / b 世界观概览 / c 源文件阶段规划 / d 候选角色识别）；
-     stage 边界由 LLM 按自然剧情切分（默认目标 10 章，最小 8 章，最大 15 章）
-   - **light_novel**：LLM 调用照旧（产出 world_overview + candidate_characters），
-     但 stage_plan 由 orchestrator 程序化 1:1 从 chapter_index 派生
-     （`stage_id = S{n:03d}`、`chapters = f"{chapter_id}-{chapter_id}"`
-     degenerate 单章区间（与 monolithic 共享 `^C[0-9]{4}-C[0-9]{4}$` 模式，
-     phase 2/3/4 消费方零分叉）、`chapter_count = 1`、
-     `stage_title` 取 `chapter_index[i].title`）；STAGE_MIN/MAX 校验自动跳过
+3. **全书分析**（Phase 1）：3 lane 并行 fan-out，每 lane = 一次 `claude -p` + 一份预先裁剪的 chunks 子集 + 独立 schema gate + 独立 `prior_error` 注入式 retry。双模式调度：
+   - **monolithic = 3 lane 并行**：`foundation` lane (产 `works/{work_id}/world/foundation/foundation.json`——决策 #54 把 foundation 前移到 phase 1 直接产，phase 2 仅补 `key_figures`) / `stage_plan` lane (产 `analysis/stage_plan.json`，stage 边界由 LLM 按自然剧情切分，章数硬范围 8–15) / `candidate_characters` lane (产 `analysis/candidate_characters.json`，跨 chunk 身份合并 + 候选识别)
+   - **light_novel = 2 lane 并行 + 程序化 stage_plan**：`foundation` lane + `candidate_characters` lane 同 monolithic，`stage_plan` lane 整体跳过 LLM——由 orchestrator 程序化 1:1 从 chapter_index 派生（`stage_id = S{n:03d}`、`chapters = f"{chapter_id}-{chapter_id}"` degenerate 单章区间（与 monolithic 共享 `^C[0-9]{4}-C[0-9]{4}$` 模式，phase 2/3/4 消费方零分叉）、`chapter_count = 1`、`stage_title` 取 `chapter_index[i].title`）；STAGE_MIN/MAX 校验自动跳过
 4. **活跃角色确认**（Phase 1.5）：用户从候选中选择要建包的目标角色
-5. **Baseline 产出**（Phase 2）：基于全书摘要和确认的角色，产出世界
-   foundation 和角色 identity/manifest 初稿
+5. **Baseline 产出**（Phase 2）：phase 1 foundation lane 已落 `world/foundation/foundation.json`；phase 2 基于全书摘要 + 已确认角色，产出 `world/foundation/fixed_relationships.json` + 每角色 `identity.json` + `target_baseline.json` + `manifest.json`；**plus** 单独一个轻量 LLM call 补齐 `foundation.major_factions[].key_figures`（输入 phase 1 落盘 foundation + candidate_characters + 已确认目标清单；补丁式 `{faction_name: [character_id, ...]}` 输出后程序 merge into foundation.json）。`target_baseline` 准入门槛 = 本角色与目标角色在 chapter_summaries 摘要描述中被反映为有过 dialogue / action 交互（决策 #54——血亲不再默认核心 tier）。
 6. **协同阶段提取**（Phase 3）：每个 stage 读原文，1+2N 全并行产出
    （1 世界 + N 角色快照 + N 角色支撑）。每个 stage 经过 JSON 修复 →
    程序校验 → 语义审核 → git 提交。每个 stage 都可修正和补充 baseline
@@ -893,7 +885,11 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 
 **世界层 baseline**（写入 `world/foundation/`）：
 - `foundation.json`：力量体系基本框架、世界地理/空间结构、主要势力/阵营
-  格局、核心设定规则、大世界线/篇章划分
+  格局、核心设定规则、大世界线/篇章划分。**由 phase 1 foundation lane
+  直接产**（决策 #54——原 phase 2 baseline 不再二次综合 foundation；
+  `major_factions[].key_figures` 字段由 phase 2 baseline 单独 LLM call
+  补齐，输入 phase 1 落盘 foundation + candidate_characters + 已确认
+  目标清单，补丁式 merge into foundation.json）
 - `fixed_relationships.json`：世界视角的固定关系网络（血缘、师承、门派
   归属等不随阶段变化的结构性纽带），骨架初稿由 Phase 2 产出，后续
   stage 维护修正
@@ -956,12 +952,17 @@ stage_snapshot 三结构的上限通过同一份
 `schemas/character/targets_cap.schema.json` $ref 共享继承，单源化（数字
 只在该共享文件里写一次，调整时所有引用方自动同步）。
 
-phase 2 产出时**宁可多列、不可漏列**：任何在全书摘要里出现过、与本
-角色有过互动 / 涉及关系演变 / 被点名提及的角色，都应纳入。但
-`targets` 总数受 `targets_cap` 上限硬卡——超限时按 `tier` 优先级裁剪
-（核心 > 重要 > 次要 > 普通，普通先弃），并在 prompt 里告知 LLM。
-phase 3 char_snapshot 进而约束：三结构 keys 必须等于 baseline.targets
-全集（多/少都 fail，从未登场以"字段空"承载）。
+**target_baseline 准入门槛**（决策 #54，替换原"宁可多列不可漏列"
+原则）：**本角色与目标角色在 chapter_summaries 摘要描述中被反映为
+有过 dialogue / action 交互**（如"X 对 Y 说……" / "X 救/打/教 Y" /
+"X 与 Y 联手……"等动作或对话描述）才纳入 baseline。仅被点名提及
+但无双向 dialogue / action 不纳入；血亲不再默认核心 tier，按准入
+门槛 + 实际剧情驱动力分级。`targets` 总数受 `targets_cap` 上限硬卡——
+超限时按 `tier` 优先级裁剪（核心 > 重要 > 次要 > 普通，普通先弃），
+并在 prompt 里告知 LLM。tier 4 档（核心 / 重要 / 次要 / 普通）不动，
+准入门槛与 tier 分级正交。phase 3 char_snapshot 进而约束：三结构
+keys 必须等于 baseline.targets 全集（多/少都 fail，从未登场以"字段
+空"承载）。
 
 **不在全书分析阶段产出的内容**：
 - voice / behavior / boundary / failure_modes 状态——内联进每个
@@ -2248,8 +2249,8 @@ LLM 产出的 stage plan 可能违反章节数上限（实测常见）。Phase 1
 1. 扫描所有 stage，检查 `chapter_count` 是否在 8-15 范围内
 2. 如有超限，打印违规 stage 列表，删除 `stage_plan.json`
 3. 构建修正反馈（列出具体违规 stage 和章节数），追加到下次 analysis prompt
-4. 重跑 Phase 1 LLM（最多重试 2 次），其他已产出文件（world_overview、
-   candidate_characters）保留不变
+4. 重跑 Phase 1 stage_plan lane LLM（最多重试 2 次，per-lane 独立预算），
+   其他已产出文件（foundation / candidate_characters lane）保留不变
 5. 若重试耗尽仍有超限，终止流程（`sys.exit(1)`），不允许带违规 plan 继续
 
 ### 11.10 跨阶段一致性检查（Phase 3.5）

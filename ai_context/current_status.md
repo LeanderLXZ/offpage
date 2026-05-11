@@ -42,7 +42,7 @@ framework-level engineering progress only.
 - Real user packages stay local
 - No novels / databases / indexes / large artifacts in git
 - The following `works/*` tracking rules apply only to `extraction/{work_id}` and `library` branches; `main` is framework-only and contains no `works/{work_id}/` artefacts (only `works/README.md`):
-  - `works/*/analysis/`: only `world_overview`, `stage_plan`, `candidate_characters`, `consistency_report` tracked; `progress/`, `chapter_summaries/`, `scene_splits/`, `evidence/*` local
+  - `works/*/analysis/`: only `stage_plan`, `candidate_characters`, `consistency_report` tracked; `progress/`, `chapter_summaries/`, `scene_splits/`, `evidence/*` local. `foundation.json` lives under `world/foundation/` (decision #54 — phase 1 foundation lane produces it directly to the world domain, not analysis)
   - `works/*/world/`, `works/*/characters/`, `works/*/indexes/` tracked; `works/*/retrieval/` local
 - `logs/change_logs/` + `logs/review_reports/` write-mostly — do not proactively read
 - No per-stage report files; progress updated in-place
