@@ -330,6 +330,9 @@ works/{work_id}/characters/{character_id}/
   承担。
 - `canon/memory_timeline/{stage_id}.json`
 - `canon/memory_digest.jsonl` — 压缩摘要索引，stage 1..N 过滤加载
+- `canon/extraction_notes/{stage_id}.jsonl` — repair_agent SourceNote
+  写入路径（决策 #25a），bootstrap 不加载；schema:
+  `schemas/shared/source_note.schema.json`
 
 `{stage_id}` 路径片段统一使用紧凑英文代号 `S###`（三位数字零填充，如 `S001`），与 `M-S###-##` / `E-S###-##` 等 ID 家族共享 stage 段；阶段的人类可读短标题由 `stage_title`（短标题，长度见 schema）承载，仅出现在 `stage_catalog` / `stage_plan` 等条目内，不进入文件路径。
 
@@ -507,7 +510,10 @@ works/{work_id}/analysis/
 works/{work_id}/indexes/
 ```
 
-推荐内容：
+> **整棵子树尚未启用** — 当前无 writer，schema 也未定义；保留路径占位
+> 以便未来 simulation engine 接入（同 §数据层 line 176 顶级提示）。
+
+推荐内容（占位）：
 
 - `character_index.json`
 - `location_index.json`
