@@ -2211,7 +2211,16 @@ class ExtractionOrchestrator:
                 # explicitly; omitting it is a legitimate "no limit"
                 # request, not an error.
                 raw = ""
-            preset_end_stage = int(raw) if raw else None
+            try:
+                preset_end_stage = int(raw) if raw else None
+            except ValueError:
+                # Non-numeric input (e.g. user typed "abc") — fall back to
+                # None = all stages with a one-line notice. Avoids a
+                # traceback on a fat-finger; the operator can --end-stage
+                # explicitly if they want a different limit.
+                print(f"  [WARN] '{raw}' is not a number — defaulting to "
+                      f"all stages (no limit).")
+                preset_end_stage = None
 
         pipeline = PipelineProgress(
             work_id=self.work_id,

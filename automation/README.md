@@ -391,7 +391,7 @@ orchestrator `_build_light_novel_stage_plan` 程序化 1:1 派生（zero LLM cal
 
 Phase 1 内部 fan-out 成独立 lane（详见决策 #52）：
 
-- **monolithic = 3 lane 并行**：foundation / stage_plan / candidate_characters，每 lane 一次 `claude -p` + 预先裁剪的 chunks 子集 + 独立 schema gate + 独立 `prior_error` 注入式 retry（与 Phase 0 / Phase 4 同形态）。**foundation lane 输出 `works/<work_id>/world/foundation/foundation.json`**（决策 #54——原 `analysis/world_overview.json` 路径已废弃，foundation 由 phase 1 直接产，phase 2 仅补 `major_factions[].key_figures`）；stage_plan + candidate_characters 仍输出 `works/<work_id>/analysis/`。
+- **monolithic = 3 lane 并行**：foundation / stage_plan / candidate_characters，每 lane 一次 `claude -p` + 预先裁剪的 chunks 子集 + 独立 schema gate + 独立 `prior_error` 注入式 retry（与 Phase 0 / Phase 4 同形态）。**foundation lane 输出 `works/<work_id>/world/foundation/foundation.json`**（决策 #54——foundation 由 phase 1 直接产到 world 域，phase 2 仅补 `major_factions[].key_figures`）；stage_plan + candidate_characters 仍输出 `works/<work_id>/analysis/`。
 - **light_novel = 2 lane 并行 + 程序化 stage_plan**：foundation + candidate_characters 走 LLM lane；stage_plan 由 orchestrator `_build_light_novel_stage_plan` 直接落盘，**stage_plan lane 不调 LLM**
 - per-lane retry 预算 = `[phase1].exit_validation_max_retry`（默认 2，per-lane 独立，不共享池）
 - 单 lane fail 不影响其他 lane 已落盘产物；`--resume` 时 reconcile 跳过 schema-valid 产物，仅重跑失败 lane
