@@ -288,3 +288,26 @@ PRE 计划全部落地；额外 3 处偏差均记录在「执行偏差」段：
 
 - **Status**: DONE
 - **Finished**: 2026-05-12 13:57:27 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：21/21 项计划动作 + 12/12 项验证标准（含 PRE 漏列由 Step 6
+  补齐的 2 项跨文档对齐 + 1 项 H1 决策 #55 末段注记）
+- Missed updates: 2 条（`docs/architecture/data_model.md` 与 M9 / M14
+  同源的连带漂移；详见对话）
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=2 / Low=1
+- Open Questions: 1 条（详见对话）
+
+## 复查时状态
+
+- **Reviewed**: 2026-05-12 16:14:33 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全落实；轨 2 有 2 个 Medium（data_model.md 与 works/README
+    + works/README M14 同源的 pre-existing 漂移）+ 1 个 Low（L12
+    成功路径 cleanup OSError raise 边界）
+- **Conversation ref**: 同会话内 /post-check 输出
