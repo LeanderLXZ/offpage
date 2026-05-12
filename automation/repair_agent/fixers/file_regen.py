@@ -50,7 +50,8 @@ SubLaneRegenCallback = Callable[
 
 
 _CHAR_SNAPSHOT_PATH_RE = re.compile(
-    r"characters/(?P<cid>[^/]+)/canon/stage_snapshots/(?P<sid>S[0-9]{3})\.json$"
+    r"works/(?P<wid>[^/]+)/characters/(?P<cid>[^/]+)/canon/"
+    r"stage_snapshots/(?P<sid>S[0-9]{3})\.json$"
 )
 
 

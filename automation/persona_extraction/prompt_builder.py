@@ -118,17 +118,14 @@ def build_summarization_prompt(
 #   - foundation lane: chunk-level secondary fields (chunk_arc_summary +
 #     chunk_world_rules + chunk_power_levels + chunk_factions INCLUDING
 #     members_present + chunk_regions). summaries[] dropped — full-book
-#     setting writeup does not depend on per-chapter anchors. (Decision #54 —
-#     lane renamed from `world_overview`; output path moved from
-#     `works/{work_id}/analysis/world_overview.json` to
-#     `works/{work_id}/world/foundation/foundation.json`; schema moved from
-#     `schemas/analysis/world_overview.schema.json` to
+#     setting writeup does not depend on per-chapter anchors. Output:
+#     `works/{work_id}/world/foundation/foundation.json`; schema:
 #     `schemas/world/foundation.schema.json`. `major_factions[].key_figures`
 #     IS produced by this lane as raw names — chunk_factions[].members_present[]
 #     是 chunk-LLM 视野下的角色 raw 名（化名 / 真名 / 称呼任一），foundation
 #     lane 跨 chunk 合并去重直接写入 key_figures 不做身份合并。phase 2 baseline
 #     LLM 后续 lookup candidate_characters.aliases 把能匹配的 raw 名替换为
-#     character_id，匹配不上保留 raw 名 — 双阶段语义，详见决策 #54 修订段。)
+#     character_id，匹配不上保留 raw 名 — 双阶段语义，详见决策 #54。
 #   - stage_plan lane: chunk_arc_summary + chunk_regions + per-summary
 #     chapter + summary only (the 150-200 CJK-char summary now carries the
 #     turning-point text signal directly; characters_present / emotional_tone
@@ -346,10 +343,9 @@ def build_foundation_prompt(
     *,
     prior_error: str = "",
 ) -> str:
-    """Phase 1 foundation lane prompt (decision #54 — renamed from
-    build_world_overview_prompt; output path moved from
-    `analysis/world_overview.json` to `world/foundation/foundation.json`;
-    schema moved to `schemas/world/foundation.schema.json`).
+    """Phase 1 foundation lane prompt (decision #54). Output:
+    `world/foundation/foundation.json`. Schema:
+    `schemas/world/foundation.schema.json`.
     """
     template = _load_template("analysis_foundation.md")
     context = _phase1_common_context(project_root, work_id)

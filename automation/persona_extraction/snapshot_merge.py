@@ -13,33 +13,39 @@ placeholder) and the merge function. Adjusting the allocation here
 automatically updates the prompt's per-lane whitelist; never duplicate
 the table in another file.
 
-Merge-time hard gates (all enforced before returning the merged dict):
+Merge-time gates (4 positive gates + 1 anti-rule, all enforced before
+returning the merged dict):
 
-1. Each partial's top-level field set must equal the lane's allocation
-   (no extra, no missing).
-2. ``failure_modes`` 4 subkeys must be mutually exclusive across the two
-   lanes that write them (``tone_traps`` only from ``char_expression`` /
-   the other three only from ``char_cognition``) and all 4 must be
-   present after merge.
-3. ``stage_delta`` 6 subkeys must be mutually exclusive across the two
-   lanes that write them (``char_decision`` / ``char_cognition``).
-   Either all 6 subkeys are present after merge OR ``stage_delta`` is
-   absent from both partials (the S001 case — no prev, no delta).
-4. The three target-keyed structures (``voice_state.target_voice_map``
-   / ``behavior_state.target_behavior_map`` / top-level ``relationships``)
+1. (positive) Each partial's top-level field set must equal the lane's
+   allocation (no extra, no missing).
+2. (positive) ``failure_modes`` 4 subkeys must be mutually exclusive
+   across the two lanes that write them (``tone_traps`` only from
+   ``char_expression`` / the other three only from ``char_cognition``)
+   and all 4 must be present after merge.
+3. (positive) ``stage_delta`` 6 subkeys must be mutually exclusive
+   across the two lanes that write them (``char_decision`` /
+   ``char_cognition``). Either all 6 subkeys are present after merge OR
+   ``stage_delta`` is absent from both partials (the S001 case — no
+   prev, no delta).
+4. (positive) The three target-keyed structures
+   (``voice_state.target_voice_map`` /
+   ``behavior_state.target_behavior_map`` / top-level ``relationships``)
    must all carry keys whose set equals ``baseline_keys`` (the caller
    provides the baseline target set; on disk the
    ``TargetsKeysEqBaselineChecker`` enforces the same rule against
    ``target_baseline.json``).
-5. Decision #11f (D) drop semantics: merge **does not** check partial
-   entry count ≥ prev. Resolved / revealed / overcome entries are
-   legitimately dropped; the responsibility for recording the reason
-   lives in ``stage_delta`` (and phase 3.5 ``consistency_checker``).
+5. (anti-rule) Decision #11f (D) drop semantics: merge **does not**
+   check partial entry count ≥ prev. Resolved / revealed / overcome
+   entries are legitimately dropped; the responsibility for recording
+   the reason lives in ``stage_delta`` (and phase 3.5
+   ``consistency_checker``).
 
 Failures raise ``MergeError``. The orchestrator treats any
 ``MergeError`` as a partial-level failure: the whole snapshot lane is
-re-run (with PENDING / ERROR ``.partial/`` files wiped by
-``progress.reconcile_with_disk``).
+re-run. ``.partial/`` cleanup on every failure path is the
+orchestrator's responsibility (explicit ``_clear_snapshot_partials``
+calls in ``_run_char_snapshot_sub_lanes``); ``progress.reconcile_with_disk``
+only sweeps orphan partials at ``--resume`` time.
 
 File-level fingerprint (``compute_fingerprint``) is a stable SHA-256 of
 the canonical-JSON-serialised merged dict; the repair_agent lifecycle

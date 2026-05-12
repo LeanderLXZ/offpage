@@ -14,6 +14,7 @@ works/{work_id}/
     stage_catalog.json
     world_event_digest.jsonl
     stage_snapshots/{stage_id}.json
+    extraction_notes/{stage_id}.jsonl    # repair_agent 接收的 SourceNote 记录
     foundation/
       foundation.json
       fixed_relationships.json
@@ -36,7 +37,7 @@ works/{work_id}/
       region_graph.json
       map_notes.md
     cast/
-      character_index.json
+      character_index.json              # 尚未启用（见 docs/architecture/data_model.md §Indexing）
       character_summaries.json
   characters/
     {character_id}/
@@ -45,8 +46,10 @@ works/{work_id}/
         identity.json
         target_baseline.json
         memory_timeline/{stage_id}.json
+        memory_digest.jsonl              # post_processing 维护的压缩索引
         stage_catalog.json
         stage_snapshots/{stage_id}.json
+        extraction_notes/{stage_id}.jsonl  # repair_agent 接收的 SourceNote 记录
 
   analysis/
     stage_plan.json
@@ -57,16 +60,17 @@ works/{work_id}/
       phase0_summaries.json
       phase3_stages.json
       phase4_scenes.json
-      extraction.log
+      extraction_logs/extraction.log{,.1,.2}   # rolling 日志（程序化轮转）
       rate_limit_pause.json         # §11.13 暂停契约（仅限额激活时存在）
       rate_limit_exit.log           # 限额硬停退出说明（仅 exit 2 路径写入）
       failed_lanes/                 # Phase 3 lane 级失败诊断（§11 T-LOG）
+      repair_logs/                  # repair_agent 周期性诊断
     chapter_summaries/
     scene_splits/
     evidence/
     conflicts/
 
-  indexes/
+  indexes/                          # 整棵子树尚未启用（见 docs/architecture/data_model.md §Indexing）
     load_profiles.json
     character_index.json
     location_index.json
@@ -180,7 +184,10 @@ works/{work_id}/
 
 - `progress/` — 流水线进度文件：
   - `pipeline.json` / `phase0_summaries.json` / `phase3_stages.json` /
-    `phase4_scenes.json` / `extraction.log` — 各阶段主进度
+    `phase4_scenes.json` — 各阶段主进度
+  - `extraction_logs/extraction.log{,.1,.2,...}` — 程序化轮转日志
+  - `repair_logs/` — repair_agent 周期性诊断（见 automation/README.md
+    §6.x）
   - `rate_limit_pause.json` — 仅 §11.13 token 限额暂停激活期间存在，
     记录 `resume_at` / `reason` / probe leader claim；暂停解除后由
     controller 自动删除。**勿手动编辑或删除运行中的暂停文件**
@@ -194,7 +201,8 @@ works/{work_id}/
 - `chapter_summaries/` — Phase 0 章节摘要（每 chunk 一个 JSON）
 - `scene_splits/` — Phase 4 中间产物（每章一个 JSON，.gitignore）
 - `stage_plan.json` — Phase 1 阶段规划
-- `candidate_characters.json` — Phase 1 候选角色（决策 #54：原 `world_overview.json` 路径已废弃；foundation 由 phase 1 foundation lane 直接落 `world/foundation/foundation.json`）
+- `candidate_characters.json` — Phase 1 候选角色（决策 #54：foundation
+  由 phase 1 foundation lane 直接落 `world/foundation/foundation.json`）
 - `consistency_report.json` — Phase 3.5 一致性检查报告
 - `evidence/` — 证据引用材料
 - `conflicts/` — 矛盾与修订记录
@@ -203,10 +211,12 @@ works/{work_id}/
 
 ### indexes/
 
-跨目录查询索引与 simulation engine 加载提示：
+跨目录查询索引与 simulation engine 加载提示。**整棵子树尚未启用**——
+当前无 writer，schema 也未定义；保留路径占位以便未来 simulation engine
+接入。详见 `docs/architecture/data_model.md` §Indexing。
 
-- `load_profiles.json` — 给运行时引擎的按需加载配置
-- 其他索引按实体类型组织
+- `load_profiles.json` — 给运行时引擎的按需加载配置（占位）
+- 其他索引按实体类型组织（占位）
 
 ## 设计规则
 

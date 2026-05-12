@@ -78,6 +78,7 @@ from .progress import (
     PipelineProgress,
     migrate_legacy_progress,
     PHASE_RUNNING,
+    _atomic_write_json,
 )
 from .prompt_builder import (
     build_baseline_prompt,
@@ -711,6 +712,10 @@ class ExtractionOrchestrator:
                 try:
                     _, success, msg = future.result()
                 except RateLimitHardStop:
+                    # Cancel siblings so the implicit ``with`` exit
+                    # ``shutdown(wait=True)`` doesn't block on still-
+                    # sleeping recovery chunks.
+                    executor.shutdown(wait=False, cancel_futures=True)
                     raise
                 except Exception as exc:  # noqa: BLE001
                     success, msg = False, str(exc)
@@ -964,15 +969,15 @@ class ExtractionOrchestrator:
                         sub_lane_errors[sub_lane] = (
                             res.error or "unknown")
             except RateLimitHardStop as exc:
-                # R2 — cancel sibling sub-lanes, delete any partial that
-                # made it to disk, re-raise so the outer pool / CLI
-                # propagates exit 2.
+                # R2 — cancel sibling sub-lanes, re-raise so the outer
+                # pool / CLI propagates exit 2. Partial files on disk are
+                # preserved for the next ``--resume`` (the next sub-lane
+                # batch starts with ``_clear_snapshot_partials`` so stale
+                # partials cannot bleed into the fresh attempt).
                 hard_stop = exc
                 pool.shutdown(wait=False, cancel_futures=True)
 
         if hard_stop is not None:
-            self._clear_snapshot_partials(
-                work_root, character_id, stage.stage_id)
             raise hard_stop
 
         if sub_lane_errors:
@@ -980,6 +985,8 @@ class ExtractionOrchestrator:
                 work_root, character_id, stage.stage_id)
             joined = "; ".join(
                 f"{name}: {msg}" for name, msg in sub_lane_errors.items())
+            if len(joined) > 2000:
+                joined = joined[:2000] + "...[truncated]"
             return LLMResult(
                 success=False,
                 text="",
@@ -1051,10 +1058,7 @@ class ExtractionOrchestrator:
 
         final_path = lane_product_path(
             work_root, stage.stage_id, f"snapshot:{character_id}")
-        final_path.parent.mkdir(parents=True, exist_ok=True)
-        final_path.write_text(
-            json.dumps(merged, ensure_ascii=False, indent=2),
-            encoding="utf-8")
+        _atomic_write_json(final_path, merged)
 
         # Cleanup partials after a successful merge — they are no longer
         # needed; the final file is the canonical artifact.
@@ -1104,6 +1108,22 @@ class ExtractionOrchestrator:
             _issues: list[RepairIssue],
             prior_attempt_context: dict[str, list[str]] | None,
         ) -> bool | None:
+            # Defense-in-depth: reject any path outside the current
+            # work_root. Multi-work repos could otherwise reach a
+            # cross-work canon file if both works happen to share a
+            # character_id and the upstream caller forgets to filter.
+            try:
+                if not Path(file_path).resolve().is_relative_to(
+                        work_root.resolve()):
+                    logger.warning(
+                        "sub-lane regen declined: path %s outside "
+                        "work_root %s", file_path, work_root)
+                    return False
+            except OSError as exc:
+                logger.warning(
+                    "sub-lane regen declined: cannot resolve %s (%s)",
+                    file_path, exc)
+                return False
             if stage_id != stage.stage_id:
                 logger.warning(
                     "sub-lane regen declined: stage_id %s on path does "
@@ -1160,11 +1180,11 @@ class ExtractionOrchestrator:
         for name in SUB_LANE_NAMES:
             p = snapshot_partial_path(
                 work_root, character_id, stage_id, name)
-            try:
-                p.unlink(missing_ok=True)
-            except OSError:
-                logger.warning(
-                    "Failed to delete stale partial %s", p, exc_info=True)
+            # ``missing_ok=True`` already absorbs the FileNotFoundError
+            # idempotent case; remaining OSError = permission / read-only
+            # mount / IO error → fail loudly so the caller sees the real
+            # cause instead of silently moving on to the next attempt.
+            p.unlink(missing_ok=True)
 
     def _load_baseline_keys(
         self,
@@ -1663,9 +1683,8 @@ class ExtractionOrchestrator:
         no shared pool). Strict-retry budget exhaustion falls through to
         length-bound tolerance gate (decision #48); only then FATAL.
 
-        Lane sets (decision #54 — `world_overview` lane renamed to
-        `foundation` and output path moved from
-        `analysis/world_overview.json` to `world/foundation/foundation.json`):
+        Lane sets (decision #54 — foundation lane output:
+        `world/foundation/foundation.json`):
         - **monolithic**: foundation + stage_plan + candidate_characters
         - **light_novel**: foundation + candidate_characters (stage_plan
           is derived programmatically from chapter_index by
@@ -2724,7 +2743,14 @@ class ExtractionOrchestrator:
                 lanes_to_run = stage.missing_lanes(
                     pipeline.target_characters)
                 n_chars = len(pipeline.target_characters)
-                n_workers = max(1, len(lanes_to_run))
+                # When sub-lane fan-out is enabled, each ``snapshot:*``
+                # lane spawns 3 inner sub-lane LLM calls; cap outer
+                # workers by that factor so peak concurrent LLM count
+                # stays close to the original lane budget (config target
+                # ~8-10 concurrent claude -p calls — see config.py).
+                sub_lane_factor = 3 if self.char_snapshot_sub_lanes else 1
+                n_workers = max(
+                    1, len(lanes_to_run) // sub_lane_factor)
                 tracker.start_step()
                 if is_partial_resume:
                     skipped = [n for n in expected_lane_names(

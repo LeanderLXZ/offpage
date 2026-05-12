@@ -28,7 +28,7 @@
     },
     "chapter": {
       "type": "string",
-      "description": "章节号字符串（4 位零填充，例如 0042），跨章节场景使用连字符范围（例如 0042-0043）。由 scene_archive.py 按章节循环填入。"
+      "description": "章节号字符串（C + 4 位零填充，例如 C0042），跨章节场景使用连字符范围（例如 C0042-C0043）。由 scene_archive.py 按章节循环填入。"
     },
     "time": {
       "type": "string",

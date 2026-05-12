@@ -19,13 +19,44 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 import jsonschema as _jsonschema  # REQUIRED — see pyproject.toml dependencies
+
+
+def _atomic_write_jsonl(path: Path, entries: list[dict[str, Any]]) -> None:
+    """Write a JSONL file atomically (temp file + ``os.replace``).
+
+    Mirrors ``progress._atomic_write_json`` for the digest writers so a
+    SIGKILL mid-serialization can't leave a truncated JSONL — worst case
+    the previous file is preserved and the most recent update is lost,
+    but the file always parses line by line.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=str(path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            for entry in entries:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_name, path)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -162,10 +193,7 @@ def generate_memory_digest(
     final = kept + deduped_new
 
     # --- write ---
-    digest_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(digest_path, "w", encoding="utf-8") as f:
-        for entry in final:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    _atomic_write_jsonl(digest_path, final)
 
     logger.info("memory_digest: wrote %d entries for stage '%s' "
                 "(%d total lines)", len(deduped_new), stage_id, len(final))
@@ -360,10 +388,7 @@ def generate_world_event_digest(
     final = kept + deduped_new
 
     # Write
-    digest_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(digest_path, "w", encoding="utf-8") as f:
-        for entry in final:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    _atomic_write_jsonl(digest_path, final)
 
     logger.info("world_event_digest: wrote %d entries for stage '%s' "
                 "(%d total lines)", len(deduped_new), stage_id, len(final))

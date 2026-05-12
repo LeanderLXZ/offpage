@@ -295,8 +295,11 @@ T3 即 `T3_EXHAUSTED`。
 
 **Rate-limit / hard-stop**：sub-lane 走现有 `run_with_retry` 自然继承
 `RateLimitController` pause / resume；hard-stop 时 sub-lane sub-executor
-`shutdown(cancel_futures=True)` + 删除已写 partial → `RateLimitHardStop`
-上抛到 phase 3 外层池，与 repair 池同源 hard-stop 双池齐落。
+`shutdown(wait=False, cancel_futures=True)` 立即 raise，磁盘 partial
+保留供下次 `--resume` 启动前的 `_clear_snapshot_partials` 兜底清理覆盖
+（不在 hard-stop 路径删 partial，避免 sleep 中的同伴 future 被隐式
+`with` 退出阻塞数小时）；`RateLimitHardStop` 上抛到 phase 3 外层池，
+与 repair 池同源 hard-stop 双池齐落。
 
 **Fallback 模式**（`[phase3].char_snapshot_sub_lanes = false`）：单 lane
 char_snapshot + file-level 2 lifecycle 标准流程——即 sub-lane 拆分前

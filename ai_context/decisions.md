@@ -43,11 +43,10 @@ source. Long discussion chains live in `logs/change_logs/`.
 11a. `identity.json` carries `core_wounds` (root traumas + behavioral impact) + `key_relationships` (relationship arcs with initial state / evolution / turning points). Loaded with the stage snapshot. **Character-level constant file alongside `target_baseline.json` (#13)** — voice / behavior / boundary / failure_modes are inlined into stage_snapshot (#11d).
 11b. `behavior_state` separates `core_goals` (rational, re-prioritizable) from `obsessions` (irrational, trauma- / emotion-tied, not cost-benefit). `emotional_baseline` mirrors with `active_goals` + `active_obsessions`.
 11c. `character_arc` in `stage_snapshot` = bird's-eye stage 1 → current. Complements `stage_delta` (last step only).
-11d. **4-piece character baseline deprecated.** `voice_rules.json` /
-     `behavior_rules.json` / `boundaries.json` / `failure_modes.json`
-     removed. voice / behavior / boundary state already lived in
+11d. **Character voice / behavior / boundary / failure_modes inlined
+     in stage_snapshot.** Voice / behavior / boundary state live in
      `stage_snapshot.{voice_state,behavior_state,boundary_state}`;
-     `failure_modes` is inlined as a new top-level field on `stage_snapshot`
+     `failure_modes` is a top-level field on `stage_snapshot`
      (4 sub-classes `common_failures` / `tone_traps` / `relationship_traps`
      / `knowledge_leaks`; sub-class maxItems carried over from the
      historical baseline schema). Each stage records the full active
@@ -431,7 +430,14 @@ source. Long discussion chains live in `logs/change_logs/`.
     下一轮时计入，rate-limit pause 重跑不消耗 lifecycle 槽 — R1）。
     **Rate-limit / hard-stop**：sub-lane 走现有 `run_with_retry` 继承
     `RateLimitController` pause / resume；hard-stop 时 sub-lane sub-executor
-    `shutdown(cancel_futures=True)` + 删 partial（R2 / R3）。**Toml 开关 +
+    `shutdown(wait=False, cancel_futures=True)` 并立即 raise，磁盘 partial
+    保留供下次 `--resume` 启动前的 `_clear_snapshot_partials` 兜底清理覆盖
+    （R2 — 不在 hard-stop 路径删 partial，避免 sleep 中的同伴 future 被
+    隐式 `with` 退出阻塞数小时；R3 — 启动前清理仍是单源真理）。**Outer pool
+    并发降量**：sub-lane 启用时 phase 3 主 ThreadPoolExecutor 的 `n_workers`
+    由 `len(lanes_to_run)` 折半到 `len(lanes_to_run) // 3`，与 inner sub-lane
+    fan-out 因子相消，避免峰值 LLM 并发超出 `config.py` 自述的 ~8-10 阈值。
+    **Toml 开关 +
     CLI 双向 flag**：`[phase3].char_snapshot_sub_lanes`（缺省 `true`）+
     `--char-snapshot-sub-lanes` / `--no-char-snapshot-sub-lanes`；
     light_novel 模式单 stage 字符数小，3 sub-lane 启动开销可能 > 抽取

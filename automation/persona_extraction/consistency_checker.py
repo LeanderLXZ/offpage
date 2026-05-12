@@ -377,10 +377,18 @@ def _check_relationship_continuity(
             curr_rels: dict[str, dict] = {}
             for rel in snapshot.get("relationships", []):
                 # Schema: target_character_id is the canonical key
-                target = rel.get("target_character_id",
-                                 rel.get("target_label", ""))
-                if target:
-                    curr_rels[target] = rel
+                # (#13 D4 set-equal anchor). A missing value here means
+                # an upstream contract violation; log + skip rather than
+                # silently keying by target_label (would mis-align
+                # prev/curr delta comparison).
+                target = rel.get("target_character_id")
+                if not target:
+                    logger.warning(
+                        "consistency_checker: relationship entry missing "
+                        "target_character_id in %s/%s — skipping",
+                        char_id, stage_id)
+                    continue
+                curr_rels[target] = rel
 
             if prev_rels:
                 for target, rel in curr_rels.items():
