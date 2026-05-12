@@ -238,3 +238,23 @@ reasonable call and continue" 走推荐方案：
 
 - **Status**: DONE
 - **Finished**: 2026-05-12 12:58:56 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：20/20 计划项 + 11/11 验证标准 全过 ✅
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=2 / Low=1
+- Open Questions: 1 条（详见对话）
+
+## 复查时状态
+
+- **Reviewed**: 2026-05-12 13:14:43 EDT
+- **Status**: REVIEWED-PARTIAL
+  - PASS = 轨 1 全落实 且 轨 2 无 High/Medium
+  - 现状：轨 1 全落实但轨 2 有 2 Medium（同类 conventions §3 文案漂移）
+- **Conversation ref**: 同会话内 /post-check 输出
