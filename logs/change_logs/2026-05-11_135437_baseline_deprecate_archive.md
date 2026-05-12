@@ -88,8 +88,10 @@ PRE 「验证标准」7 条：
 - [x] `docs/todo_list_archived.md` `## Completed` 段顶含 1 条新增 T-BASELINE-DEPRECATE 瘦身条目，带本次 log 链接 — Edit 已成功
 - [x] T-CHAR-SNAPSHOT-SUB-LANES 段的「依赖」改写为"依赖物均已就位"指针；Index 段 Ready 列 ⏸ Blocked → ✅ Ready — Edit 已成功
 - [x] `grep -n` 全仓库（除 archived / logs）：T-BASELINE-DEPRECATE 仅作为完成指针 / 历史引用出现在 T-CHAR-SNAPSHOT-SUB-LANES 段 line 508 / 615，不再出现在 In Progress 段或别处 — 2 处残留均是 intentional reference
-- [ ] worktree-main commit 后 `git status` clean — Step 9 即将验证
-- [ ] Step 10 extraction 分支同步：因 dirty 自动跳过，library 分支正常 merge — Step 10 即将验证
+- [x] worktree-main commit 后 `git status` clean — Step 9 验证通过（commit aa6dff7，worktree 已 remove）
+- [~] Step 10 分支同步实际结果偏离 PRE 预期：
+  - **extraction/<work_id> → 同步成功**（merge commit 1d11442）—— 与 PRE 预测的"因 dirty 跳过"不一致。原因：merge 影响的文件 = docs/todo_list*.md + logs/change_logs/* 与 dirty 文件 works/* 不重合，git 自动 merge 顺利，partial 产物保留
+  - **library → 同步推迟**（PRE 预测正常同步）—— 原因：`git checkout library` 因 dirty extraction 工作区 stage_catalog × 3 在 library 分支上有不同内容会被覆盖，checkout 失败；当前 HEAD 仍在 extraction。library 同步推迟到 phase 3 partial 处理结束后用户手工 merge 一并完成（同 PRE 内 extraction 同步推迟的归因——属短期运行时状态，不入 todo_list 单独跟踪）
 
 ## Completed
 
