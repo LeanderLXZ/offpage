@@ -12,14 +12,15 @@
 |---|---|---|---|---|
 | `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | 2026-05-01 | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
 
-### 🟡 Next (2)
+### 🟡 Next (3)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
 | `T-PHASE2-REPAIR-AGENT` | phase 2 baseline production 整体接入 repair_agent lifecycle（4 件产物 foundation key_figures patch + fixed_relationships + identity + target_baseline 各自包装 SourceContext + 写 phase 2 专属 checkers）。当前 phase 2 仅"裸单次 LLM + tolerance gate"为遗留缺陷（决策 #54 拆出），decision #25 + decision #48 措辞修正后已明确 repair_agent 仅在 phase 3。 | 🟡 Med | ⏸ Blocked | 🔴 Large·Arch | 2026-05-11 EDT | 无（与本次 foundation 重构正交） |
+| `T-PHASE2-RECOVERY-RESET-FLAG` | 给 `_guard_phase2_rewrite_against_phase3` 加 `--reset-phase3-after-baseline-change` 自动清理路径（带 flag 跳 guard、清 phase 3 产物 + commit、然后继续 baseline 重跑）。决策 #56 拆出，hard stop 默认已落地，二期补显式 reset。 | 🟢 Med-Low | ✅ Ready | 🟡 Med | 2026-05-12 EDT | 无 |
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
 
-### ⚪ Discussing (8)
+### ⚪ Discussing (9)
 
 | ID | Brief | Open decisions | Updated | Blocked by |
 |---|---|---|---|---|
@@ -31,7 +32,8 @@
 | `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
-**Total**: 11 — 🟢 In Progress 1 ｜ 🟡 Next 2 ｜ ⚪ Discussing 8
+| `T-LIGHTNOVEL-SCHEMA-ONEOF` | `stage_plan.chapter_count` 改 `oneOf` 按 `structure_mode` 分支（monolithic 8-15 / light_novel 1）让派生产物正式契约化。当前是已知 trade-off（决策 #27m）。 | 1 | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
+**Total**: 13 — 🟢 In Progress 1 ｜ 🟡 Next 3 ｜ ⚪ Discussing 9
 
 ---
 
@@ -368,6 +370,70 @@ repair_agent 实际接入点 grep 全仓库**只有 1 处** = `orchestrator.py` 
   / `/full-review` 都能正常降级或运行
 
 **依赖**：无（skills_config.md 已落地、6 skill 改造已完成）
+
+---
+
+### [T-PHASE2-RECOVERY-RESET-FLAG] `--reset-phase3-after-baseline-change` 自动清理 flag
+
+**开始时间**：2026-05-12 EDT（决策 #56 落地时拆出）
+
+**当前状态**：Ready（设计简单，无外部依赖；OQ2 用户选择"先做 hard stop"已落地，本 todo 是后续显式 reset 路径）。
+
+**上下文**
+
+决策 #56 给 `run_extraction_loop` validation-triggered baseline recovery + `--start-phase 2` force_baseline 两条路径前插了 `_guard_phase2_rewrite_against_phase3` —— 已有 phase 3 committed 产物时 daemon hard stop / 前台 `[y/N]` 确认。当前实现**不提供**自动清理路径，用户拍板的"显式 reset"是二期任务。
+
+**改动清单**
+
+- file: `automation/persona_extraction/cli.py` 新增 `--reset-phase3-after-baseline-change`（store_true，默认 false）
+- file: `automation/persona_extraction/orchestrator.py` `_guard_phase2_rewrite_against_phase3` 接受 `reset: bool` kwarg；为 True 时跳过 guard，直接执行 `rm -rf` + `git rm` 路径清理（world/stage_snapshots / characters/*/canon/stage_snapshots / memory_timeline / memory_digest.jsonl / world_event_digest.jsonl / phase3_stages.json），commit 一条 "Phase 3 reset before baseline change" 后继续 baseline 重跑
+- file: `automation/README.md` + `docs/architecture/extraction_workflow.md` + `ai_context/architecture.md` + `ai_context/decisions.md` #56：补 reset flag 文案
+
+**完成标准**
+
+- daemon 路径带 flag → 不 hard stop，自动清理 + 重跑 baseline + 从 phase 3 stage 1 重抽
+- 不带 flag = 当前 hard stop / `[y/N]` 行为不变
+- smoke test：构造 `phase3_stages.json` 含 COMMITTED + 带 flag → 清理执行 + baseline 重写 + phase3_stages.json 重建为全 PENDING
+
+**依赖**：无（决策 #56 已落地 hard stop 路径）
+
+**暂不做的事**
+
+- 不引入"选择性 reset"（只清部分 stage）—— baseline 改写影响全集 keys，partial reset 语义不安全
+
+---
+
+### [T-LIGHTNOVEL-SCHEMA-ONEOF] light_novel `chapter_count=1` schema 正式契约化
+
+**开始时间**：2026-05-12 EDT（决策 #56 复审时确认推迟）
+
+**当前状态**：Discussing（无外部消费方，决策 #27m 现状保留；本 todo 是预备工作，等首个外部 validator 出现时启动）
+
+**上下文**
+
+decision #27m 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标记为已知 trade-off：light_novel 模式 orchestrator 程序化 1:1 派生不走 schema validate，事实上没有外部消费方校验该产物。codex `gpt-5` 2026-05-12 复审报告 OQ3 指出：如果未来出现外部 artifact validator 独立校验 `stage_plan.json`，这会重新变成契约问题。
+
+**改动清单（设计）**
+
+- file: `schemas/analysis/stage_plan.schema.json`：改 `stages.items.chapter_count` 为 `oneOf`，按结构模式分支
+  - monolithic: `minimum=8, maximum=15`
+  - light_novel: `minimum=1, maximum=1`
+- file: `automation/persona_extraction/_build_light_novel_stage_plan`：产物加 `structure_mode` 字段供 schema dispatch（或在外层 manifest 索引）
+- file: `automation/persona_extraction/validator.py`：派生产物现在走 schema validate
+- file: `docs/architecture/schema_reference.md` + decision #27m + #56：trade-off 文案改写为已契约化
+
+**完成标准**
+
+- monolithic / light_novel 两路产物 schema validate 都过
+- 增加 fixture 测试：light_novel 产物 schema 校验过；monolithic 含 chapter_count=1 的非法产物校验失败
+
+**依赖**
+
+- 等首个外部 artifact validator 消费方出现（如独立离线校验工具 / 第三方对接），否则推动力不足
+
+**暂不做的事**
+
+- 决策 #56 复审 OQ3 用户拍板"留 todo"——本轮不动 schema
 
 ---
 

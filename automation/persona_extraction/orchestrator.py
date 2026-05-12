@@ -216,6 +216,90 @@ def _fmt_duration(seconds: float) -> str:
     return f"{h}h{m:02d}m{s:02d}s"
 
 
+def _phase3_committed_artifacts_present(
+    project_root: Path, work_id: str,
+) -> bool:
+    """Return True iff phase 3 has produced committed stage artifacts.
+
+    Detection signals (any one is sufficient):
+      1. ``phase3_stages.json`` carries at least one stage in COMMITTED state
+      2. World stage snapshot files exist on disk
+      3. Any character stage snapshot files exist on disk
+
+    A True result means a Phase 2 baseline rewrite would cascade-break the
+    decision #13 set-equal contract on every existing stage snapshot. The
+    caller MUST stop or get explicit confirmation before continuing.
+    Decision #56.
+    """
+    phase3 = Phase3Progress.load(project_root, work_id)
+    if phase3 is not None:
+        for stage in phase3.stages:
+            if stage.state == StageState.COMMITTED:
+                return True
+    work_dir = project_root / "works" / work_id
+    world_snaps = work_dir / "world" / "stage_snapshots"
+    if world_snaps.exists() and any(world_snaps.glob("S*.json")):
+        return True
+    characters_dir = work_dir / "characters"
+    if characters_dir.exists():
+        for char_dir in characters_dir.iterdir():
+            if not char_dir.is_dir():
+                continue
+            snap_dir = char_dir / "canon" / "stage_snapshots"
+            if snap_dir.exists() and any(snap_dir.glob("S*.json")):
+                return True
+    return False
+
+
+def _guard_phase2_rewrite_against_phase3(
+    project_root: Path, work_id: str, *, context: str,
+) -> None:
+    """Block phase 2 baseline rewrite when phase 3 committed artifacts exist.
+
+    Phase 2 rewriting ``target_baseline.json`` mutates the target-character
+    set that decision #13 set-equal-binds every phase 3 stage_snapshot to;
+    silently continuing would leave the new baseline ↔ stale snapshots in
+    cross-file hard-fail state on the next phase 3 cross-file validate.
+
+    Daemon path (``sys.stdin.isatty()`` False) → hard stop ``sys.exit(1)``
+    after printing the cleanup list. Foreground → same cleanup list plus
+    ``input("Continue and overwrite phase 3 artifacts? [y/N]: ")``; any
+    answer other than ``y`` exits 1. Decision #56.
+    """
+    if not _phase3_committed_artifacts_present(project_root, work_id):
+        return
+    work_root = project_root / "works" / work_id
+    print(
+        "\n[GUARD] Phase 2 baseline rewrite blocked — phase 3 committed "
+        f"artifacts detected ({context}).\n"
+        "  Decision #13 set-equal contract binds every existing phase 3 "
+        "stage_snapshot to the current `target_baseline.targets[]` set; "
+        "overwriting baseline now would leave them in cross-file hard-fail "
+        "state.\n"
+        "\n  Cleanup required before rerunning Phase 2 (decision #56):\n"
+        f"    - {work_root}/world/stage_snapshots/\n"
+        f"    - {work_root}/characters/*/canon/stage_snapshots/\n"
+        f"    - {work_root}/characters/*/canon/memory_timeline/\n"
+        f"    - {work_root}/characters/*/canon/memory_digest.jsonl\n"
+        f"    - {work_root}/world/world_event_digest.jsonl\n"
+        f"    - {work_root}/analysis/progress/phase3_stages.json\n"
+        "  After cleanup, rerun with --resume.")
+    if not sys.stdin.isatty():
+        print("[GUARD] Daemon mode (non-interactive stdin) — hard stop.")
+        sys.exit(1)
+    try:
+        answer = input(
+            "Continue and overwrite phase 3 artifacts? [y/N]: "
+        ).strip().lower()
+    except EOFError:
+        answer = ""
+    if answer != "y":
+        print("[GUARD] User declined — exiting without modifying baseline.")
+        sys.exit(1)
+    print("[GUARD] User confirmed — proceeding with baseline rewrite. "
+          "Phase 3 cascade is now the user's responsibility.")
+
+
 # stage_snapshot.schema.json::schema_version is a required string; the
 # extractor LLM has historically written "1.0" so we keep the same shape
 # when injecting the value during sub-lane merge (decision #55).
@@ -2110,19 +2194,24 @@ class ExtractionOrchestrator:
             print()
 
         # --end-stage is a runtime limit only; progress always contains
-        # the full stage plan (same pattern as Phase 4).
+        # the full stage plan (same pattern as Phase 4). Decision #56:
+        # empty input → None = no limit (run all stages), aligned with
+        # the `--end-stage` flag's "omit = all" design and the
+        # `run_extraction_loop(max_stages=None)` "no limit" semantics.
         if preset_end_stage is None:
             try:
-                raw = input(f"Extract up to stage N (total {total_stages}, "
-                            f"0 or empty = all): ").strip()
+                raw = input(
+                    f"Extract up to stage N (total {total_stages}; "
+                    f"empty = all (no limit), 0 = baseline only): "
+                ).strip()
             except EOFError:
-                # Daemon path with stdin=DEVNULL — cli.py background validator
-                # requires --end-stage preset on phase_1_5-pending path so
-                # we shouldn't reach here. Defend in depth: fallback to 0
-                # (= baseline only) so phase 2 still completes; daemon
-                # operator should re-run with --end-stage <N> for phase 3+.
+                # Daemon path with stdin=DEVNULL — fall through to empty,
+                # which decision #56 maps to None (= run all stages).
+                # Daemon operators who want a runtime cap pass --end-stage
+                # explicitly; omitting it is a legitimate "no limit"
+                # request, not an error.
                 raw = ""
-            preset_end_stage = int(raw) if raw else 0
+            preset_end_stage = int(raw) if raw else None
 
         pipeline = PipelineProgress(
             work_id=self.work_id,
@@ -2156,8 +2245,13 @@ class ExtractionOrchestrator:
         self.pipeline = pipeline
         self.phase3 = phase3
 
-        run_label = (f"first {preset_end_stage}" if preset_end_stage
-                     else "all")
+        # None → "all" (no limit), 0 → "baseline only", positive → "first N"
+        if preset_end_stage is None:
+            run_label = "all"
+        elif preset_end_stage == 0:
+            run_label = "baseline only"
+        else:
+            run_label = f"first {preset_end_stage}"
         print("\n[OK] Configuration saved.")
         print(f"     Characters: {selected}")
         print(f"     Stages: {len(phase3.stages)} total "
@@ -2273,6 +2367,9 @@ class ExtractionOrchestrator:
                     if not accept:
                         print("  [WARN] Existing baseline failed validation. "
                               "Re-running Phase 2 to repair.")
+                        _guard_phase2_rewrite_against_phase3(
+                            self.project_root, pipeline.work_id,
+                            context="validation-triggered recovery")
                         self.run_baseline_production(pipeline.target_characters)
                         sha = commit_stage(
                             self.project_root, "baseline",
@@ -2286,6 +2383,15 @@ class ExtractionOrchestrator:
                         pipeline.save(self.project_root)
                 else:
                     print("  [WARN] Baseline not completed. Running Phase 2...")
+                    # Decision #56: covers --start-phase 2 force_baseline path
+                    # too. When phase 2 is genuinely first-time (force_baseline
+                    # False and files missing), the guard helper is a no-op
+                    # because phase 3 cannot have committed artifacts yet.
+                    _guard_phase2_rewrite_against_phase3(
+                        self.project_root, pipeline.work_id,
+                        context=("--start-phase 2 force_baseline"
+                                 if force_baseline
+                                 else "baseline files missing on resume"))
                     self.run_baseline_production(pipeline.target_characters)
                     # Commit baseline so extraction starts with clean tree
                     sha = commit_stage(self.project_root, "baseline",

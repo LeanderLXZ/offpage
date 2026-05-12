@@ -1,11 +1,13 @@
-"""Smoke test for cli.py --background stage-aware validation (decision #51).
+"""Smoke test for cli.py --background stage-aware validation (decisions #51 + #56).
 
 The validation logic at cli.py's `if args.background:` block reads
-``works/{work_id}/analysis/progress/pipeline.json`` and rejects any
-combination that lets a stdin prompt reach the daemon. Phase 1.5 not
-done has TWO stdin prompt sites — character list (bypassed by
-``--characters``) AND end-stage (bypassed by ``--end-stage``); both
-must be covered. Phase 1.5 done has one stdin prompt site —
+``works/{work_id}/analysis/progress/pipeline.json`` and rejects only
+the prompt sites that would traceback-exit the daemon. Phase 1.5 not
+done has ONE blocking prompt site — character list (bypassed by
+``--characters``). The "Extract up to stage N" prompt is non-blocking:
+its daemon EOFError path falls back to ``preset_end_stage = None`` =
+run all stages (decision #56), aligned with the ``--end-stage`` flag's
+"omit = all" design. Phase 1.5 done has one stdin prompt site —
 ``"Resume from existing progress?"`` — bypassed by ``--resume``
 (auto_resume signal) or ``--characters`` (preset path).
 
@@ -17,11 +19,11 @@ Nine scenarios cover the truth table:
         → reject with sys.exit(1) + "character-selection prompt"
           (missing --characters)
   (C) phase_1_5 pending + --background --characters X (no --end-stage)
-        → reject with sys.exit(1) + "Extract up to stage N" prompt msg
-          (missing --end-stage)
+        → accept (decision #56: --end-stage omit = run all stages;
+          daemon EOFError fallback preset_end_stage=None is safe)
   (D) pipeline.json absent + --background --characters X (no --end-stage)
-        → reject (no pipeline → treated as phase_1_5 not done, both
-          --characters AND --end-stage required)
+        → accept (no pipeline → treated as phase_1_5 not done; only
+          --characters is required since #56)
   (E) phase_1_5 done + --background, no --resume / no --characters
         → reject with sys.exit(1) + "phase_1_5 is done" (would
           deadlock on the 'Resume from existing progress?' prompt)
@@ -30,10 +32,9 @@ Nine scenarios cover the truth table:
           the preset_characters branch; --end-stage not required on
           this branch since run_extraction_loop accepts max_stages=None)
   (G) phase_1_5 pending + --background --characters X --end-stage 0
-        → accept (both presets cover both Phase 1.5 stdin prompts)
+        → accept (explicit --end-stage 0 = baseline only still works)
   (H) pipeline.json absent + --background --characters X --end-stage 50
-        → accept (no pipeline → treated as phase_1_5 not done, both
-          presets given so daemon path is stdin-prompt-free)
+        → accept (explicit --end-stage still works)
   (I) --end-stage -1 → argparse reject (exit 2 + ">= 0" in stderr)
         → ``_nonneg_int`` argparse type guards against negative values
           that would otherwise pass ``args.end_stage is None`` check and
@@ -159,30 +160,44 @@ def _scenario_b(root: Path) -> bool:
 
 
 def _scenario_c(root: Path) -> bool:
-    """phase_1_5 pending + --background --characters X (no --end-stage) → reject."""
+    """phase_1_5 pending + --background --characters X (no --end-stage) → accept.
+
+    Decision #56: omitting --end-stage is a legitimate "run all stages"
+    request. Daemon EOFError on the "Extract up to stage N" prompt falls
+    back to preset_end_stage=None, which run_extraction_loop accepts as
+    "no limit". The validator must NOT reject this combination.
+    """
     project = _make_project(root, phase_1_5="pending")
     code, text = _run([
         WORK_ID, "--project-root", str(project),
         "--background", "--characters", "char_a",
     ])
-    ok = code == 1 and "Extract up to stage N" in text
+    ok = code == 0 and "Extract up to stage N" not in text \
+        and "character-selection prompt" not in text
     print(f"[C] phase_1_5=pending + --background --characters X (no --end-stage): "
-          f"exit={code} expect 1 + msg → {'OK' if ok else 'FAIL'}")
+          f"exit={code} expect 0 (accept; --end-stage omit = all) → "
+          f"{'OK' if ok else 'FAIL'}")
     if not ok:
         print(f"  stdout/stderr: {text!r}")
     return ok
 
 
 def _scenario_d(root: Path) -> bool:
-    """pipeline.json absent + --background --characters X (no --end-stage) → reject."""
+    """pipeline.json absent + --background --characters X (no --end-stage) → accept.
+
+    Decision #56: same as scenario C — no-pipeline path is treated as
+    phase_1_5 not done; only --characters is required.
+    """
     project = _make_project(root, phase_1_5=None)
     code, text = _run([
         WORK_ID, "--project-root", str(project),
         "--background", "--characters", "char_a",
     ])
-    ok = code == 1 and "Extract up to stage N" in text
+    ok = code == 0 and "Extract up to stage N" not in text \
+        and "character-selection prompt" not in text
     print(f"[D] no pipeline.json + --background --characters X (no --end-stage): "
-          f"exit={code} expect 1 + msg → {'OK' if ok else 'FAIL'}")
+          f"exit={code} expect 0 (accept; --end-stage omit = all) → "
+          f"{'OK' if ok else 'FAIL'}")
     if not ok:
         print(f"  stdout/stderr: {text!r}")
     return ok

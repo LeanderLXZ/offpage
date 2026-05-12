@@ -144,15 +144,18 @@ kill <PID>
 
 `--background` 阶段感知校验双分支：读 `works/<work_id>/analysis/progress/pipeline.json`
 的 `phase_1_5` 状态——
-- **未 done**：强制要求 `--characters`（避免 daemon 撞 `confirm_with_user`
-  的 stdin 死锁）
+- **未 done**：强制要求 `--characters`（跳过 `confirm_with_user` 的 character
+  选择 stdin prompt；该 prompt 无 daemon-safe default，必须 preset）
 - **已 done**：强制要求 `--resume` 或 `--characters` 二选一（避免 daemon
   撞 run_full 内 `'Resume from existing progress?'` 的 stdin 死锁——`--resume`
   silent 该 prompt，`--characters` 走 preset 旁路同样 silent）
 
-两分支共同保证 daemon 路径上**没有任何**可触发的 stdin prompt。`--resume` 与
-`--background` 正交：`--resume` 控制"silence the resume prompt"，`--background`
-控制后台 daemonize。
+`--end-stage` 不传 = 全跑（决策 #56）：CLI flag `default=None`，`confirm_with_user`
+内 `Extract up to stage N` prompt 文案 `empty = all (no limit), 0 = baseline only`；
+daemon EOFError 路径 `preset_end_stage = None` 兜底为"no limit"，与
+`run_extraction_loop(max_stages=None)` 的合法语义一致。两分支共同保证 daemon
+路径上**没有任何**可触发 traceback 的 stdin prompt。`--resume` 与 `--background`
+正交：`--resume` 控制"silence the resume prompt"，`--background` 控制后台 daemonize。
 
 ### 运行时限制
 

@@ -80,7 +80,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 **双模式调度**（沿用 Phase 0 的 `structure_mode`）：
 
 - **monolithic 模式 = 3 lane 并行**：
-  - **foundation lane**：题材 / 力量体系 / 主要势力 / 地理结构 / 大世界线划分 / 核心设定规则。输出：`works/{work_id}/world/foundation/foundation.json`（决策 #54——原 `analysis/world_overview.json` 路径已废弃，foundation 由 phase 1 直接产，phase 2 仅补 `major_factions[].key_figures`）
+  - **foundation lane**：题材 / 力量体系 / 主要势力 / 地理结构 / 大世界线划分 / 核心设定规则。输出：`works/{work_id}/world/foundation/foundation.json`（决策 #54——foundation 由 phase 1 直接产到 world 域，phase 2 仅补 `major_factions[].key_figures`）
   - **stage_plan lane**：按自然剧情边界切分（拐点先行，章数硬范围 8–15；详见决策 #27m 步骤 2.1/2.2/2.3 反锚定自检）。输出：`works/{work_id}/analysis/stage_plan.json`
   - **candidate_characters lane**：跨 chunk 角色身份合并 + 候选角色识别 + aliases 归并。输出：`works/{work_id}/analysis/candidate_characters.json`
 - **light_novel 模式 = 2 lane 并行 + 程序化 stage_plan**：
@@ -199,6 +199,27 @@ baseline 文件的 schema 合规性。works manifest / world manifest /
 identity / 角色 manifest / target_baseline / foundation /
 fixed_relationships 全部为必须（error）。target_baseline 缺失 / schema
 违规 / `character_id` 与目录名不一致均阻断 Phase 3。
+
+**Validation-triggered recovery 与 `--start-phase 2` force_baseline 前置 guard**
+（决策 #56）：续跑路径 `run_extraction_loop` 检测到 existing baseline 文件齐全
+但 `validate_baseline()` + length-tolerance 双重失败 → 重跑 `run_baseline_production`
+并提交 `Phase 2 baseline (validation-triggered recovery)`；此调用会**改写**
+`target_baseline.json`，触发决策 #13 双向 set-equal 约束 cascade（所有已落盘
+phase 3 stage_snapshot 与新 baseline targets 不一致 → phase 3 cross-file
+hard fail）。**前置 guard**：调用 `run_baseline_production` 前检测已有 phase 3
+committed 产物——读 `analysis/progress/phase3_stages.json` 任一 stage state ==
+`COMMITTED` 或扫磁盘 `world/stage_snapshots/*.json` + `characters/*/canon/
+stage_snapshots/*.json` 任一非空即视为存在。存在时分模式处理：
+- **daemon (`--background`, stdin=`/dev/null`)** → hard stop + `sys.exit(1)`
+  打印需清理路径清单（world stage_snapshots / characters stage_snapshots /
+  memory_timeline / memory_digest.jsonl / world_event_digest.jsonl /
+  phase3_stages.json）+ 清理指令
+- **前台** → 同清理清单 + `input("Continue and overwrite phase 3 artifacts?
+  [y/N]: ")` 非 y 即退出
+
+guard 同时覆盖 `--start-phase 2 force_baseline` 调用路径（用户显式重跑也可能
+误伤 phase 3 产物）。`--reset-phase3-after-baseline-change` 自动清理 flag
+不实现（破坏性动作走显式人工执行；二期 todo `T-PHASE2-RECOVERY-RESET-FLAG`）。
 
 ### 6. 1+2N 并行阶段提取
 
@@ -576,11 +597,14 @@ Phase 1.5 (`confirm_with_user` 用 `--characters` 旁路) → Phase 2 → Phase 
 progress? [Y/n]' 这条 run_full 内的交互确认；与磁盘上具体哪个 phase 已落盘
 无关——run_full 自检产物状态决定 skip / self-heal / 跳进 run_extraction_loop。
 `--background` 校验阶段感知双分支：读 `pipeline.json::phases.phase_1_5`——未
-done 则强制要求 `--characters`（避免 daemon 撞 `confirm_with_user` 的 stdin
-死锁）；已 done 则强制要求 `--resume` 或 `--characters` 二选一（避免 daemon
-撞 run_full 内 `'Resume from existing progress?'` 的 stdin 死锁）。两分支共同
-保证 daemon 路径上没有任何可触发的 stdin prompt。`--resume` 与 `--background`
-正交。
+done 则强制要求 `--characters`（跳过 `confirm_with_user` character-selection
+stdin prompt）；已 done 则强制要求 `--resume` 或 `--characters` 二选一（避免
+daemon 撞 run_full 内 `'Resume from existing progress?'` 的 stdin 死锁）。
+`--end-stage` 不传 = 全跑（daemon EOFError 路径 `preset_end_stage = None`
+兜底，决策 #56；prompt 文案 `empty = all (no limit), 0 = baseline only`）。
+两分支共同保证 daemon 路径上没有任何可触发 traceback 的 stdin prompt——所有
+stdin 站点走 try/except EOFError 兜底 + 安全 default。`--resume` 与
+`--background` 正交。
 
 编排架构：
 

@@ -157,11 +157,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--background", action="store_true",
         help="Run in background (survives SSH disconnect). "
-             "Stage-aware validation (decision #51): phase_1_5 not done "
-             "→ --characters required (else Phase 1.5 stdin prompt "
-             "deadlocks the daemon); phase_1_5 done → --resume or "
-             "--characters required (else 'Resume from existing "
-             "progress?' stdin prompt deadlocks the daemon).",
+             "Stage-aware validation (decisions #51 + #56): phase_1_5 "
+             "not done → --characters required (else Phase 1.5 "
+             "character-selection stdin prompt traceback-exits the "
+             "daemon); phase_1_5 done → --resume or --characters "
+             "required (else 'Resume from existing progress?' stdin "
+             "prompt traceback-exits the daemon). --end-stage is "
+             "always optional: omit = run all stages (daemon EOFError "
+             "falls back to None = no limit, aligned with the prompt's "
+             "'empty = all' contract).",
     )
     parser.add_argument(
         "--char-snapshot-sub-lanes",
@@ -247,23 +251,24 @@ def main(argv: list[str] | None = None) -> None:
 
     # --- Background mode (Phase 0-3.5) ---
     if args.background:
-        # Decision #51: --background can't survive any stdin prompt; the
-        # validator must cover every prompt site reachable on the daemon
-        # path.
+        # Decisions #51 + #56: --background must not let any stdin prompt
+        # traceback-exit the daemon. Every reachable prompt site:
         #
         #   * Phase 1.5 not done → confirm_with_user fires TWO stdin
-        #     prompts: (1) character selection, bypassed by --characters;
-        #     (2) "Extract up to stage N", bypassed by --end-stage. Both
-        #     are required when phase_1_5 is pending.
+        #     prompts:
+        #       (1) character selection — daemon EOFError has no safe
+        #           default (recommended_ids may be empty → sys.exit(1)).
+        #           --characters is REQUIRED to bypass.
+        #       (2) "Extract up to stage N" — daemon EOFError now falls
+        #           back to preset_end_stage=None = run all stages
+        #           (decision #56). --end-stage is OPTIONAL; omitting it
+        #           is a legitimate "no limit" request.
         #   * Phase 1.5 done    → run_full asks "Resume from existing
-        #     progress? [Y/n]"; --resume (auto_resume signal) silences it,
+        #     progress? [Y/n]". --resume (auto_resume signal) silences it;
         #     --characters takes the preset branch which also skips it.
         #     The end_stage prompt is not reached on this branch
         #     (run_extraction_loop accepts max_stages=None as legitimate
         #     "no limit" semantics).
-        #
-        # Either way every branch must reject any combination that lets
-        # a stdin prompt reach the daemon.
         pipeline_status = _load_pipeline_status(project_root, args.work_id)
         phase15_done = (
             pipeline_status is not None
@@ -274,13 +279,6 @@ def main(argv: list[str] | None = None) -> None:
                       "phase_1_5 is not yet done (orchestrator would block "
                       "on the interactive Phase 1.5 character-selection "
                       "prompt).")
-                sys.exit(1)
-            if args.end_stage is None:
-                print("[ERROR] --background requires --end-stage when "
-                      "phase_1_5 is not yet done (orchestrator would block "
-                      "on the interactive Phase 1.5 'Extract up to stage N' "
-                      "prompt). Pass --end-stage <N> where N is the number "
-                      "of stages to extract (or 0 for baseline-only).")
                 sys.exit(1)
         else:
             if not args.resume and not args.characters:

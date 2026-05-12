@@ -122,6 +122,24 @@ _LEGACY_PHASE_KEY_MAP = {
     "phase_2_5": "phase_2",
 }
 
+# Current `pipeline.json` schema version. `save()` always writes this;
+# `load()` skips the legacy remap when raw `schema_version >= _SCHEMA_VERSION`.
+# Older files without the field fall back to shape-based detection
+# (see `_looks_like_current_shape`) — single-key remap on a current-shape
+# file would silently drop `phase_2=done` because the legacy map sends
+# current `phase_2` → `phase_1_5`. Decision #56.
+_SCHEMA_VERSION = 2
+
+
+def _looks_like_current_shape(raw_phases: dict[str, Any]) -> bool:
+    """Detect a current-shape `pipeline.json` by phase-key signature.
+
+    Current shape uses `phase_1_5` / `phase_3_5` (introduced after the
+    rename). Legacy shape never wrote those keys. Either signature is
+    sufficient — both keys are absent in any legacy file. Decision #56.
+    """
+    return "phase_1_5" in raw_phases or "phase_3_5" in raw_phases
+
 
 @dataclass
 class PipelineProgress:
@@ -161,6 +179,7 @@ class PipelineProgress:
         path = self._path(project_root, self.work_id)
         self.last_updated = _now_iso()
         data = {
+            "schema_version": _SCHEMA_VERSION,
             "work_id": self.work_id,
             "extraction_branch": self.extraction_branch,
             "target_characters": self.target_characters,
@@ -180,9 +199,18 @@ class PipelineProgress:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             raw_phases = data.get("phases", {})
+            raw_version = data.get("schema_version", 0)
+            # Skip legacy remap iff version explicitly current OR phase-key
+            # shape unambiguously current. Otherwise apply legacy remap so
+            # genuine pre-rename files migrate forward. Decision #56.
+            apply_legacy_remap = not (
+                raw_version >= _SCHEMA_VERSION
+                or _looks_like_current_shape(raw_phases)
+            )
             phases: dict[str, str] = {}
             for key, state in raw_phases.items():
-                new_key = _LEGACY_PHASE_KEY_MAP.get(key, key)
+                new_key = (_LEGACY_PHASE_KEY_MAP.get(key, key)
+                           if apply_legacy_remap else key)
                 # If both old and new keys are present, DONE wins.
                 if phases.get(new_key) == PHASE_DONE:
                     continue

@@ -123,8 +123,8 @@
 
 自动化提取流程：
 
-0. **阶段 0 — 章节归纳**：按分组（chunk，约 25 章/组）逐组归纳，产出每章
-   结构化摘要。存储在 `analysis/chapter_summaries/`
+0. **阶段 0 — 章节归纳**：按分组（chunk，约 20 章/组；CLI `--chunk-size`
+   默认值，可调）逐组归纳，产出每章结构化摘要。存储在 `analysis/chapter_summaries/`
 1. **阶段 1 — 全书分析**（基于摘要，3 lane 并行）：跨 chunk 角色身份合并
    (`analysis/candidate_characters.json`) + 世界基础设定（`world/foundation/foundation.json`，foundation lane 直接产）+ 剧情阶段划分 (`analysis/stage_plan.json`)
 2. **阶段 1.5 — 用户确认**：用户选定目标角色、确认 stage 边界

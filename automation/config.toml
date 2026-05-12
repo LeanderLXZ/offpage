@@ -33,11 +33,11 @@ max_chapter_count    = 15        # 单 stage 最多章节数
 # 影响 phase0 与 phase4，本键提供默认值。
 concurrency              = 10
 
-# Phase 0 单 chunk summarize 子进程超时（秒）。每 chunk 读 25 章 + 写
-# 25× per-summary（100–150 字）+ 5 个 chunk-level 二级聚合字段
+# Phase 0 单 chunk summarize 子进程超时（秒）。每 chunk 读 20 章 + 写
+# 20× per-summary（150–200 字）+ 5 个 chunk-level 二级聚合字段
 # （chunk_arc_summary / chunk_world_rules / chunk_power_levels /
 # chunk_factions / chunk_regions），opus-4-7 effort=max 单 chunk wall
-# 经验值常 ≥ 600s，给到 1800s 留 3× 余量。
+# 经验值常 ≥ 600s，给到 1800s 留余量（按 20 章基数）。
 summarize_timeout_s      = 1800
 
 # Phase 0 内 L2 JSON 修复的 LLM 调用超时（秒）。L2 是"喂坏 JSON 给
@@ -86,7 +86,7 @@ review_timeout_s     = 600
 
 # claude -p --max-turns 上限：单次会话内最多允许的 agentic 轮数。
 # 调高可让 agent 探索更多文件 / 完成更多 schema 修订循环；调低可强制
-# agent 早返回。Phase 0 chunk 25 章 / chunk-level 5 字段聚合 + Phase 3
+# agent 早返回。Phase 0 chunk 20 章 / chunk-level 5 字段聚合 + Phase 3
 # stage_snapshot schema 修订循环单 chunk 实测有时撞 50 上限触发
 # `error_max_turns`，故全局放到 80。
 max_turns            = 80
