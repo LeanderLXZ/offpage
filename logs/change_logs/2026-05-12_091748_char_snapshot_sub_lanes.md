@@ -275,3 +275,23 @@ PRE 计划动作清单 vs 实际落地：
 ## Completed
 - **Status**: DONE
 - **Finished**: 2026-05-12 10:30:41 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：13/13 项计划动作 + 11/11 项代码侧验证标准；runtime 端到端验证 3 项留给下次 phase 3 启动（PRE log "验证结果" 段已声明范围外）
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=1 / Low=4（详见对话）
+- Open Questions: 6 条（详见对话——主要为 doc 增强建议 + 设计权衡量化点 + 用户场景边界）
+
+## 复查时状态
+- **Reviewed**: 2026-05-12 10:52:56 EDT
+- **Status**: REVIEWED-PASS
+  - 轨 1 全落实
+  - 轨 2 无 High；唯一 Medium = `automation/persona_extraction/snapshot_merge.py:130` 注释偏差（`chapter_scope` 不应列在"sub-lane partial 可省"语义里——它是 PROGRAM_INJECTED_FIELDS，sub-lane 不写）
+  - Low 均为可选 doc 增强（works/README .partial 注释 / schemas/README sub-lane 注脚 / schema_reference.md 生成方式段 / ai_context/requirements.md §11 同步）
+- **Conversation ref**: 同会话内 /post-check 输出
