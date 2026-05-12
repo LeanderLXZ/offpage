@@ -18,7 +18,7 @@
 |---|---|---|---|---|---|---|
 | `T-PHASE2-REPAIR-AGENT` | phase 2 baseline production 整体接入 repair_agent lifecycle（4 件产物 foundation key_figures patch + fixed_relationships + identity + target_baseline 各自包装 SourceContext + 写 phase 2 专属 checkers）。当前 phase 2 仅"裸单次 LLM + tolerance gate"为遗留缺陷（决策 #54 拆出），decision #25 + decision #48 措辞修正后已明确 repair_agent 仅在 phase 3。 | 🟡 Med | ⏸ Blocked | 🔴 Large·Arch | 2026-05-11 EDT | 无（与本次 foundation 重构正交） |
 | `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
-| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + repair lifecycle，单/三 lane 都吃 phase 2 target_baseline + 三态规则，三方 keys == baseline by-construction（合并 phase 3 全模式 keys 约束改造）。 | 🟢 High | ✅ Ready | 🔴 Large·Arch | 2026-05-02 | 无（依赖物均已就位） |
+| `T-CHAR-SNAPSHOT-SUB-LANES` | character stage_snapshot 拆 3 sub-lane（char_expression / char_decision / char_cognition）并行 + file-level repair lifecycle；sub-lane partial 程序 merge 后复用现有 `targets_keys_eq_baseline.py` 做早期预检。prev_snapshot 处理对齐决策 #11f 四态 + #13 set-equal 硬约束（已是 phase 3 现状，本 todo 不重述）。 | 🟢 High | ✅ Ready | 🔴 Large·Arch | 2026-05-12 | 无（依赖物均已就位） |
 
 ### ⚪ Discussing (8)
 
@@ -374,9 +374,9 @@ repair_agent 实际接入点 grep 全仓库**只有 1 处** = `orchestrator.py` 
 
 ---
 
-### [T-CHAR-SNAPSHOT-SUB-LANES] character stage_snapshot 拆 3 sub-lane 并行抽取 + phase 3 全模式 target keys 约束
+### [T-CHAR-SNAPSHOT-SUB-LANES] character stage_snapshot 拆 3 sub-lane 并行抽取
 
-**更新时间**：2026-05-02 18:18 EDT
+**更新时间**：2026-05-12 EDT
 
 **上下文**
 
@@ -392,21 +392,39 @@ T3 触发 → state reset → lifecycle 2 按 sub-lane 模式重新 extract →
 re-merge → re-validate）。schema 不动、世界 lane 和 char_support lane
 不动、其他 phase 不动。
 
-**target keys 约束（合并自原 T-PHASE3-TARGET-CONSTRAINT，对单 lane / 三
-lane 模式均生效）**：每 sub-lane / 单 lane 主抽取读 phase 2 产出的
-`target_baseline.json` 为锚点，prompt 内嵌三态规则让 LLM 自行判断本 stage
-active 子集——
+**prev_snapshot 处理（两个层面，sub-lane / 单 lane 模式均适用）**
 
-- a) baseline 列了但本 stage + prev 都未登场 → keys 不出现（空缺）
-- b) 已登场 → 以 prev 的 target_voice_map / target_behavior_map /
-  relationships 为基线，按本 stage 原文必要时增删 / 更新对应字段
-- c) 曾登场但本 stage 未出现 → 直接继承 prev 内容，不动
+phase 3 keys == baseline 硬约束 + prompt 各档 prev 处理规则**已由决策 #13
++ #11f + 现存 checker `automation/repair_agent/checkers/targets_keys_eq_baseline.py`
++ prompt 模板 §核心规则 #2 全量承载**——本 todo 不重述，只在此约束
+sub-lane merge 阶段的边界感知：
 
-stage_snapshot 三方 keys（target_voice_map / target_behavior_map /
-relationships）必须 == baseline.targets[].target_character_id（D4 硬约束）；
-违规由 consistency_checker 跨文件校验 hard fail，T3 用尽仍违规 → 错误
-退出（不允许 stage 突破 baseline，即使 baseline 漏判也走人工编辑 baseline
-+ stage 重抽）。
+**层面 1（per-target，三档）**：`target_voice_map` / `target_behavior_map` /
+`relationships` 三个按 target 索引的字段——keys 必须与
+`baseline.targets[].target_character_id` **双向 set-equal**（决策 #13 D4
+硬约束）。三档由内容是否填充承载：
+
+- 从未登场 → entry 必须存在 + 所有字段为空（fixed_relationship 例外可
+  预填，见决策 #13）
+- 见过但本 stage 未出场 → entry 存在 + 原样继承 prev
+- 本 stage 出场 → entry 存在 + 内容按层面 2 四态推演
+
+**层面 2（per-item，四态）**：每条 entry / 每个数组项的 prev → curr 演化
+按决策 #11f 四态：
+
+- (A) prev absent → 继承 verbatim
+- (B) present + changed → 按本阶段原文重写 + stage_delta 写关键变化
+- (C) present + unchanged → 保留 prev（required 字段仍要填，"无变化"
+  不等于"跳过"）
+- (D) **resolved / revealed / 克服 → drop entry + stage_delta 写消除原因**
+
+**(D) 对 sub-lane merge 校验的影响**：`char_cognition` lane 承包的
+`misunderstandings` / `concealments` / `failure_modes.{common_failures,
+relationship_traps, knowledge_leaks}` 全都吃 (D) 语义——merge 时 "prev
+有但 partial 没有某条 entry" 不一定是抽错，可能是 (D) 解决了。merge 校验
+**只查字段集合互斥 + 全覆盖**（schema properties 全集），**不查 entry 数
+是否 ≥ prev**——后者由 stage_delta 自由文本承载、由 phase 3.5
+consistency_checker 跨文件审计兜底，不在 sub-lane merge 范围。
 
 **字段归属表**
 
@@ -470,9 +488,13 @@ sub_lanes = true:
           - fingerprint 过滤为 file-level（merge 后整文件 hash），
             sub-lane 间共享、不各自维护
 
-sub_lanes = false（fallback 模式，仍享 target keys 约束）：
-  单 lane char_snapshot + file-level 2 lifecycle 标准流程；prompt 同样
-  注入 target_baseline + 三态规则；产出仍走 keys == baseline 校验
+sub_lanes = false（fallback 模式）：
+  单 lane char_snapshot + file-level 2 lifecycle 标准流程——即 phase 3
+  现状，本 todo 不改变 fallback 行为。baseline 锚点（已通过
+  build_char_snapshot_prompt read list 注入）+ #11f 四态（已落地于 prompt
+  §核心规则 #2）+ keys == baseline 校验（已落地于 checker
+  targets_keys_eq_baseline.py）均为 phase 3 通用现状，不需 sub-lane 专门
+  改造
 ```
 
 **改动清单**
@@ -503,25 +525,25 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
 - `automation/prompt_templates/character_snapshot_extraction.md` — **保留
   单一文件（不拆 3 份）**。加 `{lane_scope}` 占位（取值 `ALL` /
   `char_expression` / `char_decision` / `char_cognition`）+
-  `{target_baseline}` 占位；prompt 头部按 lane_scope 注入"本次仅写以下
-  字段"约束。新增「target keys 三态规则」段（D2 a/b/c）+「target keys
-  必须 == baseline」硬约束段。**T-BASELINE-DEPRECATE 引入的「maxItems
-  统一裁剪规则」段对所有 lane 全 inherits**（不按 lane_scope 过滤——该段
-  是抽取期通用准则，与字段归属正交）。字段归属表移到代码（同一来源给
-  sub-lane 调度 + merge 用，避免 prompt 与 merge 字段集合漂移），fallback
-  模式 `lane_scope=ALL` 等价单 lane 但同样吃 baseline + 三态规则
+  `{lane_field_whitelist}` 占位；prompt 头部按 lane_scope 注入"本次仅写
+  以下字段"约束。**不动 §核心规则 #2 prev_snapshot 四态规则段**（决策 #11f
+  + #13 已是 phase 3 通用准则，sub-lane / 单 lane 全 inherits）。**不动
+  §maxItems 触顶时的裁剪规则段**（决策 #11e 通用准则，与字段归属正交）。
+  字段归属表移到代码（同一来源给 sub-lane 调度 + merge 用，避免 prompt
+  与 merge 字段集合漂移）；fallback 模式 `lane_scope=ALL` 等价单 lane
+  即 phase 3 现状
 - `automation/persona_extraction/orchestrator.py` — sub-lane 调度
   （新建独立 ThreadPoolExecutor 与 repair pool 共用同一 `RateLimitController`
   信号源，hard-stop 任一池都触发 `executor.shutdown(cancel_futures=True)`）
   + .partial 清理；分支 `if config.phase3.char_snapshot_sub_lanes` 包住三
-  lane 路径，否则走单 lane（两种模式都注入 baseline + 三态 prompt）。
-  调用点 `prompt_builder.build_char_snapshot_prompt(..., lane_scope=...,
-  target_baseline_path=...)` 增 2 入参
+  lane 路径，否则走单 lane（fallback 即 phase 3 现状，不需额外注入逻辑）。
+  调用点 `prompt_builder.build_char_snapshot_prompt(..., lane_scope=...)`
+  增 1 入参
 - `automation/persona_extraction/prompt_builder.py` —
-  `build_char_snapshot_prompt` 增 `lane_scope`（`ALL` / `char_expression`
-  / `char_decision` / `char_cognition`）+ `target_baseline_path` 入参，
-  context dict 注入 `{lane_scope}` / `{lane_field_whitelist}` /
-  `{target_baseline}` 三键
+  `build_char_snapshot_prompt` 增 `lane_scope` 入参（`ALL` / `char_expression`
+  / `char_decision` / `char_cognition`），context dict 注入 `{lane_scope}` /
+  `{lane_field_whitelist}` 两键。**`target_baseline` 已通过
+  `_build_char_snapshot_read_list` 写入 read list（[prompt_builder.py:540-541](automation/persona_extraction/prompt_builder.py#L540-L541)，phase 3 现状）**，不需新加 path 入参
 - `automation/repair_agent/coordinator.py` 或对应 lifecycle dispatcher
   （**实际路径在 `automation/repair_agent/`，非 `persona_extraction/repair_agent/`**）
   — sub-lane 开启时 lifecycle 2 启动改走 3 sub-lane 并行重新 extract（替代
@@ -542,12 +564,14 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   / `--no-char-snapshot-sub-lanes` 双向 flag
 - `.gitignore` — `works/*/characters/*/canon/stage_snapshots/.partial/`
 - `docs/architecture/extraction_workflow.md` § Phase 3 — 描述 sub-lane
-  拆分 + target_baseline 锚点 + 三态规则 + keys == baseline 硬约束（对
-  全 phase 3 模式生效）
+  拆分（3 sub-lane 并行 → merge → file-level repair_agent）；
+  prev_snapshot 四态 + keys == baseline 已在 schema_reference / 决策 #11f
+  + #13 描述，不在此重述
 - `automation/README.md` — Phase 3 说明 + toml 配置文档
-- `ai_context/architecture.md` § Automated Extraction Pipeline — 一句话补充
-- `ai_context/decisions.md` — 新增决策：sub-lane 拆分 + target keys ==
-  baseline by-construction + 三态规则
+- `ai_context/architecture.md` § Automated Extraction Pipeline — 一句话
+  补充 sub-lane 拆分
+- `ai_context/decisions.md` — 新增决策：char_snapshot sub-lane 拆分（字段
+  归属表 + merge 校验 + file-level repair lifecycle 2 重抽走 sub-lane 模式）
 - `docs/requirements.md` §11 — 同步描述
 
 **rate-limit / 掉线兼容（推荐方案）**
@@ -570,8 +594,9 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
 - toml `[phase3].char_snapshot_sub_lanes = true` + CLI 双向 flag 生效
 - sub_lanes=true 跑通：Step 1/2/3 完整，merge 后 schema 校验通过
   （`additionalProperties: false` 不报漂移字段）
-- sub_lanes=false 跑通：单 lane 仍注入 baseline + 三态规则，三方 keys ==
-  baseline 校验生效（与三 lane 模式同口径）
+- sub_lanes=false 跑通：单 lane 走 phase 3 现状路径（baseline + #11f 四态
+  + keys == baseline 校验均为 phase 3 通用行为，已落地，不在本 todo 验收
+  范围；仅需确认 `lane_scope=ALL` 不破坏现有行为）
 - 3 sub-lane partial 字段集合 ∪ 程序注入 == schema properties 全集（merge
   前置校验，覆盖 schema 所有 required + 非 required 字段，无漂移）
 - failure_modes 4 子键按字段归属表互斥分布到 char_expression（tone_traps）/
@@ -579,13 +604,13 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
   失败），merge 后字段完整
 - stage_delta 6 子键按字段归属表互斥分布到 char_decision / char_cognition +
   全 6 子键覆盖（hard gate，缺一即 partial 失败）
-- 三方 keys（target_voice_map / target_behavior_map / relationships）==
-  baseline.targets[].target_character_id 双向相等（多/少都 cross-file
-  hard fail；三态由内容是否填充承载，从未登场 entry 字段空）— 复用现有
-  `repair_agent/checkers/targets_keys_eq_baseline.py`
-- prompt 模板的 maxItems 统一裁剪规则段对所有 lane 全 inherits（不按
-  lane_scope 过滤），三 lane 主抽取均按"最重要 / 最符合当前 stage 需要"
-  先排序后截断
+- sub-lane merge 阶段调用现有 `repair_agent/checkers/targets_keys_eq_baseline.py`
+  做早期预检（三方 keys == baseline 校验本身已是 phase 3 现状，本条仅验
+  merge pre-flight 调用点接入正确——预检失败应在 merge 写盘前阻断，避免
+  漂移产物落到 file-level repair 才被发现）
+- (D) resolved/revealed/克服 entry drop 不被 merge 误判：merge 校验**不查**
+  partial entry 数 ≥ prev（仅查字段集合互斥 + 全覆盖），entry 数变化由
+  stage_delta 自由文本承载、phase 3.5 consistency_checker 跨文件审计兜底
 - lifecycle 1 末端 T3 触发 → state reset → lifecycle 2 启动时按 sub-lane
   模式重新 extract（3 sub-lane 并行），re-merge 后 re-validate；lifecycle 2
   默认禁用 T3，再升 T3 即 T3_EXHAUSTED
@@ -599,26 +624,38 @@ sub_lanes = false（fallback 模式，仍享 target keys 约束）：
 
 **预估**
 
-- 中量改动（新增 1 模块 + 修改 ~10 文件 + prompt 改造，含 phase 3 全模式
-  target keys 约束改造）
-- 实施 ~1.5 个工作日；首次跑 1 stage 验证 sub_lanes=true 与
-  sub_lanes=false 两套行为 + keys == baseline 校验
+- 中量改动（新增 1 模块 + 修改 ~10 文件 + prompt 加 lane_scope 占位）；
+  原"phase 3 全模式 target keys 约束改造"半边已被前置工作消化（决策 #13
+  + checker 落地），本 todo scope 较 2026-05-02 版本缩水 ~25%
+- 实施 ~1 个工作日；首次跑 1 stage 验证 sub_lanes=true（merge + lifecycle
+  + R1/R2/R3）与 sub_lanes=false（lane_scope=ALL 不破坏现有 phase 3 行为）
+  两套路径
 - 排期基于 monolithic 底数；light_novel 模式排期与开关行为不再"按 mode
   重评"——保持单 toml bool + CLI 双向 flag，跑 light_novel 时由用户
   `--no-char-snapshot-sub-lanes` 切换（详见"暂不做的事"）
 
 **依赖**
 
-- **依赖物已就位 1**：T-PHASE2-TARGET-BASELINE 已完成于 2026-05-11（baseline
-  是三方 keys 锚点；本 todo 启动时直接消费已落盘的 target_baseline.json，
-  无 baseline 则 D4 硬约束无依据可校验）
-- **依赖物已就位 2**：T-BASELINE-DEPRECATE 已完成于 2026-05-11（4 件套已废
-  弃 + `failure_modes` 4 子键已合并到 `stage_snapshot.schema`；本轮 phase 3
-  S001 实测 failure_modes 字段产出形态正确——Character B 4 sub-class 9/10/7/6 +
-  Character A 9/10/7/7。maxItems 触顶裁剪本轮 items 数低于 maxItems 未触发，但
-  prompt 已含决策 #11e maxItems-aware truncation rule，后续 stage 内容密
-  集时自然验证。sub-lane prompt 启动后 "maxItems 统一裁剪规则段对所有 lane
-  全 inherits" 直接复用该规则段）
+- **决策依赖（全部已落地）**：
+  - **#13** phase 3 keys == baseline by-construction（set-equal hard fail）
+    — checker `automation/repair_agent/checkers/targets_keys_eq_baseline.py`
+    已注册到 [coordinator.py:86](automation/repair_agent/coordinator.py#L86)，
+    本 todo 仅在 sub-lane merge 阶段复用其做早期预检
+  - **#11d** 4 件套废弃 + `failure_modes` 4 子类内联 stage_snapshot 顶层
+    — 本轮 phase 3 S001 实测产出形态正确（详见 logs/change_logs/
+    2026-05-11_135437_baseline_deprecate_archive.md）
+  - **#11e** maxItems-aware truncation rule — 已落地于 prompt §maxItems
+    触顶时的裁剪规则；sub-lane prompt 不动该段，直接 inherits
+  - **#11f** prev_snapshot 四态 A/B/C/D — 已落地于 prompt §核心规则 #2；
+    sub-lane prompt 不动该段，merge 校验需感知 (D) drop 语义（见上方
+    "(D) 对 sub-lane merge 校验的影响"）
+  - **#25 / #48** repair_agent lifecycle 1/2 + T3_EXHAUSTED（仅 phase 3）
+    — 已落地于 `automation/repair_agent/coordinator.py`
+  - **#54** target_baseline 准入门槛收紧（dialogue/action 交互）— 已落地；
+    baseline cardinality 缩小对本 todo 是正向影响（sub-lane 输入 token
+    随之缩小）
+- **任务依赖（全部已完成）**：T-PHASE2-TARGET-BASELINE / T-BASELINE-DEPRECATE
+  均于 2026-05-11 完成
 - 全部依赖已就位 — 本 todo 可启动
 
 **暂不做的事**
