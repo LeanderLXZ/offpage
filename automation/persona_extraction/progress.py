@@ -763,6 +763,29 @@ class Phase3Progress:
                     p.unlink()
                     purged_files += 1
 
+            # R3 — drop stale sub-lane ``.partial/{stage_id}_*.json`` for
+            # any character whose ``snapshot:{cid}`` lane is not marked
+            # complete. Decision #55: PENDING / ERROR sub-lane partials
+            # are never re-used; the whole snapshot lane re-runs. The
+            # final stage_snapshot file lives at the standard path;
+            # ``.partial/`` is the sub-lane scratch space.
+            for char_id in target_characters:
+                lane_name = f"snapshot:{char_id}"
+                if stage.is_lane_complete(lane_name):
+                    continue
+                partial_dir = (work_dir / "characters" / char_id / "canon"
+                               / "stage_snapshots" / ".partial")
+                if not partial_dir.exists():
+                    continue
+                for p in partial_dir.glob(f"{stage.stage_id}_*.json"):
+                    try:
+                        p.unlink()
+                        purged_files += 1
+                    except OSError:
+                        logger.warning(
+                            "Failed to delete stale partial %s",
+                            p, exc_info=True)
+
             if stage.state != StageState.PENDING:
                 stage.fail_source = ""
                 stage.last_reviewer_feedback = ""

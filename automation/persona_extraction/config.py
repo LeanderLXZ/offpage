@@ -61,6 +61,15 @@ class Phase3Config:
     extraction_timeout_s: int = 3600
     review_timeout_s: int = 600
     max_turns: int = 80
+    # Decision #55 — Sub-lane fan-out for the per-character char_snapshot
+    # lane. ``true`` (default) splits the single LLM call into 3 parallel
+    # sub-lanes (char_expression / char_decision / char_cognition) that
+    # share one prompt template (``{lane_scope}`` placeholder) and merge
+    # programmatically. ``false`` keeps the legacy single-lane behaviour
+    # — used for light_novel mode where per-stage size is too small to
+    # amortise sub-lane startup. CLI override:
+    # ``--char-snapshot-sub-lanes`` / ``--no-char-snapshot-sub-lanes``.
+    char_snapshot_sub_lanes: bool = True
 
 
 @dataclass(frozen=True)

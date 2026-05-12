@@ -28,7 +28,7 @@ import sys
 import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .config import get_config
 from .consistency_checker import run_consistency_check, save_report
@@ -49,7 +49,17 @@ from .lane_output import (
     baseline_paths,
     expected_lane_dirty_paths,
     expected_lane_names,
+    lane_product_path,
+    snapshot_partial_dir,
+    snapshot_partial_path,
     verify_lane_output,
+)
+from .snapshot_merge import (
+    MergeError,
+    SUB_LANE_NAMES,
+    compute_fingerprint,
+    derive_chapter_scope,
+    merge_partials,
 )
 from .manifests import (
     read_structure_mode,
@@ -185,6 +195,7 @@ from ..repair_agent import (
     run as run_repair,
 )
 from ..repair_agent.checkers.semantic import SemanticReviewLLMUnavailable
+from ..repair_agent.protocol import Issue as RepairIssue
 from ..repair_agent.recorder import RepairRecorder
 
 logger = logging.getLogger(__name__)
@@ -203,6 +214,48 @@ def _fmt_duration(seconds: float) -> str:
         return f"{m}m{s:02d}s"
     h, m = divmod(m, 60)
     return f"{h}h{m:02d}m{s:02d}s"
+
+
+# stage_snapshot.schema.json::schema_version is a required string; the
+# extractor LLM has historically written "1.0" so we keep the same shape
+# when injecting the value during sub-lane merge (decision #55).
+_SNAPSHOT_SCHEMA_VERSION = "1.0"
+
+# Hard cap when concatenating the prior_attempt_context summary into the
+# reviewer-feedback channel for sub-lane prompts (decision #25 /
+# `FileRegenFixer._PRIOR_CONTEXT_CHAR_BUDGET`). Keeps the prompt budget
+# bounded so an over-eager prior-context summary can't crowd out the
+# stage-specific content.
+_SUB_LANE_PRIOR_CONTEXT_BUDGET = 600
+
+
+def _format_prior_attempt_context_block(
+    ctx: dict[str, list[str]] | None,
+) -> str:
+    """Render the lifecycle-2 prior-attempt summary as a markdown block.
+
+    Returns an empty string when ``ctx`` is None or empty so callers can
+    unconditionally concatenate.
+    """
+    if not ctx:
+        return ""
+    resolved = ctx.get("resolved") or []
+    remaining = ctx.get("remaining") or []
+    if not resolved and not remaining:
+        return ""
+    lines = ["\n\n## 上一轮 lifecycle 摘要（repair_agent T3 注入）"]
+    if resolved:
+        lines.append(f"\n上轮已解决（{len(resolved)} 条）：")
+        for s in resolved:
+            lines.append(f"- {s}")
+    if remaining:
+        lines.append(f"\n上轮仍未通过（{len(remaining)} 条，本轮需重点关注）：")
+        for s in remaining:
+            lines.append(f"- {s}")
+    text = "\n".join(lines)
+    if len(text) > _SUB_LANE_PRIOR_CONTEXT_BUDGET:
+        text = text[:_SUB_LANE_PRIOR_CONTEXT_BUDGET] + "\n...(truncated)"
+    return text
 
 
 def _repair_slug(file_path: str) -> str:
@@ -385,6 +438,7 @@ class ExtractionOrchestrator:
         max_runtime_minutes: int = 0,
         start_phase: str = "auto",
         concurrency: int = 10,
+        char_snapshot_sub_lanes: bool | None = None,
     ):
         self.project_root = project_root
         self.work_id = work_id
@@ -394,6 +448,14 @@ class ExtractionOrchestrator:
         self.max_runtime_minutes = max_runtime_minutes
         self.start_phase = start_phase
         self.concurrency = concurrency
+        # ``None`` → inherit ``[phase3].char_snapshot_sub_lanes`` from
+        # the loaded config; ``True`` / ``False`` → CLI override
+        # (``--[no-]char-snapshot-sub-lanes``). Decision #55.
+        self.char_snapshot_sub_lanes: bool = (
+            char_snapshot_sub_lanes
+            if char_snapshot_sub_lanes is not None
+            else get_config().phase3.char_snapshot_sub_lanes
+        )
         self.pipeline: PipelineProgress | None = None
         self.phase3: Phase3Progress | None = None
         self._interrupted = False
@@ -724,6 +786,328 @@ class ExtractionOrchestrator:
                                 f"{count}/{expected} summaries")
 
         return idx, True, ""
+
+    def _run_char_snapshot_sub_lanes(
+        self,
+        *,
+        pipeline: PipelineProgress,
+        stage: StageEntry,
+        stages: list[StageEntry] | None,
+        character_id: str,
+        work_root: Path,
+        feedback: str = "",
+        log_lane_failure: Callable[[str, str, int],
+                                   Callable[[LLMResult, int], None]]
+                          | None = None,
+        prior_attempt_context: dict[str, list[str]] | None = None,
+    ) -> LLMResult:
+        """Run 3 parallel sub-lane LLM calls for one character snapshot +
+        merge programmatically (decision #55).
+
+        Writes ``.partial/{stage_id}_{sub_lane}.json`` files via the
+        sub-lane prompts (each one's ``output_relative_path`` placeholder
+        points to its own partial), then loads the three partials and
+        calls ``snapshot_merge.merge_partials`` to weld them into a
+        single ``stage_snapshots/{stage_id}.json``. On success returns a
+        positive ``LLMResult`` whose ``text`` field carries the
+        file-level fingerprint (used by callers that wire it into the
+        repair_agent accept list); on failure returns a negative
+        ``LLMResult`` with ``error`` describing which gate tripped.
+
+        ``prior_attempt_context`` is the repair_agent lifecycle-2 prior-
+        attempt summary; when set, each sub-lane prompt receives a short
+        formatted block alongside any reviewer feedback (≤600 char
+        budget mirroring ``FileRegenFixer``). ``log_lane_failure`` may
+        be ``None`` (repair path) or the closure-built
+        ``_log_lane_failure`` (extraction path); each sub-lane uses its
+        own ``f"char_snapshot:{cid}:{sub_lane}"`` lane name for failure
+        logging so the per-sub-lane stdout / stderr is recoverable.
+        """
+        partial_dir = snapshot_partial_dir(work_root, character_id)
+        partial_dir.mkdir(parents=True, exist_ok=True)
+
+        # R3 .partial 残留清理 — drop any pre-existing partials for this
+        # stage before the new attempt so a half-written ``.partial`` file
+        # from a previous run can't bleed into the merge.
+        self._clear_snapshot_partials(work_root, character_id, stage.stage_id)
+
+        prior_block = _format_prior_attempt_context_block(
+            prior_attempt_context)
+        combined_feedback = (feedback + prior_block) if prior_block else feedback
+
+        sub_lane_results: dict[str, LLMResult] = {}
+        sub_lane_errors: dict[str, str] = {}
+        hard_stop: RateLimitHardStop | None = None
+
+        def _run_one_sub_lane(sub_lane: str) -> tuple[str, LLMResult]:
+            prompt = build_char_snapshot_prompt(
+                self.project_root, pipeline, stage, character_id,
+                stages=stages,
+                reviewer_feedback=combined_feedback,
+                lane_scope=sub_lane,
+            )
+            lane_name = f"char_snapshot:{character_id}:{sub_lane}"
+            on_failure = (
+                log_lane_failure(
+                    "char_snapshot",
+                    f"{character_id}:{sub_lane}",
+                    len(prompt))
+                if log_lane_failure is not None else None
+            )
+            res = run_with_retry(
+                self.backend, prompt,
+                timeout_seconds=get_config().phase3.extraction_timeout_s,
+                lane_name=lane_name,
+                on_failure=on_failure,
+            )
+            return sub_lane, res
+
+        # Pre-launch token-limit gate — block here if the controller
+        # already recorded a pause (mirrors the parent extraction pool).
+        self._rate_limit.wait_if_paused()
+
+        with ThreadPoolExecutor(max_workers=len(SUB_LANE_NAMES)) as pool:
+            futures = {
+                pool.submit(_run_one_sub_lane, name): name
+                for name in SUB_LANE_NAMES
+            }
+            try:
+                for fut in as_completed(futures):
+                    sub_lane, res = fut.result()
+                    if res.success:
+                        sub_lane_results[sub_lane] = res
+                    else:
+                        sub_lane_errors[sub_lane] = (
+                            res.error or "unknown")
+            except RateLimitHardStop as exc:
+                # R2 — cancel sibling sub-lanes, delete any partial that
+                # made it to disk, re-raise so the outer pool / CLI
+                # propagates exit 2.
+                hard_stop = exc
+                pool.shutdown(wait=False, cancel_futures=True)
+
+        if hard_stop is not None:
+            self._clear_snapshot_partials(
+                work_root, character_id, stage.stage_id)
+            raise hard_stop
+
+        if sub_lane_errors:
+            self._clear_snapshot_partials(
+                work_root, character_id, stage.stage_id)
+            joined = "; ".join(
+                f"{name}: {msg}" for name, msg in sub_lane_errors.items())
+            return LLMResult(
+                success=False,
+                text="",
+                error=f"sub-lane extraction failed — {joined}",
+            )
+
+        # All 3 sub-lane LLM calls succeeded; load partials + merge.
+        partials: dict[str, dict[str, Any]] = {}
+        for sub_lane in SUB_LANE_NAMES:
+            path = snapshot_partial_path(
+                work_root, character_id, stage.stage_id, sub_lane)
+            if not path.exists():
+                self._clear_snapshot_partials(
+                    work_root, character_id, stage.stage_id)
+                return LLMResult(
+                    success=False, text="",
+                    error=(
+                        f"sub-lane {sub_lane}: partial output file "
+                        f"missing at {path}"),
+                )
+            try:
+                partials[sub_lane] = json.loads(
+                    path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                self._clear_snapshot_partials(
+                    work_root, character_id, stage.stage_id)
+                return LLMResult(
+                    success=False, text="",
+                    error=(
+                        f"sub-lane {sub_lane}: partial JSON unreadable "
+                        f"at {path}: {exc}"),
+                )
+
+        baseline_keys = self._load_baseline_keys(work_root, character_id)
+        if baseline_keys is None:
+            logger.error(
+                "sub-lane merge aborted for %s/%s: target_baseline.json "
+                "missing or unreadable (phase 2 should have produced it; "
+                "check works/%s/characters/%s/canon/target_baseline.json)",
+                character_id, stage.stage_id, pipeline.work_id, character_id)
+            self._clear_snapshot_partials(
+                work_root, character_id, stage.stage_id)
+            return LLMResult(
+                success=False, text="",
+                error=(
+                    f"target_baseline.json missing or unreadable for "
+                    f"{character_id}; cannot run sub-lane merge D4 "
+                    f"pre-flight (decision #13)"),
+            )
+
+        try:
+            merged = merge_partials(
+                partials,
+                schema_version=_SNAPSHOT_SCHEMA_VERSION,
+                work_id=pipeline.work_id,
+                character_id=character_id,
+                stage_id=stage.stage_id,
+                stage_title=stage.stage_title or stage.stage_id,
+                chapter_scope=derive_chapter_scope(stage.chapters),
+                baseline_keys=baseline_keys,
+            )
+        except MergeError as exc:
+            self._clear_snapshot_partials(
+                work_root, character_id, stage.stage_id)
+            return LLMResult(
+                success=False, text="",
+                error=f"sub-lane merge failed: {exc}",
+            )
+
+        final_path = lane_product_path(
+            work_root, stage.stage_id, f"snapshot:{character_id}")
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+        final_path.write_text(
+            json.dumps(merged, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+
+        # Cleanup partials after a successful merge — they are no longer
+        # needed; the final file is the canonical artifact.
+        self._clear_snapshot_partials(
+            work_root, character_id, stage.stage_id)
+
+        fingerprint = compute_fingerprint(merged)
+        logger.info(
+            "char_snapshot sub-lane merge complete: %s/%s fingerprint=%s",
+            character_id, stage.stage_id, fingerprint[:16])
+        return LLMResult(success=True, text=fingerprint, error="")
+
+    def _build_sub_lane_regen_callback(
+        self,
+        *,
+        pipeline: PipelineProgress,
+        stage: StageEntry,
+        stages: list[StageEntry],
+        work_root: Path,
+    ) -> Callable[
+        [str, str, str, list[RepairIssue], dict[str, list[str]] | None],
+        bool | None,
+    ]:
+        """Build a T3-friendly callback that drives the orchestrator's
+        sub-lane re-extract path on behalf of ``FileRegenFixer``
+        (decision #55).
+
+        The callback's signature matches
+        ``automation/repair_agent/fixers/file_regen.py::SubLaneRegenCallback``:
+        ``(file_path, character_id, stage_id, issues,
+        prior_attempt_context) -> bool | None``.
+
+        Return contract:
+          * ``True``  — sub-lane regen succeeded; final
+            ``stage_snapshots/{stage_id}.json`` is on disk, ``.partial/``
+            cleaned. The fixer marks every issue resolved.
+          * ``False`` — declined (e.g. stage_id mismatch); the fixer
+            falls back to the default single-LLM regen.
+          * ``None``  — sub-lane regen failed; the fixer skips this file
+            without marking issues resolved (lifecycle surfaces them on
+            the next pass).
+        """
+        def _cb(
+            file_path: str,
+            character_id: str,
+            stage_id: str,
+            _issues: list[RepairIssue],
+            prior_attempt_context: dict[str, list[str]] | None,
+        ) -> bool | None:
+            if stage_id != stage.stage_id:
+                logger.warning(
+                    "sub-lane regen declined: stage_id %s on path does "
+                    "not match orchestrator stage %s (path: %s)",
+                    stage_id, stage.stage_id, file_path)
+                return False
+            if character_id not in pipeline.target_characters:
+                logger.warning(
+                    "sub-lane regen declined: character %s on path not "
+                    "in target_characters %s",
+                    character_id, pipeline.target_characters)
+                return False
+            try:
+                result = self._run_char_snapshot_sub_lanes(
+                    pipeline=pipeline,
+                    stage=stage,
+                    stages=stages,
+                    character_id=character_id,
+                    work_root=work_root,
+                    feedback="",
+                    log_lane_failure=None,
+                    prior_attempt_context=prior_attempt_context,
+                )
+            except RateLimitHardStop:
+                raise
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "sub-lane regen raised unexpectedly for %s", file_path)
+                return None
+            if not result.success:
+                logger.warning(
+                    "sub-lane regen failed for %s: %s",
+                    file_path, result.error)
+                return None
+            return True
+
+        return _cb
+
+    def _clear_snapshot_partials(
+        self,
+        work_root: Path,
+        character_id: str,
+        stage_id: str,
+    ) -> None:
+        """Delete ``.partial/{stage_id}_*.json`` for one (character, stage).
+
+        Used (1) before launching a fresh sub-lane batch, (2) after a
+        successful merge (cleanup), and (3) on any sub-lane / merge
+        failure (R3). Idempotent — missing files are silently OK.
+        """
+        partial_dir = snapshot_partial_dir(work_root, character_id)
+        if not partial_dir.exists():
+            return
+        for name in SUB_LANE_NAMES:
+            p = snapshot_partial_path(
+                work_root, character_id, stage_id, name)
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                logger.warning(
+                    "Failed to delete stale partial %s", p, exc_info=True)
+
+    def _load_baseline_keys(
+        self,
+        work_root: Path,
+        character_id: str,
+    ) -> set[str] | None:
+        """Read ``target_baseline.targets[].target_character_id`` as a set.
+
+        Returns ``None`` when the file is missing or unparseable — caller
+        treats this as a hard merge-time failure (decision #13).
+        """
+        path = (work_root / "characters" / character_id / "canon"
+                / "target_baseline.json")
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        targets = data.get("targets") if isinstance(data, dict) else None
+        if not isinstance(targets, list):
+            return None
+        keys: set[str] = set()
+        for entry in targets:
+            if isinstance(entry, dict):
+                cid = entry.get("target_character_id")
+                if isinstance(cid, str) and cid:
+                    keys.add(cid)
+        return keys
 
     def _extraction_output_exists(
         self,
@@ -2069,6 +2453,18 @@ class ExtractionOrchestrator:
             char_id: str,
             feedback: str = "",
         ) -> tuple[str, str, LLMResult]:
+            if self.char_snapshot_sub_lanes:
+                result = self._run_char_snapshot_sub_lanes(
+                    pipeline=pipeline,
+                    stage=stage,
+                    stages=phase3.stages,
+                    character_id=char_id,
+                    work_root=work_root,
+                    feedback=feedback,
+                    log_lane_failure=_log_lane_failure,
+                )
+                result = _verify_lane(f"snapshot:{char_id}", result)
+                return "char_snapshot", char_id, result
             prompt = build_char_snapshot_prompt(
                 self.project_root, pipeline, stage, char_id,
                 stages=phase3.stages,
@@ -2443,6 +2839,20 @@ class ExtractionOrchestrator:
             repair_logs_dir = progress_dir / "repair_logs"
             repair_logs_dir.mkdir(parents=True, exist_ok=True)
 
+            # Decision #55 — when sub-lane mode is on, route T3 char_
+            # snapshot regen through the 3-sub-lane parallel extract +
+            # merge path. The callback is built once per stage so the
+            # orchestrator's pipeline / stage / work_root context is
+            # captured and reused for every per-file repair worker.
+            sub_lane_regen_cb = None
+            if self.char_snapshot_sub_lanes:
+                sub_lane_regen_cb = self._build_sub_lane_regen_callback(
+                    pipeline=pipeline,
+                    stage=stage,
+                    stages=phase3.stages,
+                    work_root=work_root,
+                )
+
             def _repair_one(f: RepairFileEntry) -> tuple[
                     RepairFileEntry, RepairResult]:
                 rec_path = repair_logs_dir / (
@@ -2456,6 +2866,7 @@ class ExtractionOrchestrator:
                         llm_call=_llm_call,
                         importance_map=importance_map,
                         recorder=recorder,
+                        sub_lane_regen=sub_lane_regen_cb,
                     )
                 return f, result
 

@@ -524,11 +524,21 @@ def build_char_snapshot_prompt(
     *,
     stages: list[StageEntry] | None = None,
     reviewer_feedback: str = "",
+    lane_scope: str = "ALL",
 ) -> str:
     """Build prompt for character snapshot extraction (stage_snapshot only).
 
     This is the heavier of the two character sub-processes. Input includes
     the previous stage snapshot for delta calculation and style reference.
+
+    ``lane_scope`` selects which slice of the stage_snapshot the LLM
+    writes — decision #55 ``char_snapshot`` sub-lane fan-out. ``ALL``
+    (the legacy / fallback single-lane behaviour) makes the LLM write
+    every field; ``char_expression`` / ``char_decision`` /
+    ``char_cognition`` restrict output to the assigned field subset via
+    the ``{lane_scope}`` placeholder + ``{lane_field_whitelist}``
+    rendered table. The field allocation lives in
+    ``snapshot_merge.FIELD_ALLOCATION`` — never duplicate it here.
     """
     template = _load_template("character_snapshot_extraction.md")
 
@@ -550,6 +560,20 @@ def build_char_snapshot_prompt(
                    / f"{prev_stage.stage_id}.json")
         if cs_path.exists():
             prev_char_snapshot = str(cs_path)
+
+    lane_scope_block, lane_field_whitelist = _render_lane_scope_block(
+        lane_scope)
+
+    if lane_scope == "ALL":
+        output_relative_path = (
+            f"works/{work_id}/characters/{character_id}/canon/"
+            f"stage_snapshots/{stage.stage_id}.json"
+        )
+    else:
+        output_relative_path = (
+            f"works/{work_id}/characters/{character_id}/canon/"
+            f"stage_snapshots/.partial/{stage.stage_id}_{lane_scope}.json"
+        )
 
     context = {
         "work_id": work_id,
@@ -573,9 +597,65 @@ def build_char_snapshot_prompt(
             f"{reviewer_feedback}\n\n"
             f"请重点修复以上问题。"
         ) if reviewer_feedback else "",
+        "lane_scope": lane_scope,
+        "lane_scope_block": lane_scope_block,
+        "lane_field_whitelist": lane_field_whitelist,
+        "output_relative_path": output_relative_path,
     }
 
     return _render_template(template, context)
+
+
+def _render_lane_scope_block(lane_scope: str) -> tuple[str, str]:
+    """Build the per-sub-lane "本次仅写以下字段" instruction block +
+    whitelist table for the prompt template (decision #55).
+
+    Returns ``(lane_scope_block, lane_field_whitelist)``. ``ALL`` mode
+    returns an empty block + empty whitelist so the prompt template's
+    full-field guidance applies unchanged (single-lane fallback).
+    """
+    if lane_scope == "ALL":
+        return "", ""
+
+    from .snapshot_merge import (
+        FIELD_ALLOCATION, SHARED_KEY_SUBKEYS, SUB_LANE_NAMES,
+    )
+    if lane_scope not in SUB_LANE_NAMES:
+        raise ValueError(
+            f"invalid lane_scope {lane_scope!r}; expected one of "
+            f"{('ALL',) + SUB_LANE_NAMES}")
+
+    top_keys = FIELD_ALLOCATION[lane_scope]
+    whitelist_rows = ["| 顶层字段 | 子键限定 |", "|---|---|"]
+    for top_key in top_keys:
+        if top_key in SHARED_KEY_SUBKEYS:
+            subkeys = SHARED_KEY_SUBKEYS[top_key].get(lane_scope, ())
+            sub_list = ", ".join(f"`{k}`" for k in subkeys)
+            whitelist_rows.append(f"| `{top_key}` | 仅 {sub_list} |")
+        else:
+            whitelist_rows.append(f"| `{top_key}` | 整个对象 |")
+    whitelist = "\n".join(whitelist_rows)
+
+    block = (
+        "\n\n## Sub-lane 字段范围（hard gate）\n\n"
+        f"本次调用为 sub-lane 模式（`lane_scope = {lane_scope}`，"
+        "决策 #55）。**只允许写下表列出的顶层字段 / 子键**——多写、少写、"
+        "或写到其他 sub-lane 的字段，merge 阶段都会直接 hard fail，整个 "
+        "char_snapshot lane 重跑。\n\n"
+        f"{whitelist}\n\n"
+        "**程序注入字段（不要写）**：`schema_version` / `work_id` / "
+        "`character_id` / `stage_id` / `stage_title` / `timeline_anchor` "
+        "/ `chapter_scope` 由 orchestrator 在 merge 后注入，不要在本次输出"
+        "里出现。\n\n"
+        "**`failure_modes` / `stage_delta` 子键划分**：这两个顶层字段被"
+        "拆给两个 sub-lane 分别写不同子键；只允许写本 sub-lane 分到的子键"
+        "（见上表"
+        "「子键限定」列），其他子键留给另一 sub-lane。`stage_delta` 整段"
+        "可省略（S001 无 prev 时合理），但若写则必须写齐分配到的全部子键。\n\n"
+        "**§核心规则 / §maxItems 段照常适用**——本 sub-lane 字段范围与字段"
+        "内部裁剪 / 三态规则正交，下文给出的规则不因 sub-lane 而改变。\n"
+    )
+    return block, whitelist
 
 
 def build_char_support_prompt(
@@ -691,8 +771,14 @@ def _build_char_snapshot_read_list(
 ) -> list[str]:
     """Pre-compute file list for character snapshot extraction.
 
-    Includes identity (character-level constant), previous stage_snapshot
-    (for delta/style), and source chapters. Does NOT include memory_timeline.
+    Includes the stage_snapshot schema, identity (character-level
+    constant), target_baseline (anchor for the D4 set-equal rule —
+    decision #13; the three target-keyed structures must match its
+    ``targets[].target_character_id`` set), the previous stage_snapshot
+    (for delta / style), and source chapters. Does NOT include
+    memory_timeline. Sub-lane mode (decision #55) inherits the same
+    read list — every sub-lane needs to see the baseline target set to
+    fill its slice of the three target structures.
     """
     files: list[str] = []
     work_dir = project_root / "works" / work_id
@@ -706,6 +792,16 @@ def _build_char_snapshot_read_list(
         identity = char_dir / "identity.json"
         if identity.exists():
             files.append(str(identity.relative_to(project_root)))
+
+    # target_baseline.json — D4 anchor (decision #13). The three target-
+    # keyed structures (voice_state.target_voice_map /
+    # behavior_state.target_behavior_map / relationships) must match its
+    # targets[].target_character_id set; LLM needs to see it to fill the
+    # keys correctly by construction.
+    if char_dir.exists():
+        baseline = char_dir / "target_baseline.json"
+        if baseline.exists():
+            files.append(str(baseline.relative_to(project_root)))
 
     # Previous stage_snapshot for delta calculation and style reference
     if prev_stage and char_dir.exists():

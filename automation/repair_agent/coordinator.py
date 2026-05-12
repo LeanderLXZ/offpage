@@ -91,12 +91,17 @@ def _build_pipeline(
 def _build_fixers(
     llm_call: Callable[..., str] | None = None,
     retriever: ContextRetriever | None = None,
+    sub_lane_regen: Callable[..., Any] | None = None,
 ) -> dict[int, object]:
     return {
         0: ProgrammaticFixer(),
         1: LocalPatchFixer(llm_call=llm_call),
         2: SourcePatchFixer(llm_call=llm_call, retriever=retriever),
-        3: FileRegenFixer(llm_call=llm_call, retriever=retriever),
+        3: FileRegenFixer(
+            llm_call=llm_call,
+            retriever=retriever,
+            sub_lane_regen=sub_lane_regen,
+        ),
     }
 
 
@@ -163,6 +168,7 @@ def run(
     llm_call: Callable[..., str] | None = None,
     importance_map: dict[str, str] | None = None,
     recorder: RepairRecorder | None = None,
+    sub_lane_regen: Callable[..., Any] | None = None,
 ) -> RepairResult:
     """Three-phase repair, possibly across two lifecycles.
 
@@ -175,6 +181,11 @@ def run(
             completion transition. ``None`` disables structured logging.
             Every event is tagged with ``cycle`` (0 = lifecycle 1,
             1 = lifecycle 2).
+        sub_lane_regen: optional T3 callback for character
+            stage_snapshot files (decision #55). When wired, the fixer
+            routes char_snapshot regen through the orchestrator's
+            3-sub-lane parallel extract + merge path; ``None`` keeps the
+            legacy single-LLM full-file regen.
     """
     if config is None:
         config = RepairConfig()
@@ -184,7 +195,11 @@ def run(
         importance_map=importance_map,
     )
     retriever = ContextRetriever()
-    fixers = _build_fixers(llm_call=llm_call, retriever=retriever)
+    fixers = _build_fixers(
+        llm_call=llm_call,
+        retriever=retriever,
+        sub_lane_regen=sub_lane_regen,
+    )
 
     triager: Triager | None = None
     notes_writer: NotesWriter | None = None

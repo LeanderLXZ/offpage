@@ -11,6 +11,9 @@
 - **首阶段？**: {is_first_stage}
 - **源目录**: `{source_dir}`
 - **作品目录**: `{work_dir}`
+- **lane_scope**: `{lane_scope}`（`ALL` = 单 lane 全字段；`char_expression` /
+  `char_decision` / `char_cognition` = sub-lane 模式，仅写本 lane 分到的字段集合）
+{lane_scope_block}
 
 ## 必读文件清单
 
@@ -181,7 +184,15 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
 ## 角色快照输出
 
 **仅产出一个文件**：
-- `characters/{character_id}/canon/stage_snapshots/{stage_id}.json` — 自包含快照（遵循 character/stage_snapshot.schema.json）
+- `{output_relative_path}` —
+  `lane_scope = ALL` 时即最终自包含快照（遵循
+  `character/stage_snapshot.schema.json`）；sub-lane 模式（`lane_scope != ALL`）
+  时这是本 sub-lane 的 partial 文件，路径已切到 `.partial/` 子目录由 LLM
+  直接写入，orchestrator 在 3 sub-lane 全部完成后程序合并成 `{stage_id}.json`
+  最终快照——partial 文件本身**不需要**符合 `stage_snapshot.schema.json`
+  顶层 `required`（合并后才校验），但顶层字段集合**必须严格遵守**上方
+  「Sub-lane 字段范围」表的分配，多写 / 少写 / 越界都会 merge hard fail
+  导致整 char_snapshot lane 重跑
 
 **不要修改任何其他文件**。baseline 修正和 memory_timeline 由独立调用处理。
 

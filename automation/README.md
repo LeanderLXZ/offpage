@@ -61,7 +61,12 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
 - `[stage]` 章节数边界（target/min/max）
 - `[phase0]` chunk 并发、summarize 子进程超时、L2 修复超时
 - `[phase1]` stage_plan 出口验证重试上限
-- `[phase3]` 提取 / 审校超时、`max_turns`
+- `[phase3]` 提取 / 审校超时、`max_turns`、`char_snapshot_sub_lanes`
+  （缺省 `true` — 单 char_snapshot lane 内部拆 3 并行 sub-lane 跑同一份
+  prompt 模板的不同字段子集，merge 程序合并；CLI `--char-snapshot-sub-lanes`
+  / `--no-char-snapshot-sub-lanes` 覆盖；light_novel 模式 stage 字符数
+  小可手动关；详见 `docs/architecture/extraction_workflow.md` §6.2 sub-lane
+  字段归属表 + 决策 #55）
 - `[phase4]` 章节并发、短路熔断阈值
 - `[repair_agent]` 各 tier 重试次数、lifecycle 上限、triage 接受上限、总轮数、per-file 并发度（`repair_concurrency`，默认 10）
 - `[backoff]` 快速空失败退避序列

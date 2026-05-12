@@ -393,6 +393,67 @@ source. Long discussion chains live in `logs/change_logs/`.
 
 54. **Foundation 前移 phase 1 + phase 2 仅补 `key_figures` + target_baseline 准入门槛收紧（dialogue/action 交互）。** 2026-05-09 端到端跑完 phase 2 后比对 [analysis/world_overview.json](works/<work_id>/analysis/world_overview.json) vs [world/foundation/foundation.json](works/<work_id>/world/foundation/foundation.json)，发现两份 95% 字段重叠（`work_id` / `genre` / `tone` / `world_structure` / `power_system` / `world_lines` 几乎 1:1 拷贝）；真增量只有 `core_rules` 升 object[] 含 `impact` + `major_factions.key_figures[]` 两项。同步发现 target_baseline 15 条全 `核心 / 重要` tier，含末章才出生且无 dialogue / action 的双胞胎角色——baseline prompt 当前"宁可多列、不可漏列、被点名提及即纳入"导致前 12 stage × 2 角色 × 3 结构 = 72 条纯空 entry 噪声。改造三件合一：(1) **foundation 前移 phase 1**：原 phase 1 `world_overview` lane → 改名 `foundation` lane，输出路径 `works/{work_id}/analysis/world_overview.json` → `works/{work_id}/world/foundation/foundation.json`。`schemas/analysis/world_overview.schema.json` 删除，内容**逐字搬到** `schemas/world/foundation.schema.json` 替换旧 foundation schema（旧 foundation 字段 / bound 形态废弃，新 foundation = 旧 world_overview 形态）；`$id` / `title` / `description` 改写为 foundation 语义，**字段 / bound 一字不改**（含 `core_rules` 保持 `string[] ≤30 条 / 每条 ≤150 字` 形态——user 决策 1 明确不改 core_rules 结构）。`major_factions.items` 新增 `key_figures[]` optional 字段（items: string maxLength 30 / maxItems 10 / 注释说明双阶段语义），**phase 1 lane 写 raw 名**（chunk_factions[].members_present[] 跨 chunk 合并去重直接写入，化名 / 真名 / 称呼任一）。`analysis_world_overview.md` → 改名 `analysis_foundation.md`。(2) **phase 2 缩水到 LLM "替换" 工作**（决策 #54 修订段，2026-05-11 user 反馈 phase 1 不应丢信息——chunk_factions.members_present 已有 raw 名）：删 `baseline_production.md`「产出 1：世界 Foundation」整段（≈100 行）；新增「产出 1：替换 foundation.major_factions[].key_figures 内 raw 名为 character_id」段：单次 LLM call 整合到 build_baseline_prompt（与 fixed_relationships / identity / target_baseline / manifest 同一次调用），输入 phase 1 落盘 foundation（含 raw 名 key_figures）+ `analysis/candidate_characters.json`（含 character_id + aliases） + 已确认目标清单；LLM 对 key_figures 每个 raw 名 lookup candidates[*].aliases，能匹配的换为对应 character_id，**匹配不上保留 raw 名**（不报错、不删除）；schema 不抓 character_id 合法性，key_figures 最终是 character_id + 未合并 raw 名混合。phase 2 保留产出：`fixed_relationships.json` + per-character `identity.json` + `target_baseline.json` + `manifest.json` 四件 + foundation key_figures 替换。失败处理：phase 2 现行兜底形态——单次 `run_with_retry` → `validate_baseline` schema gate → length-bound tolerance gate (#48) → fail 则 `sys.exit(1)`，**不接入 repair_agent**（B-2 拆出来作单独 todo `T-PHASE2-REPAIR-AGENT`，工程量 ≈ phase 3 接入当年的工作量，与本次重构正交）。(3) **target_baseline 准入门槛收紧**：删 prompt 中「宁可多列、不可漏列、被点名提及即纳入」原则；改为 **准入门槛 = 本角色与目标角色在 chapter_summaries 摘要描述中被反映为有过 dialogue / action 交互**（如"X 对 Y 说……" / "X 救/打/教 Y" / "X 与 Y 联手……"等动作或对话描述）；血亲不再默认核心 tier——按准入门槛 + 实际剧情驱动力分级。tier 4 档 (核心 / 重要 / 次要 / 普通) 不动，准入门槛与 tier 分级正交。Phase 3 stage_snapshot 三结构双向 set-equal 约束（#13）不动——准入门槛只影响 baseline 收录范围，对 phase 3 keys == baseline 的执行不变。**显式不做**：不动 [target_baseline.schema.json](schemas/character/target_baseline.schema.json) 与 [targets_cap.schema.json](schemas/character/targets_cap.schema.json)（schema 不变，仅 prompt 加严）；不引入 `_validation_tolerance_applied` 类元数据；不本次接入 repair_agent 到 phase 2（拆出来作 `T-PHASE2-REPAIR-AGENT`）；本 /go 不执行 `git reset` 重跑 phase 2 数据迁移——user 自决何时操作。Plumbing → `schemas/world/foundation.schema.json`（重写）+ `schemas/analysis/world_overview.schema.json`（删除）、`automation/prompt_templates/analysis_foundation.md`（改名 + 内容更新）+ `automation/prompt_templates/baseline_production.md`（删 foundation 段 + 加 key_figures 补齐段 + target_baseline 加严）、`automation/persona_extraction/prompt_builder.py`（`build_world_overview_prompt` → `build_foundation_prompt`、`_project_chunk_for_world_overview` → `_project_chunk_for_foundation`、新增 `build_factions_keyfigures_prompt`、lane 名常量 `world_overview` → `foundation`）、`automation/persona_extraction/orchestrator.py`（`run_analysis` foundation lane 输出路径改 + `run_baseline_production` 新增 key_figures 补齐 LLM call）、`schemas/README.md` + `automation/README.md`（schema 索引 + lane 列表更新）、`ai_context/{architecture,decisions,conventions}.md`（本条 + #25 / #40 disambiguation + #48 措辞修正 + #27m + #52 + #53 同步）、`docs/architecture/{schema_reference,extraction_workflow}.md` + `docs/requirements.md` §9 / §11、`docs/todo_list.md`（新立 `T-PHASE2-REPAIR-AGENT`）。
 
+55. **char_snapshot lane 拆 3 sub-lane 并行 + 程序 merge + lifecycle 2
+    sub-lane 重抽。** 2026-05-12 起 phase 3 单 stage 的 `char_snapshot` lane
+    内部拆 3 个并行 sub-lane（`char_expression` / `char_decision` /
+    `char_cognition`）压 wall-time。字段归属表（同源给 prompt + merge 用，
+    定义在 `automation/persona_extraction/snapshot_merge.py::FIELD_ALLOCATION`）：
+    `char_expression` = `voice_state` / `active_aliases` / `current_mood` /
+    `failure_modes.tone_traps`；`char_decision` = `behavior_state` /
+    `boundary_state` / `emotional_baseline` / `current_personality` /
+    `current_status` / `stage_delta.{status_changes, mood_shift,
+    personality_changes}`；`char_cognition` = `knowledge_scope` /
+    `misunderstandings` / `concealments` / `relationships` /
+    `relationship_state_summary` / `stage_events` / `character_arc` /
+    `snapshot_summary` / `stage_delta.{trigger_events, relationship_changes,
+    voice_shift}` / `failure_modes.{common_failures, relationship_traps,
+    knowledge_leaks}`；程序注入 = `schema_version` / `work_id` /
+    `character_id` / `stage_id` / `stage_title` / `timeline_anchor` /
+    `chapter_scope`. **Merge hard gate**：(1) 每 partial 顶层字段集合 ==
+    分配；(2) `failure_modes` 4 子键互斥 across 2 sub-lane + 全 4 子键覆盖；
+    (3) `stage_delta` 6 子键互斥 across 2 sub-lane + 全 6 子键覆盖（S001
+    允许两 sub-lane 都不写 `stage_delta` 顶层 key）；(4) 三方 keys（
+    `voice_state.target_voice_map` / `behavior_state.target_behavior_map` /
+    `relationships`）keys 集合相互相等且 == `target_baseline.targets[].target_character_id`
+    — 复用 `automation/repair_agent/checkers/targets_keys_eq_baseline.py`
+    做 merge 前置预检；(5) **(D) drop entry 不被误判**：merge 仅查字段集合
+    互斥 + 全覆盖，**不查** partial entry 数 ≥ prev（per #11f / #13）。
+    **Lane 级 resume 粒度仍是 `snapshot:{char_id}`**——sub-lane 拆分对
+    `StageEntry.lane_states` 不可见；任一 sub-lane 或 merge 失败即整 lane
+    重跑，PENDING / ERROR 状态下的 `.partial/{stage_id}_*.json` 由
+    `progress.reconcile_with_disk` 一律删，不复用。**Repair lifecycle 2 T3
+    重抽**：file-level lifecycle 1 末端 T3 触发后，若开关开 + 文件是
+    `characters/<cid>/canon/stage_snapshots/<sid>.json` → T3 fixer 走 3
+    sub-lane 并行重新 extract + merge 路径（每 sub-lane prompt 注入
+    `prior_attempt_context` resolved+remaining ≤600 char 摘要 + 错误信息），
+    替代默认 `FileRegenFixer` 全文 regen；lifecycle 计数（`max_lifecycles_per_file = 2`）
+    与 `T3_EXHAUSTED` 终止语义不变（lifecycle +1 仅在 T3 真正触发并 reset 进入
+    下一轮时计入，rate-limit pause 重跑不消耗 lifecycle 槽 — R1）。
+    **Rate-limit / hard-stop**：sub-lane 走现有 `run_with_retry` 继承
+    `RateLimitController` pause / resume；hard-stop 时 sub-lane sub-executor
+    `shutdown(cancel_futures=True)` + 删 partial（R2 / R3）。**Toml 开关 +
+    CLI 双向 flag**：`[phase3].char_snapshot_sub_lanes`（缺省 `true`）+
+    `--char-snapshot-sub-lanes` / `--no-char-snapshot-sub-lanes`；
+    light_novel 模式单 stage 字符数小，3 sub-lane 启动开销可能 > 抽取
+    耗时收益，**不引入** mode-aware 默认值，由用户按 work 手切。
+    **Fallback** `false` → 单 lane 等价 `lane_scope=ALL`，phase 3 现状不变
+    （baseline 锚点 + #11f 四态 + #13 keys == baseline 校验均为 phase 3
+    通用现状，已落地，本决策不引入新强制规则；仅在 prompt_builder
+    校准 char_snapshot read list 把 `target_baseline.json` 纳入——todo body
+    误以为该文件已在 read list 里，实际此前没有，作为同源校准随本次落盘）。
+    **`.partial/` 路径**：`works/{wid}/characters/{cid}/canon/stage_snapshots/.partial/`
+    被 `.gitignore` 屏蔽。Plumbing → `automation/persona_extraction/{snapshot_merge,
+    prompt_builder,orchestrator,progress,config,cli,lane_output}.py`、
+    `automation/prompt_templates/character_snapshot_extraction.md`（加
+    `{lane_scope}` / `{lane_field_whitelist}` 占位，不动 §核心规则 #2 与
+    §maxItems 裁剪段，保持 sub-lane / 单 lane 全 inherits）、
+    `automation/repair_agent/{coordinator.py,fixers/file_regen.py}`（
+    `FileRegenFixer` 加可选 `sub_lane_regen` 回调，`coordinator.run` 新增
+    kwarg 透传到 `_build_fixers`）、`automation/config.toml`、`.gitignore`、
+    `docs/architecture/extraction_workflow.md` §6.2、`docs/requirements.md` §9.3、
+    `automation/README.md` Phase 3 段、`ai_context/{architecture,decisions,conventions}.md`、
+    `docs/todo_list_archived.md`。
+
 ## Repository
 
 41. No novels / databases / indexes / large artifacts / real user packages in git.

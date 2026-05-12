@@ -989,6 +989,27 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 依赖——角色不读世界快照，世界不读角色快照。角色间的主观体验差异是
 设计特性（不同视角），无需跨角色强制对齐。
 
+**char_snapshot 内部 sub-lane 拆分**（`[phase3].char_snapshot_sub_lanes`，
+缺省 `true`；CLI `--char-snapshot-sub-lanes` / `--no-char-snapshot-sub-lanes`
+覆盖）：单 char_snapshot lane 内部再拆 3 个并行 sub-lane（`char_expression`
+/ `char_decision` / `char_cognition`，按字段聚类划分，归属表见
+`docs/architecture/extraction_workflow.md` §6.2），共用同一 prompt 模板
+（占位 `{lane_scope}` 切换字段子集）。3 sub-lane 各自落 `.partial/`
+（`works/{wid}/characters/{cid}/canon/stage_snapshots/.partial/{sid}_{lane}.json`，
+`.gitignore` 屏蔽）后由 `automation/persona_extraction/snapshot_merge.py`
+合并；merge 前置 hard gate 校验"字段集合互斥 + 全覆盖 + failure_modes /
+stage_delta 子键互斥 + 三方 keys == baseline（复用
+`automation/repair_agent/checkers/targets_keys_eq_baseline.py`）"，任一不
+过即整 snapshot lane 失败。Fallback `false` → 单 lane 等价 `lane_scope=ALL`，
+phase 3 现状不变。Lane 级 resume 粒度仍为 `snapshot:{char_id}`（外层
+lane_states 不感知 sub-lane）；任一 sub-lane 或 merge 失败均整 lane 重
+跑，PENDING / ERROR 状态下的 partial 一律删，不复用。Repair lifecycle 2
+T3 重抽走 sub-lane 模式（每 sub-lane prompt 注入 `prior_attempt_context`
+≤600 char 摘要 + 错误信息），lifecycle 计数（`max_lifecycles_per_file = 2`）
+与 T3_EXHAUSTED 语义不变。Light_novel 模式单 stage 字符数小，3 sub-lane
+启动开销可能 > 抽取耗时收益——保持单 toml bool + CLI 双向 flag，由用户
+按 work 手切，不引入 mode-aware 默认值。
+
 共同规则：
 - char_support 每个 stage 都可修正和补充 identity（不限第一个 stage）
 - 不读取也不写入 `memory_digest.jsonl`、`world_event_digest.jsonl`、

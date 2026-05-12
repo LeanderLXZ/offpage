@@ -228,6 +228,64 @@ fixed_relationships 全部为必须（error）。target_baseline 缺失 / schema
 
 **对应提示词**：`automation/prompt_templates/character_snapshot_extraction.md`
 
+**Sub-lane 拆分模式**（`[phase3].char_snapshot_sub_lanes = true`，缺省
+开启）：单个角色的 char_snapshot lane 内部再拆 3 个并行 sub-lane 跑
+同一份 prompt 模板（占位 `{lane_scope}` 切换写哪一份字段子集），缩短
+单 stage wall-time。3 sub-lane 各自落 `.partial/{stage_id}_{lane}.json`，
+由程序合并成完整快照。字段归属表（同源给 prompt + merge 用，定义在
+`automation/persona_extraction/snapshot_merge.py`）：
+
+| sub-lane | 字段 |
+|---|---|
+| `char_expression` | `voice_state` / `active_aliases` / `current_mood` / `failure_modes.tone_traps` |
+| `char_decision` | `behavior_state` / `boundary_state` / `emotional_baseline` / `current_personality` / `current_status` / `stage_delta.{status_changes,mood_shift,personality_changes}` |
+| `char_cognition` | `knowledge_scope` / `misunderstandings` / `concealments` / `relationships` / `relationship_state_summary` / `stage_events` / `character_arc` / `snapshot_summary` / `stage_delta.{trigger_events,relationship_changes,voice_shift}` / `failure_modes.{common_failures,relationship_traps,knowledge_leaks}` |
+| 程序注入 | `schema_version` / `work_id` / `character_id` / `stage_id` / `stage_title` / `timeline_anchor` / `chapter_scope` |
+
+**Merge 阶段 hard gate**（任一不过 → partial 失败 → 整 snapshot lane 失败）：
+
+1. 每 partial 顶层字段集合等于字段归属表里该 sub-lane 的分配（多 / 少都判违规）
+2. `failure_modes` 4 子键互斥 across 2 sub-lane（`tone_traps` 仅 `char_expression`
+   写、其余 3 子键仅 `char_cognition` 写）+ 4 子键全覆盖
+3. `stage_delta` 6 子键互斥 across 2 sub-lane（`char_decision` / `char_cognition`）
+   + 6 子键全覆盖；S001 允许两 sub-lane 都不写 `stage_delta` 顶层 key，此时
+   合并结果亦无 `stage_delta`
+4. 三方 keys（`voice_state.target_voice_map` / `behavior_state.target_behavior_map`
+   / `relationships`）keys 集合相互相等且 set-equal `target_baseline.targets[].target_character_id`
+   — 复用 `automation/repair_agent/checkers/targets_keys_eq_baseline.py` 做
+   merge 前置预检（与 phase 3 单 stage validate 层同 checker，不重复实现）
+5. **(D) drop entry 不被误判**：merge 仅查字段集合互斥 + 全覆盖，**不查**
+   partial entry 数 ≥ prev。entry 数变化由 `stage_delta` 自由文本承载、
+   phase 3.5 `consistency_checker` 跨文件审计兜底
+
+**File-level fingerprint**：merge 成功后写入整文件 hash；lifecycle 2 启动
+前按已 accept fingerprint 过滤（per T-REPAIR-T3-LIFECYCLE-RESET 现状），
+sub-lane 间共享、不各自维护。
+
+**Lifecycle 2 重抽路径**：repair_agent file-level lifecycle 1 末端 T3 触发
+时（per 决策 #25），若 `char_snapshot_sub_lanes=true` 且文件是
+`characters/<cid>/canon/stage_snapshots/<sid>.json` → T3 fixer 走 3 sub-lane
+并行重新 extract + merge 路径（每 sub-lane prompt 注入
+`prior_attempt_context` resolved+remaining ≤600 char 摘要 + 错误信息），
+替代默认 `FileRegenFixer` 单 lane 全文 regen。Lifecycle 计数（`max_lifecycles_per_file = 2`）
+保持现状：lifecycle +1 仅在 T3 真正触发并 reset 进入下一轮时计入；
+rate-limit pause 重跑不消耗 lifecycle 槽。Lifecycle 2 默认禁用 T3，再升
+T3 即 `T3_EXHAUSTED`。
+
+**Rate-limit / hard-stop**：sub-lane 走现有 `run_with_retry` 自然继承
+`RateLimitController` pause / resume；hard-stop 时 sub-lane sub-executor
+`shutdown(cancel_futures=True)` + 删除已写 partial → `RateLimitHardStop`
+上抛到 phase 3 外层池，与 repair 池同源 hard-stop 双池齐落。
+
+**Fallback 模式**（`[phase3].char_snapshot_sub_lanes = false`）：单 lane
+char_snapshot + file-level 2 lifecycle 标准流程——即 sub-lane 拆分前
+的 phase 3 现状。`lane_scope = ALL` 等价单 lane，行为完全不变。
+
+**`.partial/` 路径**：`works/{work_id}/characters/{character_id}/canon/stage_snapshots/.partial/`
+被 `.gitignore` 屏蔽；disk reconcile 在 snapshot lane 不完整时一律删该
+目录内 `{stage_id}_*.json`（PENDING / ERROR lane 的 partial 不复用，
+整 lane 重跑）。
+
 #### 6.3 角色支持层提取（N 次并行调用，char_support lane）
 
 每阶段产出或更新：
@@ -303,7 +361,12 @@ log，失败诊断所需的内存 / elapsed 曲线不丢失。间隔仍由
 
 `StageEntry.lane_states: dict[str, str]` 追踪每个 lane 的完成状态：
 键为 `world` / `snapshot:{char_id}` / `support:{char_id}`，值为
-`"complete"` 或键缺失（= 未开始/未完成）。
+`"complete"` 或键缺失（= 未开始/未完成）。Sub-lane 模式
+（`[phase3].char_snapshot_sub_lanes = true`）下 `snapshot:{char_id}`
+仍为单 lane 标记——3 sub-lane 并行 + merge 在该 lane 闭包内闭环，
+merge 成功才写 complete；任一 sub-lane 或 merge 失败则整 lane 重跑
+（结合 `.partial/` 残留清理策略，PENDING / ERROR lane 的 partial
+一律删，不尝试复用）。
 
 **完成判据**（两者同时成立，在主线程 `as_completed` 循环中判定）：
 

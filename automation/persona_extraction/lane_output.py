@@ -25,6 +25,13 @@ WORLD_LANE = "world"
 SNAPSHOT_PREFIX = "snapshot:"
 SUPPORT_PREFIX = "support:"
 
+# Sub-lane partial directory (decision #55) — sibling of the per-stage
+# product directory, gitignored. Each sub-lane writes
+# ``.partial/{stage_id}_{sub_lane}.json`` here; ``merge_partials`` reads
+# them, writes the merged file to ``stage_snapshots/{stage_id}.json``,
+# and the orchestrator cleans the .partial entries.
+SNAPSHOT_PARTIAL_DIRNAME = ".partial"
+
 # char_support lane's cumulative baseline file. Lives under
 # works/{wid}/characters/{char_id}/canon/ and is NOT per-stage; we
 # restore it from HEAD before re-running an incomplete support lane
@@ -60,6 +67,22 @@ def lane_product_path(work_root: Path, stage_id: str, lane_name: str) -> Path:
         return (work_root / "characters" / char_id / "canon"
                 / "memory_timeline" / f"{stage_id}.json")
     raise ValueError(f"unknown lane name: {lane_name!r}")
+
+
+def snapshot_partial_dir(work_root: Path, char_id: str) -> Path:
+    """``.partial/`` directory for a character's stage_snapshot sub-lane
+    partials (decision #55). Gitignored."""
+    return (work_root / "characters" / char_id / "canon"
+            / "stage_snapshots" / SNAPSHOT_PARTIAL_DIRNAME)
+
+
+def snapshot_partial_path(work_root: Path, char_id: str,
+                          stage_id: str, sub_lane: str) -> Path:
+    """Path of a single sub-lane partial file. ``sub_lane`` is one of
+    ``char_expression`` / ``char_decision`` / ``char_cognition``
+    (validated by ``snapshot_merge.SUB_LANE_NAMES`` — not re-checked
+    here to keep this module dependency-free)."""
+    return snapshot_partial_dir(work_root, char_id) / f"{stage_id}_{sub_lane}.json"
 
 
 def baseline_paths(work_root: Path, char_id: str) -> list[Path]:

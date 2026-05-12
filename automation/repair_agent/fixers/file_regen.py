@@ -4,12 +4,24 @@ Last resort: sends the entire file content + all unresolved issues +
 original chapter text to an LLM and asks for a complete rewrite.
 
 Only used when field-level patches (T1/T2) have failed repeatedly.
+
+Sub-lane regen hook (decision #55): when ``sub_lane_regen`` callback is
+wired AND the target file is a character ``stage_snapshot.json``, T3
+delegates regeneration to the orchestrator's 3-sub-lane parallel extract
++ merge path (replacing the default single-LLM-call full-file rewrite).
+The callback receives the file entry + remaining issues +
+``prior_attempt_context`` and returns the new content dict (or ``None``
+to fall back to the default regen). The callback is responsible for
+writing the resulting file to disk and clearing sub-lane ``.partial/``
+scratch.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
+from pathlib import Path
 from typing import Any, Callable
 
 from . import BaseFixer
@@ -20,6 +32,40 @@ from ..protocol import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# Decision #55 — callback signature for sub-lane-aware T3 regen.
+# ``character_id`` / ``stage_id`` are parsed from the file path by the
+# caller before invocation so the callback signature stays narrow.
+# Return value: ``True`` means the callback handled the regen (wrote
+# the file + cleaned partials) — the fixer will mark all attempted
+# issues resolved; ``False`` means the callback chose not to handle
+# this file (fall back to default regen); ``None`` means the callback
+# failed and the fixer should NOT mark issues resolved (the lifecycle
+# will surface them on the next pass).
+SubLaneRegenCallback = Callable[
+    [str, str, str, list[Issue], dict[str, list[str]] | None],
+    bool | None,
+]
+
+
+_CHAR_SNAPSHOT_PATH_RE = re.compile(
+    r"characters/(?P<cid>[^/]+)/canon/stage_snapshots/(?P<sid>S[0-9]{3})\.json$"
+)
+
+
+def _parse_char_snapshot_path(file_path: str) -> tuple[str, str] | None:
+    """Extract ``(character_id, stage_id)`` from a stage_snapshot path.
+
+    Returns ``None`` if the path is not a character stage_snapshot file
+    (e.g. world snapshot, memory_timeline, baseline). The sub-lane regen
+    callback is only valid for character stage_snapshot files.
+    """
+    normalized = file_path.replace("\\", "/")
+    m = _CHAR_SNAPSHOT_PATH_RE.search(normalized)
+    if m is None:
+        return None
+    return m.group("cid"), m.group("sid")
 
 REGEN_SYSTEM = """\
 You are a JSON file regeneration tool for character extraction data.
@@ -65,9 +111,14 @@ class FileRegenFixer(BaseFixer):
     tier = 3
 
     def __init__(self, llm_call: Callable[..., str] | None = None,
-                 retriever: ContextRetriever | None = None):
+                 retriever: ContextRetriever | None = None,
+                 sub_lane_regen: SubLaneRegenCallback | None = None):
         self._llm_call = llm_call
         self._retriever = retriever or ContextRetriever()
+        # Decision #55 — when set, T3 routes char_snapshot files through
+        # the orchestrator's 3-sub-lane parallel re-extract + merge path
+        # instead of the default single-LLM full-file regen.
+        self._sub_lane_regen = sub_lane_regen
 
     def fix(
         self,
@@ -95,6 +146,54 @@ class FileRegenFixer(BaseFixer):
             f = next((f for f in files if f.path == file_path), None)
             if f is None:
                 continue
+
+            # Decision #55 — sub-lane-aware regen for char_snapshot
+            # stage_snapshot files. The callback re-runs the 3-sub-lane
+            # parallel extract + merge path with prior_attempt_context
+            # injected, writes the merged file, and cleans .partial/
+            # scratch. Returns True on success → mark every attempted
+            # issue resolved (the merged file is the new ground truth).
+            # Returns False (declined) → fall through to default regen.
+            # Returns None (failure) → skip this file; lifecycle will
+            # surface the issues on the next pass.
+            if self._sub_lane_regen is not None:
+                char_snapshot = _parse_char_snapshot_path(file_path)
+                if char_snapshot is not None:
+                    cid, sid = char_snapshot
+                    verdict = self._sub_lane_regen(
+                        file_path, cid, sid, file_issues,
+                        prior_attempt_context,
+                    )
+                    if verdict is True:
+                        # Re-load the merged file so f.content reflects
+                        # the new ground truth for any downstream
+                        # consumer that reuses the FileEntry object.
+                        try:
+                            with Path(file_path).open(
+                                    "r", encoding="utf-8") as fh:
+                                f.content = json.load(fh)
+                        except (OSError, json.JSONDecodeError) as exc:
+                            logger.warning(
+                                "sub-lane regen claimed success but "
+                                "merged file unreadable at %s: %s",
+                                file_path, exc)
+                            continue
+                        for issue in file_issues:
+                            patched.append(issue.json_path)
+                            resolved.add(issue.fingerprint)
+                        continue
+                    if verdict is None:
+                        # Sub-lane path failed — skip, do NOT mark
+                        # issues resolved; do NOT fall back to default
+                        # regen (would double-charge an already-failing
+                        # extraction path).
+                        logger.warning(
+                            "sub-lane regen failed for %s; lifecycle "
+                            "will re-surface remaining issues",
+                            file_path)
+                        continue
+                    # verdict is False → callback declined; fall through
+
             content = f.content if f.content is not None else f.load()
             if content is None:
                 continue

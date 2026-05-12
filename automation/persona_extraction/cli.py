@@ -164,6 +164,24 @@ def main(argv: list[str] | None = None) -> None:
              "progress?' stdin prompt deadlocks the daemon).",
     )
     parser.add_argument(
+        "--char-snapshot-sub-lanes",
+        dest="char_snapshot_sub_lanes",
+        action="store_true",
+        default=None,
+        help="Force-enable the Phase 3 char_snapshot 3-sub-lane fan-out "
+             "(decision #55). Overrides "
+             "[phase3].char_snapshot_sub_lanes from config.toml.",
+    )
+    parser.add_argument(
+        "--no-char-snapshot-sub-lanes",
+        dest="char_snapshot_sub_lanes",
+        action="store_false",
+        help="Force-disable the Phase 3 char_snapshot 3-sub-lane fan-out; "
+             "fall back to the legacy single-lane behaviour. Useful for "
+             "light_novel mode where per-stage size is too small to "
+             "amortise sub-lane startup.",
+    )
+    parser.add_argument(
         "--max-runtime",
         type=int,
         default=cfg.runtime.max_runtime_min_default,
@@ -299,6 +317,7 @@ def main(argv: list[str] | None = None) -> None:
         max_runtime_minutes=args.max_runtime,
         start_phase=args.start_phase,
         concurrency=args.concurrency,
+        char_snapshot_sub_lanes=args.char_snapshot_sub_lanes,
     )
 
     # Acquire lock
