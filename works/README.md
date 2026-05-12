@@ -144,7 +144,10 @@ works/{work_id}/
 - `stage_snapshots/{stage_id}.json` — 角色在每个阶段的**自包含**状态快照
   （voice / behavior / boundary / failure_modes 全部内联，无独立 baseline
   文件；运行时与 `identity.json` + `target_baseline.json` 配套加载即可）。
-  内容涵盖：
+  `[phase3].char_snapshot_sub_lanes = true`（缺省）时产出由 3 sub-lane
+  并行抽取后由 `snapshot_merge.merge_partials` 程序合并；merge 中间产物
+  暂存于 `stage_snapshots/.partial/{stage_id}_{lane}.json`，phase 3 自动
+  清理，`.gitignore` 屏蔽（决策 #55）。内容涵盖：
   - 仅本阶段发生的事件 `stage_events`（每条 50–80 字，schema 硬门控；
     非累积历史；跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
     `world_event_digest.jsonl` 共同承载）

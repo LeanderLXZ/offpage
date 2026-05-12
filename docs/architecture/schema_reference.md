@@ -341,6 +341,15 @@ maxItems 时按 `tier` 优先级裁剪**：核心 > 重要 > 次要 > 普通，�
 `source_type` / `scene_refs` 全部不挂在快照层）；定位通过
 `timeline_anchor` + `memory_timeline` 自身锚点完成。
 
+**生成方式**：`[phase3].char_snapshot_sub_lanes = true`（缺省）时由
+`automation/persona_extraction/snapshot_merge.py::merge_partials` 程序
+合并 3 sub-lane partial（`char_expression` / `char_decision` /
+`char_cognition`）产出，merge 前置 5 道 hard gate 保证字段集合互斥 +
+全覆盖 + 三方 keys == `target_baseline.targets[].target_character_id`；
+开关关闭时由单 LLM call 直接产出，行为退回 sub-lane 拆分前的 phase 3
+现状（决策 #55）。Schema 本身不感知该拆分——单 lane / sub-lane 模式
+产出的最终 stage_snapshot 都遵循同一份 schema。
+
 ---
 
 ### character/memory_timeline_entry.schema.json

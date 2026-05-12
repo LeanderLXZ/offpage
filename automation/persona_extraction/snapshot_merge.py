@@ -127,9 +127,12 @@ SHARED_KEY_SUBKEYS: dict[str, dict[str, tuple[str, ...]]] = {
 # Top-level fields that are non-required at the schema level — partials
 # are allowed to omit them entirely (e.g. ``emotional_baseline`` /
 # ``current_status`` / ``misunderstandings`` / ``concealments`` /
-# ``relationship_state_summary`` / ``stage_delta`` / ``chapter_scope``).
+# ``relationship_state_summary`` / ``stage_delta``).
 # Sub-lane partials may drop these without tripping the "field set
-# equals allocation" gate.
+# equals allocation" gate. ``chapter_scope`` is also non-required at the
+# schema level but is **program-injected** (see
+# ``PROGRAM_INJECTED_FIELDS`` below) — sub-lane partials never write it,
+# so it does not belong in this set.
 OPTIONAL_TOP_LEVEL_FIELDS: frozenset[str] = frozenset({
     "emotional_baseline",
     "current_status",
