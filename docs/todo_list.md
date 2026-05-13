@@ -12,12 +12,13 @@
 |---|---|---|---|---|
 | `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | 2026-05-01 | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
 
-### 🟡 Next (2)
+### 🟡 Next (3)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
 | `T-PHASE2-REPAIR-AGENT` | Phase 2 抽人物 baseline 时如果格式错了，目前只会"试一次就硬失败"，不像 phase 3 有自动修复管线。给 phase 2 也接上自动修复，让 baseline 抽错能自动重试 / 调整，而不用手动 rerun。改动大、设计还没拍板。 | 🟡 Med | ⏸ Blocked | 🔴 Large·Arch | 2026-05-11 EDT | 无（与本次 foundation 重构正交） |
 | `T-PLUGIN-README` | 现在这套 skill plugin 想接到新项目上时，没有文档说"该填哪些字段、模板长啥样、漏填了会发生什么"——这些信息散在各处。写一个 README 当 setup 入口，告诉新项目 plugin 装上后该怎么开干。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
+| `T-CHAR-SNAPSHOT-LANE-REWORK` | Phase 3 抽角色 stage_snapshot 拆成 3 路并行，"角色认知"那一路字段最多最重，碰 API 偶尔卡顿就撞 60min 超时整个 stage 失败。把它再拆成"内省"和"关系/事件"两路，并让每路只读 prev 自己需要的那部分而不是整份。 | 🔴 High | ✅ Ready | 🔴 Large·Arch | 2026-05-13 | 无 |
 
 ### ⚪ Discussing (6)
 
@@ -30,7 +31,7 @@
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。等真有外部消费方校验这个文件再改 schema。 | 1 | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
-**Total**: 9 — 🟢 In Progress 1 ｜ 🟡 Next 2 ｜ ⚪ Discussing 6
+**Total**: 10 — 🟢 In Progress 1 ｜ 🟡 Next 3 ｜ ⚪ Discussing 6
 
 ---
 
@@ -401,6 +402,50 @@ decision #27m 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
 **暂不做的事**
 
 - 决策 #56 复审 OQ3 用户拍板"留 todo"——本轮不动 schema
+
+---
+
+### [T-CHAR-SNAPSHOT-LANE-REWORK] char_snapshot 拆 4 sub-lane（cognition → internal+social）+ prev snapshot 按 lane 切片喂入
+
+**上下文**
+
+Phase 3 抽角色 stage_snapshot 时拆成 3 路并行（expression / decision / cognition），其中 cognition 字段最多最重（10 top-level，~12 KB），且每个 sub-lane 都读完整 prev snapshot（~30 KB）。本轮 S002 跑Character A cognition lane 撞 60 分钟 hard timeout 0 输出（API streaming hang），sub-lane 失败 → 整个 stage 失败、daemon 退出，阻塞当前 work phase 3 推进。
+
+会话拍板：(1) cognition 拆成 `char_internal`（自身知识/隐瞒/失败模式 + snapshot_summary）和 `char_social`（关系/事件/弧线 + 从 decision 拉过来的 target_behavior_map）；(2) prev snapshot 按 lane 切 4 个 slice，每个 lane 只读自己需要的部分，internal+social 互读对方 slice；(3) `[phase3].concurrency` 默认 10 → 12 覆盖新峰值 `1 + 2×4 + 2 = 11`；(4) slice 文件 lifecycle 照搬 `.partial/`（stage 启动前 R3 清理 + repair 完成后 commit 前清 + 失败时清）。
+
+**改动清单**
+
+- `automation/persona_extraction/snapshot_merge.py:65-131`：`SUB_LANE_NAMES` 改成 4 元组（`char_expression` / `char_decision` / `char_internal` / `char_social`），`FIELD_ALLOCATION` 按方案重分配（`snapshot_summary` → internal、`character_arc` → social），`SHARED_KEY_SUBKEYS` 新增 `behavior_state` 拆 subkey（`target_behavior_map` → social，其余 → decision），`failure_modes` / `stage_delta` 现有拆分调整到新 lane 命名
+- `automation/persona_extraction/snapshot_merge.py`（新 helper）：暴露 `slice_snapshot_for_lane(full, lane) -> dict`，merge 的逆操作，按 `FIELD_ALLOCATION` + `SHARED_KEY_SUBKEYS` 投影
+- `automation/persona_extraction/orchestrator.py`（新增 2 helper）：`_write_prev_snapshot_slices(work_root, char, prev_stage_id)` 切 4 文件到 `works/{work}/analysis/progress/.partial_prev/{prev_stage_id}_{lane}.json`；`_clear_prev_snapshot_slices(work_root, char, prev_stage_id)` 清同名 4 文件（参考 [orchestrator.py:1165-1184 `_clear_snapshot_partials`](../automation/persona_extraction/orchestrator.py)）
+- `automation/persona_extraction/orchestrator.py` phase 3 主流程：stage 启动前调 `_write_prev_snapshot_slices`（R3 残留清理也在此），repair 完成后、`[5/5] Git commit` 前调 `_clear_prev_snapshot_slices`，sub-lane / merge 失败时也调
+- `automation/persona_extraction/prompt_builder.py:583`：`prev_char_snapshot` 改成按 `lane_scope` 选 slice 路径——`char_expression` / `char_decision` 拼自身 slice、`char_internal` / `char_social` 各拼两个 slice（internal + social）
+- `automation/persona_extraction/prompt_builder.py:619`：`lane_scope` 合法值校验自动跟随 `SUB_LANE_NAMES`
+- `automation/persona_extraction/config.py` + `automation/config.toml`：`[phase3].concurrency` 默认 10 → 12
+- `ai_context/decisions.md` #55：重写 sub-lane 数学（3→4 lane、concurrency 10→12、2 角色峰值 11 ≤ 12）+ 新增 prev slice 切片设计 + `snapshot_summary` / `character_arc` 归属
+- `ai_context/architecture.md` Phase 3 bullet + `docs/architecture/extraction_workflow.md` §6.2/§6.5：sub-lane 拓扑、并发数学、slice lifecycle
+- `automation/persona_extraction/_smoke_*`：新增 4-way merge happy path + 各 lane slice 切割正确性 + behavior_state 拆 subkey + slice lifecycle（write/clear）smoke
+- `.gitignore`：新增 `works/*/analysis/progress/.partial_prev/`（progress/ 整目录已 local-only，但显式加防误提）
+
+**完成标准**
+
+- 静态 gate：merge / slice / config / prompt_builder / smoke 全过
+- runtime：拿 S002 重跑一遍，4 lane 并行产 partial → merge → final stage_snapshot.json schema PASS；Character A cognition 历史长 lane 时长降到 ≤ 18 min（vs 当前 26-60 min）
+- 跨文件对齐：决策 #55 / architecture.md / extraction_workflow.md 三处描述与代码一致
+- 失败回路：sub-lane 单次失败时 `.partial/` + `.partial_prev/` 都清，R3 残留清理可重入
+
+**依赖**：无技术依赖（纯 phase 3 内部改造）；前置 todo `T-CHAR-SNAPSHOT-SUB-LANES`（archived 2026-05-12）已完成
+
+**暂不做的事**
+
+- 不读 world prev snapshot 或 memory_digest 进 char_snapshot（已 push back，章节原文 + baseline 已够）
+- 不为 N≥3 角色场景再调 concurrency cap（当前 cap=12 仅覆盖 N=2，N=3 峰值 `1+3×4+3=16`，留给另一个 todo `T-PHASE3-PEAK-CAP-N-CHARS` scope）
+- 不动 phase 3 外层并行结构（决策 #55 outer full-parallel 保留）
+- 不动 char_support / world / phase 4 lane
+
+**预估**：~4-6 小时（spec + 实现 + smoke + 文档同步）
+
+**更新时间**：2026-05-13 14:59 EDT
 
 ---
 
