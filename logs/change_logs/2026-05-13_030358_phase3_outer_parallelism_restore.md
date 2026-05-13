@@ -85,3 +85,21 @@ H1 把外层缩到 1，等效峰值砍到 3（sub-lane 开）/ 1（关），单 
 
 - **Status**: DONE
 - **Finished**: 2026-05-13 03:07:42 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：2/2 计划项 + 6/6 验证标准
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=0 / Low=0
+- Open Questions: 1 条（OQ1 = N ≥ 3 角色峰值超 cap，已在 /go Step 7 留底）
+
+## 复查时状态
+- **Reviewed**: 2026-05-13 10:22:08 EDT
+- **Status**: REVIEWED-PASS
+  - 轨 1 全落实（2/2 + 6/6）+ 轨 2 无任何 H/M/L
+- **Conversation ref**: 同会话内 /post-check 输出
