@@ -305,7 +305,8 @@ vs 关系/事件"切：`char_internal` 集中知识/隐瞒/失败模式形成
 snapshot）：orchestrator 在 stage 启动前调
 `_write_prev_snapshot_slices(work_root, char, prev_stage_id)`，通过
 `snapshot_merge.slice_snapshot_for_lane(full, lane)` 把 prev 文件切成 4
-个 slice，写盘到 `works/{wid}/analysis/progress/.partial_prev/{prev_stage_id}_{lane}.json`。
+个 slice，写盘到 `works/{wid}/analysis/progress/.partial_prev/{char_id}/{prev_stage_id}_{lane}.json`
+（per-char 子层，与 `stage_snapshots/.partial/` 的 per-char 结构对称）。
 prompt_builder 按 `lane_scope` 选 slice 路径塞进 prompt：
 
 | sub-lane | 读哪些 prev slice |

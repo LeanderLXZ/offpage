@@ -188,7 +188,7 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
   `lane_scope = ALL` 时即最终自包含快照（遵循
   `character/stage_snapshot.schema.json`）；sub-lane 模式（`lane_scope != ALL`）
   时这是本 sub-lane 的 partial 文件，路径已切到 `.partial/` 子目录由 LLM
-  直接写入，orchestrator 在 3 sub-lane 全部完成后程序合并成 `{stage_id}.json`
+  直接写入，orchestrator 在 4 sub-lane 全部完成后程序合并成 `{stage_id}.json`
   最终快照——partial 文件本身**不需要**符合 `stage_snapshot.schema.json`
   顶层 `required`（合并后才校验），但顶层字段集合**必须严格遵守**上方
   「Sub-lane 字段范围」表的分配，多写 / 少写 / 越界都会 merge hard fail

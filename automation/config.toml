@@ -93,16 +93,16 @@ review_timeout_s     = 600
 # `error_max_turns`，故全局放到 80。
 max_turns            = 80
 
-# 单 char_snapshot lane 内部是否再拆 3 个并行 sub-lane（决策 #55）。
-# true：sub-lane 模式——char_expression / char_decision / char_cognition
-#       三 sub-lane 并行跑同一份 prompt 模板（占位 `{lane_scope}` 切换
-#       字段子集），落 `.partial/{stage_id}_{lane}.json`，由
-#       `automation/persona_extraction/snapshot_merge.py` 合并；merge
+# 单 char_snapshot lane 内部是否再拆 4 个并行 sub-lane（决策 #55）。
+# true：sub-lane 模式——char_expression / char_decision / char_internal /
+#       char_social 四 sub-lane 并行跑同一份 prompt 模板（占位
+#       `{lane_scope}` 切换字段子集），落 `.partial/{stage_id}_{lane}.json`，
+#       由 `automation/persona_extraction/snapshot_merge.py` 合并；merge
 #       前置 hard gate 校验字段集合互斥 + 全覆盖 + 三方 keys ==
-#       target_baseline。Wall-time bottleneck 从 ~28.3K 字符（cognition 单
-#       lane）降到三 sub-lane 并行的最大单值；理论加速 ~2.3×。
+#       target_baseline。Wall-time bottleneck 进一步降低——原 3 sub-lane
+#       时代 cognition 是单点瓶颈，本次切成 internal + social 分担。
 # false：单 lane 等价 `lane_scope = ALL`，phase 3 现状不变。light_novel
-#        模式单 stage 字符数小，3 sub-lane 启动开销可能 > 抽取耗时收益，
+#        模式单 stage 字符数小，4 sub-lane 启动开销可能 > 抽取耗时收益，
 #        建议手切到 false。
 # CLI 覆盖：`--char-snapshot-sub-lanes` / `--no-char-snapshot-sub-lanes`。
 # 字段归属表见 docs/architecture/extraction_workflow.md §6.2。

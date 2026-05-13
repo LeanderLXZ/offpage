@@ -1261,14 +1261,28 @@ class ExtractionOrchestrator:
             return
 
         slice_dir = prev_snapshot_slice_dir(work_root, character_id)
-        slice_dir.mkdir(parents=True, exist_ok=True)
-        for name in SUB_LANE_NAMES:
-            projected = slice_snapshot_for_lane(full, name)
-            path = prev_snapshot_slice_path(
-                work_root, character_id, prev_stage_id, name)
-            path.write_text(
-                json.dumps(projected, ensure_ascii=False, indent=2),
-                encoding="utf-8")
+        try:
+            slice_dir.mkdir(parents=True, exist_ok=True)
+            for name in SUB_LANE_NAMES:
+                projected = slice_snapshot_for_lane(full, name)
+                path = prev_snapshot_slice_path(
+                    work_root, character_id, prev_stage_id, name)
+                path.write_text(
+                    json.dumps(projected, ensure_ascii=False, indent=2),
+                    encoding="utf-8")
+        except OSError as exc:
+            # permission denied / disk full / read-only mount — degrade
+            # gracefully (mirrors the prev snapshot read-failure path
+            # above, line 1254-1261): warning + return so sub-lanes can
+            # still run, falling back to the full prev snapshot via
+            # ``_format_prev_char_snapshot_reference`` /
+            # ``_build_char_snapshot_read_list`` (which detect the
+            # missing slice files and revert to the full prev path).
+            logger.warning(
+                "prev snapshot slice write failed for %s/%s under %s "
+                "(%s); sub-lanes will fall back to the full prev "
+                "snapshot for this stage",
+                character_id, prev_stage_id, slice_dir, exc)
 
     def _clear_prev_snapshot_slices(
         self,
