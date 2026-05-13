@@ -30,8 +30,10 @@ max_chapter_count    = 15        # 单 stage 最多章节数
 [phase0]
 # 章节归纳 chunk 的并行度（ThreadPoolExecutor 线程数）。订阅模式下并发
 # 越高越容易撞 5h 限额；调小可降低限额风险。CLI `--concurrency` 同时
-# 影响 phase0 与 phase4，本键提供默认值。
-concurrency              = 10
+# 影响 phase0 与 phase4，本键提供默认值。**12** 是覆盖 phase 3 决策 #55
+# 4-sub-lane 拓扑下 2 角色峰值 `1 + 2×4 + 2 = 11` 的最小值；3 sub-lane
+# 时代曾为 10。
+concurrency              = 12
 
 # Phase 0 单 chunk summarize 子进程超时（秒）。每 chunk 读 20 章 + 写
 # 20× per-summary（150–200 字）+ 5 个 chunk-level 二级聚合字段
@@ -112,8 +114,9 @@ char_snapshot_sub_lanes = true
 # ----------------------------------------------------------------
 [phase4]
 # 章节级并行度（ThreadPoolExecutor）。Phase 4 是 work-level 全局任务，
-# 并行越高越快但也越容易撞限额。
-concurrency = 10
+# 并行越高越快但也越容易撞限额。默认 **12**，与 [phase0].concurrency 对齐
+# （决策 #55 4-sub-lane 拓扑覆盖）。
+concurrency = 12
 
 # 单章节单次运行内的 retry 次数上限。FAILED 章节（validate 失败 / 解析失败 /
 # LLM 错误）会被回插队列并在 prompt 里注入 prior_error 重新切，最多再试这么

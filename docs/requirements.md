@@ -991,24 +991,35 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 
 **char_snapshot 内部 sub-lane 拆分**（`[phase3].char_snapshot_sub_lanes`，
 缺省 `true`；CLI `--char-snapshot-sub-lanes` / `--no-char-snapshot-sub-lanes`
-覆盖）：单 char_snapshot lane 内部再拆 3 个并行 sub-lane（`char_expression`
-/ `char_decision` / `char_cognition`，按字段聚类划分，归属表见
-`docs/architecture/extraction_workflow.md` §6.2），共用同一 prompt 模板
-（占位 `{lane_scope}` 切换字段子集）。3 sub-lane 各自落 `.partial/`
-（`works/{wid}/characters/{cid}/canon/stage_snapshots/.partial/{sid}_{lane}.json`，
+覆盖）：单 char_snapshot lane 内部再拆 **4** 个并行 sub-lane
+（`char_expression` / `char_decision` / `char_internal` / `char_social`，
+按字段聚类划分，归属表见 `docs/architecture/extraction_workflow.md` §6.2），
+共用同一 prompt 模板（占位 `{lane_scope}` 切换字段子集）。4 sub-lane
+各自落 `.partial/`（`works/{wid}/characters/{cid}/canon/stage_snapshots/.partial/{sid}_{lane}.json`，
 `.gitignore` 屏蔽）后由 `automation/persona_extraction/snapshot_merge.py`
 合并；merge 前置 hard gate 校验"字段集合互斥 + 全覆盖 + failure_modes /
-stage_delta 子键互斥 + 三方 keys == baseline（复用
+stage_delta / behavior_state 子键互斥 + 三方 keys == baseline（复用
 `automation/repair_agent/checkers/targets_keys_eq_baseline.py`）"，任一不
-过即整 snapshot lane 失败。Fallback `false` → 单 lane 等价 `lane_scope=ALL`，
-phase 3 现状不变。Lane 级 resume 粒度仍为 `snapshot:{char_id}`（外层
-lane_states 不感知 sub-lane）；任一 sub-lane 或 merge 失败均整 lane 重
-跑，PENDING / ERROR 状态下的 partial 一律删，不复用。Repair lifecycle 2
-T3 重抽走 sub-lane 模式（每 sub-lane prompt 注入 `prior_attempt_context`
-≤600 char 摘要 + 错误信息），lifecycle 计数（`max_lifecycles_per_file = 2`）
-与 T3_EXHAUSTED 语义不变。Light_novel 模式单 stage 字符数小，3 sub-lane
-启动开销可能 > 抽取耗时收益——保持单 toml bool + CLI 双向 flag，由用户
-按 work 手切，不引入 mode-aware 默认值。
+过即整 snapshot lane 失败。**Prev snapshot 4-way slice**：orchestrator
+stage 启动前把 prev snapshot 切 4 个 slice 写盘到 `.partial_prev/`
+（`works/{wid}/analysis/progress/.partial_prev/{prev}_{lane}.json`），
+每 sub-lane 只读自己需要的 slice 而非完整 ~30 KB prev——`char_expression`
+/ `char_decision` 读自身 slice，`char_internal` / `char_social` 各读两个
+（internal + social 互读对方）。Slice lifecycle 与 `.partial/` 同形态
+（stage 启动前 R3 清 + repair 完成后 commit 前清 + 失败时清）。
+Fallback `false` → 单 lane 等价 `lane_scope=ALL`，phase 3 现状不变
+（prev slice 仅 sub-lane 模式生效，fallback 直接读完整 prev）。Lane 级
+resume 粒度仍为 `snapshot:{char_id}`（外层 lane_states 不感知 sub-lane）；
+任一 sub-lane 或 merge 失败均整 lane 重跑，PENDING / ERROR 状态下的
+partial 一律删，不复用。Repair lifecycle 2 T3 重抽走 sub-lane 模式
+（每 sub-lane prompt 注入 `prior_attempt_context` ≤600 char 摘要 + 错误
+信息），lifecycle 计数（`max_lifecycles_per_file = 2`）与 T3_EXHAUSTED
+语义不变。**并发数学**：2 角色峰值 `1 + 2×4 + 2 = 11 ≤ [phase3].concurrency=12`
+（由 3 sub-lane 时代的 10 上调到 12 覆盖新峰值）；N≥3 角色场景仍超 cap
+依赖 RateLimitController pause 兜底，追踪在 todo `T-PHASE3-PEAK-CAP-N-CHARS`。
+Light_novel 模式单 stage 字符数小，4 sub-lane 启动开销可能 > 抽取
+耗时收益——保持单 toml bool + CLI 双向 flag，由用户按 work 手切，
+不引入 mode-aware 默认值。
 
 共同规则：
 - char_support 每个 stage 都可修正和补充 identity（不限第一个 stage）

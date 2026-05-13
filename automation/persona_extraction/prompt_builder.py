@@ -531,10 +531,14 @@ def build_char_snapshot_prompt(
     writes — decision #55 ``char_snapshot`` sub-lane fan-out. ``ALL``
     (the legacy / fallback single-lane behaviour) makes the LLM write
     every field; ``char_expression`` / ``char_decision`` /
-    ``char_cognition`` restrict output to the assigned field subset via
-    the ``{lane_scope}`` placeholder + ``{lane_field_whitelist}``
-    rendered table. The field allocation lives in
-    ``snapshot_merge.FIELD_ALLOCATION`` — never duplicate it here.
+    ``char_internal`` / ``char_social`` restrict output to the assigned
+    field subset via the ``{lane_scope}`` placeholder +
+    ``{lane_field_whitelist}`` rendered table. The field allocation
+    lives in ``snapshot_merge.FIELD_ALLOCATION`` — never duplicate it
+    here. Sub-lane mode also reads only the prev-snapshot slice(s) the
+    sub-lane needs (written by
+    ``orchestrator._write_prev_snapshot_slices`` to
+    ``.partial_prev/{char_id}/{prev_stage_id}_{sub_lane}.json``).
     """
     template = _load_template("character_snapshot_extraction.md")
 
@@ -544,18 +548,14 @@ def build_char_snapshot_prompt(
 
     prev_stage = _find_previous_committed_stage(stages or [], stage)
     files_to_read = _build_char_snapshot_read_list(
-        project_root, work_id, character_id, stage, prev_stage)
+        project_root, work_id, character_id, stage, prev_stage,
+        lane_scope=lane_scope)
 
     quality_requirements = _build_quality_requirements(
         project_root, work_id, progress.target_characters)
 
-    prev_char_snapshot = ""
-    if prev_stage:
-        char_dir = work_dir / "characters" / character_id / "canon"
-        cs_path = (char_dir / "stage_snapshots"
-                   / f"{prev_stage.stage_id}.json")
-        if cs_path.exists():
-            prev_char_snapshot = str(cs_path)
+    prev_char_snapshot = _format_prev_char_snapshot_reference(
+        project_root, work_id, character_id, prev_stage, lane_scope)
 
     lane_scope_block, lane_field_whitelist = _render_lane_scope_block(
         lane_scope)
@@ -600,6 +600,70 @@ def build_char_snapshot_prompt(
     }
 
     return _render_template(template, context)
+
+
+def _format_prev_char_snapshot_reference(
+    project_root: Path,
+    work_id: str,
+    character_id: str,
+    prev_stage: StageEntry | None,
+    lane_scope: str,
+) -> str:
+    """Format the prev snapshot reference for the
+    ``{prev_char_snapshot}`` placeholder in
+    ``character_snapshot_extraction.md`` (decision #55).
+
+    Returns an empty string when there is no prev stage (S001) so the
+    template's prev-reference line renders to a known-empty form.
+
+    For ``ALL`` mode → one backticked full prev path.
+    For sub-lane mode → one or two backticked slice paths (a 1-item or
+    2-item bullet list when 2 slices). The internal / social pair lists
+    both internal + social slices; expression / decision list their own
+    slice only. Falls back to the full prev path when slice files are
+    missing on disk so the LLM still has a reference.
+    """
+    if prev_stage is None:
+        return ""
+
+    from .lane_output import prev_snapshot_slice_path
+    from .snapshot_merge import SUB_LANE_NAMES
+
+    work_dir = project_root / "works" / work_id
+    char_dir = work_dir / "characters" / character_id / "canon"
+    full_path = char_dir / "stage_snapshots" / f"{prev_stage.stage_id}.json"
+
+    slice_lanes = _slice_lanes_for_lane_scope(lane_scope, SUB_LANE_NAMES)
+    if slice_lanes is None:
+        # ALL mode → single full path.
+        return f"`{full_path}`" if full_path.exists() else ""
+
+    if not slice_lanes:
+        # Unknown lane_scope — be defensive, point to full path.
+        return f"`{full_path}`" if full_path.exists() else ""
+
+    existing_paths: list[Path] = []
+    for slice_lane in slice_lanes:
+        sp = prev_snapshot_slice_path(
+            work_dir, character_id, prev_stage.stage_id, slice_lane)
+        if sp.exists():
+            existing_paths.append(sp)
+
+    if not existing_paths:
+        # Slice files unexpectedly missing — fall back to full path so
+        # the LLM still has a delta reference. Orchestrator should have
+        # written slices, but be resilient.
+        return f"`{full_path}`" if full_path.exists() else ""
+
+    if len(existing_paths) == 1:
+        return f"`{existing_paths[0]}`"
+
+    # 2 slices → bullet list. Render leading newline so the surrounding
+    # prose stays on its own line:
+    #   前一阶段角色快照参照：
+    #   - `path1`
+    #   - `path2`
+    return "\n" + "\n".join(f"- `{p}`" for p in existing_paths)
 
 
 def _render_lane_scope_block(lane_scope: str) -> tuple[str, str]:
@@ -764,18 +828,33 @@ def _build_char_snapshot_read_list(
     character_id: str,
     stage: StageEntry,
     prev_stage: StageEntry | None,
+    *,
+    lane_scope: str = "ALL",
 ) -> list[str]:
     """Pre-compute file list for character snapshot extraction.
 
     Includes the stage_snapshot schema, identity (character-level
     constant), target_baseline (anchor for the D4 set-equal rule —
     decision #13; the three target-keyed structures must match its
-    ``targets[].target_character_id`` set), the previous stage_snapshot
-    (for delta / style), and source chapters. Does NOT include
-    memory_timeline. Sub-lane mode (decision #55) inherits the same
-    read list — every sub-lane needs to see the baseline target set to
-    fill its slice of the three target structures.
+    ``targets[].target_character_id`` set), the previous stage's
+    snapshot reference (for delta / style), and source chapters. Does
+    NOT include memory_timeline.
+
+    Sub-lane mode (decision #55, 4-lane topology): instead of listing
+    the full prev snapshot, lists the per-lane slice(s) the lane needs
+    — ``char_expression`` / ``char_decision`` read their own slice,
+    ``char_internal`` / ``char_social`` each read both internal +
+    social slices. Slices are written by
+    ``orchestrator._write_prev_snapshot_slices`` before sub-lane
+    fan-out. Falls back to full prev path when the slice file is
+    missing on disk (orchestrator failed to write it for some reason)
+    so the LLM still has a delta reference.
     """
+    # Local import to avoid an import-time cycle with snapshot_merge /
+    # lane_output (this module is imported early by orchestrator).
+    from .lane_output import prev_snapshot_slice_path
+    from .snapshot_merge import SUB_LANE_NAMES
+
     files: list[str] = []
     work_dir = project_root / "works" / work_id
     source_dir = project_root / "sources" / "works" / work_id
@@ -799,11 +878,31 @@ def _build_char_snapshot_read_list(
         if baseline.exists():
             files.append(str(baseline.relative_to(project_root)))
 
-    # Previous stage_snapshot for delta calculation and style reference
+    # Previous stage_snapshot reference — full path (ALL mode) or slice
+    # path(s) (sub-lane mode). Slice paths land under
+    # ``analysis/progress/.partial_prev/{char_id}/`` (decision #55).
     if prev_stage and char_dir.exists():
-        cs = char_dir / "stage_snapshots" / f"{prev_stage.stage_id}.json"
-        if cs.exists():
-            files.append(str(cs.relative_to(project_root)))
+        full_path = (char_dir / "stage_snapshots"
+                     / f"{prev_stage.stage_id}.json")
+        slice_lanes = _slice_lanes_for_lane_scope(lane_scope, SUB_LANE_NAMES)
+        if slice_lanes is None:
+            # ALL mode (or unrecognised lane_scope) → full prev path.
+            if full_path.exists():
+                files.append(str(full_path.relative_to(project_root)))
+        else:
+            # Sub-lane mode → per-lane slice path(s). Fall back to full
+            # path when a slice file is unexpectedly missing on disk so
+            # the LLM still has a delta reference.
+            any_slice_listed = False
+            for slice_lane in slice_lanes:
+                sp = prev_snapshot_slice_path(
+                    work_dir, character_id,
+                    prev_stage.stage_id, slice_lane)
+                if sp.exists():
+                    files.append(str(sp.relative_to(project_root)))
+                    any_slice_listed = True
+            if not any_slice_listed and full_path.exists():
+                files.append(str(full_path.relative_to(project_root)))
 
     # Source chapters
     start, end = _parse_chapter_range(stage.chapters)
@@ -813,6 +912,30 @@ def _build_char_snapshot_read_list(
             files.append(str(ch_file.relative_to(project_root)))
 
     return _deduplicate(files)
+
+
+def _slice_lanes_for_lane_scope(
+    lane_scope: str,
+    sub_lane_names: tuple[str, ...],
+) -> tuple[str, ...] | None:
+    """Map a ``lane_scope`` to the list of prev-snapshot slice files that
+    sub-lane should read (decision #55, 4-lane prev slice).
+
+    Returns ``None`` for ``ALL`` mode (caller falls back to the full
+    prev snapshot). Returns an empty tuple for unknown lane scopes (no
+    slices to list — defensive, callers also fall back).
+
+    The internal / social pair reads both internal + social slices to
+    cover the knowledge ↔ relationships coupling; expression and
+    decision each read only their own slice.
+    """
+    if lane_scope == "ALL":
+        return None
+    if lane_scope not in sub_lane_names:
+        return ()
+    if lane_scope in ("char_internal", "char_social"):
+        return ("char_internal", "char_social")
+    return (lane_scope,)
 
 
 def _build_char_support_read_list(

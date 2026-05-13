@@ -1,11 +1,11 @@
 """Sub-lane partial merge for ``char_snapshot`` (decision #55).
 
-The single ``char_snapshot`` lane fans out into three parallel sub-lanes
-(``char_expression`` / ``char_decision`` / ``char_cognition``) that share
-one prompt template and write disjoint slices of the final
-``stage_snapshot.json``. ``merge_partials`` welds the three slices into
-one schema-valid object, runs the merge-time hard gates, and returns the
-final dict ready to be written to disk.
+The single ``char_snapshot`` lane fans out into **four** parallel
+sub-lanes (``char_expression`` / ``char_decision`` / ``char_internal`` /
+``char_social``) that share one prompt template and write disjoint slices
+of the final ``stage_snapshot.json``. ``merge_partials`` welds the four
+slices into one schema-valid object, runs the merge-time hard gates, and
+returns the final dict ready to be written to disk.
 
 The field allocation (``FIELD_ALLOCATION`` below) is the **single source
 of truth** consumed by both the prompt builder (`{lane_field_whitelist}`
@@ -13,28 +13,48 @@ placeholder) and the merge function. Adjusting the allocation here
 automatically updates the prompt's per-lane whitelist; never duplicate
 the table in another file.
 
-Merge-time gates (4 positive gates + 1 anti-rule, all enforced before
+Three top-level fields are split across multiple lanes via
+``SHARED_KEY_SUBKEYS``:
+  * ``failure_modes`` across 3 lanes (expression / internal / social)
+  * ``stage_delta`` across 2 lanes (decision / social)
+  * ``behavior_state`` across 2 lanes (decision: 7 self-behavior subkeys
+    / social: ``target_behavior_map`` only — keeps target-keyed
+    structures together with ``relationships``)
+
+``slice_snapshot_for_lane(full, lane)`` is the inverse projection: given
+a full ``stage_snapshot.json`` dict and a sub-lane name, return only the
+fields that sub-lane is responsible for (used by the orchestrator to
+generate per-lane prev snapshot slices before extraction — each sub-lane
+reads only its own slice instead of the full ~30 KB prev snapshot).
+
+Merge-time gates (5 positive gates + 1 anti-rule, all enforced before
 returning the merged dict):
 
 1. (positive) Each partial's top-level field set must equal the lane's
    allocation (no extra, no missing).
 2. (positive) ``failure_modes`` 4 subkeys must be mutually exclusive
-   across the two lanes that write them (``tone_traps`` only from
-   ``char_expression`` / the other three only from ``char_cognition``)
-   and all 4 must be present after merge.
+   across the **three** lanes that write them
+   (``tone_traps``→``char_expression`` /
+   ``{knowledge_leaks, common_failures}``→``char_internal`` /
+   ``relationship_traps``→``char_social``) and all 4 must be present
+   after merge.
 3. (positive) ``stage_delta`` 6 subkeys must be mutually exclusive
-   across the two lanes that write them (``char_decision`` /
-   ``char_cognition``). Either all 6 subkeys are present after merge OR
-   ``stage_delta`` is absent from both partials (the S001 case — no
-   prev, no delta).
-4. (positive) The three target-keyed structures
+   across the two lanes that write them (``char_decision`` 3 subkeys /
+   ``char_social`` 3 subkeys). Either all 6 subkeys are present after
+   merge OR ``stage_delta`` is absent from both partials (the S001
+   case — no prev, no delta).
+4. (positive) ``behavior_state`` 8 subkeys must be mutually exclusive
+   across the two lanes that write them (``char_decision`` 7
+   self-behavior subkeys / ``char_social`` ``target_behavior_map`` only)
+   and all 8 must be present after merge.
+5. (positive) The three target-keyed structures
    (``voice_state.target_voice_map`` /
    ``behavior_state.target_behavior_map`` / top-level ``relationships``)
    must all carry keys whose set equals ``baseline_keys`` (the caller
    provides the baseline target set; on disk the
    ``TargetsKeysEqBaselineChecker`` enforces the same rule against
    ``target_baseline.json``).
-5. (anti-rule) Decision #11f (D) drop semantics: merge **does not**
+6. (anti-rule) Decision #11f (D) drop semantics: merge **does not**
    check partial entry count ≥ prev. Resolved / revealed / overcome
    entries are legitimately dropped; the responsibility for recording
    the reason lives in ``stage_delta`` (and phase 3.5
@@ -65,17 +85,21 @@ from typing import Any
 
 LANE_CHAR_EXPRESSION = "char_expression"
 LANE_CHAR_DECISION = "char_decision"
-LANE_CHAR_COGNITION = "char_cognition"
+LANE_CHAR_INTERNAL = "char_internal"
+LANE_CHAR_SOCIAL = "char_social"
 
 SUB_LANE_NAMES: tuple[str, ...] = (
     LANE_CHAR_EXPRESSION,
     LANE_CHAR_DECISION,
-    LANE_CHAR_COGNITION,
+    LANE_CHAR_INTERNAL,
+    LANE_CHAR_SOCIAL,
 )
 
 # Top-level fields each sub-lane is responsible for. Order matters: keys
 # are iterated when building the per-lane whitelist for the prompt, so
-# keep them grouped semantically.
+# keep them grouped semantically. Three top-level fields are split across
+# multiple lanes (``failure_modes`` / ``stage_delta`` / ``behavior_state``);
+# see ``SHARED_KEY_SUBKEYS`` for subkey allocation.
 FIELD_ALLOCATION: dict[str, tuple[str, ...]] = {
     LANE_CHAR_EXPRESSION: (
         "voice_state",
@@ -84,37 +108,46 @@ FIELD_ALLOCATION: dict[str, tuple[str, ...]] = {
         "failure_modes",  # only the tone_traps subkey, see SHARED_KEY_SUBKEYS
     ),
     LANE_CHAR_DECISION: (
-        "behavior_state",
+        "behavior_state",  # 7 self-behavior subkeys (NOT target_behavior_map)
         "boundary_state",
         "emotional_baseline",
         "current_personality",
         "current_status",
         "stage_delta",  # only the 3 decision-side subkeys
     ),
-    LANE_CHAR_COGNITION: (
+    LANE_CHAR_INTERNAL: (
         "knowledge_scope",
         "misunderstandings",
         "concealments",
+        "snapshot_summary",
+        "failure_modes",  # only knowledge_leaks + common_failures subkeys
+    ),
+    LANE_CHAR_SOCIAL: (
         "relationships",
         "relationship_state_summary",
         "stage_events",
         "character_arc",
-        "snapshot_summary",
-        "stage_delta",  # the other 3 subkeys
-        "failure_modes",  # the other 3 subkeys
+        "behavior_state",  # ONLY target_behavior_map subkey, see SHARED_KEY_SUBKEYS
+        "failure_modes",  # only relationship_traps subkey
+        "stage_delta",  # the other 3 subkeys (trigger_events / relationship_changes / voice_shift)
     ),
 }
 
-# Subkey allocation for the two compound top-level keys that two lanes
-# share. ``failure_modes`` and ``stage_delta`` are each split.
+# Subkey allocation for compound top-level keys that multiple lanes share.
+# Three keys split across lanes:
+#   * ``failure_modes``  — across 3 lanes (expression / internal / social)
+#   * ``stage_delta``    — across 2 lanes (decision / social)
+#   * ``behavior_state`` — across 2 lanes (decision / social), NEW in 4-lane
+#                          topology to keep target_behavior_map with the
+#                          relationships-keyed structures (decision #55).
 SHARED_KEY_SUBKEYS: dict[str, dict[str, tuple[str, ...]]] = {
     "failure_modes": {
         LANE_CHAR_EXPRESSION: ("tone_traps",),
-        LANE_CHAR_COGNITION: (
-            "common_failures",
-            "relationship_traps",
+        LANE_CHAR_INTERNAL: (
             "knowledge_leaks",
+            "common_failures",
         ),
+        LANE_CHAR_SOCIAL: ("relationship_traps",),
     },
     "stage_delta": {
         LANE_CHAR_DECISION: (
@@ -122,11 +155,27 @@ SHARED_KEY_SUBKEYS: dict[str, dict[str, tuple[str, ...]]] = {
             "mood_shift",
             "personality_changes",
         ),
-        LANE_CHAR_COGNITION: (
+        LANE_CHAR_SOCIAL: (
             "trigger_events",
             "relationship_changes",
             "voice_shift",
         ),
+    },
+    "behavior_state": {
+        # 7 self-behavior subkeys stay with char_decision (the character's
+        # own habitual / decisional behaviour, independent of target).
+        LANE_CHAR_DECISION: (
+            "core_goals",
+            "obsessions",
+            "decision_making_style",
+            "emotional_triggers",
+            "emotional_reaction_map",
+            "habitual_behaviors",
+            "stress_response",
+        ),
+        # target_behavior_map is N×M (per-target behaviour pattern) and
+        # belongs with the relationships-keyed structures in char_social.
+        LANE_CHAR_SOCIAL: ("target_behavior_map",),
     },
 }
 
@@ -384,11 +433,11 @@ def merge_partials(
     baseline_keys: set[str],
     timeline_anchor_max_length: int = 50,
 ) -> dict[str, Any]:
-    """Merge three sub-lane partials into a single ``stage_snapshot`` dict.
+    """Merge four sub-lane partials into a single ``stage_snapshot`` dict.
 
     Args:
         partials: Mapping of sub-lane name → partial dict. Must contain
-            all three sub-lanes in ``SUB_LANE_NAMES``.
+            all four sub-lanes in ``SUB_LANE_NAMES``.
         schema_version / work_id / character_id / stage_id / stage_title:
             Program-injected structural metadata; never produced by any
             sub-lane.
@@ -449,6 +498,11 @@ def merge_partials(
     if stage_delta is not None:
         merged["stage_delta"] = stage_delta
 
+    behavior_state = _check_shared_key_coverage(
+        "behavior_state", partials, allow_absent_both=False)
+    if behavior_state is not None:
+        merged["behavior_state"] = behavior_state
+
     # Program-injected metadata.
     merged["schema_version"] = schema_version
     merged["work_id"] = work_id
@@ -477,6 +531,64 @@ def compute_fingerprint(merged: dict[str, Any]) -> str:
     blob = json.dumps(
         merged, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def slice_snapshot_for_lane(
+    full: dict[str, Any],
+    lane: str,
+) -> dict[str, Any]:
+    """Project a complete ``stage_snapshot`` dict onto one sub-lane's
+    allocated fields (the inverse of ``merge_partials``).
+
+    Used by the orchestrator to produce per-lane prev snapshot slices
+    written to ``.partial_prev/{prev_stage_id}_{lane}.json``: each
+    sub-lane reads only the slice(s) it needs (decision #55 — prev
+    snapshot 4-way slice), avoiding the ~30 KB whole-snapshot context
+    every sub-lane previously consumed.
+
+    Output:
+      * Non-shared fields owned by ``lane`` are copied as-is.
+      * Compound shared fields (``failure_modes`` / ``stage_delta`` /
+        ``behavior_state``) are reduced to **only** the subkeys this
+        lane owns per ``SHARED_KEY_SUBKEYS``.
+      * Program-injected metadata (``schema_version`` / ``work_id`` /
+        ``character_id`` / ``stage_id`` / ``stage_title`` /
+        ``timeline_anchor`` / ``chapter_scope``) is NOT included —
+        slices carry only sub-lane content, not orchestrator metadata.
+      * Missing fields in ``full`` are simply omitted (no defaults).
+
+    Raises ``ValueError`` for unknown ``lane``.
+    """
+    if lane not in FIELD_ALLOCATION:
+        raise ValueError(
+            f"unknown sub-lane {lane!r}; expected one of "
+            f"{sorted(FIELD_ALLOCATION.keys())}")
+
+    out: dict[str, Any] = {}
+    for top_key in FIELD_ALLOCATION[lane]:
+        if top_key not in full:
+            continue
+        if top_key in SHARED_KEY_SUBKEYS:
+            by_lane = SHARED_KEY_SUBKEYS[top_key]
+            if lane not in by_lane:
+                # Defensive: FIELD_ALLOCATION lists a shared key for this
+                # lane but SHARED_KEY_SUBKEYS doesn't allocate any subkeys
+                # to it — table drift. Skip rather than copy the whole
+                # compound object (which would leak other lanes' subkeys).
+                continue
+            allowed = set(by_lane[lane])
+            section = full[top_key]
+            if not isinstance(section, dict):
+                # Source is malformed (expected object); skip to avoid
+                # propagating bad shape. Caller will see the missing key
+                # and decide.
+                continue
+            projected = {k: v for k, v in section.items() if k in allowed}
+            if projected:
+                out[top_key] = projected
+        else:
+            out[top_key] = full[top_key]
+    return out
 
 
 def derive_chapter_scope(chapters: str) -> dict[str, str] | None:

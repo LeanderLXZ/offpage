@@ -50,6 +50,8 @@ from .lane_output import (
     expected_lane_dirty_paths,
     expected_lane_names,
     lane_product_path,
+    prev_snapshot_slice_dir,
+    prev_snapshot_slice_path,
     snapshot_partial_dir,
     snapshot_partial_path,
     verify_lane_output,
@@ -60,6 +62,7 @@ from .snapshot_merge import (
     compute_fingerprint,
     derive_chapter_scope,
     merge_partials,
+    slice_snapshot_for_lane,
 )
 from .manifests import (
     read_structure_mode,
@@ -343,6 +346,21 @@ def _format_prior_attempt_context_block(
     return text
 
 
+def _find_previous_committed_stage_for_sub_lanes(
+    stages: list[StageEntry], current: StageEntry,
+) -> StageEntry | None:
+    """Mirror of ``prompt_builder._find_previous_committed_stage`` for use
+    in ``_run_char_snapshot_sub_lanes`` (decision #55 — 4-lane prev
+    slice). Kept local to avoid importing a private helper across modules;
+    the logic is trivially 4 lines."""
+    for b in reversed(stages):
+        if b.stage_id == current.stage_id:
+            continue
+        if b.state.value == "committed":
+            return b
+    return None
+
+
 def _repair_slug(file_path: str) -> str:
     """Compact filesystem-safe slug for a repair target path.
 
@@ -522,7 +540,7 @@ class ExtractionOrchestrator:
         chunk_size: int = 20,
         max_runtime_minutes: int = 0,
         start_phase: str = "auto",
-        concurrency: int = 10,
+        concurrency: int = 12,
         char_snapshot_sub_lanes: bool | None = None,
     ):
         self.project_root = project_root
@@ -890,12 +908,12 @@ class ExtractionOrchestrator:
                           | None = None,
         prior_attempt_context: dict[str, list[str]] | None = None,
     ) -> LLMResult:
-        """Run 3 parallel sub-lane LLM calls for one character snapshot +
+        """Run 4 parallel sub-lane LLM calls for one character snapshot +
         merge programmatically (decision #55).
 
         Writes ``.partial/{stage_id}_{sub_lane}.json`` files via the
         sub-lane prompts (each one's ``output_relative_path`` placeholder
-        points to its own partial), then loads the three partials and
+        points to its own partial), then loads the four partials and
         calls ``snapshot_merge.merge_partials`` to weld them into a
         single ``stage_snapshots/{stage_id}.json``. On success returns a
         positive ``LLMResult`` whose ``text`` field carries the
@@ -919,6 +937,21 @@ class ExtractionOrchestrator:
         # stage before the new attempt so a half-written ``.partial`` file
         # from a previous run can't bleed into the merge.
         self._clear_snapshot_partials(work_root, character_id, stage.stage_id)
+
+        # Prev snapshot 4-way slice (decision #55): R3 pre-clear + fresh
+        # write so each sub-lane reads only its allocated field projection
+        # of the prev stage's snapshot, not the full ~30 KB file. Re-runs
+        # within one stage (repair-triggered sub-lane regen) re-derive the
+        # slices from whatever prev snapshot is on disk now — so a
+        # repair_agent rewrite of prev is reflected the next time we
+        # re-extract.
+        prev_stage = _find_previous_committed_stage_for_sub_lanes(
+            stages or [], stage)
+        if prev_stage is not None:
+            self._clear_prev_snapshot_slices(
+                work_root, character_id, prev_stage.stage_id)
+            self._write_prev_snapshot_slices(
+                work_root, character_id, prev_stage.stage_id)
 
         prior_block = _format_prior_attempt_context_block(
             prior_attempt_context)
@@ -980,9 +1013,20 @@ class ExtractionOrchestrator:
         if hard_stop is not None:
             raise hard_stop
 
-        if sub_lane_errors:
+        def _on_failure_cleanup() -> None:
+            """Clear .partial/ + .partial_prev/ for this (char, stage)
+            on any sub-lane / merge failure path. ``prev_stage`` is
+            captured from the enclosing scope; no-op when there is no
+            committed prev stage (S001). Slices on hard-stop paths are
+            intentionally NOT cleared (next ``--resume`` regenerates)."""
             self._clear_snapshot_partials(
                 work_root, character_id, stage.stage_id)
+            if prev_stage is not None:
+                self._clear_prev_snapshot_slices(
+                    work_root, character_id, prev_stage.stage_id)
+
+        if sub_lane_errors:
+            _on_failure_cleanup()
             joined = "; ".join(
                 f"{name}: {msg}" for name, msg in sub_lane_errors.items())
             if len(joined) > 2000:
@@ -993,14 +1037,13 @@ class ExtractionOrchestrator:
                 error=f"sub-lane extraction failed — {joined}",
             )
 
-        # All 3 sub-lane LLM calls succeeded; load partials + merge.
+        # All sub-lane LLM calls succeeded; load partials + merge.
         partials: dict[str, dict[str, Any]] = {}
         for sub_lane in SUB_LANE_NAMES:
             path = snapshot_partial_path(
                 work_root, character_id, stage.stage_id, sub_lane)
             if not path.exists():
-                self._clear_snapshot_partials(
-                    work_root, character_id, stage.stage_id)
+                _on_failure_cleanup()
                 return LLMResult(
                     success=False, text="",
                     error=(
@@ -1011,8 +1054,7 @@ class ExtractionOrchestrator:
                 partials[sub_lane] = json.loads(
                     path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as exc:
-                self._clear_snapshot_partials(
-                    work_root, character_id, stage.stage_id)
+                _on_failure_cleanup()
                 return LLMResult(
                     success=False, text="",
                     error=(
@@ -1027,8 +1069,7 @@ class ExtractionOrchestrator:
                 "missing or unreadable (phase 2 should have produced it; "
                 "check works/%s/characters/%s/canon/target_baseline.json)",
                 character_id, stage.stage_id, pipeline.work_id, character_id)
-            self._clear_snapshot_partials(
-                work_root, character_id, stage.stage_id)
+            _on_failure_cleanup()
             return LLMResult(
                 success=False, text="",
                 error=(
@@ -1049,8 +1090,7 @@ class ExtractionOrchestrator:
                 baseline_keys=baseline_keys,
             )
         except MergeError as exc:
-            self._clear_snapshot_partials(
-                work_root, character_id, stage.stage_id)
+            _on_failure_cleanup()
             return LLMResult(
                 success=False, text="",
                 error=f"sub-lane merge failed: {exc}",
@@ -1184,6 +1224,73 @@ class ExtractionOrchestrator:
             # idempotent case; remaining OSError = permission / read-only
             # mount / IO error → fail loudly so the caller sees the real
             # cause instead of silently moving on to the next attempt.
+            p.unlink(missing_ok=True)
+
+    def _write_prev_snapshot_slices(
+        self,
+        work_root: Path,
+        character_id: str,
+        prev_stage_id: str,
+    ) -> None:
+        """Slice the previous stage's snapshot into per-lane slice files
+        for sub-lane consumption (decision #55 — 4-lane prev slice).
+
+        Writes ``.partial_prev/{char_id}/{prev_stage_id}_{sub_lane}.json``
+        for each sub-lane via ``slice_snapshot_for_lane`` — unconditional
+        overwrite (R3 pre-clear runs first; this method assumes the dir
+        has been cleared so the freshly written slices stay in sync with
+        the on-disk prev snapshot, even if repair_agent rewrote the prev
+        file since the previous slice run).
+
+        No-op when the prev snapshot file is missing (S001 has no prev →
+        prompt_builder treats missing slice as "no delta reference",
+        same as today's missing prev file).
+        """
+        prev_snapshot_path = (work_root / "characters" / character_id
+                              / "canon" / "stage_snapshots"
+                              / f"{prev_stage_id}.json")
+        if not prev_snapshot_path.exists():
+            return
+        try:
+            full = json.loads(prev_snapshot_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "prev snapshot slice skipped for %s/%s: cannot read %s (%s); "
+                "sub-lanes will run without prev reference for this stage",
+                character_id, prev_stage_id, prev_snapshot_path, exc)
+            return
+
+        slice_dir = prev_snapshot_slice_dir(work_root, character_id)
+        slice_dir.mkdir(parents=True, exist_ok=True)
+        for name in SUB_LANE_NAMES:
+            projected = slice_snapshot_for_lane(full, name)
+            path = prev_snapshot_slice_path(
+                work_root, character_id, prev_stage_id, name)
+            path.write_text(
+                json.dumps(projected, ensure_ascii=False, indent=2),
+                encoding="utf-8")
+
+    def _clear_prev_snapshot_slices(
+        self,
+        work_root: Path,
+        character_id: str,
+        prev_stage_id: str,
+    ) -> None:
+        """Delete ``.partial_prev/{char_id}/{prev_stage_id}_*.json`` for
+        one (character, prev_stage) pair (decision #55).
+
+        Used (1) before writing a fresh slice batch (R3 pre-clear), (2)
+        after repair completes + before ``[5/5] Git commit`` (slice is
+        ephemeral, no debugging value once stage commits — prev snapshot
+        is already in git history), and (3) on any sub-lane / merge
+        failure path. Idempotent — missing files are silently OK.
+        """
+        slice_dir = prev_snapshot_slice_dir(work_root, character_id)
+        if not slice_dir.exists():
+            return
+        for name in SUB_LANE_NAMES:
+            p = prev_snapshot_slice_path(
+                work_root, character_id, prev_stage_id, name)
             p.unlink(missing_ok=True)
 
     def _load_baseline_keys(
@@ -2746,8 +2853,9 @@ class ExtractionOrchestrator:
                 # Outer lanes (world / snapshot:* / support:*) all run
                 # in parallel. sub-lane fan-out only expands inside
                 # snapshot:* lanes; peak LLM concurrency is
-                # 1 + N_chars*3 + N_chars when sub-lanes on, 1+2*N_chars
-                # when off — both ≤ [phase3].concurrency cap.
+                # 1 + N_chars*4 + N_chars when sub-lanes on, 1+2*N_chars
+                # when off — decision #55 4-sub-lane topology, cap = 12
+                # (raised from 10 in the 3-sub-lane era).
                 n_workers = max(1, len(lanes_to_run))
                 tracker.start_step()
                 if is_partial_resume:
@@ -2979,7 +3087,7 @@ class ExtractionOrchestrator:
             repair_logs_dir.mkdir(parents=True, exist_ok=True)
 
             # Decision #55 — when sub-lane mode is on, route T3 char_
-            # snapshot regen through the 3-sub-lane parallel extract +
+            # snapshot regen through the 4-sub-lane parallel extract +
             # merge path. The callback is built once per stage so the
             # orchestrator's pipeline / stage / work_root context is
             # captured and reused for every per-file repair worker.
@@ -3110,6 +3218,22 @@ class ExtractionOrchestrator:
 
             stage.transition(StageState.PASSED)
             phase3.save(self.project_root)
+
+            # Prev snapshot slice cleanup (decision #55) — repair has
+            # finished consuming the slices via any T3 sub-lane regen,
+            # and the upcoming commit will baseline the new snapshot.
+            # Keeping slices past commit has no debug value (prev snapshot
+            # is in git history + slice is a deterministic projection),
+            # so wipe them per-char before the commit step.
+            if self.char_snapshot_sub_lanes:
+                prev_stage_for_slice = (
+                    _find_previous_committed_stage_for_sub_lanes(
+                        phase3.stages, stage))
+                if prev_stage_for_slice is not None:
+                    for char_id in pipeline.target_characters:
+                        self._clear_prev_snapshot_slices(
+                            work_root, char_id,
+                            prev_stage_for_slice.stage_id)
 
 
         # --- Step 5: Git commit ---

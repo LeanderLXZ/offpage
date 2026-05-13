@@ -392,37 +392,87 @@ source. Long discussion chains live in `logs/change_logs/`.
 
 54. **Foundation 前移 phase 1 + phase 2 仅补 `key_figures` + target_baseline 准入门槛收紧（dialogue/action 交互）。** 2026-05-09 端到端跑完 phase 2 后比对 [analysis/world_overview.json](works/<work_id>/analysis/world_overview.json) vs [world/foundation/foundation.json](works/<work_id>/world/foundation/foundation.json)，发现两份 95% 字段重叠（`work_id` / `genre` / `tone` / `world_structure` / `power_system` / `world_lines` 几乎 1:1 拷贝）；真增量只有 `core_rules` 升 object[] 含 `impact` + `major_factions.key_figures[]` 两项。同步发现 target_baseline 15 条全 `核心 / 重要` tier，含末章才出生且无 dialogue / action 的双胞胎角色——baseline prompt 当前"宁可多列、不可漏列、被点名提及即纳入"导致前 12 stage × 2 角色 × 3 结构 = 72 条纯空 entry 噪声。改造三件合一：(1) **foundation 前移 phase 1**：原 phase 1 `world_overview` lane → 改名 `foundation` lane，输出路径 `works/{work_id}/analysis/world_overview.json` → `works/{work_id}/world/foundation/foundation.json`。`schemas/analysis/world_overview.schema.json` 删除，内容**逐字搬到** `schemas/world/foundation.schema.json` 替换旧 foundation schema（旧 foundation 字段 / bound 形态废弃，新 foundation = 旧 world_overview 形态）；`$id` / `title` / `description` 改写为 foundation 语义，**字段 / bound 一字不改**（含 `core_rules` 保持 `string[] ≤30 条 / 每条 ≤150 字` 形态——user 决策 1 明确不改 core_rules 结构）。`major_factions.items` 新增 `key_figures[]` optional 字段（items: string maxLength 30 / maxItems 10 / 注释说明双阶段语义），**phase 1 lane 写 raw 名**（chunk_factions[].members_present[] 跨 chunk 合并去重直接写入，化名 / 真名 / 称呼任一）。`analysis_world_overview.md` → 改名 `analysis_foundation.md`。(2) **phase 2 缩水到 LLM "替换" 工作**（决策 #54 修订段，2026-05-11 user 反馈 phase 1 不应丢信息——chunk_factions.members_present 已有 raw 名）：删 `baseline_production.md`「产出 1：世界 Foundation」整段（≈100 行）；新增「产出 1：替换 foundation.major_factions[].key_figures 内 raw 名为 character_id」段：单次 LLM call 整合到 build_baseline_prompt（与 fixed_relationships / identity / target_baseline / manifest 同一次调用），输入 phase 1 落盘 foundation（含 raw 名 key_figures）+ `analysis/candidate_characters.json`（含 character_id + aliases） + 已确认目标清单；LLM 对 key_figures 每个 raw 名 lookup candidates[*].aliases，能匹配的换为对应 character_id，**匹配不上保留 raw 名**（不报错、不删除）；schema 不抓 character_id 合法性，key_figures 最终是 character_id + 未合并 raw 名混合。phase 2 保留产出：`fixed_relationships.json` + per-character `identity.json` + `target_baseline.json` + `manifest.json` 四件 + foundation key_figures 替换。失败处理：phase 2 现行兜底形态——单次 `run_with_retry` → `validate_baseline` schema gate → length-bound tolerance gate (#48) → fail 则 `sys.exit(1)`，**不接入 repair_agent**（B-2 拆出来作单独 todo `T-PHASE2-REPAIR-AGENT`，工程量 ≈ phase 3 接入当年的工作量，与本次重构正交）。(3) **target_baseline 准入门槛收紧**：删 prompt 中「宁可多列、不可漏列、被点名提及即纳入」原则；改为 **准入门槛 = 本角色与目标角色在 chapter_summaries 摘要描述中被反映为有过 dialogue / action 交互**（如"X 对 Y 说……" / "X 救/打/教 Y" / "X 与 Y 联手……"等动作或对话描述）；血亲不再默认核心 tier——按准入门槛 + 实际剧情驱动力分级。tier 4 档 (核心 / 重要 / 次要 / 普通) 不动，准入门槛与 tier 分级正交。Phase 3 stage_snapshot 三结构双向 set-equal 约束（#13）不动——准入门槛只影响 baseline 收录范围，对 phase 3 keys == baseline 的执行不变。**显式不做**：不动 [target_baseline.schema.json](schemas/character/target_baseline.schema.json) 与 [targets_cap.schema.json](schemas/character/targets_cap.schema.json)（schema 不变，仅 prompt 加严）；不引入 `_validation_tolerance_applied` 类元数据；不本次接入 repair_agent 到 phase 2（拆出来作 `T-PHASE2-REPAIR-AGENT`）；本 /go 不执行 `git reset` 重跑 phase 2 数据迁移——user 自决何时操作。Plumbing → `schemas/world/foundation.schema.json`（重写）+ `schemas/analysis/world_overview.schema.json`（删除）、`automation/prompt_templates/analysis_foundation.md`（改名 + 内容更新）+ `automation/prompt_templates/baseline_production.md`（删 foundation 段 + 加 key_figures 补齐段 + target_baseline 加严）、`automation/persona_extraction/prompt_builder.py`（`build_world_overview_prompt` → `build_foundation_prompt`、`_project_chunk_for_world_overview` → `_project_chunk_for_foundation`、新增 `build_factions_keyfigures_prompt`、lane 名常量 `world_overview` → `foundation`）、`automation/persona_extraction/orchestrator.py`（`run_analysis` foundation lane 输出路径改 + `run_baseline_production` 新增 key_figures 补齐 LLM call）、`schemas/README.md` + `automation/README.md`（schema 索引 + lane 列表更新）、`ai_context/{architecture,decisions,conventions}.md`（本条 + #25 / #40 disambiguation + #48 措辞修正 + #27m + #52 + #53 同步）、`docs/architecture/{schema_reference,extraction_workflow}.md` + `docs/requirements.md` §9 / §11、`docs/todo_list.md`（新立 `T-PHASE2-REPAIR-AGENT`）。
 
-55. **char_snapshot lane 拆 3 sub-lane 并行 + 程序 merge + lifecycle 2
-    sub-lane 重抽。** 2026-05-12 起 phase 3 单 stage 的 `char_snapshot` lane
-    内部拆 3 个并行 sub-lane（`char_expression` / `char_decision` /
-    `char_cognition`）压 wall-time。字段归属表（同源给 prompt + merge 用，
+55. **char_snapshot lane 拆 4 sub-lane 并行 + prev snapshot 按 lane 切片喂入
+    + 程序 merge + lifecycle 2 sub-lane 重抽。** Phase 3 单 stage 的
+    `char_snapshot` lane 内部拆 **4** 个并行 sub-lane（`char_expression` /
+    `char_decision` / `char_internal` / `char_social`）压 wall-time；每个
+    sub-lane 只读 prev snapshot 中自己需要的字段切片，**不读完整 prev**。
+    字段归属表（同源给 prompt + merge 用，
     定义在 `automation/persona_extraction/snapshot_merge.py::FIELD_ALLOCATION`）：
     `char_expression` = `voice_state` / `active_aliases` / `current_mood` /
-    `failure_modes.tone_traps`；`char_decision` = `behavior_state` /
-    `boundary_state` / `emotional_baseline` / `current_personality` /
-    `current_status` / `stage_delta.{status_changes, mood_shift,
-    personality_changes}`；`char_cognition` = `knowledge_scope` /
-    `misunderstandings` / `concealments` / `relationships` /
+    `failure_modes.tone_traps`；`char_decision` = `behavior_state`
+    （仅 7 个自身行为子键 `{core_goals, obsessions, decision_making_style,
+    emotional_triggers, emotional_reaction_map, habitual_behaviors,
+    stress_response}`，**不含** `target_behavior_map`）/ `boundary_state` /
+    `emotional_baseline` / `current_personality` / `current_status` /
+    `stage_delta.{status_changes, mood_shift, personality_changes}`；
+    **`char_internal`** = `knowledge_scope` / `misunderstandings` /
+    `concealments` / `snapshot_summary` / `failure_modes.{knowledge_leaks,
+    common_failures}`；**`char_social`** = `relationships` /
     `relationship_state_summary` / `stage_events` / `character_arc` /
-    `snapshot_summary` / `stage_delta.{trigger_events, relationship_changes,
-    voice_shift}` / `failure_modes.{common_failures, relationship_traps,
-    knowledge_leaks}`；程序注入 = `schema_version` / `work_id` /
+    `behavior_state.target_behavior_map` / `failure_modes.relationship_traps` /
+    `stage_delta.{trigger_events, relationship_changes, voice_shift}`；
+    程序注入 = `schema_version` / `work_id` /
     `character_id` / `stage_id` / `stage_title` / `timeline_anchor` /
-    `chapter_scope`. **Merge hard gate**：(1) 每 partial 顶层字段集合 ==
-    分配；(2) `failure_modes` 4 子键互斥 across 2 sub-lane + 全 4 子键覆盖；
-    (3) `stage_delta` 6 子键互斥 across 2 sub-lane + 全 6 子键覆盖（S001
-    允许两 sub-lane 都不写 `stage_delta` 顶层 key）；(4) 三方 keys（
+    `chapter_scope`. **拆分依据**（S001 振荡定位 + S002 cognition lane
+    60min hard timeout）：原 `char_cognition` 10 top-level / ~12 KB 输出
+    是 stage 内单点瓶颈；按"内省 vs 关系/事件"切，`char_internal` 集中
+    知识/隐瞒/失败模式形成 `knowledge_state_self_contradiction` 自洽闭包
+    （避免跨 lane 振荡 — S001 修复一处 `knowledge_leaks` 引入新
+    `does_not_know` 矛盾的根因），`char_social` 集中关系/事件/弧线/对
+    target 的行为模式。`target_behavior_map` 从 `char_decision` 移到
+    `char_social`：它是 N×M 对 target 的行为映射，与 `relationships` 同
+    结构、应同 lane 印证；`char_decision` 保留 `behavior_state` 的 7 个
+    自身行为子键（`core_goals` / `obsessions` / `decision_making_style` /
+    `emotional_triggers` / `emotional_reaction_map` / `habitual_behaviors`
+    / `stress_response`）。
+    **Merge hard gate**（5 gate；4 positive + 1 anti-rule）：(1) 每
+    partial 顶层字段集合 == 分配；(2) `failure_modes` 4 子键互斥 across
+    3 sub-lane（`tone_traps`→expression /
+    `{knowledge_leaks, common_failures}`→internal /
+    `relationship_traps`→social）+ 全 4 子键覆盖；(3) `stage_delta` 6 子键
+    互斥 across 2 sub-lane（decision 半
+    `{status_changes, mood_shift, personality_changes}` / cognition 半
+    `{trigger_events, relationship_changes, voice_shift}` 按新拓扑 cognition
+    半归 `char_social`）+ 全 6 子键覆盖（S001 允许 contributing 两 lane
+    都不写 `stage_delta` 顶层 key）；(4) **`behavior_state` 8 子键互斥**
+    across 2 sub-lane（7 self-behavior 子键 `{core_goals, obsessions,
+    decision_making_style, emotional_triggers, emotional_reaction_map,
+    habitual_behaviors, stress_response}`→decision /
+    `target_behavior_map`→social）+ 全 8 子键覆盖；三方 keys（
     `voice_state.target_voice_map` / `behavior_state.target_behavior_map` /
     `relationships`）keys 集合相互相等且 == `target_baseline.targets[].target_character_id`
     — 复用 `automation/repair_agent/checkers/targets_keys_eq_baseline.py`
     做 merge 前置预检；(5) **(D) drop entry 不被误判**：merge 仅查字段集合
     互斥 + 全覆盖，**不查** partial entry 数 ≥ prev（per #11f / #13）。
+    **Prev snapshot 4-way slice**（避免 sub-lane 都读 ~30 KB 完整 prev
+    snapshot）：`snapshot_merge.slice_snapshot_for_lane(full, lane)` 按
+    `FIELD_ALLOCATION` + `SHARED_KEY_SUBKEYS` 反向投影；orchestrator stage
+    启动前调 `_write_prev_snapshot_slices(work_root, char, prev_stage_id)`
+    切 4 个 slice 写盘到 `works/{wid}/analysis/progress/.partial_prev/{prev_stage_id}_{lane}.json`，
+    prompt_builder 按 `lane_scope` 选 slice 路径塞进 prompt：
+    `char_expression` / `char_decision` 各拼**自身 slice**，`char_internal`
+    / `char_social` 各拼**两个 slice**（internal + social，互读对方，
+    覆盖"知识 ↔ 关系"的耦合 — 角色对甲知道什么 vs 角色与甲的关系演变
+    属于同一状态空间）。每 lane prev 部分体量从 ~30 KB 降到 ~7–13 KB
+    （-50% 到 -70%）；**不读** prev world stage_snapshot、**不读**
+    `memory_digest.jsonl`（章节原文 + baseline 已够，加这些既无法防住
+    具体 failure mode，又会重新膨胀上下文）。slice lifecycle 照搬
+    `.partial/`（决策 #55 同段）：stage 启动前 R3 残留清理（先
+    `_clear_prev_snapshot_slices` 再 `_write_prev_snapshot_slices`
+    unconditional overwrite，保证 fresh 且与 repair 中可能改过的 prev
+    snapshot 同步）+ repair 完成后 `[5/5] Git commit` 前清当 stage 用的
+    prev slice + sub-lane / merge 失败时清。**不保留 slice 调试**：prev
+    snapshot 已 committed 在 git history + slice 是 `FIELD_ALLOCATION` 的
+    确定性投影，留盘无任何调试收益（要看 LLM 当时读到啥，
+    `git show {prev_stage}:.../stage_snapshots/{prev}.json` + 翻
+    `FIELD_ALLOCATION` 即可）。
     **Lane 级 resume 粒度仍是 `snapshot:{char_id}`**——sub-lane 拆分对
     `StageEntry.lane_states` 不可见；任一 sub-lane 或 merge 失败即整 lane
     重跑，PENDING / ERROR 状态下的 `.partial/{stage_id}_*.json` 由
     `progress.reconcile_with_disk` 一律删，不复用。**Repair lifecycle 2 T3
     重抽**：file-level lifecycle 1 末端 T3 触发后，若开关开 + 文件是
-    `characters/<cid>/canon/stage_snapshots/<sid>.json` → T3 fixer 走 3
+    `characters/<cid>/canon/stage_snapshots/<sid>.json` → T3 fixer 走 4
     sub-lane 并行重新 extract + merge 路径（每 sub-lane prompt 注入
     `prior_attempt_context` resolved+remaining ≤600 char 摘要 + 错误信息），
     替代默认 `FileRegenFixer` 全文 regen；lifecycle 计数（`max_lifecycles_per_file = 2`）
@@ -436,31 +486,38 @@ source. Long discussion chains live in `logs/change_logs/`.
     隐式 `with` 退出阻塞数小时；R3 — 启动前清理仍是单源真理）。**Outer pool
     全并发**：phase 3 主 ThreadPoolExecutor `n_workers = max(1, len(lanes_to_run))`，
     外层 lane (`world` / `snapshot:*` / `support:*`) 全并发提交；sub-lane fan-out
-    仅在 `snapshot:*` lane 内部展开 3 inner LLM 调用，`world` / `support:*` 无
-    fan-out。2 角色场景峰值 = 1 world + 2×3 snapshot sub-lane + 2 support = **9**
-    LLM 并发；sub-lane 关闭时降为 1 + 2 + 2 = **5**——均 ≤ `[phase3].concurrency=10`
-    cap（`automation/persona_extraction/config.py`）。原 H1 "÷3 与 inner 相消"
-    算法把 `world` / `support` 错按 sub-lane 折扣，外层无故缩到 1 等效串行，
-    单 stage 时长由理论 max(world, snapshot, support) ~15 min 拉到 ~60 min，
-    已撤回。**Toml 开关 +
+    仅在 `snapshot:*` lane 内部展开 **4** inner LLM 调用，`world` /
+    `support:*` 无 fan-out。**2 角色场景峰值 = 1 world + 2×4 snapshot
+    sub-lane + 2 support = 11** LLM 并发；sub-lane 关闭时降为
+    1 + 2 + 2 = **5**——均 ≤ `[phase3].concurrency=12` cap
+    （`automation/persona_extraction/config.py` + `automation/config.toml`，
+    由 3 sub-lane 时代的 10 上调到 12 覆盖新峰值）。N≥3 角色场景峰值
+    `1 + 4N + N` 仍超 cap（N=3 → 16，N=4 → 21），留给另一个 todo
+    `T-PHASE3-PEAK-CAP-N-CHARS` 讨论，本次保持 RateLimitController pause
+    兜底现状不引入新分支。原 H1 "÷3 与 inner 相消" 算法把 `world` /
+    `support` 错按 sub-lane 折扣，外层无故缩到 1 等效串行，单 stage 时长由
+    理论 max(world, snapshot, support) ~15 min 拉到 ~60 min，已撤回。**Toml 开关 +
     CLI 双向 flag**：`[phase3].char_snapshot_sub_lanes`（缺省 `true`）+
     `--char-snapshot-sub-lanes` / `--no-char-snapshot-sub-lanes`；
-    light_novel 模式单 stage 字符数小，3 sub-lane 启动开销可能 > 抽取
+    light_novel 模式单 stage 字符数小，4 sub-lane 启动开销可能 > 抽取
     耗时收益，**不引入** mode-aware 默认值，由用户按 work 手切。
     **Fallback** `false` → 单 lane 等价 `lane_scope=ALL`，phase 3 现状不变
-    （baseline 锚点 + #11f 四态 + #13 keys == baseline 校验均为 phase 3
-    通用现状，已落地，本决策不引入新强制规则；仅在 prompt_builder
-    校准 char_snapshot read list 把 `target_baseline.json` 纳入——todo body
-    误以为该文件已在 read list 里，实际此前没有，作为同源校准随本次落盘）。
-    **`.partial/` 路径**：`works/{wid}/characters/{cid}/canon/stage_snapshots/.partial/`
-    被 `.gitignore` 屏蔽。Plumbing → `automation/persona_extraction/{snapshot_merge,
-    prompt_builder,orchestrator,progress,config,cli,lane_output}.py`、
+    （prev slice 机制仅 sub-lane 模式生效；fallback 单 lane 直接读完整 prev
+    snapshot；baseline 锚点 + #11f 四态 + #13 keys == baseline 校验均为
+    phase 3 通用现状，已落地，本决策不引入新强制规则）。**`.partial/`
+    路径**：`works/{wid}/characters/{cid}/canon/stage_snapshots/.partial/`
+    被 `.gitignore` 屏蔽；**`.partial_prev/` 路径**：
+    `works/{wid}/analysis/progress/.partial_prev/` 跟随 `progress/` 整目录
+    被 `.gitignore` 屏蔽（已有 `works/*/analysis/progress/` 通配 + 新增
+    `works/*/analysis/progress/.partial_prev/` 显式条目防误提）。Plumbing →
+    `automation/persona_extraction/{snapshot_merge,prompt_builder,orchestrator,progress,config,cli,lane_output}.py`、
     `automation/prompt_templates/character_snapshot_extraction.md`（加
     `{lane_scope}` / `{lane_field_whitelist}` 占位，不动 §核心规则 #2 与
     §maxItems 裁剪段，保持 sub-lane / 单 lane 全 inherits）、
     `automation/repair_agent/{coordinator.py,fixers/file_regen.py}`（
     `FileRegenFixer` 加可选 `sub_lane_regen` 回调，`coordinator.run` 新增
-    kwarg 透传到 `_build_fixers`）、`automation/config.toml`、`.gitignore`、
+    kwarg 透传到 `_build_fixers`）、`automation/config.toml`（
+    `[phase3].concurrency` 10→12）、`.gitignore`、
     `docs/architecture/extraction_workflow.md` §6.2、`docs/requirements.md` §9.3、
     `automation/README.md` Phase 3 段、`ai_context/{architecture,decisions,conventions}.md`、
     `docs/todo_list_archived.md`。

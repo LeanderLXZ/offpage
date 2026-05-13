@@ -172,7 +172,7 @@ def main(argv: list[str] | None = None) -> None:
         dest="char_snapshot_sub_lanes",
         action="store_true",
         default=None,
-        help="Force-enable the Phase 3 char_snapshot 3-sub-lane fan-out "
+        help="Force-enable the Phase 3 char_snapshot 4-sub-lane fan-out "
              "(decision #55). Overrides "
              "[phase3].char_snapshot_sub_lanes from config.toml.",
     )
@@ -180,7 +180,7 @@ def main(argv: list[str] | None = None) -> None:
         "--no-char-snapshot-sub-lanes",
         dest="char_snapshot_sub_lanes",
         action="store_false",
-        help="Force-disable the Phase 3 char_snapshot 3-sub-lane fan-out; "
+        help="Force-disable the Phase 3 char_snapshot 4-sub-lane fan-out; "
              "fall back to the legacy single-lane behaviour. Useful for "
              "light_novel mode where per-stage size is too small to "
              "amortise sub-lane startup.",

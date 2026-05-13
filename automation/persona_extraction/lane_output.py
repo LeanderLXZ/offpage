@@ -32,6 +32,17 @@ SUPPORT_PREFIX = "support:"
 # and the orchestrator cleans the .partial entries.
 SNAPSHOT_PARTIAL_DIRNAME = ".partial"
 
+# Sub-lane prev-snapshot slice directory (decision #55, 4-lane topology) —
+# lives under ``works/{wid}/analysis/progress/.partial_prev/{char_id}/``,
+# gitignored (the ``progress/`` parent is already in .gitignore; we add an
+# explicit ``.partial_prev/`` entry for defence-in-depth). The orchestrator
+# writes ``{prev_stage_id}_{sub_lane}.json`` slices here before each stage
+# runs, and the prompt_builder injects the appropriate slice path(s) into
+# each sub-lane's prompt. Cleanup mirrors ``.partial/``: R3 pre-clear
+# before write, plus explicit clear after repair / before commit / on
+# any sub-lane failure.
+SNAPSHOT_PARTIAL_PREV_DIRNAME = ".partial_prev"
+
 # char_support lane's cumulative baseline file. Lives under
 # works/{wid}/characters/{char_id}/canon/ and is NOT per-stage; we
 # restore it from HEAD before re-running an incomplete support lane
@@ -79,10 +90,27 @@ def snapshot_partial_dir(work_root: Path, char_id: str) -> Path:
 def snapshot_partial_path(work_root: Path, char_id: str,
                           stage_id: str, sub_lane: str) -> Path:
     """Path of a single sub-lane partial file. ``sub_lane`` is one of
-    ``char_expression`` / ``char_decision`` / ``char_cognition``
-    (validated by ``snapshot_merge.SUB_LANE_NAMES`` — not re-checked
-    here to keep this module dependency-free)."""
+    the names in ``snapshot_merge.SUB_LANE_NAMES`` (validated there —
+    not re-checked here to keep this module dependency-free)."""
     return snapshot_partial_dir(work_root, char_id) / f"{stage_id}_{sub_lane}.json"
+
+
+def prev_snapshot_slice_dir(work_root: Path, char_id: str) -> Path:
+    """``.partial_prev/{char_id}/`` directory for per-lane slices of the
+    previous stage's snapshot (decision #55 — 4-lane prev slice).
+    Gitignored via ``progress/`` parent (with explicit ``.partial_prev/``
+    entry as belt-and-suspenders)."""
+    return (work_root / "analysis" / "progress"
+            / SNAPSHOT_PARTIAL_PREV_DIRNAME / char_id)
+
+
+def prev_snapshot_slice_path(work_root: Path, char_id: str,
+                             prev_stage_id: str, sub_lane: str) -> Path:
+    """Path of a single per-lane prev-snapshot slice file. ``sub_lane``
+    is one of the names in ``snapshot_merge.SUB_LANE_NAMES`` (validated
+    by the caller)."""
+    return (prev_snapshot_slice_dir(work_root, char_id)
+            / f"{prev_stage_id}_{sub_lane}.json")
 
 
 def baseline_paths(work_root: Path, char_id: str) -> list[Path]:

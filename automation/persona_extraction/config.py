@@ -38,7 +38,13 @@ class StageConfig:
 
 @dataclass(frozen=True)
 class Phase0Config:
-    concurrency: int = 10
+    # Default = 12 (raised from 10 in the 3-sub-lane era when decision
+    # #55's 4-sub-lane char_snapshot fan-out landed; covers 2-character
+    # phase 3 peak LLM concurrency 1 + 2×4 + 2 = 11). Phase 0 has no
+    # sub-lane fan-out itself; the 12 default just keeps phase 0 in step
+    # with phase 3's peak so users running the full pipeline don't trip
+    # rate-limit pauses earlier than necessary.
+    concurrency: int = 12
     summarize_timeout_s: int = 1800
     json_repair_l2_timeout_s: int = 600
     recovery_effort: str = "high"
@@ -62,19 +68,21 @@ class Phase3Config:
     review_timeout_s: int = 600
     max_turns: int = 80
     # Decision #55 — Sub-lane fan-out for the per-character char_snapshot
-    # lane. ``true`` (default) splits the single LLM call into 3 parallel
-    # sub-lanes (char_expression / char_decision / char_cognition) that
-    # share one prompt template (``{lane_scope}`` placeholder) and merge
-    # programmatically. ``false`` keeps the legacy single-lane behaviour
-    # — used for light_novel mode where per-stage size is too small to
-    # amortise sub-lane startup. CLI override:
+    # lane. ``true`` (default) splits the single LLM call into 4 parallel
+    # sub-lanes (char_expression / char_decision / char_internal /
+    # char_social) that share one prompt template (``{lane_scope}``
+    # placeholder) and merge programmatically. ``false`` keeps the legacy
+    # single-lane behaviour — used for light_novel mode where per-stage
+    # size is too small to amortise sub-lane startup. CLI override:
     # ``--char-snapshot-sub-lanes`` / ``--no-char-snapshot-sub-lanes``.
     char_snapshot_sub_lanes: bool = True
 
 
 @dataclass(frozen=True)
 class Phase4Config:
-    concurrency: int = 10
+    # Default = 12 (raised from 10 with decision #55 4-sub-lane topology;
+    # see Phase0Config.concurrency for rationale).
+    concurrency: int = 12
     # Per-chapter retry budget within a single Phase 4 run. A FAILED
     # chapter (validate_scene_split errors / parse failure / LLM error)
     # is requeued with the prior error injected into the prompt up to

@@ -65,6 +65,9 @@ works/{work_id}/
       rate_limit_exit.log           # 限额硬停退出说明（仅 exit 2 路径写入）
       failed_lanes/                 # Phase 3 lane 级失败诊断（§11 T-LOG）
       repair_logs/                  # repair_agent 周期性诊断
+      .partial_prev/{char_id}/{prev_stage_id}_{sub_lane}.json
+                                    # Phase 3 sub-lane prev snapshot 切片
+                                    # （决策 #55；启动前 R3 清 + repair 完成后 commit 前清）
     chapter_summaries/
     scene_splits/
     evidence/
@@ -148,10 +151,12 @@ works/{work_id}/
 - `stage_snapshots/{stage_id}.json` — 角色在每个阶段的**自包含**状态快照
   （voice / behavior / boundary / failure_modes 全部内联，无独立 baseline
   文件；运行时与 `identity.json` + `target_baseline.json` 配套加载即可）。
-  `[phase3].char_snapshot_sub_lanes = true`（缺省）时产出由 3 sub-lane
+  `[phase3].char_snapshot_sub_lanes = true`（缺省）时产出由 **4** sub-lane
   并行抽取后由 `snapshot_merge.merge_partials` 程序合并；merge 中间产物
   暂存于 `stage_snapshots/.partial/{stage_id}_{lane}.json`，phase 3 自动
-  清理，`.gitignore` 屏蔽（决策 #55）。内容涵盖：
+  清理，`.gitignore` 屏蔽。每 sub-lane 只读 prev snapshot 中自己需要的
+  字段切片（`analysis/progress/.partial_prev/{char_id}/{prev_stage_id}_{sub_lane}.json`），
+  同 lifecycle 自动清理（决策 #55）。内容涵盖：
   - 仅本阶段发生的事件 `stage_events`（每条 50–80 字，schema 硬门控；
     非累积历史；跨阶段历史由 `memory_timeline` + `memory_digest.jsonl` +
     `world_event_digest.jsonl` 共同承载）

@@ -12,7 +12,7 @@
 - **源目录**: `{source_dir}`
 - **作品目录**: `{work_dir}`
 - **lane_scope**: `{lane_scope}`（`ALL` = 单 lane 全字段；`char_expression` /
-  `char_decision` / `char_cognition` = sub-lane 模式，仅写本 lane 分到的字段集合）
+  `char_decision` / `char_internal` / `char_social` = sub-lane 模式，仅写本 lane 分到的字段集合）
 {lane_scope_block}
 
 ## 必读文件清单
@@ -198,9 +198,11 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
 
 ## 风格一致性要求
 
-前一阶段角色快照参照：`{prev_char_snapshot}`
+前一阶段角色快照参照：{prev_char_snapshot}
 
-如果存在前一阶段的输出，请先读取它，并确保本阶段产出在以下维度与之保持一致：
+如果存在前一阶段的输出（上方反引号包裹的路径；sub-lane 模式下可能列出
+1–2 个 per-lane slice 路径而非完整 prev snapshot），请先读取它（们），
+并确保本阶段产出在以下维度与之保持一致：
 
 - emotional_voice_map 条目数不少于前一 stage
 - target_voice_map 每个 target 的 dialogue_examples 不少于下方质量要求表的最低值
