@@ -2743,14 +2743,12 @@ class ExtractionOrchestrator:
                 lanes_to_run = stage.missing_lanes(
                     pipeline.target_characters)
                 n_chars = len(pipeline.target_characters)
-                # When sub-lane fan-out is enabled, each ``snapshot:*``
-                # lane spawns 3 inner sub-lane LLM calls; cap outer
-                # workers by that factor so peak concurrent LLM count
-                # stays close to the original lane budget (config target
-                # ~8-10 concurrent claude -p calls — see config.py).
-                sub_lane_factor = 3 if self.char_snapshot_sub_lanes else 1
-                n_workers = max(
-                    1, len(lanes_to_run) // sub_lane_factor)
+                # Outer lanes (world / snapshot:* / support:*) all run
+                # in parallel. sub-lane fan-out only expands inside
+                # snapshot:* lanes; peak LLM concurrency is
+                # 1 + N_chars*3 + N_chars when sub-lanes on, 1+2*N_chars
+                # when off — both ≤ [phase3].concurrency cap.
+                n_workers = max(1, len(lanes_to_run))
                 tracker.start_step()
                 if is_partial_resume:
                     skipped = [n for n in expected_lane_names(

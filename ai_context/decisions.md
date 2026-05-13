@@ -434,10 +434,15 @@ source. Long discussion chains live in `logs/change_logs/`.
     保留供下次 `--resume` 启动前的 `_clear_snapshot_partials` 兜底清理覆盖
     （R2 — 不在 hard-stop 路径删 partial，避免 sleep 中的同伴 future 被
     隐式 `with` 退出阻塞数小时；R3 — 启动前清理仍是单源真理）。**Outer pool
-    并发降量**：sub-lane 启用时 phase 3 主 ThreadPoolExecutor 的 `n_workers`
-    由 `len(lanes_to_run)` 折半到 `len(lanes_to_run) // 3`，与 inner sub-lane
-    fan-out 因子相消，避免峰值 LLM 并发超出 `config.py` 自述的 ~8-10 阈值。
-    **Toml 开关 +
+    全并发**：phase 3 主 ThreadPoolExecutor `n_workers = max(1, len(lanes_to_run))`，
+    外层 lane (`world` / `snapshot:*` / `support:*`) 全并发提交；sub-lane fan-out
+    仅在 `snapshot:*` lane 内部展开 3 inner LLM 调用，`world` / `support:*` 无
+    fan-out。2 角色场景峰值 = 1 world + 2×3 snapshot sub-lane + 2 support = **9**
+    LLM 并发；sub-lane 关闭时降为 1 + 2 + 2 = **5**——均 ≤ `[phase3].concurrency=10`
+    cap（`automation/persona_extraction/config.py`）。原 H1 "÷3 与 inner 相消"
+    算法把 `world` / `support` 错按 sub-lane 折扣，外层无故缩到 1 等效串行，
+    单 stage 时长由理论 max(world, snapshot, support) ~15 min 拉到 ~60 min，
+    已撤回。**Toml 开关 +
     CLI 双向 flag**：`[phase3].char_snapshot_sub_lanes`（缺省 `true`）+
     `--char-snapshot-sub-lanes` / `--no-char-snapshot-sub-lanes`；
     light_novel 模式单 stage 字符数小，3 sub-lane 启动开销可能 > 抽取
