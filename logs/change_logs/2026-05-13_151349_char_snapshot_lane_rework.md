@@ -141,3 +141,32 @@ PRE「计划动作清单」对照：
 ## Completed
 - **Status**: DONE
 - **Finished**: 2026-05-13 15:59:25 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：13/13 计划项 ✅ + 10/10 验证标准 ✅
+- Missed updates: 0 条
+
+### 轨 2 — 影响扩散
+- Findings: High=1 / Medium=5 / Low=5
+  - **H1** `automation/persona_extraction/orchestrator.py:1263-1271` — `_write_prev_snapshot_slices` 的 `mkdir` + `write_text` 无 try/except，permission / disk full 异常会冒泡到 `_run_char_snapshot_sub_lanes`（无 except）→ 整 stage 挂；与同函数 line 1254-1261 prev read 失败的 warn-and-return 降级不对称
+  - **M1** `docs/architecture/extraction_workflow.md:308` — 路径文档写 `.partial_prev/{prev_stage_id}_{lane}.json`，缺 `{char_id}/` 子层（D3 同步不完整）；代码实际正确
+  - **M2** `automation/prompt_templates/character_snapshot_extraction.md:191` — "3 sub-lane 全部完成后程序合并" 残留 "3"
+  - **M3** `automation/config.toml:96` — "单 char_snapshot lane 内部是否再拆 3 个并行 sub-lane（决策 #55）" 残留 "3"
+  - **M4** `automation/config.toml:105` — "light_novel ... 3 sub-lane 启动开销" 残留 "3"
+  - **M5** `automation/persona_extraction/snapshot_merge.py:586-588` — `slice_snapshot_for_lane` 共享键空投影时跳过写入；round-trip merge 会失败（生产路径不消费 slice→merge 链路，仅 smoke 5e 覆盖不全）
+  - **L1** `automation/persona_extraction/progress.py` `reconcile_with_disk` 未扫 `.partial_prev/` 残留（下次 R3 unconditional overwrite 兜底）
+  - **L2** `automation/persona_extraction/prompt_builder.py:617, 781, 921` 三处函数内 `from .snapshot_merge import SUB_LANE_NAMES`（避免顶层循环 import 的设计 trade-off）
+  - **L3** phase 3 外层 ThreadPool 无硬 cap（`n_workers = max(1, len(lanes_to_run))`）— D2 已说明 cap 是名义值
+  - **L4** `Phase0Config.concurrency = 12` 上调 — phase 0 自身不消费 phase 3 cap，是"对齐"副作用，符合 toml 注释 intent
+  - **L5** smoke 5e 未覆盖共享键空投影 round-trip
+- Open Questions: 2 条（详见对话）
+
+## 复查时状态
+- **Reviewed**: 2026-05-13 16:28 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全落实 ✅；轨 2 有 1 H + 5 M（H1 是 unhandled exception 边界 case；M1-M4 是 docs / toml 文案漂移；M5 是 smoke 覆盖缺口）
+- **Conversation ref**: 同会话内 /post-check 输出
