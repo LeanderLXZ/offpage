@@ -152,6 +152,28 @@
 
 ## Abandoned
 
+### [T-CODEX-RATE-LIMIT] CodexBackend 错误分类对齐 rate-limit / 429 / 5h_window · 废弃于 2026-05-12
+
+- 废弃原因：codex backend 未启用（默认 `--backend claude`），本机连 codex CLI 都没装无法实测；代码侧 `CodexBackend.run` 顶上已有相关注释作为提醒。切到 codex 时一定会读该文件、注释自动跳出，todo 行只是冗余索引。真要用 codex 时和 T-CODEX-STDIN 一起修。
+- 关联 log: [logs/change_logs/2026-05-12_201319_todo_brief_plain_language_and_archive_sweep.md](../logs/change_logs/2026-05-12_201319_todo_brief_plain_language_and_archive_sweep.md)
+
+### [T-CODEX-STDIN] CodexBackend prompt 走 stdin 临时文件 · 废弃于 2026-05-12
+
+- 废弃原因：codex backend 未启用（默认 `--backend claude`），本机连 codex CLI 都没装无法实测；代码侧 `CodexBackend.run` 顶上已有 "NOTE: codex CLI still receives the prompt via argv ..." 注释作为提醒。切 codex 时注释自动跳出，todo 在 Discussing 段躺着只是噪声。真要用 codex 时再启动这条 + T-CODEX-RATE-LIMIT。
+- 关联 log: [logs/change_logs/2026-05-12_201319_todo_brief_plain_language_and_archive_sweep.md](../logs/change_logs/2026-05-12_201319_todo_brief_plain_language_and_archive_sweep.md)
+
+### [T-PHASE2-RECOVERY-RESET-FLAG] `--reset-phase3-after-baseline-change` 自动清理 flag · 废弃于 2026-05-12
+
+- 废弃原因：过度工程。决策 #56 hard stop 路径已落地、daemon 撞这条概率极低（baseline 抽错本来罕见 + 在 daemon 模式 + 已有 phase 3 committed 三重叠加），为它写 store_true flag + cleanup 路径 + 4 个 doc 同步性价比不够。手动 `rm -rf + commit` 是更小的 runbook；真撞上了切前台跑 `[y/N]` 也行。等真实需求验证后再立项。
+- 关联 log: [logs/change_logs/2026-05-12_201319_todo_brief_plain_language_and_archive_sweep.md](../logs/change_logs/2026-05-12_201319_todo_brief_plain_language_and_archive_sweep.md)
+
+### [T-SIMULATION-MODE-MARKER] simulation 运行时注入 worker-mode marker · 废弃于 2026-05-12
+
+- 废弃原因：冗余提醒。`[simulation_runtime_mode]` 占位符已写在 `CLAUDE.md` / `AGENTS.md` 顶部 "Worker-Mode Short-Circuit" 段——simulation runtime 真开工时一定会读这两份入口文件、第一眼看到占位符就知道要注入。真到要做时 1 行 `--append-system-prompt` 改动量微不足道，不需要 todo 行作为二次索引。
+- 关联 log: [logs/change_logs/2026-05-12_201319_todo_brief_plain_language_and_archive_sweep.md](../logs/change_logs/2026-05-12_201319_todo_brief_plain_language_and_archive_sweep.md)
+
+---
+
 ### [T-PHASE35-IMPORTANCE-AWARE] Phase 3.5 一致性检查按 importance 调门槛 · 废弃于 2026-04-30
 
 - 废弃原因：核心痛点（`_check_target_map_counts` 对从未登场 / tier=次要/普通 角色 over-error）已在 T-CONSISTENCY-TARGETS-SUBSET commit `620be09` 顺手用"空 examples 跳过"守卫等价解决；剩余 7 个 `_check_*` 的 over-error 风险被 D4 == + schema-required 字段双重稀释，且 T-PHASE2-TARGET-BASELINE / T-BASELINE-DEPRECATE runtime 未跑前调阈值是过早优化。后续如确有需要，按"D4-state + tier 双锚点"重新立项即可。

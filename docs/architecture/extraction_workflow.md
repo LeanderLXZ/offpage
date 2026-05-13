@@ -219,7 +219,8 @@ stage_snapshots/*.json` 任一非空即视为存在。存在时分模式处理�
 
 guard 同时覆盖 `--start-phase 2 force_baseline` 调用路径（用户显式重跑也可能
 误伤 phase 3 产物）。`--reset-phase3-after-baseline-change` 自动清理 flag
-不实现（破坏性动作走显式人工执行；二期 todo `T-PHASE2-RECOVERY-RESET-FLAG`）。
+不实现——破坏性动作走显式人工执行（撞 hard stop 后用户手动跑清理命令再重启
+或切前台走 `[y/N]`）。
 
 ### 6. 1+2N 并行阶段提取
 

@@ -492,8 +492,8 @@ source. Long discussion chains live in `logs/change_logs/`.
     双模交互**：daemon (`--background`，stdin=`/dev/null`) → 打印清理清单
     + `sys.exit(1)`；前台 → 同清理清单 + `input("Continue and overwrite
     phase 3 artifacts? [y/N]: ")` 非 y 即退出。**默认 hard stop**，不实现
-    `--reset-phase3-after-baseline-change` 自动清理 flag（破坏性动作走显式
-    人工执行；二期 todo `T-PHASE2-RECOVERY-RESET-FLAG`）。
+    `--reset-phase3-after-baseline-change` 自动清理 flag——破坏性动作走显式
+    人工执行（撞 hard stop 后用户手动跑清理命令再重启或切前台走 `[y/N]`）。
     (3) **`--end-stage` daemon 路径"empty = 全跑"语义贯通**：(3a)
     `confirm_with_user` 内 `Extract up to stage N` prompt 文案写 `"0 or
     empty = all"`，但代码 `int(raw) if raw else 0` 把 empty 折成 0（baseline
@@ -514,9 +514,9 @@ source. Long discussion chains live in `logs/change_logs/`.
     改为"EOFError → None = 全跑"。**显式不做**：不动 `_LEGACY_PHASE_KEY_MAP`
     内容（仍保留 `phase_2 → phase_1_5` / `phase_2_5 → phase_2`）；不动
     `migrate_legacy_progress` 的 `extraction_progress.json` 路径；不实现
-    `--reset-phase3-after-baseline-change` flag（二期）；不动 light_novel
-    `chapter_count=1` schema 例外（决策 #27m 现状保留，外部 validator
-    消费方未出现 → todo `T-LIGHTNOVEL-SCHEMA-ONEOF`）。Plumbing →
+    `--reset-phase3-after-baseline-change` flag（破坏性动作走人工执行更稳）；
+    不动 light_novel `chapter_count=1` schema 例外（决策 #27m 现状保留，
+    外部 validator 消费方未出现 → todo `T-LIGHTNOVEL-SCHEMA-ONEOF`）。Plumbing →
     `automation/persona_extraction/progress.py`（`PipelineProgress.save/load`
     + `_LEGACY_REMAP_GUARD` 内部辅助）、`automation/persona_extraction/orchestrator.py`
     （`_phase3_committed_artifacts_present` helper + `run_extraction_loop`
@@ -528,7 +528,7 @@ source. Long discussion chains live in `logs/change_logs/`.
     （C / D 翻转）、`automation/README.md` + `docs/architecture/extraction_workflow.md`
     + `ai_context/architecture.md`（四处 `--background` 文案同步）、
     `ai_context/decisions.md`（本条 + #51 措辞同步）、`docs/todo_list.md`
-    （登记 `T-PHASE2-RECOVERY-RESET-FLAG` + `T-LIGHTNOVEL-SCHEMA-ONEOF`）。
+    （登记 `T-LIGHTNOVEL-SCHEMA-ONEOF`）。
 
 ## Repository
 

@@ -12,28 +12,25 @@
 |---|---|---|---|---|
 | `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | 2026-05-01 | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
 
-### 🟡 Next (3)
+### 🟡 Next (2)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
-| `T-PHASE2-REPAIR-AGENT` | phase 2 baseline production 整体接入 repair_agent lifecycle（4 件产物 foundation key_figures patch + fixed_relationships + identity + target_baseline 各自包装 SourceContext + 写 phase 2 专属 checkers）。当前 phase 2 仅"裸单次 LLM + tolerance gate"为遗留缺陷（决策 #54 拆出），decision #25 + decision #48 措辞修正后已明确 repair_agent 仅在 phase 3。 | 🟡 Med | ⏸ Blocked | 🔴 Large·Arch | 2026-05-11 EDT | 无（与本次 foundation 重构正交） |
-| `T-PHASE2-RECOVERY-RESET-FLAG` | 给 `_guard_phase2_rewrite_against_phase3` 加 `--reset-phase3-after-baseline-change` 自动清理路径（带 flag 跳 guard、清 phase 3 产物 + commit、然后继续 baseline 重跑）。决策 #56 拆出，hard stop 默认已落地，二期补显式 reset。 | 🟢 Med-Low | ✅ Ready | 🟡 Med | 2026-05-12 EDT | 无 |
-| `T-PLUGIN-README` | 2026-04-28 把 skills 项目专属内容抽到 `ai_context/skills_config.md`，但新项目装 plugin 时不知道每节怎么填 / 缺失行为 / 模板。需写 `.agents/skills/README.md` 作为 setup 单一入口。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
+| `T-PHASE2-REPAIR-AGENT` | Phase 2 抽人物 baseline 时如果格式错了，目前只会"试一次就硬失败"，不像 phase 3 有自动修复管线。给 phase 2 也接上自动修复，让 baseline 抽错能自动重试 / 调整，而不用手动 rerun。改动大、设计还没拍板。 | 🟡 Med | ⏸ Blocked | 🔴 Large·Arch | 2026-05-11 EDT | 无（与本次 foundation 重构正交） |
+| `T-PLUGIN-README` | 现在这套 skill plugin 想接到新项目上时，没有文档说"该填哪些字段、模板长啥样、漏填了会发生什么"——这些信息散在各处。写一个 README 当 setup 入口，告诉新项目 plugin 装上后该怎么开干。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
 
-### ⚪ Discussing (9)
+### ⚪ Discussing (6)
 
 | ID | Brief | Open decisions | Updated | Blocked by |
 |---|---|---|---|---|
-| `T-REPAIR-EVENT-DRIVEN` | E2 方案：每 lane 完成立刻触发 repair，与后续 lane extract 重叠。2026-04-22 测算只比 E1 省 4min/stage（49 stage 共 ~3h），双线程池 + peak 9 并发撞 rate limit 复杂度跳一档，暂不做。等 E1 真实耗时数据出来再重评。 | 0 | — | T-REPAIR-PARALLEL 先落地 |
-| `T-CODEX-STDIN` | ClaudeBackend 已改 stdin 临时文件绕过 argv 128KiB 上限；CodexBackend.run 仍走 positional argv，切 `--backend codex` 时大 prompt 会复现 Argument list too long。已加注释未改代码——本机无 codex CLI 实测。 | 2 | — | 有 codex CLI 的机器 / 订阅 |
-| `T-CODEX-RATE-LIMIT` | ClaudeBackend 已通过 `_classify_rate_limit`（含 429）把 stderr 映射为 `rate_limit:`；CodexBackend.run 非零退出仍直接返回 `exit N`，撞限额走普通 retry，不进 pause-controller。本机无 codex CLI 实测。 | 2 | — | 有 codex CLI 的机器 / 订阅 |
-| `T-PROMPT-SCHEMA-INJECT` | conventions.md 要求 bounds 只在 schema 写一次，但 prompt template + schema_reference.md 部分段落仍复述具体数字。需选定路径：A 自动从 schema 注入 prompt bound 段；B 修订 conventions 加 prompt 例外条款。 | 3 | — | 无（路径决策即可启动） |
-| `T-SIMULATION-MODE-MARKER` | CLAUDE.md / AGENTS.md 已预留 `[simulation_runtime_mode]` worker-mode short-circuit；extraction 侧已注入 `[extraction_worker_mode]`，simulation 侧零 Python 尚无注入点。 | 2 | — | simulation runtime 首次实装 |
-| `T-PHASE5-RETRIEVAL` | 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物（current_status / decisions / data_model / system_overview 都在说），但目前没有 Phase 承担生成职责。计划新增 Phase 5 统一承接 vocab_dict / 关键词 / FTS5 / RAG 等。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
-| `T-RETRY` | T-LOG 已能解析 subtype / num_turns / cost，但 retry 决策本身还没用上 subtype 分流；短时阈值仍 5s（[config.toml:130](../automation/config.toml#L130)）偏小，char_snapshot 正常 10-20m，<60s 失败几乎一定是 launch / 连接错。需扩大阈值到 60s（候选 120s）+ 长时 exit 按 subtype 分流。 | 2 | — | 无（T-LOG 已完成） |
-| `T-USER-AUX-SCHEMAS` | users/ 下若干辅助文件无 schema 绑定（session_index.json / archive_refs.json），2026-04-20 codex audit R3 指出 runtime 真正落地前最容易继续漂移。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
-| `T-LIGHTNOVEL-SCHEMA-ONEOF` | `stage_plan.chapter_count` 改 `oneOf` 按 `structure_mode` 分支（monolithic 8-15 / light_novel 1）让派生产物正式契约化。当前是已知 trade-off（决策 #27m）。 | 1 | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
-**Total**: 13 — 🟢 In Progress 1 ｜ 🟡 Next 3 ｜ ⚪ Discussing 9
+| `T-REPAIR-EVENT-DRIVEN` | Phase 3 一抽完一个文件就立刻去修复、跟下一文件的抽取并行——理论最快。但实测算过只比当前方案省 4 分钟/stage，要为这点收益引入双线程池 + 撞限额风险，性价比太低。先做简单版（E1），等真实跑数据出来再决定要不要做这个。 | 0 | — | T-REPAIR-PARALLEL 先落地 |
+| `T-PROMPT-SCHEMA-INJECT` | 项目约定"长度上限这种数字只在 schema 写一份"，但少数 prompt 和 doc 里仍有手写的数字（"150-200 字"之类）。万一 schema 改了，这些地方就会偷偷不一致。要么写代码让 prompt 自动从 schema 读，要么修约定明说"prompt 允许例外"。 | 3 | — | 无（路径决策即可启动） |
+| `T-PHASE5-RETRIEVAL` | 好几份架构文档都在说"每部作品下应该有个 indexes/ 目录"，但实际没有任何阶段在生成它——目录在磁盘上压根不存在。打算加一个 Phase 5 专门做检索类产物（词典、关键词、向量索引、RAG 数据等）。等 phase 3 跑完 + 检索层设计定稿再启动。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
+| `T-RETRY` | LLM 调用失败时的重试策略能更聪明些。现在不到 5 秒就失败的会重试，但人物抽取正常要跑 10-20 分钟，5 秒太短了——那种短时失败几乎都是启动错、不是真活干完才挂。打算扩到 60 秒，再按失败类型分流要不要重试。改动小，两个数值要拍板。 | 2 | — | 无（T-LOG 已完成） |
+| `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
+| `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。等真有外部消费方校验这个文件再改 schema。 | 1 | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
+
+**Total**: 9 — 🟢 In Progress 1 ｜ 🟡 Next 2 ｜ ⚪ Discussing 6
 
 ---
 
@@ -184,7 +181,7 @@ any node ─────────────────(abandoned)───
 | 🔴 Large·Arch | 改动清单 ≥ 7 文件 或 触及任一：新增 Phase / 改 schema 字段 / 改核心接口 / 跨模块协议变更 / 引入新依赖 / 影响多 work 流程 |
 | — | 缺「改动清单」段（多见于 "Discussing" 未拆解的条目）；备注"未拆解，规模待评估" |
 
-**简介撰写要求**：首句必含核心信息；再补 1–2 句关键背景（痛点 / 关键文件 / 实测数据 / 触发原因之一），让用户不点开正文也知道这是个什么事、为什么值得做。**总长 ≤ 150 字**——超过宁可砍背景也要保住首句。
+**简介撰写要求**：用大白话说清"这是要解决什么问题"和"为什么值得做"。**避免堆砌代码名 / 函数名 / schema 路径 / 行号 / 决策编号 / 专业缩写**——除非那本身就是问题的核心，否则换成普通说法。反例：`phase 2 baseline production 整体接入 repair_agent lifecycle（4 件产物 foundation key_figures patch + fixed_relationships + identity + target_baseline 各自包装 SourceContext + 写 phase 2 专属 checkers）`；正例：`Phase 2 抽人物 baseline 时如果格式错了，目前只会"试一次就硬失败"，不像 phase 3 有自动修复管线。给 phase 2 也接上自动修复`。读者不点开正文也能听懂这是干啥、为啥要做。**总长 ≤ 150 字**——超过先砍细节，保住"是啥 + 为啥"。
 
 **汇总行**：三张表后打印一行：`Total: N — 🟢 In Progress a ｜ 🟡 Next b ｜ ⚪ Discussing c`。
 
@@ -373,36 +370,6 @@ repair_agent 实际接入点 grep 全仓库**只有 1 处** = `orchestrator.py` 
 
 ---
 
-### [T-PHASE2-RECOVERY-RESET-FLAG] `--reset-phase3-after-baseline-change` 自动清理 flag
-
-**开始时间**：2026-05-12 EDT（决策 #56 落地时拆出）
-
-**当前状态**：Ready（设计简单，无外部依赖；OQ2 用户选择"先做 hard stop"已落地，本 todo 是后续显式 reset 路径）。
-
-**上下文**
-
-决策 #56 给 `run_extraction_loop` validation-triggered baseline recovery + `--start-phase 2` force_baseline 两条路径前插了 `_guard_phase2_rewrite_against_phase3` —— 已有 phase 3 committed 产物时 daemon hard stop / 前台 `[y/N]` 确认。当前实现**不提供**自动清理路径，用户拍板的"显式 reset"是二期任务。
-
-**改动清单**
-
-- file: `automation/persona_extraction/cli.py` 新增 `--reset-phase3-after-baseline-change`（store_true，默认 false）
-- file: `automation/persona_extraction/orchestrator.py` `_guard_phase2_rewrite_against_phase3` 接受 `reset: bool` kwarg；为 True 时跳过 guard，直接执行 `rm -rf` + `git rm` 路径清理（world/stage_snapshots / characters/*/canon/stage_snapshots / memory_timeline / memory_digest.jsonl / world_event_digest.jsonl / phase3_stages.json），commit 一条 "Phase 3 reset before baseline change" 后继续 baseline 重跑
-- file: `automation/README.md` + `docs/architecture/extraction_workflow.md` + `ai_context/architecture.md` + `ai_context/decisions.md` #56：补 reset flag 文案
-
-**完成标准**
-
-- daemon 路径带 flag → 不 hard stop，自动清理 + 重跑 baseline + 从 phase 3 stage 1 重抽
-- 不带 flag = 当前 hard stop / `[y/N]` 行为不变
-- smoke test：构造 `phase3_stages.json` 含 COMMITTED + 带 flag → 清理执行 + baseline 重写 + phase3_stages.json 重建为全 PENDING
-
-**依赖**：无（决策 #56 已落地 hard stop 路径）
-
-**暂不做的事**
-
-- 不引入"选择性 reset"（只清部分 stage）—— baseline 改写影响全集 keys，partial reset 语义不安全
-
----
-
 ### [T-LIGHTNOVEL-SCHEMA-ONEOF] light_novel `chapter_count=1` schema 正式契约化
 
 **开始时间**：2026-05-12 EDT（决策 #56 复审时确认推迟）
@@ -471,101 +438,6 @@ repair，与后续 lane 的 extract 时间重叠，理论最优解。
 
 ---
 
-### [T-CODEX-STDIN] CodexBackend prompt 走 stdin 临时文件
-
-**上下文**
-
-`ClaudeBackend` 已在
-`automation/persona_extraction/llm_backend.py::ClaudeBackend.run` 把 prompt
-改走唯一临时文件 + stdin，绕过 Linux `MAX_ARG_STRLEN ≈ 128 KiB` 的 argv
-上限。`CodexBackend.run` 仍用 `cmd = ["codex", "--quiet", "--full-auto",
-prompt]`（同文件 L378 附近），大 prompt（尤其 T3 全文件 regen）会在
-切到 `--backend codex` 时复现 `[Errno 7] Argument list too long`。
-
-当前已加注释标注风险，未改代码——本机未安装 codex CLI 无法实测其 stdin
-接口（是否自动读 stdin / 是否要 `-` / 是否要 `--prompt -`）。
-
-**待决策项**
-
-1. codex CLI 的 stdin 契约到底是哪种形式？三种候选：
-   - `echo 'hi' | codex --quiet --full-auto`（自动读 stdin）
-   - `codex --quiet --full-auto -`（显式 `-`）
-   - `codex --quiet --full-auto --prompt -`（`--prompt` flag + `-`）
-2. 是否仍坚持与 ClaudeBackend 对称？也可以走 `--input-file /tmp/xxx` 这类
-   文件传递（若 codex 支持），避免 stdin 管道在并发下意外关闭的风险
-
-**改动清单（待契约确认后落地）**
-
-1. `automation/persona_extraction/llm_backend.py::CodexBackend.run` 复用
-   `_prompt_tempfile` + stdin 文件句柄的写法，移除 cmd 中的 positional
-   prompt
-2. 删掉 `CodexBackend.run` 开头那段 "NOTE: codex CLI still receives the
-   prompt via argv ..." 注释
-3. 小 prompt smoke：`create_backend('codex', ...).run('ping')`
-
-**暂不做的事**
-
-- 不在没有 codex CLI 的机器上盲改——三种候选形式有两种会 silent hang，
-  必须实测
-- 不把 argv 传递路径保留为 fallback——要么切 stdin 要么不切，保留两路
-  只会让并发下的错误更难定位
-
-**依赖**：有 codex CLI 的机器 / 订阅
-
-**未落地原因**
-
-- 当前所有 extraction 默认走 `--backend claude`，codex 分支未被激活使用；
-  问题是潜在风险而非阻塞
-
----
-
-### [T-CODEX-RATE-LIMIT] CodexBackend 错误分类对齐 rate-limit / 429 / 5h_window
-
-**上下文**
-
-`automation/persona_extraction/llm_backend.py::ClaudeBackend.run` 已经
-通过 `_classify_rate_limit`（涵盖 `rate limit` / `rate_limit` /
-`too many requests` / `429`）把 stderr 命中映射为 `error="rate_limit: ..."`，
-进入 `run_with_retry` 的 pause-controller 分支。`CodexBackend.run` 在
-`returncode != 0` 时直接返回 `error=f"exit {N}: {stderr}"`，**没有过
-`_classify_rate_limit`**——意味着 codex 端撞限额会走普通失败 / retry，
-不会写共享 pause file，多 worker 并发更容易消耗 retry budget 或产生 ERROR。
-
-`docs/requirements.md` §11.13.4 明确 `429` / `rate limit` 是通用 retry
-关键词，跨 backend 应一致；本机当前默认 `--backend claude`，问题潜在但未
-触发。
-
-**待决策项**
-
-1. CodexBackend 的 stdout / stderr 分别承载哪些限额信号？
-   （Anthropic claude CLI 把限额放 stderr；codex CLI 行为本机不可实测）
-2. 是否同时把 `5h_window` / `weekly` 等 Claude 专用关键词也通过同一函数对齐
-   codex 端，还是 codex 端只走通用 `_classify_rate_limit`
-
-**改动清单（待 codex CLI 实测后落地）**
-
-1. `automation/persona_extraction/llm_backend.py::CodexBackend.run`
-   `returncode != 0` 分支：先 `_classify_rate_limit(stderr)` /
-   `_classify_rate_limit(stdout)`，命中则返回 `error=f"rate_limit: ..."`
-2. （可选）把 `from .rate_limit import classify_error` 引入并用统一函数
-   做 `5h_window` / `weekly` 二级分类
-3. smoke：在有 codex CLI 的环境跑撞限额场景，确认 `RateLimitController`
-   能进入 pause
-
-**暂不做的事**
-
-- 不在没有 codex CLI 的机器上盲改 stderr 关键词假设——不同 CLI 措辞差异大
-- 不把 Claude 端的 `_RATE_LIMIT_SIGNALS` 列表硬编进 codex 端——保留 codex
-  端独立的 stderr 解析空间
-
-**依赖**：有 codex CLI 的机器 / 订阅；本条与 T-CODEX-STDIN 同环境，可同批跑
-
-**未落地原因**
-
-- 默认 backend 是 claude；codex 分支未激活使用
-
----
-
 ### [T-PROMPT-SCHEMA-INJECT] prompt 模板从 schema 自动注入具体 bound
 
 **上下文**
@@ -608,41 +480,6 @@ bound 都要扫一遍 prompts。
 **未落地原因**
 
 - 当前 schema bound 稳定，drift 风险尚未触发；优先级低于 H1–H4 体系问题
-
----
-
-### [T-SIMULATION-MODE-MARKER] simulation 运行时注入 worker-mode marker
-
-**上下文**
-
-`CLAUDE.md` / `AGENTS.md` 顶部的 Worker-Mode Short-Circuit 已预留
-`[simulation_runtime_mode]` 标记：当 system prompt 包含该字符串时，
-worker 跳过 `ai_context/` 加载与所有自检，只按 user prompt 执行。
-
-extraction 侧已在 [automation/persona_extraction/llm_backend.py](../automation/persona_extraction/llm_backend.py)
-注入对应 `[extraction_worker_mode]`。simulation 侧预留了入口但尚无代码：
-`simulation/` 当前只有 contracts / flows / prompt_templates / retrieval /
-README.md，零 Python。
-
-**待决策项**
-
-1. simulation runtime 的 LLM backend 选型（是否复用 `ClaudeBackend` 类，
-   还是独立 backend）
-2. marker 注入点：每轮 user→character 对话的 LLM 调用、retrieval
-   辅助调用、`search_memory` tool 的内部 LLM 调用，全部都需注入还是
-   按调用类型区分
-
-**完成标准**
-
-- simulation runtime 首个实装的 LLM 调用处，命令行参数追加
-  `--append-system-prompt "[simulation_runtime_mode]"`（或等价机制）
-- 本 todo 条目移到 archived
-
-**未落地原因**
-
-- simulation runtime 尚未开始实装；无注入点
-
-**依赖**：simulation runtime 首次实装
 
 ---
 
