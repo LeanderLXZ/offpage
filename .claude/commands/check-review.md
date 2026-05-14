@@ -56,7 +56,10 @@
 5. `Deferred / Rejected`：推迟或驳回的条目及原因（按 ID 引用）
 6. `Open Questions for User`：需用户拍板的分歧点；每条编号 `OQ1` / `OQ2`...
 7. `Recommendations`
-   - **仅供参考，用户拍板优先**；不超出 source report scope 扩功能、不过度工程
+   - **仅供参考，用户拍板优先**。给出每条建议前先过三问自检：
+     1. **必要吗** —— 不修会怎样？只是看着不顺眼 / 强迫症 → 倾向"跳过"或"留 todo"
+     2. **能更简单吗** —— 能改 3 行解决就别抽 helper / 加层 / 加配置 / 加 flag
+     3. **超出 source report scope 吗** —— 顺手改的"相关项"是不是已经溢出本轮目标
    - 一段 flat list：每条 finding ID（沿用原 ID）+ 每条 OQ 给"建议{修 / 留 todo / 跳过}：{一句话理由 / 推荐方案}"
 
 ## 5. 等待确认

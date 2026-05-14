@@ -93,7 +93,10 @@ description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/
 4. `Open Questions / Ambiguities`
    - 列出仓库内部无法唯一判断、需要产品 / 架构决策澄清的点；每条 OQ 编号 `OQ1` / `OQ2`...
 5. `Recommendations`
-   - **仅供参考，用户拍板优先**；不超出本次 review scope 扩功能、不过度工程
+   - **仅供参考，用户拍板优先**。给出每条建议前先过三问自检：
+     1. **必要吗** —— 不修会怎样？只是看着不顺眼 / 强迫症 → 倾向"跳过"或"留 todo"
+     2. **能更简单吗** —— 能改 3 行解决就别抽 helper / 加层 / 加配置 / 加 flag
+     3. **超出本次 review scope 吗** —— 顺手改的"相关项"是不是已经溢出本轮目标
    - 一段 flat list：每条 finding ID（H1 / M1 / L1...）+ 每条 OQ 给"建议{修 / 留 todo / 跳过}：{一句话理由 / 推荐方案}"
 
 ## 结果归档（必做）
