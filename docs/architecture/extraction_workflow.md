@@ -298,8 +298,9 @@ vs 关系/事件"切：`char_internal` 集中知识/隐瞒/失败模式形成
    — 复用 `extraction/repair/checkers/targets_keys_eq_baseline.py` 做
    merge 前置预检（与 phase 3 单 stage validate 层同 checker，不重复实现）
 6. **(D) drop entry 不被误判**（anti-rule）：merge 仅查字段集合互斥 + 全覆盖，
-   **不查** partial entry 数 ≥ prev。entry 数变化由 `stage_delta` 自由文本
-   承载、phase 3.5 `consistency_checker` 跨文件审计兜底
+   **不查** partial entry 数 ≥ prev。entry 数变化由 `stage_delta` 顶层 6-key
+   structured object 对应 sub-field 的叙述性 text 承载、phase 3.5
+   `consistency_checker` 跨文件审计兜底
 
 **Prev snapshot 4-way slice**（避免每个 sub-lane 都读 ~30 KB 完整 prev
 snapshot）：orchestrator 在 stage 启动前调

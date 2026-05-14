@@ -112,7 +112,8 @@ work-agnostic:
 - No history narration ("legacy", "deprecated", "formerly", "renamed from").
 
 Exempt (history is the point): `logs/change_logs/`, `logs/review_reports/`,
-`docs/todo_list_archived.md`, `works/*/` sample outputs, git commit messages.
+`docs/todo_list_archived.md`, `ai_context/decisions.md`, `works/*/` sample
+outputs, git commit messages.
 
 ## Data Separation — Hard Schema Gates
 

@@ -1078,12 +1078,15 @@ Light_novel 模式单 stage 字符数小，4 sub-lane 启动开销可能 > 抽�
 - `emotional_baseline`：主导特质、**active_goals**（活跃理性目标）、
   **active_obsessions**（活跃执念）、活跃恐惧、活跃创伤
 - `current_personality` / `current_mood` / `current_status`
-- `stage_delta`：从上一阶段的变化摘要（自由文本）。**必须捕捉**
-  prev_stage 出场字段的 (B) 关键变化（target / emotion / relationship
-  演变要点）和 (D) 消除原因（misunderstanding / concealment /
-  failure_mode 在本阶段被 resolve / reveal / 克服 + 为什么）；
-  **禁止"无明显变化"敷衍**。三态规则的权威定义见
-  `extraction/persona_extraction/prompts/character_snapshot_extraction.md`
+- `stage_delta`：从上一阶段的变化摘要。**顶层是 6-key 结构化对象**
+  （`trigger_events` / `personality_changes` / `relationship_changes`
+  / `status_changes` / `mood_shift` / `voice_shift`，schema 真值见
+  `schemas/character/stage_snapshot.schema.json`），每个 sub-field 的
+  内容是叙述性 text。**必须捕捉** prev_stage 出场字段的 (B) 关键变化
+  （target / emotion / relationship 演变要点）和 (D) 消除原因
+  （misunderstanding / concealment / failure_mode 在本阶段被 resolve
+  / reveal / 克服 + 为什么）；**禁止"无明显变化"敷衍**。三态规则的
+  权威定义见 `extraction/persona_extraction/prompts/character_snapshot_extraction.md`
   §核心规则 #2 prev_stage 处理规则
 - `character_arc`：角色从阶段 1 到当前阶段的整体弧线概述，
   **单一字符串**，一句到一段话概括核心变化轨迹。第一个阶段可省略
