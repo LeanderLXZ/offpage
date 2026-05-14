@@ -150,17 +150,8 @@ filename 倒序排列，**先只构建索引**：每个 filename 解析时间戳
 
 ## 约束
 
-- **只读**：不 `git checkout` / `merge` / `push` / `fetch` / `commit`，不改 todo_list、不删 change_logs、不调外部 API
-- skills_config 的 `## Timezone` / `## Activity sources` 任一缺失或路径漂移 → fail loudly，不静默降级
-- 时间戳一律用 ISO 8601 含时区（`%cI` / 解析 filename 时拼 skills_config 时区），不要本地裸时间
-- 当前分支视角；不跨分支聚合（要全局视角先 `/branch-inventory` 再切分支）
-- merge commits 默认忽略（`--no-merges`）
-- 缺 `**更新时间**` 字段的 todo 条目静默跳过（不报警 — 视为旧格式或未触过 `/todo-add`，不是异常）
-- 每源过采样上限 `3*N`：避免单源稀疏导致另两源被挤出；合并后统一截断到 N
+- **只读**：不 `git checkout` / `merge` / `push` / `fetch` / `commit`，不改 todo_list / change_logs，不调外部 API
 - 不接受时间窗参数（`24h` / `since=...` 不支持）；要按时间过滤先 `/branch-inventory` 看 commit 时间，或者直接 `git log --since`
-- **正文截断**：commit body / change_log 头部均 ≤ 25 行；超出加末尾截断提示
-- **延后读取**：log 文件正文只对 Step 5 截断后入选的 `log` 条目逐个 Read（避免无谓 IO）；git body 在 Step 2 一次性拿全；todo 不展开正文
-- 输出格式是**块视图**（`### N. ...` 标题 + body 段），不是表格 —— body 含 markdown / 多行时表格无法承载
 
 ---
 

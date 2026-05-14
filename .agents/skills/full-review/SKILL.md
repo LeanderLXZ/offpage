@@ -67,7 +67,7 @@ description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/
 ## 审计要求
 
 - 这是 review，**不是改代码**；除"结果归档（必做）"那份新建的 review report 必须 commit 之外，不要修改、commit 或推送任何其他文件
-- 优先找"高价值问题"，不是泛泛而谈
+- 优先找"高价值问题"，不是泛泛而谈；尽量覆盖全仓库，但把重点放在真实影响后续开发 / 提取质量 / 运行时正确性的地方
 - 不要只给总结，先给 findings
 - findings 按严重性排序：High / Medium / Low
 - 每条 finding 尽量给出：
@@ -79,6 +79,7 @@ description: 全仓库对齐审计 — 扫 ai_context/docs/schema/prompt/代码/
 - 如果没有发现问题，也要明确说"未发现明确问题"，并列出残余风险和未覆盖区域
 - 不要为了凑数而列低价值意见
 - 不要把"未来可优化"混成 bug；把 bug / 冲突 / 风险 / 架构隐患分清楚
+- 报告 finding 时：文档之间互相冲突 → 明确指出哪个应视为更高优先级真相；`ai_context` 已过时 → 明确指出它会如何误导后续 AI
 
 ## 输出格式
 
@@ -126,14 +127,6 @@ logs/review_reports/{YYYY-MM-DD_HHMMSS}_{model}_{slug}.md
 - 仅 `git add` 这一份 review report 文件——不要顺手把其他无关 dirty 文件带进 commit
 - commit message 风格：`log(review_reports): /full-review {slug} ({model})`
 - 不 push，不切分支；commit 后即结束本轮 review
-
-## 额外要求
-
-- 如果发现"文档之间互相冲突"，明确指出哪个应视为更高优先级真相
-- 如果发现"ai_context 已过时"，明确指出它会如何误导后续 AI
-- 如果发现"样例数据 / 进度文件与当前叙述不一致"，把它作为正式 finding
-- 如果发现"检查器 / 一致性工具本身有盲区"，把它作为高优先级问题处理
-- 尽量覆盖全仓库，但把重点放在真实会影响后续开发、提取质量、运行时正确性的地方
 
 ---
 

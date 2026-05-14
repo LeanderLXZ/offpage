@@ -57,7 +57,6 @@ description: 加载并执行指定的 prompt 文件作为本轮任务。$ARGUMEN
 - **不递归触发 /run-prompt**——被加载的 prompt 自己不许在执行中再 `/run-prompt` 别的文件；如果 prompt 流程要分支到别的 prompt，应该走显式步骤（read + 跟随）而非嵌套触发
 - **不 commit / 不 push / 不改 git 状态**——本 skill 的工作止于"加载并按 prompt 执行"；commit / push 等 git 动作只能由 prompt 内部明确要求时才发生（且按那个 prompt 自己的规则做）
 - **不绕过 prompt 内的安全 / 范围约束**——例如 `prompts/ingestion/原始资料规范化.md` 明确 "不要写入 `works/` / `users/`"，本 skill 加载该 prompt 后必须遵守，不许借口"被 /run-prompt 调用所以不算"
-- **解析失败立即停手**：路径不存在 / 名称 0 命中 / 名称 ≥ 2 命中 → 都不许"猜个最像的"继续走
 
 ---
 

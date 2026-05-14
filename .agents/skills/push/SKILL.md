@@ -50,11 +50,8 @@ description: 把指定本地分支 push 到对应 remote。$ARGUMENTS = 分支�
 
 ## 约束
 
-- 只 push 一个分支（`$ARGUMENTS` 指定的或默认 `main`）；不批量 push
-- 不 `--force` / `--force-with-lease` / `--no-verify` / `--no-gpg-sign`，除非用户在本轮明确授权
-- 不动 working tree、不 commit、不 merge、不 rebase、不 checkout
-- 远端落后于本地之外的任何状态（behind>0 / 无追踪 / push 失败）→ 停手问，不绕过
-- 不替用户 push 到非追踪 remote / 非追踪分支
+- 不 `--force` / `--force-with-lease` / `--no-verify` / `--no-gpg-sign`（除非用户在本轮明确授权）；不动 working tree（不 checkout / commit / merge / rebase）
+- 非"本地 ahead，远端 ancestor"之外的任何状态（behind>0 / 无追踪 / push 失败）→ 停手问，不绕过
 
 ---
 

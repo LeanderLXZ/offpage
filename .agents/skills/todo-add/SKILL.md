@@ -165,22 +165,12 @@ b. **跨段移动**：从原段删除整个 `### [T-XXX]` 块（连带其前后�
 
 ## 约束
 
-- **不 commit / 不 push**
-- **不动无关段位**：CREATE 只动目标段 + 索引；UPDATE 同段只动该段 +
-  索引；UPDATE 跨段只动源段 + 目标段 + 索引；其他段位条目内容一律不
-  顺手改
-- **UPDATE 优先于 CREATE**：能匹配到已有条目就更新，不要重复造同一
-  概念的新条目；多条疑似命中要问用户
-- **UPDATE 时已有 ID 不变**：除非用户明确要求改 ID
-- **ID 查重必须做**：CREATE 时与 `todo_list.md` + `todo_list_archived.md`
-  全量对照，新 ID 不冲突
-- **预览必须等确认**：CREATE 看全文 / UPDATE 看 diff，都不能合成完
-  直接写盘
-- **会话不清晰主动问**：CREATE 时缺字段问；UPDATE 时多条疑似命中问；
-  不替用户编字段或挑条目
+- **不 commit / 不 push**（持久化交给 `/commit` 或 `/go`）
+- **UPDATE 优先于 CREATE**：能匹配到已有条目就更新；多条疑似命中、CREATE
+  缺关键字段时**主动问用户**，不替用户决定
 - **In Progress 单槽**：段非空就拒写（CREATE）/ 拒移入（UPDATE 跨段）
 - **索引规则单源**：刷新逻辑指向 `docs/todo_list.md` "Index maintenance" 段，
-  本 skill 不重复定义；那段改了这里自动跟随
+  本 skill 不重复定义
 
 ---
 

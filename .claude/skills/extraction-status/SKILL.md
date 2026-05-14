@@ -76,10 +76,8 @@ description: 当前所有 extraction 任务的 one-shot 快照 — 综合 ai_con
 
 ## 限制
 
-- 只读：不 `kill`、不 `rm` pid 文件、不改 progress.json、不重启进程、不 commit、不 push
+- 只读：不 `kill` / `kill -9` / `pkill` / `rm` pid 文件 / 改 progress.json / 重启进程 / commit / push（`pgrep` + `kill -0` 是允许的只读探测）
 - 不读巨型 log 文件全文（只看 progress.json 摘要 + ps 输出 + log 末 N 行可选）
-- skills_config 的 `Background processes` 段缺失 / 全 `(none)` → 直接停手，不试图猜
-- pgrep / kill -0 这两条是仅本 skill 必须的只读探测命令；不允许用 mutating 命令（`kill -9` / `pkill` / `rm` 等）
 
 ---
 

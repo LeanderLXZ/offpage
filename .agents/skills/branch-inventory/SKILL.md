@@ -72,9 +72,7 @@ description: 全分支盘点 — 列所有本地 + remote 分支，按 Main / Re
 
 ## 限制
 
-- 只读：不 `git checkout` / `git merge` / `git push` / `git fetch` / `git pull` / `git branch -d` / `git worktree prune` / `git remote update`，**不 commit、不改 git 状态**
-- 不主动执行任何"建议动作"— 只给清单
-- skills_config 的相关段缺失 → 降级到 git 默认值并显式标注，不静默
+- 只读：不 `git checkout` / `merge` / `push` / `fetch` / `pull` / `branch -d` / `worktree prune` / `remote update` / `commit`
 - 分支数 > 50 时按分组各只展示前 20 行 + "（… 还有 N 条已折叠）"提示，避免对话刷屏
 
 ---

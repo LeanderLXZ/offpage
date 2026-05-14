@@ -47,11 +47,7 @@ description: 直接读 docs/todo_list.md 顶部 ## Index (auto-generated; do not
 ## 约束
 
 - **只读**：不改任何文件、不 commit、不 push
-- **不解析正文**：信任索引段。索引若与正文不一致，那是上一次改 todo_list 的人没刷新索引——这是写入端的责任，不是 `/todo` 的责任
-- **不重新分档**：不重新推断 "Importance / Ready / Scope"。这些标签由维护索引的规则决定，规则在 `docs/todo_list.md` 的 "Index maintenance" 段
-- **不生成建议**：之前版本会给"建议 1: 直接 /go XXX、建议 2: 讨论 YYY、建议 3: 聊聊别的"——现在删掉。用户看完索引自己决定即可
-- **逃生口仍在**：第 4 步的提问明确"或者说点别的"，让用户随时跳出 todo_list
-- **`$ARGUMENTS` 仅作过滤**：不接受"展开 T-XXX 详情"等指令；要看详情用户会自己 Read todo_list.md 或说"展开 T-XXX"，那是另一轮交互
+- **信任索引段**：不解析正文、不重新分档、不补建议；索引规则单源指向 `docs/todo_list.md` "Index maintenance" 段
 
 ---
 

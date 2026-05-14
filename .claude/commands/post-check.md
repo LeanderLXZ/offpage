@@ -206,11 +206,7 @@ intent 基线缺失时：**跳过本轨**并打印"无 PRE log，无法对账"�
 
 ## 约束
 
-- 这是针对**本次修改**的复审，不是全仓 review；超出本次改动范围的疑点 → 登记到 `Residual Risks` 或 `Open Questions`，不在本轮追
-- **只读 + 单写单 commit 例外**：不改代码、不改 docs、不改 schema / prompt / ai_context；**唯一允许的写 + commit 是 Step 5 那份 log 摘要回写**——其他 dirty 文件一律不动、不提交
-- 每条 finding 必须落到文件 + 行号；直接证据与推断分开标注
 - 不要因为 `/go` Step 7 已经 review 过就走过场 —— 此轮用新的眼睛再看一遍，重点抓 `/go` 漏掉的连带文件和歧义
-- 轨 1 和轨 2 都要跑（除非 intent 基线缺失跳过轨 1）；不能只做其中一条
 - **输出顺序硬约束**：log 回写 + commit (Step 5) **先于** 对话报告输出 (Step 6)。完整双轨报告必须是 `/post-check` 在对话里的**最后一段实质内容**——Step 7 只放一行"等待确认"短语作收尾，不要在报告之后再跟一段总结 / commit 提示 / next steps，否则用户又得回滚屏幕
 
 ---

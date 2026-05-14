@@ -98,12 +98,8 @@ forward 进程检测）、`## Protected branch prefixes`（Step 5 区分长跑�
 
 ## 约束
 
-- 只提交本次 working tree 改动；不做 ai_context / docs / README 对齐（那是 `/go` 范围）
-- 不 `git push`、不 `--force`、不 `--amend`（除非用户明确要求）
-- 不 `git add -A`；逐文件加
-- 发现可疑（禁提路径、巨型 diff、分支不对、有未解决冲突）→ 停手问，不绕过
-- forward / merge 在普通模式下必须经用户确认；**auto-sync 模式**（`$ARGUMENTS` 含 `同步` / `sync` / `auto-sync` / `--sync`）才允许跳过询问直接同步，仍跳过有进程 / dirty / 冲突的分支
-- auto-sync 仅作用于本地分支；**永不 push**
+- 不 `git push`、不 `--force`、不 `--amend`（除非用户明确要求）；auto-sync 也**永不 push**
+- 发现可疑（禁提路径、巨型 diff、分支不对、未解决冲突）→ 停手问，不绕过
 
 ---
 
