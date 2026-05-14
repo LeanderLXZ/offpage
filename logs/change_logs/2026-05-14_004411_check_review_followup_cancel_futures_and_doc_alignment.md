@@ -157,3 +157,19 @@
 
 - **Status**: DONE
 - **Finished**: 2026-05-14 01:05:58 EDT
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：19 / 19 项计划动作全部落实 + 12 / 12 项验证标准全过；偏差 D1 / D2 已在 POST 段记录
+- Missed updates: 2 条（M2 同根残留扩展——PRE 漏盖 docs/architecture/extraction_workflow.md:301 + docs/requirements.md:1081）
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=2 / Low=1
+- Open Questions: 1 条（decision log #27i provenance 是否同步收紧）
+
+## 复查时状态
+- **Reviewed**: 2026-05-14 09:55:22 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 落实率 100% + 验证 100%；轨 2 有 2 条 M（M2 同根扩散），无 H
+- **Conversation ref**: 同会话内 /post-check 输出
