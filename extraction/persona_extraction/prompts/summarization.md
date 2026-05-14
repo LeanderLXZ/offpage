@@ -43,7 +43,7 @@
 - `chunk_world_rules[]`（最多 5 条）：本 chunk 揭示的世界规则（修炼 / 转世 / 天道 / 契约 / 因果等结构性规则）。每条：
   - `rule`（≤50 字，**required**）：规则名 + 一句概括（如"转世规则：每千年一次大轮回，记忆自动封存"）
   - `description`（≤50 字）：规则的具体机制描述。本 chunk 无更详细解释 → 写空字符串
-  - `observed_impact`（≤50 字）：本 chunk 观察到的对剧情 / 角色的影响。**禁止静默留空**——本 chunk 未直接观察到触发时，必须显式填 `"未在本 chunk 直接观察"` 或同义短语；空字符串会被下游误读为"无影响"。本字段是 Phase 2 综合 `foundation.core_rules.impact` 的局部锚点
+  - `observed_impact`（≤50 字）：本 chunk 观察到的对剧情 / 角色的影响。**禁止静默留空**——本 chunk 未直接观察到触发时，必须显式填 `"未在本 chunk 直接观察"` 或同义短语；空字符串会被下游误读为"无影响"。本字段是 Phase 1 foundation lane 综合 `foundation.core_rules` 的局部锚点（决策 #54）
 - `chunk_power_levels[]`（最多 20 条）：本 chunk 出现的力量体系等级 / 阶段名。每条：
   - `name`（≤15 字，**required**）：等级名（如"练气"、"筑基"、"金丹"）
   - `description`（≤30 字）：等级简要描述。本 chunk 无解释 → 写空字符串

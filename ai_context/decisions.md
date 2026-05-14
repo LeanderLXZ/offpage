@@ -452,7 +452,7 @@ source. Long discussion chains live in `logs/change_logs/`.
     snapshot）：`snapshot_merge.slice_snapshot_for_lane(full, lane)` 按
     `FIELD_ALLOCATION` + `SHARED_KEY_SUBKEYS` 反向投影；orchestrator stage
     启动前调 `_write_prev_snapshot_slices(work_root, char, prev_stage_id)`
-    切 4 个 slice 写盘到 `works/{wid}/analysis/progress/.partial_prev/{prev_stage_id}_{lane}.json`，
+    切 4 个 slice 写盘到 `works/{wid}/analysis/progress/.partial_prev/{char_id}/{prev_stage_id}_{lane}.json`，
     prompt_builder 按 `lane_scope` 选 slice 路径塞进 prompt：
     `char_expression` / `char_decision` 各拼**自身 slice**，`char_internal`
     / `char_social` 各拼**两个 slice**（internal + social，互读对方，
@@ -645,6 +645,55 @@ source. Long discussion chains live in `logs/change_logs/`.
     architecture/{data_model,schema_reference,extraction_workflow}.md` +
     `docs/requirements.md` + `prompts/{README,ingestion/*,review/*}.md` +
     `schemas/README.md` + `works/README.md`。
+
+58. **Foundation schema 收紧（核心字段 required）+ `key_figures` required allow-empty
+    + Phase 2 不再让 LLM 写空 stage_catalog。** 2026-05-14 /check-review codex 复审
+    （`logs/review_reports/2026-05-14_004356_gpt-5_full-review-alignment-audit.md`）
+    报出三处契约漏洞（H4 + OQ1 + OQ2 + OQ5）。本条把三件合一落地，作为 #54 的
+    收尾收紧条款。(1) **OQ1 — foundation.schema.json 核心字段 required**：原
+    `required: ["work_id"]` 太弱——`{"work_id": "demo"}` 通过 schema 会让 phase 1
+    foundation lane 的 `_lane_passes_skip` 静默跳过（`orchestrator.py:1854-1867`
+    用 `validator.iter_errors(existing)` 空即 skip）+ phase 2 `validate_baseline`
+    line 152 仅 `data.get("work_id")` 非空 + schema pass 即放行；连锁后果是 runtime
+    Tier 0 的 `genre / tone / world_structure / power_system / major_factions /
+    world_lines / core_rules` 可全空缺，从根上让 simulation 拿到空世界。改为
+    `required` 含上述 7 个核心字段（与 phase 1 foundation lane prompt 实际产出对齐）。
+    代价：main 上 `works/` 只 README，无历史 foundation.json 受影响；新跑的
+    extraction 在 `validate_baseline` 阶段被这个 schema gate 收紧。(2) **OQ2 —
+    `major_factions[].key_figures` items required allow-empty `[]`**：原 schema
+    `items.required = ["name", "description"]`，`key_figures` 是 optional 字段；
+    phase 1 prompt 明确"必须写"但 schema 不卡，导致 phase 2 替换 LLM 看到的
+    `key_figures` 字段可能缺失（需要 init vs 替换分支判断）。改为 items.required
+    含 `key_figures`，允许 `[]`——给 phase 2 替换 LLM 稳定的"key 一定存在"前提，
+    替换工作变成纯 in-place map 操作而非 conditional init+map。foundation.schema.json
+    的 `major_factions.items.key_figures.description` 同步收紧为"必须存在，无成员
+    势力写 `[]`"。(3) **OQ5 — Phase 2 不再让 LLM 写空 stage_catalog**：原
+    `baseline_production.md:13 / 253-256 / 279 / 292` 多处要 LLM 写空数组
+    `world/stage_catalog.json` + `characters/{char}/canon/stage_catalog.json`；但
+    `phase2_baseline.validate_baseline` 不校验空 stage_catalog（不在文件存在性必查
+    列表里），而 Phase 3 第一个 stage 的 `post_processing.upsert_stage_catalog`
+    （`post_processing.py:550`）会自动 init 文件（带 mkdir parents=True 走
+    `_atomic_write_json`，父目录不存在也 OK）。LLM 写空 = 无用功 + 引入第 6 个
+    无 validator 兜底的产物面 + 让 baseline prompt 多 ~40 行说明文本。删除
+    `baseline_production.md` 内 stage_catalog 初始化段（第 5 件「世界与角色
+    stage_catalog 初始化」整段 + 「产出清单」内 stage_catalog 行 + 末尾 "5 件
+    baseline" → "4 件 baseline" 描述），由 Phase 3 post_processing 自动 init
+    承担文件创建。代价：`works/{work_id}/world/stage_catalog.json` +
+    `works/{work_id}/characters/{char}/canon/stage_catalog.json` 在 phase 2 结束后
+    **不存在**，直到 phase 3 第一个 stage 跑完 post_processing 才落盘——下游消费方
+    （bootstrap stage 选择、记录展示）必须容忍"phase 2 done but stage_catalog
+    not yet present"。`works/README.md` + `extraction/README.md` 描述同步。
+    **不在本条 scope**：foundation.json 的 `additionalProperties` 仍保持 `true`（
+    允许 per-work 扩展字段，#54 现状）；`major_factions.items` 的
+    `additionalProperties` 保持 `false`（结构性收紧不放松）；不动 phase 2 repair
+    接入（`T-PHASE2-REPAIR-AGENT` 跟踪）。Plumbing → `schemas/world/foundation.schema.json`
+    （`required` 加 7 字段 + `items.required` 加 `key_figures`） +
+    `extraction/persona_extraction/prompts/baseline_production.md`（删 stage_catalog
+    初始化段 + 产物清单段 + 产物数字 5→4） + `extraction/persona_extraction/prompts/analysis_foundation.md`
+    （key_figures "必须存在 ≥ []"重申） + `works/README.md` + `extraction/README.md` +
+    `docs/architecture/{schema_reference,extraction_workflow}.md` +
+    `docs/requirements.md` §9 / §11 + `ai_context/{architecture,conventions}.md`
+    同步表更新。
 
 ## Repository
 

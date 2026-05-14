@@ -212,15 +212,19 @@ def _timeline_to_digest(entry: dict, stage_id: str) -> dict | None:
     if not memory_id:
         return None
 
-    # `memory_importance` is required by memory_timeline_entry schema.
-    # The L1 jsonschema gate fails the timeline file if any entry is
-    # missing it, so by this point the value must be present and
-    # within the 5-level enum — pulling it via [...] makes a missing
-    # value a hard KeyError rather than a silent demotion to "minor".
+    # `memory_importance` is required by memory_timeline_entry schema,
+    # but the L1 jsonschema gate against that schema is collected in
+    # `_collect_stage_files` and only runs in the **Step 4 repair**
+    # phase — which is after Step 3 post-processing (this function).
+    # A schema-invalid timeline entry must NOT crash digest generation
+    # before repair can see it, so fallback to "significant" (same
+    # default as `_infer_importance` for unknown text) keeps the event
+    # in importance-filtered retrieval while the repair gate fixes
+    # the underlying timeline file in Step 4.
     digest: dict[str, Any] = {
         "memory_id": memory_id,
         "summary": entry.get("digest_summary", ""),
-        "importance": entry["memory_importance"],
+        "importance": entry.get("memory_importance", "significant"),
         "time": entry.get("time", ""),
         "location": entry.get("location", ""),
     }

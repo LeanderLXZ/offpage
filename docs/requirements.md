@@ -770,7 +770,7 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 │                                                                     │
 │  Phase 0 ─ 章节归纳                                                 │
 │  ┌───────────────────────────────────────────────────┐              │
-│  │ 原始章节 ──→ 按 chunk 分组(~25ch) ──→ 逐 chunk    │              │
+│  │ 原始章节 ──→ 按 chunk 分组(默认 20ch) ──→ 逐 chunk│              │
 │  │              并行归纳 ──→ 每章结构化摘要            │              │
 │  └───────────────────────┬───────────────────────────┘              │
 │                          ▼                                          │
@@ -1002,7 +1002,7 @@ stage_delta / behavior_state 子键互斥 + 三方 keys == baseline（复用
 `extraction/repair/checkers/targets_keys_eq_baseline.py`）"，任一不
 过即整 snapshot lane 失败。**Prev snapshot 4-way slice**：orchestrator
 stage 启动前把 prev snapshot 切 4 个 slice 写盘到 `.partial_prev/`
-（`works/{wid}/analysis/progress/.partial_prev/{prev}_{lane}.json`），
+（`works/{wid}/analysis/progress/.partial_prev/{char_id}/{prev}_{lane}.json`），
 每 sub-lane 只读自己需要的 slice 而非完整 ~30 KB prev——`char_expression`
 / `char_decision` 读自身 slice，`char_internal` / `char_social` 各读两个
 （internal + social 互读对方）。Slice lifecycle 与 `.partial/` 同形态
@@ -1346,10 +1346,11 @@ prompt template + Phase 3.5 一致性审计（§11.5）继续负责把"应有变
 │  └──────────────────────┬──────────────────────────┘            │
 │                         ▼                                       │
 │  ┌─ Phase 2 ─ Baseline 产出 (claude -p) ────────┐             │
-│  │  foundation.json + fixed_relationships.json      │             │
+│  │  foundation.key_figures 替换 raw→character_id     │             │
+│  │  + fixed_relationships.json                        │             │
 │  │  + identity.json + target_baseline.json           │             │
 │  │    (两件 character-level 恒定文件, 全书视野初稿)   │             │
-│  │  + manifest.json + 空 stage_catalog               │             │
+│  │  + manifest.json （决策 #54 + #58）              │             │
 │  └──────────────────────┬──────────────────────────┘            │
 │                         ▼                                       │
 │  ┌─ Phase 3 ─ 1+2N 分层阶段提取（串行循环）────────┐             │
@@ -2114,7 +2115,7 @@ issue 重新走 triage 流程。**本次实现不包含该自动 resume 逻辑**
 |-------|---------|------|
 | Phase 0 (summarization) | `repair(files=[chunk], config=RepairConfig(run_semantic=False))` | 每个 chunk JSON 格式正确、非空 |
 | Phase 1 (analysis) | 程序化验证（stage plan 章节数硬性门控 8-15，违规重跑 LLM） | 沿用现有逻辑 |
-| Phase 2 (baseline) | `repair(files=[identity, manifest, foundation, ...], config=...)` | 关键文件（identity/manifest/foundation）缺失 = error 阻断 |
+| Phase 2 (baseline) | `validate_baseline` 跑 schema + length-tolerance（决策 #48），失败 fatal，**不接 repair**（repair 当前仅 phase 3，决策 #25/#54） | 关键文件（works_manifest / world_manifest / foundation / fixed_relationships / identity / target_baseline）缺失 = error 阻断；自动 repair 接入由 `T-PHASE2-REPAIR-AGENT` 跟踪 |
 | Phase 3 (extraction) | 每文件独立调用 `repair(files=[single_file], config=RepairConfig(run_semantic=True), source_context=...)`，orchestrator 用 `ThreadPoolExecutor(max_workers=[repair].repair_concurrency)` 并发分发 | 完整四层检查 + 四层修复，per-file 独立事务，全部文件 PASS 才进 commit |
 | Phase 3.5 (consistency) | `validate_only(files=all_stages, checkers=["structural"])` | 跨阶段程序化检查，不自动修复 |
 | Phase 4 (scene) | per-chapter 程序化校验（沿用现有逻辑） | 行号有效/不重叠/覆盖全章 |
@@ -3339,7 +3340,7 @@ LLM 的 system prompt 中应包含：
 works/{work_id}/
   ├── world/
   │   ├── foundation/
-  │   │   ├── foundation.json         # 世界层 baseline（Phase 2）
+  │   │   ├── foundation.json         # 世界层 baseline（Phase 1 foundation lane）
   │   │   └── fixed_relationships.json # 固定关系网（Phase 2）
   │   ├── stage_snapshots/
   │   │   └── {stage_id}.json         # 世界阶段快照（Phase 3 world lane）

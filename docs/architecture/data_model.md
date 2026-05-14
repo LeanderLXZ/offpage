@@ -293,10 +293,18 @@ stage 子树是运行时加载所用的作品级时间线锚点。它应描述�
 
 推荐的按需世界观加载项：
 
-- `world/events/{event_id}.json`
-- `world/history/timeline.jsonl`
-- `world/locations/{location_id}/...`
-- `world/factions/{faction_id}.json`
+> **未来设计目标**：以下 4 个 `world/` 子路径属未来 Tier 1 拆分目标，
+> **当前 extraction 不产出** —— timeline / location / faction 详情全部
+> inline 进 `world_stage_snapshot` 的 `timeline_anchor` / `location_anchor`
+> 字段 + `foundation.json` 的 `major_factions` / `world_lines`
+> （决策 #27c + 当前 `world_manifest.schema.json::paths` 仅含 foundation /
+> fixed_relationships / stage_catalog / stage_snapshot_root /
+> world_event_digest）。未来 loader 实现时再决定要不要拆 standalone schema。
+
+- `world/events/{event_id}.json` *(future)*
+- `world/history/timeline.jsonl` *(future)*
+- `world/locations/{location_id}/...` *(future)*
+- `world/factions/{faction_id}.json` *(future)*
 - FTS5 / embedding scene_archive 检索（按 `characters_present`、`stage_id`、
   `time`、`location` 过滤）
 - FTS5 / embedding memory_timeline 检索（启动时未加载的低重要度记忆）

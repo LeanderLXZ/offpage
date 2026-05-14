@@ -209,8 +209,8 @@ works/{work_id}/
 - `candidate_characters.json` — Phase 1 候选角色（决策 #54：foundation
   由 phase 1 foundation lane 直接落 `world/foundation/foundation.json`）
 - `consistency_report.json` — Phase 3.5 一致性检查报告
-- `evidence/` — 证据引用材料
-- `conflicts/` — 矛盾与修订记录
+- `evidence/` — 证据引用材料（本地，未 tracked；.gitignore 屏蔽）
+- `conflicts/` — 矛盾与修订记录（本地，未 tracked；.gitignore 屏蔽；当前无 writer，预留给未来 phase 3.5 一致性检查的修订归档）
 
 不要为每个 stage 单独生成报告文件，交接信息应直接写入 progress 文件。
 

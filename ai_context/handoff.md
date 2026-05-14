@@ -73,9 +73,11 @@ file otherwise.
 - No raw text pasted into logs / docs / answers
 - **No real book / character / chapter / plot names** in docs,
   requirements, README, prompt templates, schemas, or `ai_context/`.
-  Use generic placeholders (`Character A`, `<work_id>`, `S001`). Only
-  `works/`, `sources/`, and `logs/change_logs/` may carry work-specific
-  references.
+  Use generic placeholders (`Character A`, `<work_id>`, `S001`).
+  Exempt (history is the point — full list in `conventions.md`
+  §Generic Placeholders): `logs/change_logs/`, `logs/review_reports/`,
+  `docs/todo_list_archived.md`, `ai_context/decisions.md`, `works/*/`
+  sample outputs, `sources/`, git commit messages.
 
 ## After Each Milestone
 

@@ -634,10 +634,25 @@ class ExtractionOrchestrator:
 
     @staticmethod
     def _chunk_passes_full_check(
-        output_path: Path, expected: int,
+        output_path: Path,
+        expected: int,
+        *,
+        start_ch: int | None = None,
+        end_ch: int | None = None,
     ) -> tuple[bool, str]:
         """Verify chunk file is structurally complete: exists + valid JSON
-        + schema-passing + ``len(summaries) == expected``.
+        + schema-passing + chapter set equal to the expected range.
+
+        Strict equality (decision-#58 H3): the chapter set extracted from
+        ``summaries[].chapter`` must equal exactly
+        ``{f"C{i:04d}" for i in range(start_ch, end_ch + 1)}`` — neither
+        under-count nor over-count nor wrong-chapter sneaks past. The chunk
+        schema only enforces ``^C[0-9]{4}$`` on each item and has no
+        uniqueness / range knowledge.
+
+        When ``start_ch`` / ``end_ch`` are omitted (e.g. legacy callers),
+        falls back to the previous ``count == expected`` check to stay
+        backwards compatible.
 
         Single source of truth for "chunk done"; called from skip path,
         final gate, and reconcile_with_disk so a partial / stale file
@@ -653,9 +668,23 @@ class ExtractionOrchestrator:
             first = errs[0]
             err_path = "/".join(str(p) for p in first.absolute_path) or "<root>"
             return False, f"schema fail @ {err_path}: {first.message[:80]}"
-        count = len(data.get("summaries", []))
-        if count < expected:
-            return False, f"partial {count}/{expected}"
+        summaries = data.get("summaries", [])
+        count = len(summaries)
+        if count != expected:
+            tag = "partial" if count < expected else "over"
+            return False, f"{tag} {count}/{expected}"
+        if start_ch is not None and end_ch is not None:
+            expected_set = {f"C{i:04d}" for i in range(start_ch, end_ch + 1)}
+            actual_set = {s.get("chapter", "") for s in summaries}
+            if actual_set != expected_set:
+                missing = sorted(expected_set - actual_set)
+                extra = sorted(actual_set - expected_set)
+                bits = []
+                if missing:
+                    bits.append(f"missing={missing[:5]}")
+                if extra:
+                    bits.append(f"extra={extra[:5]}")
+                return False, "chapter set mismatch: " + " ".join(bits)
         return True, ""
 
     def _run_recovery_sweep(
@@ -1427,13 +1456,22 @@ class ExtractionOrchestrator:
                         break
             if not kept:
                 return None
+            # Collect current-stage keys so write-back can authoritatively
+            # drop them from `full` instead of preserving stale entries
+            # the repair stack intentionally removed (decision #58 / M2).
+            primary_key = id_fields[0]
+            current_stage_keys = frozenset(
+                obj[primary_key] for obj in kept
+                if isinstance(obj.get(primary_key), str)
+            )
             return RepairFileEntry(
                 path=str(path),
                 schema=_load_schema(schema_name),
                 content=kept,
                 is_jsonl_slice=True,
                 jsonl_full_content=full,
-                jsonl_key_field=id_fields[0],
+                jsonl_key_field=primary_key,
+                current_stage_keys=current_stage_keys,
             )
 
         # World stage snapshot
@@ -1578,7 +1616,8 @@ class ExtractionOrchestrator:
             output_path = summaries_dir / f"{chunk_id}.json"
             expected = end - start + 1
 
-            ok, why = self._chunk_passes_full_check(output_path, expected)
+            ok, why = self._chunk_passes_full_check(
+                output_path, expected, start_ch=start, end_ch=end)
 
             if not ok and output_path.exists() and "json parse" in why:
                 # L1+L2 JSON repair attempt; re-check after repair
@@ -1589,7 +1628,8 @@ class ExtractionOrchestrator:
                 )
                 if repaired:
                     ok, why = self._chunk_passes_full_check(
-                        output_path, expected)
+                        output_path, expected,
+                        start_ch=start, end_ch=end)
                     if ok:
                         print(f"  [{idx}/{total_chunks}] {chunk_id} "
                               f"(C{start:04d}-C{end:04d}) — repaired "
@@ -1711,7 +1751,8 @@ class ExtractionOrchestrator:
         for idx, start, end in chunks:
             output_path = summaries_dir / f"chunk_{idx:03d}.json"
             expected = end - start + 1
-            ok, why = self._chunk_passes_full_check(output_path, expected)
+            ok, why = self._chunk_passes_full_check(
+                output_path, expected, start_ch=start, end_ch=end)
             if not ok:
                 gate_failures.append(f"chunk_{idx:03d} ({why})")
 
@@ -2132,15 +2173,18 @@ class ExtractionOrchestrator:
     def run_baseline_production(
         self, target_characters: list[str]
     ) -> None:
-        """Produce phase 2 baseline (decision #54 — phase 2 缩水):
-        - foundation.major_factions[].key_figures 补齐（phase 1 foundation
-          lane 已落 foundation.json 主体，仅 key_figures 字段留空待补）
+        """Produce phase 2 baseline (decision #54 + #58 — phase 2 缩水到 4 件):
+        - foundation.major_factions[].key_figures 替换（phase 1 foundation
+          lane 已落 foundation.json 含 raw 名 key_figures，phase 2 LLM 在
+          build_baseline_prompt 单次 call 内替换能匹配 candidate_characters
+          .aliases 的 raw 名为 character_id，匹配不上保留 raw 名）
         - fixed_relationships.json
         - per-character identity.json + manifest.json + target_baseline.json
-        - 空 stage_catalog.json
 
         foundation.json 主体由 phase 1 foundation lane 直接产出，phase 2
-        不再二次综合 foundation。
+        不再二次综合 foundation。stage_catalog 不再由 phase 2 LLM 写空占位
+        ——决策 #58 把 stage_catalog 初始化前移到 phase 3 第一个 stage 的
+        post_processing.upsert_stage_catalog 程序级首次落盘。
 
         ⚠️ **Phase 3 cascade warning (decision #54 + #13)**：本函数重跑
         会改写 ``target_baseline.json``（决策 #54 的 dialogue/action 准入
@@ -2259,11 +2303,11 @@ class ExtractionOrchestrator:
                       "Fix the errors above before proceeding.")
                 sys.exit(1)
 
-        # Mark baseline as done in pipeline so resume skips it
-        if self.pipeline:
-            self.pipeline.mark_done("phase_2")
-            self.pipeline.save(self.project_root)
-
+        # Phase_2 progress is marked done by the caller AFTER commit_stage
+        # succeeds (decision #58 / M3) — marking done here would let a
+        # failed commit slip past while Phase 3 starts on a still-dirty
+        # baseline. The caller pattern: run_baseline_production(...) →
+        # commit_stage(...) → if sha is None: sys.exit(1) → mark_done.
         print("\n[OK] Baseline production complete.")
 
     # ------------------------------------------------------------------
@@ -2536,8 +2580,17 @@ class ExtractionOrchestrator:
                             work_id=pipeline.work_id,
                             message="Phase 2 baseline (validation-triggered "
                                     "recovery)")
-                        if sha:
-                            print(f"  [OK] Baseline committed as {sha}")
+                        if sha is None:
+                            print(
+                                "\n[ERROR] Baseline validation-triggered "
+                                "recovery produced no commit SHA (commit "
+                                "failed or empty status). Refusing to "
+                                "proceed to Phase 3 with a dirty / "
+                                "uncommitted baseline (decision #58 / M3).")
+                            sys.exit(1)
+                        print(f"  [OK] Baseline committed as {sha}")
+                        pipeline.mark_done("phase_2")
+                        pipeline.save(self.project_root)
                     else:
                         pipeline.mark_done("phase_2")
                         pipeline.save(self.project_root)
@@ -2557,8 +2610,16 @@ class ExtractionOrchestrator:
                     sha = commit_stage(self.project_root, "baseline",
                                        work_id=pipeline.work_id,
                                        message="Phase 2 baseline (recovery)")
-                    if sha:
-                        print(f"  [OK] Baseline committed as {sha}")
+                    if sha is None:
+                        print(
+                            "\n[ERROR] Baseline recovery commit produced "
+                            "no SHA (commit failed or empty status). "
+                            "Refusing to proceed to Phase 3 with a dirty "
+                            "/ uncommitted baseline (decision #58 / M3).")
+                        sys.exit(1)
+                    print(f"  [OK] Baseline committed as {sha}")
+                    pipeline.mark_done("phase_2")
+                    pipeline.save(self.project_root)
 
             # --end-stage 0: baseline only, stop here
             if max_stages is not None and max_stages == 0:
@@ -3709,12 +3770,24 @@ class ExtractionOrchestrator:
 
             self.run_baseline_production(pipeline.target_characters)
 
-            # Commit baseline output so Phase 3 starts with a clean tree
+            # Commit baseline output so Phase 3 starts with a clean tree.
+            # Treat a None sha as fatal (decision #58 / M3) — moving phase_2
+            # mark_done out of run_baseline_production into the post-commit
+            # path means an empty / failed commit must not silently fall
+            # through to Phase 3 on a dirty / uncommitted baseline.
             sha = commit_stage(self.project_root, "baseline",
                                work_id=pipeline.work_id,
                                message="Phase 0-2 baseline")
-            if sha:
-                print(f"  [OK] Baseline committed as {sha}")
+            if sha is None:
+                print(
+                    "\n[ERROR] Baseline commit produced no SHA (commit "
+                    "failed or empty status). Refusing to proceed to "
+                    "Phase 3 with a dirty / uncommitted baseline "
+                    "(decision #58 / M3).")
+                sys.exit(1)
+            print(f"  [OK] Baseline committed as {sha}")
+            pipeline.mark_done("phase_2")
+            pipeline.save(self.project_root)
 
             self.run_extraction_loop(pipeline, phase3,
                                      max_stages=preset_end_stage)

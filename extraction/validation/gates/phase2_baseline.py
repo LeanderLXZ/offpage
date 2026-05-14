@@ -1,11 +1,23 @@
 """Phase 2 baseline gate.
 
-After Phase 2 produces baseline outputs (identity, manifest, world
-foundation, and the skeleton voice/behavior/boundary/failure-mode files)
-this validator checks that every file parses as JSON, matches its schema
-and carries the required non-empty fields. It runs before Phase 3 starts
-so baseline issues surface immediately rather than during stage
-extraction.
+After Phase 2 produces baseline outputs this validator checks that every
+file parses as JSON, matches its schema, and carries the required non-
+empty fields. Files validated (post-decision #54 + #58):
+
+- `manifest.json` (works-level + world)
+- `world/foundation/foundation.json` (phase 1 落 + phase 2 替换
+  `major_factions[].key_figures` raw→character_id)
+- `world/foundation/fixed_relationships.json`
+- per-character `identity.json` + `target_baseline.json`
+
+`stage_catalog.json` is NOT validated here — decision #58 made it a
+phase-3 post_processing artifact (first stage's `upsert_stage_catalog`
+initializes both world and character catalogs). `voice` / `behavior` /
+`boundary` / `failure_modes` are no separate-file baselines (decision
+#54 archive); their state lives inline in `stage_snapshot`.
+
+It runs before Phase 3 starts so baseline issues surface immediately
+rather than during stage extraction.
 
 Stage-level validation lives in ``extraction.repair`` (L0–L3 checkers +
 T0–T3 fixers), driven by ``orchestrator.run_stage_extraction``.

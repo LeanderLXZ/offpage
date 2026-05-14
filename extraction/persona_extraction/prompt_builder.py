@@ -394,11 +394,13 @@ def build_baseline_prompt(
     work_id: str,
     target_characters: list[str],
 ) -> str:
-    """Build prompt for phase 2 baseline production (decision #54 — phase 2
-    缩水到 5 件：foundation.major_factions[].key_figures 补齐 +
-    fixed_relationships + identity + target_baseline + manifest + 空
-    stage_catalog；foundation 主体由 phase 1 foundation lane 直接产出，
-    phase 2 不再二次综合)."""
+    """Build prompt for phase 2 baseline production (decision #54 + #58 —
+    phase 2 缩水到 4 件：foundation.major_factions[].key_figures 替换
+    （raw 名 → character_id）+ fixed_relationships + identity +
+    target_baseline + manifest；foundation 主体由 phase 1 foundation
+    lane 直接产出，phase 2 不再二次综合。stage_catalog 由 phase 3 第一个
+    stage 的 post_processing.upsert_stage_catalog 程序级首次落盘，phase 2
+    LLM 完全不沾——决策 #58)."""
     template = _load_template("baseline_production.md")
 
     source_dir = project_root / "sources" / "works" / work_id

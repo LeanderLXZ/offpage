@@ -91,10 +91,18 @@ Load before the first reply:
 
 Load only if the turn needs it:
 
-- `world/events/{event_id}.json`
-- `world/locations/{location_id}/...`
-- `world/factions/{faction_id}.json`
-- `world/history/timeline.jsonl`
+> **未来设计目标**：以下 4 个 `world/` 子路径（events / locations / factions /
+> history/timeline.jsonl）属未来 Tier 1 拆分目标，**当前 extraction 不产出**。
+> 现状：timeline / location / faction 详情全部 inline 进 `world_stage_snapshot`
+> 的 `timeline_anchor` / `location_anchor` 字段 + `foundation.json` 的
+> `major_factions` / `world_lines`（决策 #27c — no separate
+> `evidence_refs` / `source_type` / `scene_refs`；`ai_context/current_status.md` §36）。
+> 未来 loader 实现时再决定要不要拆 standalone schema。
+
+- `world/events/{event_id}.json` *(future)*
+- `world/locations/{location_id}/...` *(future)*
+- `world/factions/{faction_id}.json` *(future)*
+- `world/history/timeline.jsonl` *(future)*
 - past stage snapshots (`canon/stage_snapshots/{past_stage_id}.json` — for
   deep historical recall of past-stage voice, behavior, or relationship details)
 - `users/{user_id}/relationship_core/pinned_memories.jsonl`

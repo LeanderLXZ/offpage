@@ -14,6 +14,7 @@ works/*/analysis/scene_splits/
 works/*/retrieval/
 works/*/analysis/evidence/*
 !works/*/analysis/evidence/.gitkeep
+works/*/analysis/conflicts/
 
 # ===== Source corpus =====
 # Raw novels and derived source data: large, copyrighted, never tracked.

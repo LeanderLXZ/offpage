@@ -107,7 +107,7 @@ JSON 结构：
 - 中文作品的 work_id、字段值使用中文
 - 产出文件必须是格式良好的 JSON
 - 你**只**负责 foundation，不要尝试产出 stage_plan / candidate_characters（它们由其他 lane 并行处理）
-- **必须写 `major_factions[].key_figures` 字段**：用 chunk_factions[].members_present[] 跨 chunk 合并去重产出 raw 名列表（化名 / 真名 / 称呼有什么写什么，不做身份合并）。phase 2 baseline LLM 后续替换能匹配身份的 raw 名为 character_id
+- **必须写 `major_factions[].key_figures` 字段**（schema items.required，决策 #58）：用 chunk_factions[].members_present[] 跨 chunk 合并去重产出 raw 名列表（化名 / 真名 / 称呼有什么写什么，不做身份合并）。**无成员势力写 `[]`**（空数组合法，给 phase 2 替换 LLM 稳定的「key 一定存在」前提）；不允许缺失字段。phase 2 baseline LLM 后续替换能匹配身份的 raw 名为 character_id
 - 不要修改 `{lane_inputs_dir}` 下的输入文件
 - 不要读取 `sources/` 下的原始章节正文——本 lane 输入仅基于 chunks 摘要
 {retry_note}

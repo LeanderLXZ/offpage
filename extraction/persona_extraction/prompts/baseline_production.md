@@ -4,15 +4,14 @@
 
 ## 任务
 
-基于全书分析阶段的产出（phase 1 已落 `world/foundation/foundation.json`、`analysis/candidate_characters.json`、`analysis/stage_plan.json`、`analysis/chapter_summaries/`），为作品 `{work_id}` 产出 phase 2 baseline 5 件：
+基于全书分析阶段的产出（phase 1 已落 `world/foundation/foundation.json`、`analysis/candidate_characters.json`、`analysis/stage_plan.json`、`analysis/chapter_summaries/`），为作品 `{work_id}` 产出 phase 2 baseline 4 件：
 
-1. **补齐 `world/foundation/foundation.json` 的 `major_factions[].key_figures`**——phase 1 foundation lane 不写该字段（身份合并未完成），phase 2 单独 LLM 补丁式补齐
+1. **替换 `world/foundation/foundation.json` 的 `major_factions[].key_figures` 内 raw 名为 character_id**——phase 1 foundation lane 已写 raw 名（chunk_factions[].members_present[] 跨 chunk 合并去重），phase 2 LLM 在身份合并完成后做 1-to-1 替换：能匹配 candidate_characters.aliases 的 raw 名换为 character_id，匹配不上保留 raw 名（不报错、不删除）
 2. **世界级 fixed_relationships baseline**——`world/foundation/fixed_relationships.json`
 3. **每角色 identity baseline**——`characters/{char_id}/canon/identity.json` + `manifest.json`
 4. **每角色 target_baseline**——`characters/{char_id}/canon/target_baseline.json`（**准入门槛收紧**，详见产出 4）
-5. **世界与角色 stage_catalog 初始化**——空数组占位
 
-**foundation 不再由 phase 2 产出**——决策 #54 把 foundation 前移到 phase 1 foundation lane 直接产，phase 2 仅补 `key_figures` 字段。
+**foundation 不再由 phase 2 产出**——决策 #54 把 foundation 前移到 phase 1 foundation lane 直接产（含 raw 名 key_figures），phase 2 仅在 build_baseline_prompt 单次 LLM call 内做 `key_figures` raw→character_id 替换；**stage_catalog 不再由 phase 2 LLM 写空占位**（决策 #58）——phase 3 第一个 stage 的 `post_processing.upsert_stage_catalog` 会程序级首次落盘，phase 2 LLM 完全不沾 stage_catalog。
 
 identity 与 target_baseline 都是 character-level 恒定文件——identity 记录
 角色基础事实（aliases / core_wounds / key_relationships 等），target_baseline
@@ -248,48 +247,25 @@ character_snapshot_extraction prompt 的 D4 三态规则）。
 （青梅竹马）或 `次要`（点头之交）；同样是 `路人`，可能是 `普通`
 （街头偶遇）也可能是 `核心`（命运伏笔的关键路人）。
 
-## 产出 5：世界与角色 Stage Catalog 初始化
-
-为世界包和每个目标角色创建空的 stage_catalog.json，后续提取时逐阶段追加。
-
-- `{work_dir}/world/stage_catalog.json`（遵循 `schemas/world/world_stage_catalog.schema.json`）
-- `{work_dir}/characters/{{char_id}}/canon/stage_catalog.json`（遵循 `schemas/character/stage_catalog.schema.json`）
-
-世界 catalog 初始内容：
-
-```json
-{{
-  "schema_version": "1.0",
-  "work_id": "{work_id}",
-  "stages": []
-}}
-```
-
-角色 catalog 初始内容：
-
-```json
-{{
-  "schema_version": "1.0",
-  "character_id": "{{char_id}}",
-  "work_id": "{work_id}",
-  "stages": []
-}}
-```
-
-**注意**：后续提取追加 stage 条目时，每条**必须**包含 `stage_id`（紧凑英文代号 S###，排序键）、`stage_title`（短标题）、`summary`（一句话摘要）、`snapshot_path`（快照相对路径）。stage_catalog 仅用于 bootstrap 阶段选择，运行时不加载。
-
 ## 不在 baseline 阶段产出的文件
 
 以下文件由 `post_processing.py` 在每阶段提取完成后程序化维护（0 token），
 baseline 阶段**不需要**创建任何占位文件：
 
+- `{work_dir}/world/stage_catalog.json` 与
+  `{work_dir}/characters/{{char_id}}/canon/stage_catalog.json` — 由 phase 3
+  第一个 stage 的 post_processing `upsert_stage_catalog` 程序级首次落盘
+  （决策 #58），phase 2 LLM 完全不沾。后续阶段每条 catalog entry 含
+  `stage_id`（紧凑英文代号 S###，排序键）+ `stage_title`（短标题）+
+  `summary`（一句话摘要）+ `snapshot_path`（快照相对路径）；stage_catalog
+  仅用于 bootstrap 阶段选择，运行时不加载。
 - `{work_dir}/world/world_event_digest.jsonl` — 从世界 stage_snapshot 的
   `stage_events` 生成；首阶段提取后首次创建，后续阶段 upsert。
 - `{work_dir}/characters/{{char_id}}/canon/memory_digest.jsonl` — 从角色
   memory_timeline 生成；同样由首阶段 post-processing 首次创建。
 
-baseline 阶段只需完成上文列出的 foundation.key_figures 补齐 /
-fixed_relationships / identity / target_baseline / manifest / 空 stage_catalog。
+baseline 阶段只需完成上文列出的 foundation.key_figures 替换 /
+fixed_relationships / identity / target_baseline / manifest 四件。
 
 ## 规则
 

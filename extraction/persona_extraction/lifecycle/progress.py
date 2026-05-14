@@ -362,6 +362,7 @@ class Phase0Progress:
             output_path = summaries_dir / f"chunk_{idx:03d}.json"
             on_disk = output_path.exists()
             expected = self._expected_chapter_count(entry)
+            chapter_range = self._expected_chapter_range(entry)
             if entry.state == "done":
                 if not on_disk:
                     entry.state = "pending"
@@ -370,9 +371,13 @@ class Phase0Progress:
                     reverted += 1
                     continue
                 if expected is not None:
+                    start_ch, end_ch = (
+                        chapter_range if chapter_range is not None
+                        else (None, None))
                     ok, why = (
                         ExtractionOrchestrator._chunk_passes_full_check(
-                            output_path, expected))
+                            output_path, expected,
+                            start_ch=start_ch, end_ch=end_ch))
                     if not ok:
                         # Partial / stale / corrupt — purge file and
                         # reset so re-run regenerates from scratch.
@@ -399,6 +404,22 @@ class Phase0Progress:
         try:
             lo, hi = entry.chapters.split("-")
             return int(hi.lstrip("C")) - int(lo.lstrip("C")) + 1
+        except (ValueError, AttributeError):
+            return None
+
+    @staticmethod
+    def _expected_chapter_range(
+            entry: "ChunkEntry") -> tuple[int, int] | None:
+        """Parse ``chapters`` field → (start_ch, end_ch) integer pair.
+
+        Used by ``reconcile_with_disk`` to pass the chapter range into
+        ``_chunk_passes_full_check`` so the strict set-equality check
+        (H3, decision #58) can run on already-completed chunks. Same
+        format tolerance as ``_expected_chapter_count``.
+        """
+        try:
+            lo, hi = entry.chapters.split("-")
+            return int(lo.lstrip("C")), int(hi.lstrip("C"))
         except (ValueError, AttributeError):
             return None
 

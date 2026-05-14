@@ -88,24 +88,50 @@ class PidLock:
         return data
 
     def acquire(self) -> bool:
-        """Try to acquire the lock. Returns False if held by another process."""
-        existing = self.is_held()
-        if existing:
-            return False
+        """Try to acquire the lock atomically. Returns False if held.
 
+        Uses ``O_CREAT | O_EXCL`` so two processes racing to acquire the
+        same lock cannot both succeed — the loser sees ``FileExistsError``.
+        On collision we ask ``is_held()`` whether the existing lock is a
+        live process; if it's stale we unlink and retry the atomic create
+        exactly once. This closes the race window in the previous
+        ``is_held() → write_text`` pattern where two processes could both
+        observe "no lock" and then both overwrite the same file.
+
+        On NFS or other shared filesystems where ``O_EXCL`` is unreliable
+        this would need ``fcntl.flock`` (cf. ``rate_limit.py``'s pause
+        file); local work directories under ``works/`` are POSIX-local so
+        ``O_EXCL`` is sufficient here.
+        """
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
         # lock_path: works/{work_id}/analysis/{lock_name}
         # parent = analysis/ ; parent.parent = works/{work_id}/ (whose .name is work_id)
-        self.lock_path.write_text(
-            json.dumps({
-                "pid": os.getpid(),
-                "started": datetime.now().isoformat(timespec="seconds"),
-                "work_id": self.lock_path.parent.parent.name,
-            }, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        logger.info("Lock acquired (PID %d)", os.getpid())
-        return True
+        payload = json.dumps({
+            "pid": os.getpid(),
+            "started": datetime.now().isoformat(timespec="seconds"),
+            "work_id": self.lock_path.parent.parent.name,
+        }, ensure_ascii=False, indent=2).encode("utf-8")
+
+        flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+        for _attempt in range(2):
+            try:
+                fd = os.open(str(self.lock_path), flags, 0o644)
+            except FileExistsError:
+                # Collision — let is_held() decide if it's stale (dead
+                # PID / corrupt) and clean up; on stale it returns None
+                # and we retry once. On live lock we return False.
+                if self.is_held() is not None:
+                    return False
+                continue
+            try:
+                os.write(fd, payload)
+            finally:
+                os.close(fd)
+            logger.info("Lock acquired (PID %d)", os.getpid())
+            return True
+
+        # Both attempts collided with live locks
+        return False
 
     def release(self) -> None:
         """Release the lock (only if we own it)."""

@@ -21,6 +21,15 @@ class FileEntry:
     original full list, and ``jsonl_key_field`` is the per-entry id key
     used to merge the slice back into the full list at write time. This
     prevents a filtered subset from overwriting prior-stage entries.
+
+    ``current_stage_keys`` (decision #58 / M2) carries the set of
+    ``jsonl_key_field`` values that belong to the current stage at slice
+    load time. Without it, ``_merge_jsonl_slice`` only knew how to
+    *replace* by key — a repair that *removed* an entry from the slice
+    would have its full-list counterpart silently re-survive the merge.
+    With this set, the merge drops all full-list entries whose key is in
+    ``current_stage_keys`` and then takes the patched slice as the
+    authoritative current-stage content, so removals stick.
     """
     path: str
     schema: dict | None = None
@@ -28,6 +37,7 @@ class FileEntry:
     is_jsonl_slice: bool = False
     jsonl_full_content: list[dict] | None = None
     jsonl_key_field: str = ""
+    current_stage_keys: frozenset[str] | None = None
 
     def load(self) -> dict | list | None:
         """Load content from disk if not already loaded."""

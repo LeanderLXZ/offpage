@@ -219,6 +219,47 @@ def validate_source_package(
                     )
                     break
 
+    # Chapter text file existence (decision #58 / M1) — schema only checks
+    # `chapter_index[].normalized_path` shape; doesn't verify the file on
+    # disk. Phase 0 would later glob `sources/works/{wid}/chapters/*.txt`
+    # and hard-exit on zero matches, but partial loss (90/100 chapters)
+    # would slip past glob and surface mid-extraction. Verify per-entry
+    # existence here so the preflight gate fails loudly before Phase 0.
+    if isinstance(ci, list):
+        chapters_dir = source_dir / "chapters"
+        ci_label = str(source_dir / "metadata/chapter_index.json")
+        missing_chapters: list[str] = []
+        for idx, entry in enumerate(ci, start=1):
+            if not isinstance(entry, dict):
+                continue
+            chapter_id = entry.get("chapter_id", "")
+            normalized_path = entry.get("normalized_path", "")
+            # The canonical path is `chapters/{chapter_id}.txt` (used by
+            # prompt_builder + orchestrator); normalized_path is the
+            # source's own pointer (may be relative to source_dir or
+            # `chapters/`). Verify at least one resolves.
+            candidates: list[Path] = []
+            if chapter_id:
+                candidates.append(chapters_dir / f"{chapter_id}.txt")
+            if normalized_path:
+                np = Path(normalized_path)
+                candidates.append(np if np.is_absolute() else source_dir / np)
+            if not any(p.is_file() for p in candidates):
+                tag = chapter_id or f"sequence={idx}"
+                missing_chapters.append(tag)
+                if len(missing_chapters) >= 10:
+                    break
+        if missing_chapters:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    ci_label,
+                    f"chapter text file(s) missing on disk: "
+                    f"{', '.join(missing_chapters)}"
+                    + (" ..." if len(missing_chapters) >= 10 else ""),
+                )
+            )
+
     passed = not any(i.severity == "error" for i in issues)
     return ValidationReport(passed=passed, issues=issues)
 

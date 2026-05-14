@@ -27,7 +27,7 @@ branch / worktree?", so they don't disturb it
   - `works/*/analysis/progress/*.pid`
   - `works/*/analysis/progress/*.json`
 - Process logs:
-  - `works/*/analysis/logs/`
+  - `works/*/analysis/progress/extraction_logs/`
 
 ## Protected branch prefixes
 

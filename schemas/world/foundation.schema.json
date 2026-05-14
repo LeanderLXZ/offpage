@@ -2,9 +2,18 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/world/foundation.schema.json",
   "title": "WorldFoundation",
-  "description": "世界基础设定 baseline——genre / tone / world_structure / power_system / core_rules / world_lines / major_factions。作为运行时 Tier 0 静态背景加载，不含 stage-scoped 信息（阶段化内容归 world_stage_snapshot）。**由 Phase 1 foundation lane 直接产出**（决策 #54）；phase 2 baseline 仅负责在 `build_baseline_prompt` 单次 LLM call 内补齐 `major_factions[].key_figures` 字段（输入是 phase 1 落盘 foundation + candidate_characters + 已确认目标清单），补丁式 merge into foundation.json。后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。顶层 additionalProperties=true 以兼容 per-work 扩展字段；子对象按需收紧。",
+  "description": "世界基础设定 baseline——genre / tone / world_structure / power_system / core_rules / world_lines / major_factions。作为运行时 Tier 0 静态背景加载，不含 stage-scoped 信息（阶段化内容归 world_stage_snapshot）。**由 Phase 1 foundation lane 直接产出**（决策 #54），phase 1 落盘的 foundation.json 已含全部 7 个核心字段 + `major_factions[].key_figures` 的 raw 名；phase 2 baseline 在 `build_baseline_prompt` 单次 LLM call 内**仅替换** `major_factions[].key_figures` 中能匹配 candidate_characters.aliases 的 raw 名为 character_id（patch-style，决策 #54 + #58）。决策 #58 把 7 核心字段 + items.key_figures 加入 required——`{\"work_id\":\"demo\"}` 类骨架不再通过 schema，phase 1 lane skip / phase 2 validate_baseline gate 双重收紧。后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。顶层 additionalProperties=true 以兼容 per-work 扩展字段；子对象按需收紧。",
   "type": "object",
-  "required": ["work_id"],
+  "required": [
+    "work_id",
+    "genre",
+    "tone",
+    "world_structure",
+    "power_system",
+    "major_factions",
+    "world_lines",
+    "core_rules"
+  ],
   "additionalProperties": true,
   "properties": {
     "work_id": {
@@ -78,10 +87,10 @@
     "major_factions": {
       "type": "array",
       "maxItems": 20,
-      "description": "主要势力（≤20 项）。`name` / `description` 由 phase 1 foundation lane 综合 chunk_factions 产出；`key_figures` 由 phase 2 baseline 单独 LLM call 补齐（输入 phase 1 落盘 foundation + candidate_characters + 已确认目标清单；映射 raw 角色名 → character_id；character_id 必须 ∈ candidate_characters 已合并身份集；决策 #54）。",
+      "description": "主要势力（≤20 项）。**双阶段填充**（决策 #54 + #58）：(1) phase 1 foundation lane 综合 chunk_factions 写 `name` / `description` / **`key_figures` raw 名**（chunk_factions[].members_present[] 跨 chunk 合并去重，化名 / 真名 / 称呼任一）；(2) phase 2 baseline LLM 在 build_baseline_prompt 单次 LLM call 内**替换** `key_figures` 中能匹配 candidate_characters.aliases 的 raw 名为 character_id，匹配不上保留 raw 名。`key_figures` items.required（决策 #58）——无成员势力 phase 1 写 `[]`。",
       "items": {
         "type": "object",
-        "required": ["name", "description"],
+        "required": ["name", "description", "key_figures"],
         "additionalProperties": false,
         "properties": {
           "name": { "type": "string", "maxLength": 30 },
@@ -93,7 +102,7 @@
               "type": "string",
               "maxLength": 30
             },
-            "description": "关键人物列表（≤10 项，每项 ≤30 字），**character_id + raw 名混合**。双阶段填充：(1) phase 1 foundation lane 用 `chunk_factions[].members_present[]` 跨 chunk 合并去重产出 raw 名（化名 / 真名 / 称呼 / 未合并身份任一字符串）；(2) phase 2 baseline LLM 替换——对每个 raw 名 lookup `candidate_characters.json::candidates[*].aliases[*].name`，命中则换为该 candidate 的 `character_id`，未命中保留 raw 名不动（不报错、不删除）。最终内容混合 character_id（已合并身份，runtime 可绑定角色包）+ raw 名（未合并身份，作为字符串显示提示）。schema 不做 character_id 合法性硬卡——LLM 不能匹配的 raw 名作为合法字符串保留。"
+            "description": "关键人物列表（≤10 项，每项 ≤30 字），**character_id + raw 名混合**。**字段必须存在**（决策 #58）——无成员势力写 `[]`（空数组合法），给 phase 2 替换 LLM 稳定的「key 一定存在」前提，替换工作变成纯 in-place map。双阶段填充：(1) phase 1 foundation lane 用 `chunk_factions[].members_present[]` 跨 chunk 合并去重产出 raw 名（化名 / 真名 / 称呼 / 未合并身份任一字符串）；(2) phase 2 baseline LLM 替换——对每个 raw 名 lookup `candidate_characters.json::candidates[*].aliases[*].name`，命中则换为该 candidate 的 `character_id`，未命中保留 raw 名不动（不报错、不删除）。最终内容混合 character_id（已合并身份，runtime 可绑定角色包）+ raw 名（未合并身份，作为字符串显示提示）。schema 不做 character_id 合法性硬卡——LLM 不能匹配的 raw 名作为合法字符串保留。"
           }
         }
       }

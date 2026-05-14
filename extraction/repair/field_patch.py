@@ -55,34 +55,60 @@ def write_patched_file(path: str, patched: dict | list) -> None:
 
 
 def _merge_jsonl_slice(
-    full: list[dict], patched_slice: list[dict], key_field: str,
+    full: list[dict],
+    patched_slice: list[dict],
+    key_field: str,
+    current_stage_keys: frozenset[str] | None = None,
 ) -> list[dict]:
     """Merge a patched current-stage slice back into the full accumulated list.
 
-    Replace-by-key: entries in *full* whose ``key_field`` value matches
-    an entry in *patched_slice* are swapped for the slice version;
-    slice entries with a key not present in *full* are appended at the
-    end, preserving full-list ordering otherwise. Entries in *full* not
-    referenced by *patched_slice* are passed through unchanged.
+    Two modes (decision #58 / M2):
+
+    1. ``current_stage_keys`` provided (preferred): drop every entry in
+       *full* whose ``key_field`` value is in that set, then append the
+       patched slice in slice order. The slice is the authoritative
+       current-stage content — so removals from the slice (e.g. repair
+       deleting an invalid duplicate) actually stick, instead of being
+       silently undone by the legacy replace-by-key path that always
+       carried forward the corresponding full-list entry.
+
+    2. ``current_stage_keys`` is None (legacy): fall back to replace-by-
+       key + append-unseen — same behaviour as before. Used by callers
+       that don't know the current-stage key set at construction time.
+
+    Non-dict entries in *full* are passed through unchanged. Slice
+    entries missing ``key_field`` are appended verbatim in both modes
+    (no key to dedupe / drop by).
     """
+    if current_stage_keys is not None:
+        merged: list[dict] = []
+        for entry in full:
+            k = entry.get(key_field) if isinstance(entry, dict) else None
+            if k and k in current_stage_keys:
+                # Current-stage entry — slice is authoritative, drop it
+                continue
+            merged.append(entry)
+        merged.extend(patched_slice)
+        return merged
+
     slice_by_key = {
         e.get(key_field): e
         for e in patched_slice
         if isinstance(e, dict) and e.get(key_field)
     }
     seen: set = set()
-    merged: list[dict] = []
+    merged_legacy: list[dict] = []
     for entry in full:
         k = entry.get(key_field) if isinstance(entry, dict) else None
         if k and k in slice_by_key:
-            merged.append(slice_by_key[k])
+            merged_legacy.append(slice_by_key[k])
             seen.add(k)
         else:
-            merged.append(entry)
+            merged_legacy.append(entry)
     for k, entry in slice_by_key.items():
         if k not in seen:
-            merged.append(entry)
-    return merged
+            merged_legacy.append(entry)
+    return merged_legacy
 
 
 def write_file_entry(entry) -> None:
@@ -105,7 +131,8 @@ def write_file_entry(entry) -> None:
         and entry.jsonl_key_field
     ):
         merged = _merge_jsonl_slice(
-            entry.jsonl_full_content, entry.content, entry.jsonl_key_field)
+            entry.jsonl_full_content, entry.content, entry.jsonl_key_field,
+            current_stage_keys=getattr(entry, "current_stage_keys", None))
         write_patched_file(entry.path, merged)
         entry.jsonl_full_content = merged
         return
