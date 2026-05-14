@@ -74,4 +74,4 @@
 
 ---
 
-**镜像约束**：本文件和 `.claude/commands/check-review.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。本文件额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /check-review` 起往下）与 `.claude/commands/check-review.md` **逐字一致**。
+**镜像约束**：本文件和 `.agents/skills/check-review/SKILL.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。`.agents/skills/check-review/SKILL.md` 额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /check-review` 起往下）与本文件**逐字一致**。

@@ -102,4 +102,4 @@ forward 进程检测）、`## Protected branch prefixes`（Step 5 区分长跑�
 
 ---
 
-**镜像约束**：本文件和 `.claude/commands/commit.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。本文件额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /commit` 起往下）与 `.claude/commands/commit.md` **逐字一致**。
+**镜像约束**：本文件和 `.agents/skills/commit/SKILL.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。`.agents/skills/commit/SKILL.md` 额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /commit` 起往下）与本文件**逐字一致**。

@@ -220,4 +220,4 @@ intent 基线缺失时：**跳过本轨**并打印"无 PRE log，无法对账"�
 
 ---
 
-**镜像约束**：本文件和 `.agents/skills/post-check/SKILL.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。`.agents/skills/post-check/SKILL.md` 额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /post-check` 起往下）与本文件**逐字一致**。
+**镜像约束**：本文件和 `.claude/commands/post-check.md` 正文保持同步——任一侧修改必须在同 commit 内镜像到另一侧。本文件额外带 YAML frontmatter（`name` / `description`），正文（从一级标题 `# /post-check` 起往下）与 `.claude/commands/post-check.md` **逐字一致**。
