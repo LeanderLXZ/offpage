@@ -241,3 +241,22 @@ extraction/                              ← 改名自 automation/
 
 - **Status**: DONE
 - **Finished**: 2026-05-13 21:10:17 EDT
+
+<!-- /post-check 填写 -->
+
+## 复查结论（对话里有完整报告）
+
+### 轨 1 — 需求落实
+- 落实率：13/13 计划动作清单项全部 ✅；13/13 验证标准全部 ✅（含 `_smoke_triage` pre-existing 失败二次确认）
+- Missed updates: 4 条（详见对话）—— ext_workflow.md:755 `validator.X` stale prefix / extraction/README.md:282-283 forbidden "（原 X.py）" / Cross-File Alignment row 7 触发清单不全 / todo_list.md 未补 _smoke_triage 跟进条目
+
+### 轨 2 — 影响扩散
+- Findings: High=0 / Medium=6 / Low=6
+- Open Questions: 3 条（详见对话）—— validation.gates → persona_extraction.core 反向耦合是临时桥还是设计意图 / docs 保留 "consistency_checker" 角色名是否合规 / RepairAgentConfig 类名 vs `[repair]` section 长远迷惑
+
+## 复查时状态
+- **Reviewed**: 2026-05-13 22:04:36 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 轨 1 全落实但有 4 条 Missed Updates（PRE 计划之外的连带遗漏）
+  - 轨 2 无 High，有 6 Medium——其中 R-M1 (TOML stale section silent-drop) 为 latent footgun 值得跟进
+- **Conversation ref**: 同会话内 /post-check 输出
