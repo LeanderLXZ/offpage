@@ -279,8 +279,8 @@ extraction/
 │   ├── README.md
 │   ├── __init__.py / types.py
 │   ├── gates/                                ← 相位边界 validator（orchestrator 直调，不走 repair 循环）
-│   │   ├── phase2_baseline.py                ← Phase 2 baseline 校验（原 validator.py）
-│   │   └── phase3_5_consistency.py           ← Phase 3.5 跨 stage 一致性（原 consistency_checker.py）
+│   │   ├── phase2_baseline.py                ← Phase 2 baseline 校验
+│   │   └── phase3_5_consistency.py           ← Phase 3.5 跨 stage 一致性
 │   └── shared/                               ← 纯函数原语（gates / repair.checkers 共享）
 │       ├── importance.py                     ← importance_for_target / importance_min_examples
 │       └── schema_tolerance.py               ← validate_with_length_tolerance / relaxed_schema_for_length

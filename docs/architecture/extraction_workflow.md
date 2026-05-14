@@ -752,7 +752,7 @@ orchestrator (Python)
   总轮次限制（每 lifecycle 默认 5 轮）。**Length-bound tolerance 兜底**：在 lifecycle
   2 即将判定 `T3_EXHAUSTED` 之前，如果剩余 issues **全部**是 `category ==
   schema_validation` 且错误描述命中 `minLength` / `maxLength` 关键词，调
-  `validator.validate_with_length_tolerance`：relaxed schema（×0.9 floor /
+  `validate_with_length_tolerance`：relaxed schema（×0.9 floor /
   ×1.1 ceil）通过 → 改判 `PASS`；否则保留 `T3_EXHAUSTED`。仅修改终态判定
   分支，不动 lifecycle 1/2/T3 cap/fixer 升级；详见 `ai_context/decisions.md`
   #48
