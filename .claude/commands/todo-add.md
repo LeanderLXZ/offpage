@@ -164,8 +164,7 @@ b. **跨段移动**：从原段删除整个 `### [T-XXX]` 块（连带其前后�
 - **UPDATE 优先于 CREATE**：能匹配到已有条目就更新；多条疑似命中、CREATE
   缺关键字段时**主动问用户**，不替用户决定
 - **In Progress 单槽**：段非空就拒写（CREATE）/ 拒移入（UPDATE 跨段）
-- **索引规则单源**：刷新逻辑指向 `docs/todo_list.md` "Index maintenance" 段，
-  本 skill 不重复定义
+- **索引规则单源**：见 `docs/todo_list.md` "Index maintenance" 段
 
 ---
 
