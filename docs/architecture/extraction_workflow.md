@@ -402,7 +402,7 @@ char_snapshot + file-level 2 lifecycle 标准流程——即 sub-lane 拆分前
 - 阶段 1 快照：基于本阶段原文 + identity 直接推演基线状态全字段（voice_state / behavior_state / boundary_state / failure_modes 等），不再依赖 4 件套 baseline
 - 阶段 N 快照以 identity + 前一阶段快照为参照，产出完整的当前阶段状态
 - **未变化的内容也必须包含在快照中**——快照是自包含的；运行时与 identity 配套加载即可
-- `stage_delta` 记录从上一阶段的变化（自由文本），必须捕捉 (B) 关键变化 + (D) 消除原因，禁止"无明显变化"敷衍
+- `stage_delta` 顶层是 6-key 结构化对象（`trigger_events` / `personality_changes` / `relationship_changes` / `status_changes` / `mood_shift` / `voice_shift`，schema 真值见 `schemas/character/stage_snapshot.schema.json`），每个 sub-field 的内容是叙述性 text；必须捕捉 (B) 关键变化 + (D) 消除原因，禁止"无明显变化"敷衍
 - **prev_stage 处理规则**：(A) 未出场继承 / (B) 出场且变化 重写 / (C) 出场且无变化 保留 / (D) resolved-revealed-消除 + per-stage 推演原则的权威定义见 `extraction/persona_extraction/prompts/character_snapshot_extraction.md` §核心规则 #2
 
 **长度硬门控**：所有字段级长度限制由对应 schema 的 `minLength` /

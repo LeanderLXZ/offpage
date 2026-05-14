@@ -125,8 +125,9 @@ def main(argv: list[str] | None = None) -> None:
         "--end-stage",
         type=_nonneg_int,
         default=None,
-        help="Stop after stage N completes (0 = baseline only, omit = all). "
-             "Negative values rejected at argparse.",
+        help="Stop after stage N completes (Phase 3: 0 = baseline only, "
+             "omit = all; Phase 4 standalone treats 0 / omit both as all "
+             "chapters). Negative values rejected at argparse.",
     )
     parser.add_argument(
         "--start-phase",

@@ -99,9 +99,9 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
    **prev_stage 处理规则（必读，下方 stage_delta 字段说明会引用 (B)/(D) 标签）**：
 
    - **(A) 未出场角色的继承规则**：本阶段中某个 baseline target 未出场，但**之前任一 stage** 已有该 target 的 target_voice_map / target_behavior_map / relationships 条目（即"已见过"）时，必须从前一阶段 **原样继承** 到本阶段快照中。不可因为"本阶段没出现"就删除。没有新原文时不加新例句，但已有条目完整保留。**从未登场的 baseline target**（cumulative 都没出现）单独走 D4 状态 3 规则——entry 必须存在以满足 set-equal 约束，但所有字段保持空（fixed_relationship 例外见 D4）。
-   - **(B) 出场且有变化** → 以本阶段原文为准 **重写** 该字段；prev 仅作对照；在 stage_delta 自由文本中点出关键变化（如"X 角色对 Y 的态度从戒备转为信任"），不必逐字段列举
+   - **(B) 出场且有变化** → 以本阶段原文为准 **重写** 该字段；prev 仅作对照；在 stage_delta 对应 sub-field（如 `relationship_changes` / `personality_changes`）的叙述性 text 中点出关键变化（如"X 角色对 Y 的态度从戒备转为信任"），不必逐字段列举
    - **(C) 出场且无变化** → 保留 prev 内容；不要因为"没变化所以不写"而漏字段，schema required 字段一律完整填充
-   - **(D) resolved / revealed / 消除** → 适用于 misunderstandings（已 resolve）、concealments（已 revealed）、failure_modes（角色已显著克服该崩坏模式）等"语义被解决"的条目。**判断标准**：本阶段或前阶段原文里有显式的解决 / 揭露 / 长期克服证据，而不是"本阶段没体现"。在 stage_delta 自由文本中写明消除原因。**这与 maxItems 裁剪是两件不同的事**——裁剪是空间不够（不写进 stage_delta），消除是语义被解决（要写）
+   - **(D) resolved / revealed / 消除** → 适用于 misunderstandings（已 resolve）、concealments（已 revealed）、failure_modes（角色已显著克服该崩坏模式）等"语义被解决"的条目。**判断标准**：本阶段或前阶段原文里有显式的解决 / 揭露 / 长期克服证据，而不是"本阶段没体现"。在 stage_delta 对应 sub-field（`status_changes` / `personality_changes` 等）的叙述性 text 中写明消除原因。**这与 maxItems 裁剪是两件不同的事**——裁剪是空间不够（不写进 stage_delta），消除是语义被解决（要写）
 
    **per-stage 推演原则**：除 character_arc（累积型）和 (A) 类继承外，所有字段值必须基于本阶段原文 + prev_snapshot **推演得出**，不可静默照搬 prev_snapshot；schema 通过不等于推演到位。
 
@@ -136,7 +136,7 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
    - `misunderstandings`（已 resolved 的移除）、`concealments`（已 revealed 的移除）。**数组上限以 schema 为准**
    - `emotional_baseline`（含 **active_goals** 理性目标、**active_obsessions** 执念、active_fears、active_wounds）、`current_personality`、`current_mood`、`current_status`。**所有数组上限以 schema 为准**
    - `stage_events`（**仅本阶段**发生的关键事件清单，每条字数与数组上限**以 schema 为准**；schema 两端硬门控，过短/过长都会直接判失败；不累积历史，历史由 memory_timeline 和 world_event_digest 承载）。**事件归属（强约束）**：① 必写——本角色亲历 / 亲为 / 在场 / 直接影响其处境或认知的事件；② 不写——其他角色之间的私事、与本角色无关的对话 / 设局 / 经济活动 / 内心决定，**哪怕剧情很重要也不属于本角色 stage_events**；③ 世界级公共事件（势力变迁、大 boss 复活、天灾、地震、灵脉断裂、奇观、跨角色公共战役等）由 world `stage_snapshot.stage_events` 承载——**不要直接复制世界层文本**；仅当本角色亲历该世界事件时，必须以**角色视角**重写一条进入此清单（角色看到 / 经历 / 应对的是什么、对其造成的具体影响），不可遗漏也不可机械抄录
-   - `stage_delta`：从上一阶段的变化（自由文本）。应能体现 (B) 类关键变化（target / emotion / relationship 等的演变要点）和 (D) 类消除原因（哪条 misunderstanding/concealment/failure_mode 在本阶段被 resolve/reveal/克服 + 为什么）。**不要写"无明显变化"敷衍**——若真的本阶段无变化（C 全态），写明你对照了哪些字段、原文为什么不带来变化
+   - `stage_delta`：从上一阶段的变化。**顶层是 6-key 结构化对象**（`trigger_events` / `personality_changes` / `relationship_changes` / `status_changes` / `mood_shift` / `voice_shift`，schema 真值见上方 inline schema），每个 sub-field 的内容是叙述性 text。应能体现 (B) 类关键变化（target / emotion / relationship 等的演变要点）和 (D) 类消除原因（哪条 misunderstanding/concealment/failure_mode 在本阶段被 resolve/reveal/克服 + 为什么）。**不要写"无明显变化"敷衍**——若真的本阶段无变化（C 全态），写明你对照了哪些字段、原文为什么不带来变化
    - `character_arc`：角色从阶段 1 到当前阶段的整体弧线概述，**单一字符串**（≤ 200 字），一句到一段话概括核心变化轨迹。第一个阶段可省略或仅写起点状态
    - `timeline_anchor`：阶段时间锚点短描述（≤ 50 字），必填
    - `snapshot_summary`：当前阶段一段式摘要，100–200 字，必填
@@ -174,7 +174,8 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
      按状态 1/2/3 的常规规则处理。
 
    **越界处置**：原文出现 baseline 未覆盖的 target，**不要写入**
-   stage_snapshot；该情况记到 `stage_delta` 自由文本说明，由 phase 3
+   stage_snapshot；该情况记到 `stage_delta` 对应 sub-field（如
+   `relationship_changes`）的叙述性 text 中说明，由 phase 3
    之后的人工流程决定是否补 baseline 重抽。详见
    `ai_context/decisions.md` #13。
 

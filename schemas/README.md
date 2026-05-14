@@ -6,10 +6,10 @@
 
 | 子目录 | 作用 | 典型成员 |
 |--------|------|---------|
-| `analysis/` | Phase 0 / Phase 1 / Phase 4 LLM 产物（不入运行时；Phase 1 入 git 部分 = `stage_plan` + `candidate_characters`） | `chapter_summary_chunk`、`scene_split`、`stage_plan`、`candidate_characters`（决策 #54：原 `world_overview` 已删除，foundation 由 phase 1 foundation lane 直接落 `schemas/world/foundation.schema.json` 形态） |
+| `analysis/` | Phase 0 / Phase 1 / Phase 4 LLM 产物（不入运行时；Phase 1 入 git 部分 = `stage_plan` + `candidate_characters`） | `chapter_summary_chunk`、`scene_split`、`stage_plan`、`candidate_characters`（决策 #54：foundation 由 phase 1 foundation lane 直接落 `schemas/world/foundation.schema.json`） |
 | `work/` | 作品级入库、目录、per-work 加载配置 | `work_manifest`、`works_manifest`、`book_metadata`、`chapter_index`、`load_profiles` |
 | `world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | `world_manifest`、`foundation`、`world_stage_snapshot`、`world_event_digest_entry`、`fixed_relationships`、`world_stage_catalog` |
-| `character/` | 角色 baseline + 阶段目录 + 阶段快照 + 记忆 + 域内共享片段 | `identity`、`target_baseline`、`character_manifest`、`stage_catalog`、`stage_snapshot`（含内联 `failure_modes` / `voice_state` / `behavior_state` / `boundary_state` 全字段；phase 3 产出由 `extraction/persona_extraction/phases/snapshot_merge.py::merge_partials` 合并 3 sub-lane partial，决策 #55）、`memory_timeline_entry`、`memory_digest_entry`、`targets_cap`（域内 `$ref` 单源） |
+| `character/` | 角色 baseline + 阶段目录 + 阶段快照 + 记忆 + 域内共享片段 | `identity`、`target_baseline`、`character_manifest`、`stage_catalog`、`stage_snapshot`（含内联 `failure_modes` / `voice_state` / `behavior_state` / `boundary_state` 全字段；phase 3 产出由 `extraction/persona_extraction/phases/snapshot_merge.py::merge_partials` 合并 4 sub-lane partial（`char_expression` / `char_decision` / `char_internal` / `char_social`），决策 #55）、`memory_timeline_entry`、`memory_digest_entry`、`targets_cap`（域内 `$ref` 单源） |
 | `user/` | 用户根画像、绑定、长期档案、关系核心、钉选记忆条目 | `user_profile`、`role_binding`、`long_term_profile`、`relationship_core`、`pinned_memory_entry` |
 | `runtime/` | Context / Session / 请求载荷 / 场景归档条目 | `context_manifest`、`context_character_state`、`session_manifest`、`runtime_session_request`、`scene_archive_entry` |
 | `shared/` | 跨域**业务**共享（运行时 / 抽取产物中跨子域复用的数据片段，独立 schema 文件） | `source_note` |

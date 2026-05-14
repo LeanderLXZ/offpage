@@ -7,7 +7,7 @@ Only used when field-level patches (T1/T2) have failed repeatedly.
 
 Sub-lane regen hook (decision #55): when ``sub_lane_regen`` callback is
 wired AND the target file is a character ``stage_snapshot.json``, T3
-delegates regeneration to the orchestrator's 3-sub-lane parallel extract
+delegates regeneration to the orchestrator's 4-sub-lane parallel extract
 + merge path (replacing the default single-LLM-call full-file rewrite).
 The callback receives the file entry + remaining issues +
 ``prior_attempt_context`` and returns the new content dict (or ``None``
@@ -117,7 +117,7 @@ class FileRegenFixer(BaseFixer):
         self._llm_call = llm_call
         self._retriever = retriever or ContextRetriever()
         # Decision #55 — when set, T3 routes char_snapshot files through
-        # the orchestrator's 3-sub-lane parallel re-extract + merge path
+        # the orchestrator's 4-sub-lane parallel re-extract + merge path
         # instead of the default single-LLM full-file regen.
         self._sub_lane_regen = sub_lane_regen
 
@@ -149,7 +149,7 @@ class FileRegenFixer(BaseFixer):
                 continue
 
             # Decision #55 — sub-lane-aware regen for char_snapshot
-            # stage_snapshot files. The callback re-runs the 3-sub-lane
+            # stage_snapshot files. The callback re-runs the 4-sub-lane
             # parallel extract + merge path with prior_attempt_context
             # injected, writes the merged file, and cleans .partial/
             # scratch. Returns True on success → mark every attempted

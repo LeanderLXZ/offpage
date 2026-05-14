@@ -10,7 +10,7 @@
 
 | 子目录 | 作用 | 文件数 |
 |--------|------|--------|
-| `schemas/analysis/` | Phase 0 / Phase 1 / Phase 4 LLM 产物（Phase 1 三件套入 git，其余不入运行时） | 4 |
+| `schemas/analysis/` | Phase 0 / Phase 1 / Phase 4 LLM 产物（Phase 1 入 git 部分 = `stage_plan` + `candidate_characters`；foundation 在 `schemas/world/`；其余不入运行时） | 4 |
 | `schemas/work/` | 作品入库、目录、阶段目录、per-work 加载配置 | 5 |
 | `schemas/world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | 6 |
 | `schemas/character/` | 角色 baseline + 阶段快照 + 记忆（含 `target_baseline` + `targets_cap` 域内 `$ref` 片段） | 8 |

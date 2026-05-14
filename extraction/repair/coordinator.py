@@ -184,8 +184,8 @@ def run(
         sub_lane_regen: optional T3 callback for character
             stage_snapshot files (decision #55). When wired, the fixer
             routes char_snapshot regen through the orchestrator's
-            3-sub-lane parallel extract + merge path; ``None`` keeps the
-            legacy single-LLM full-file regen.
+            4-sub-lane parallel extract + merge path; ``None`` keeps the
+            single-LLM full-file regen path.
     """
     if config is None:
         config = RepairConfig()

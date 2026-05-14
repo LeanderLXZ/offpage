@@ -1656,7 +1656,11 @@ class ExtractionOrchestrator:
                 except RateLimitHardStop:
                     # Hard stop must propagate to the main thread (and
                     # then to CLI) per docs/requirements.md §11.13;
-                    # never demote it to a per-chunk failure.
+                    # never demote it to a per-chunk failure. Cancel
+                    # siblings so the implicit ``with`` exit
+                    # ``shutdown(wait=True)`` doesn't block on still-
+                    # sleeping chunks (decision #55 R2 pattern).
+                    executor.shutdown(wait=False, cancel_futures=True)
                     raise
                 except Exception as exc:
                     success, msg = False, str(exc)
@@ -2064,7 +2068,14 @@ class ExtractionOrchestrator:
                         for lane in pending
                     }
                     for fut in as_completed(futures):
-                        name, status, err = fut.result()
+                        try:
+                            name, status, err = fut.result()
+                        except RateLimitHardStop:
+                            # Cancel siblings so the implicit ``with``
+                            # exit doesn't block on still-sleeping
+                            # lanes (decision #55 R2 pattern).
+                            pool.shutdown(wait=False, cancel_futures=True)
+                            raise
                         results[name] = (status, err)
                         msg = f"  [{status.upper()}] phase 1 lane: {name}"
                         if err:
@@ -2926,7 +2937,15 @@ class ExtractionOrchestrator:
                             futures.append(executor.submit(
                                 _extract_char_support, c))
                     for future in as_completed(futures):
-                        proc_type, proc_id, result = future.result()
+                        try:
+                            proc_type, proc_id, result = future.result()
+                        except RateLimitHardStop:
+                            # Cancel siblings (1+2N lanes at N-char peak)
+                            # so the implicit ``with`` exit doesn't block
+                            # on still-sleeping lanes (decision #55 R2).
+                            executor.shutdown(
+                                wait=False, cancel_futures=True)
+                            raise
                         lane_key = _lane_key(proc_type, proc_id)
                         if result.success:
                             stage.mark_lane_complete(lane_key)
@@ -3147,6 +3166,10 @@ class ExtractionOrchestrator:
                     except RateLimitHardStop:
                         # Propagate hard stop to the main thread; CLI
                         # exit-2 contract per docs/requirements.md §11.13.
+                        # Cancel siblings so the implicit ``with`` exit
+                        # doesn't block on still-sleeping repair workers
+                        # (decision #55 R2 pattern).
+                        pool.shutdown(wait=False, cancel_futures=True)
                         raise
                     except Exception as exc:  # noqa: BLE001
                         # Worker raised (e.g. context_retriever ERR,

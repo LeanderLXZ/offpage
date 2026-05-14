@@ -971,7 +971,10 @@ def _run_parallel(
                     cid, success, error_msg = future.result()
                 except RateLimitHardStop:
                     # Propagate hard stop to the main thread → CLI exit 2.
-                    # Per docs/requirements.md §11.13.
+                    # Per docs/requirements.md §11.13. Cancel siblings so
+                    # the implicit ``with`` exit doesn't block on still-
+                    # sleeping chapter workers (decision #55 R2 pattern).
+                    executor.shutdown(wait=False, cancel_futures=True)
                     raise
                 except Exception as exc:
                     cid = chapter_id

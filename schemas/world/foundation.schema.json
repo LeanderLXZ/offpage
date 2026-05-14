@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/world/foundation.schema.json",
   "title": "WorldFoundation",
-  "description": "世界基础设定 baseline——genre / tone / world_structure / power_system / core_rules / world_lines / major_factions。作为运行时 Tier 0 静态背景加载，不含 stage-scoped 信息（阶段化内容归 world_stage_snapshot）。**由 Phase 1 foundation lane 直接产出**（决策 #54——原 `schemas/analysis/world_overview.schema.json` 已删除，内容合并入本 schema；phase 2 baseline 仅负责单独 LLM call 补齐 `major_factions[].key_figures` 字段，输入是 phase 1 落盘 foundation + candidate_characters + 已确认目标清单，补丁式 merge into foundation.json）。后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。顶层 additionalProperties=true 以兼容 per-work 扩展字段；子对象按需收紧。",
+  "description": "世界基础设定 baseline——genre / tone / world_structure / power_system / core_rules / world_lines / major_factions。作为运行时 Tier 0 静态背景加载，不含 stage-scoped 信息（阶段化内容归 world_stage_snapshot）。**由 Phase 1 foundation lane 直接产出**（决策 #54）；phase 2 baseline 仅负责在 `build_baseline_prompt` 单次 LLM call 内补齐 `major_factions[].key_figures` 字段（输入是 phase 1 落盘 foundation + candidate_characters + 已确认目标清单），补丁式 merge into foundation.json。后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。顶层 additionalProperties=true 以兼容 per-work 扩展字段；子对象按需收紧。",
   "type": "object",
   "required": ["work_id"],
   "additionalProperties": true,

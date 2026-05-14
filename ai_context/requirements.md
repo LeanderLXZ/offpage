@@ -98,14 +98,23 @@ input layer, never modified downstream, excluded from git. Chinese
 works → Chinese `work_id`.
 → `docs/requirements.md` §8 + `extraction/ingestion/`.
 
-## §9 Extraction Process — Seven Steps
+## §9 Extraction Process — Phase 0–4
 
-ingest → chapter summarization (parallel chunks) → global analysis
-(identity merge → world overview → stage plan → candidates → baseline
-production) → active character confirmation → coordinated stage
-extraction (world + character per stage; may correct baselines) →
-targeted supplement → package validation. Self-contained snapshots per
-stage (stage N = complete current state, including unchanged fields).
+Phase 0 chapter summarization (parallel chunks; each chunk carries
+chunk-level analysis fields — `chunk_arc_summary` / `chunk_world_rules`
+/ `chunk_power_levels` / `chunk_factions` / `chunk_regions`) → Phase 1
+global analysis (monolithic mode = 3 parallel lanes
+`foundation` / `stage_plan` / `candidate_characters`; light_novel mode
+= 2 lanes `foundation` + `candidate_characters` with orchestrator
+程序化 `_build_light_novel_stage_plan`, decision #52) → Phase 1.5
+active character confirmation → Phase 2 baseline production (per-character
+`identity.json` + `target_baseline.json` + `fixed_relationships.json`
++ `manifest.json` + foundation `major_factions[].key_figures` 替换;
+single LLM call, decision #54) → Phase 3 coordinated stage extraction
+(world + per-character snapshot per stage, with file-level repair
+lifecycle) → Phase 4 scene archival → package validation.
+Self-contained snapshots per stage (stage N = complete current state,
+including unchanged fields).
 → `docs/requirements.md` §9.
 
 ## §10 Output Quality Protection
