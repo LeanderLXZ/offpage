@@ -34,7 +34,7 @@
         "monolithic",
         "light_novel"
       ],
-      "description": "phase 0/1 双模式调度信号（必填）。monolithic = 单卷非结构化作品，phase 0 token-budget chunking + phase 1 LLM stage 边界发现；light_novel = 多卷结构化作品，1 sub-section = 1 C-id = 1 phase 0 chunk = 1 phase 1 stage，phase 1 stage_plan 1:1 程序化派生。必须与 metadata/chapter_index.json 的 items profile 一致（automation/ingestion/validator.py 跨文件断言）。"
+      "description": "phase 0/1 双模式调度信号（必填）。monolithic = 单卷非结构化作品，phase 0 token-budget chunking + phase 1 LLM stage 边界发现；light_novel = 多卷结构化作品，1 sub-section = 1 C-id = 1 phase 0 chunk = 1 phase 1 stage，phase 1 stage_plan 1:1 程序化派生。必须与 metadata/chapter_index.json 的 items profile 一致（extraction/ingestion/validator.py 跨文件断言）。"
     },
     "source_types": {
       "type": "array",

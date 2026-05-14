@@ -9,14 +9,14 @@
 | `analysis/` | Phase 0 / Phase 1 / Phase 4 LLM 产物（不入运行时；Phase 1 入 git 部分 = `stage_plan` + `candidate_characters`） | `chapter_summary_chunk`、`scene_split`、`stage_plan`、`candidate_characters`（决策 #54：原 `world_overview` 已删除，foundation 由 phase 1 foundation lane 直接落 `schemas/world/foundation.schema.json` 形态） |
 | `work/` | 作品级入库、目录、per-work 加载配置 | `work_manifest`、`works_manifest`、`book_metadata`、`chapter_index`、`load_profiles` |
 | `world/` | 世界基础设定、阶段快照、事件、固定关系、目录页 | `world_manifest`、`foundation`、`world_stage_snapshot`、`world_event_digest_entry`、`fixed_relationships`、`world_stage_catalog` |
-| `character/` | 角色 baseline + 阶段目录 + 阶段快照 + 记忆 + 域内共享片段 | `identity`、`target_baseline`、`character_manifest`、`stage_catalog`、`stage_snapshot`（含内联 `failure_modes` / `voice_state` / `behavior_state` / `boundary_state` 全字段；phase 3 产出由 `automation/persona_extraction/snapshot_merge.py::merge_partials` 合并 3 sub-lane partial，决策 #55）、`memory_timeline_entry`、`memory_digest_entry`、`targets_cap`（域内 `$ref` 单源） |
+| `character/` | 角色 baseline + 阶段目录 + 阶段快照 + 记忆 + 域内共享片段 | `identity`、`target_baseline`、`character_manifest`、`stage_catalog`、`stage_snapshot`（含内联 `failure_modes` / `voice_state` / `behavior_state` / `boundary_state` 全字段；phase 3 产出由 `extraction/persona_extraction/phases/snapshot_merge.py::merge_partials` 合并 3 sub-lane partial，决策 #55）、`memory_timeline_entry`、`memory_digest_entry`、`targets_cap`（域内 `$ref` 单源） |
 | `user/` | 用户根画像、绑定、长期档案、关系核心、钉选记忆条目 | `user_profile`、`role_binding`、`long_term_profile`、`relationship_core`、`pinned_memory_entry` |
 | `runtime/` | Context / Session / 请求载荷 / 场景归档条目 | `context_manifest`、`context_character_state`、`session_manifest`、`runtime_session_request`、`scene_archive_entry` |
 | `shared/` | 跨域**业务**共享（运行时 / 抽取产物中跨子域复用的数据片段，独立 schema 文件） | `source_note` |
 
 `shared/` 用于业务层 cross-cutting 数据格式（如 `source_note` 在抽取 /
 repair / 审计多处复用），每个文件**独立对应一种数据载体**。加载侧通过
-`automation/persona_extraction/schema_loader.py` 在加载时 inline 化
+`extraction/persona_extraction/core/schema_loader.py` 在加载时 inline 化
 `$ref`（包括 `./<file>.schema.json`、sibling `<file>.schema.json`、
 `../<dir>/<file>.schema.json` 三种相对形式），让 Draft7 / Draft202012
 任一 validator 都能直接吃自包含 schema。

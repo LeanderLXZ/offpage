@@ -24,7 +24,7 @@ no runtime code.
    `schema_reference.md`.
 4. Runtime flow → `simulation/README.md`, `simulation/flows/`,
    `simulation/retrieval/`, `simulation/prompt_templates/`.
-5. Extraction pipeline → `automation/README.md`.
+5. Extraction pipeline → `extraction/README.md`.
 
 ## Running Extraction
 
@@ -34,10 +34,10 @@ analysis/progress/`):
 
 ```bash
 # Foreground
-python -m automation.persona_extraction "<work_id>" --resume
+python -m extraction.persona_extraction "<work_id>" --resume
 
 # Background (survives SSH disconnect), default runtime cap
-python -m automation.persona_extraction "<work_id>" \
+python -m extraction.persona_extraction "<work_id>" \
     --resume --background --max-runtime 360
 
 # Follow log
@@ -45,8 +45,8 @@ tail -f works/<work_id>/analysis/progress/extraction_logs/extraction.log
 ```
 
 Pipeline checks PID lock + clean git tree (scope-limited) before
-starting. `jsonschema` is a HARD dep in `automation/pyproject.toml`.
-Full CLI + background semantics → `automation/README.md`.
+starting. `jsonschema` is a HARD dep in `extraction/pyproject.toml`.
+Full CLI + background semantics → `extraction/README.md`.
 
 Manual repair scenarios → `prompts/review/*.md`.
 

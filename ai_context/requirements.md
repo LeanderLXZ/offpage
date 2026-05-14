@@ -96,7 +96,7 @@ Formats TXT / EPUB / MOBI / HTML / user excerpts. Pipeline: raw →
 normalize → chapter split (zero-padded) → metadata. Source package =
 input layer, never modified downstream, excluded from git. Chinese
 works → Chinese `work_id`.
-→ `docs/requirements.md` §8 + `automation/ingestion/`.
+→ `docs/requirements.md` §8 + `extraction/ingestion/`.
 
 ## §9 Extraction Process — Seven Steps
 
@@ -120,18 +120,18 @@ stage (stage N = complete current state, including unchanged fields).
 
 ## §11 Automated Extraction Pipeline
 
-Python orchestrator at `automation/persona_extraction/`. Phase 0
+Python orchestrator at `extraction/persona_extraction/`. Phase 0
 parallel summarization → Phase 1 analysis → Phase 1.5 user confirm →
 Phase 2 baseline → Phase 3 stage loop (1+2N split extraction, PP,
 repair agent, commit) → Phase 3.5 cross-stage consistency → Phase 4
 scene archive (independent). Supports Claude CLI and Codex CLI backends.
 
-- Repair agent (per-stage quality gate) → `automation/repair_agent/` +
+- Repair agent (per-stage quality gate) → `extraction/repair/` +
   `docs/requirements.md` §11.4
 - Token-limit auto-pause → `docs/requirements.md` §11.13 +
-  `automation/persona_extraction/rate_limit.py`
+  `extraction/persona_extraction/core/rate_limit.py`
 - Full pipeline detail → `architecture.md` §Automated Extraction
-  Pipeline + `automation/README.md` +
+  Pipeline + `extraction/README.md` +
   `docs/architecture/extraction_workflow.md`.
 
 ## §12 Memory System and Retrieval

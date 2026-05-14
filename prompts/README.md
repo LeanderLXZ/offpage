@@ -3,7 +3,7 @@
 这个目录存放"可以直接发给一个全新的、没有项目背景的 AI agent"的固定提示词模板。
 
 **仅保留手动场景使用的模板。** 自动化提取流程的 prompt 已迁入
-`automation/prompt_templates/`；运行时 LLM 行为规则已迁入
+`extraction/persona_extraction/prompts/`；运行时 LLM 行为规则已迁入
 `simulation/prompt_templates/`。
 
 ## 使用方式

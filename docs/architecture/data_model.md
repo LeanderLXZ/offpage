@@ -5,7 +5,7 @@
 ```text
 offpage/
   ai_context/
-  automation/
+  extraction/
   docs/
   interfaces/
   prompts/
@@ -119,7 +119,7 @@ sources/works/{work_id}/
 
 8. **（可选）** 在 `chunks/` 下创建面向检索的分块，供后续 RAG 或 embedding 工作流使用。
 
-9. **交付前 gate**：运行 `python -m automation.ingestion.validator <work_id>`；
+9. **交付前 gate**：运行 `python -m extraction.ingestion.validator <work_id>`；
    三份元数据任一不过 schema 必须退回步骤 3/6 修改，才可继续 Phase 0。
 
 10. **（可选）** 检索资产由 Phase 4 产出至 `works/{work_id}/retrieval/`：
@@ -164,7 +164,7 @@ works/{work_id}/
 必需内容：
 
 - `manifest.json` — canon 作品包清单（schema：`schemas/work/works_manifest.schema.json`；
-  Phase 1.5 用户确认后由 `automation.persona_extraction.manifests.write_works_manifest`
+  Phase 1.5 用户确认后由 `extraction.persona_extraction.lifecycle.manifests.write_works_manifest`
   程序化写出）
 - `world/`
 - `characters/`
@@ -208,7 +208,7 @@ works/{work_id}/world/
 必需内容（已 schema-gated）：
 
 - `manifest.json` — world 包清单（schema：`schemas/world/world_manifest.schema.json`；
-  Phase 2 baseline 产出后由 `automation.persona_extraction.manifests.write_world_manifest`
+  Phase 2 baseline 产出后由 `extraction.persona_extraction.lifecycle.manifests.write_world_manifest`
   程序化写出）
 - `stage_catalog.json` — `schemas/world/world_stage_catalog.schema.json`
 - `stage_snapshots/{stage_id}.json` — 世界当前阶段状态；`stage_events`
@@ -330,7 +330,7 @@ works/{work_id}/characters/{character_id}/
   承担。
 - `canon/memory_timeline/{stage_id}.json`
 - `canon/memory_digest.jsonl` — 压缩摘要索引，stage 1..N 过滤加载
-- `canon/extraction_notes/{stage_id}.jsonl` — repair_agent SourceNote
+- `canon/extraction_notes/{stage_id}.jsonl` — repair SourceNote
   写入路径（决策 #25a），bootstrap 不加载；schema:
   `schemas/shared/source_note.schema.json`
 

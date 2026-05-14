@@ -3,7 +3,7 @@
   "$id": "offpage/work/chapter_index.schema.json",
   "title": "章节索引",
   "type": "array",
-  "description": "source package 章节清单，按 sequence 升序排列，与 chapters/ 目录下的规范化文件一一对应。items 为 oneOf 双 profile：monolithic（单卷非结构化作品）禁用 6 个 light_novel 字段；light_novel（多卷结构化作品）必填三层 seq + volume_id。profile 必须与 source manifest 的 structure_mode 一致，跨文件断言由 automation/ingestion/validator.py 执行。",
+  "description": "source package 章节清单，按 sequence 升序排列，与 chapters/ 目录下的规范化文件一一对应。items 为 oneOf 双 profile：monolithic（单卷非结构化作品）禁用 6 个 light_novel 字段；light_novel（多卷结构化作品）必填三层 seq + volume_id。profile 必须与 source manifest 的 structure_mode 一致，跨文件断言由 extraction/ingestion/validator.py 执行。",
   "items": {
     "oneOf": [
       {

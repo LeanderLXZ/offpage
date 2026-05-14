@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/runtime/scene_archive_entry.schema.json",
   "title": "SceneArchiveEntry",
-  "description": "scene_archive.jsonl 中的单条记录——Phase 4 scene_split 后按行号切出的场景。每行一条，作为 FTS5 检索与 full_text 取回的基本单元。由 automation/persona_extraction/scene_archive.py 程序级拼接产出（零 LLM）：scene_id / stage_id / chapter / full_text 由程序生成或按 stage_plan + 章节文本切片；time / location / characters_present / summary 从上游 scene_split.schema.json 1:1 拉取，bound 由上游单源定义。",
+  "description": "scene_archive.jsonl 中的单条记录——Phase 4 scene_split 后按行号切出的场景。每行一条，作为 FTS5 检索与 full_text 取回的基本单元。由 extraction/persona_extraction/phases/scene_archive.py 程序级拼接产出（零 LLM）：scene_id / stage_id / chapter / full_text 由程序生成或按 stage_plan + 章节文本切片；time / location / characters_present / summary 从上游 scene_split.schema.json 1:1 拉取，bound 由上游单源定义。",
   "type": "object",
   "required": [
     "scene_id",

@@ -23,7 +23,7 @@ framework-level engineering progress only.
 - Character + world + user schemas — complete index at `docs/architecture/schema_reference.md`
 - Simulation-engine **design** only (no implementation) — `simulation/` flows, contracts, retrieval, prompt templates
 - Manual-scenario prompts — `prompts/` (ingest, review, supplement, cold start)
-- Automated extraction orchestrator — `automation/persona_extraction/` + CLI `persona-extract`; pipeline detail in `architecture.md` §Automated Extraction Pipeline + `automation/README.md`
+- Automated extraction orchestrator — `extraction/persona_extraction/` + CLI `persona-extract`; pipeline detail in `architecture.md` §Automated Extraction Pipeline + `extraction/README.md`
 - User package template at `users/_template/` (no real user package)
 
 ## Current Gaps

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/world/world_stage_catalog.schema.json",
   "title": "世界阶段目录",
-  "description": "阶段索引，仅用于 bootstrap 阶段选择，运行时不加载。由 automation/persona_extraction/post_processing.py:upsert_stage_catalog 程序级从世界 stage_snapshot 派生（零 LLM）：每条 stages[] 项的字段从同 stage_id 对应快照拉取。",
+  "description": "阶段索引，仅用于 bootstrap 阶段选择，运行时不加载。由 extraction/persona_extraction/phases/post_processing.py:upsert_stage_catalog 程序级从世界 stage_snapshot 派生（零 LLM）：每条 stages[] 项的字段从同 stage_id 对应快照拉取。",
   "type": "object",
   "additionalProperties": false,
   "required": [

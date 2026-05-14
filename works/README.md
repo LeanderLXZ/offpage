@@ -14,7 +14,7 @@ works/{work_id}/
     stage_catalog.json
     world_event_digest.jsonl
     stage_snapshots/{stage_id}.json
-    extraction_notes/{stage_id}.jsonl    # repair_agent 接收的 SourceNote 记录
+    extraction_notes/{stage_id}.jsonl    # repair 接收的 SourceNote 记录
     foundation/
       foundation.json
       fixed_relationships.json
@@ -49,7 +49,7 @@ works/{work_id}/
         memory_digest.jsonl              # post_processing 维护的压缩索引
         stage_catalog.json
         stage_snapshots/{stage_id}.json
-        extraction_notes/{stage_id}.jsonl  # repair_agent 接收的 SourceNote 记录
+        extraction_notes/{stage_id}.jsonl  # repair 接收的 SourceNote 记录
 
   analysis/
     stage_plan.json
@@ -64,7 +64,7 @@ works/{work_id}/
       rate_limit_pause.json         # §11.13 暂停契约（仅限额激活时存在）
       rate_limit_exit.log           # 限额硬停退出说明（仅 exit 2 路径写入）
       failed_lanes/                 # Phase 3 lane 级失败诊断（§11 T-LOG）
-      repair_logs/                  # repair_agent 周期性诊断
+      repair_logs/                  # repair 周期性诊断
       .partial_prev/{char_id}/{prev_stage_id}_{sub_lane}.json
                                     # Phase 3 sub-lane prev snapshot 切片
                                     # （决策 #55；启动前 R3 清 + repair 完成后 commit 前清）
@@ -191,7 +191,7 @@ works/{work_id}/
   - `pipeline.json` / `phase0_summaries.json` / `phase3_stages.json` /
     `phase4_scenes.json` — 各阶段主进度
   - `extraction_logs/extraction.log{,.1,.2,...}` — 程序化轮转日志
-  - `repair_logs/` — repair_agent 周期性诊断（见 automation/README.md
+  - `repair_logs/` — repair 周期性诊断（见 extraction/README.md
     §6.x）
   - `rate_limit_pause.json` — 仅 §11.13 token 限额暂停激活期间存在，
     记录 `resume_at` / `reason` / probe leader claim；暂停解除后由

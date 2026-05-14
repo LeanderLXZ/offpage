@@ -63,7 +63,7 @@ Project-specific paths that must never be committed, on top of
 Used by `/full-review` "implementation track" and `/post-check` Track 2
 implementation track for code-level scans.
 
-- `automation/`
+- `extraction/`
 - `simulation/`
 
 ## Data contract directories

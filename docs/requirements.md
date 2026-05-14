@@ -743,7 +743,7 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
     三层结构）。1 sub-section = 1 C-id = 1 phase 0 chunk = 1 phase 1 stage；
     stage_plan 1:1 程序化派生
   - 必须与 `metadata/chapter_index.json` items 的 `oneOf` profile 一致；
-    `automation/ingestion/validator.py` 跨文件断言
+    `extraction/ingestion/validator.py` 跨文件断言
 
 中文作品的 `work_id` 应直接使用中文书名。
 
@@ -800,7 +800,7 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 │  │ 每个 stage:                                        │              │
 │  │   ① 世界+角色提取 (1+2N 全并行)                     │              │
 │  │   ② 程序化后处理（digest + stage_catalog）           │              │
-│  │   ③ repair_agent（四层检查 + 就地修复）              │              │
+│  │   ③ repair（四层检查 + 就地修复）              │              │
 │  │   ④ git commit                                     │              │
 │  │                                                     │             │
 │  │ 每个 stage 可修正 baseline（不限第一个 stage）      │              │
@@ -943,7 +943,7 @@ character_id keying，`target_type` 仅作 sibling 元数据用于标注 target
 
 **校验位置**：phase 3 单 stage validate 层（与 schema validate 同
 层），越界走 file-level repair lifecycle（L1 = json_repair → L2 =
-repair_agent cross-file checker `targets_keys_eq_baseline` → L3 =
+repair cross-file checker `targets_keys_eq_baseline` → L3 =
 re-extract）。phase 3.5 `consistency_checker.py` 不再承担此规则。
 
 target_baseline 在 phase 3 全程只读不写——若 phase 2 漏判某 target，
@@ -996,10 +996,10 @@ memory_timeline，support 不读 stage_snapshot。世界和角色间也无执行
 按字段聚类划分，归属表见 `docs/architecture/extraction_workflow.md` §6.2），
 共用同一 prompt 模板（占位 `{lane_scope}` 切换字段子集）。4 sub-lane
 各自落 `.partial/`（`works/{wid}/characters/{cid}/canon/stage_snapshots/.partial/{sid}_{lane}.json`，
-`.gitignore` 屏蔽）后由 `automation/persona_extraction/snapshot_merge.py`
+`.gitignore` 屏蔽）后由 `extraction/persona_extraction/phases/snapshot_merge.py`
 合并；merge 前置 hard gate 校验"字段集合互斥 + 全覆盖 + failure_modes /
 stage_delta / behavior_state 子键互斥 + 三方 keys == baseline（复用
-`automation/repair_agent/checkers/targets_keys_eq_baseline.py`）"，任一不
+`extraction/repair/checkers/targets_keys_eq_baseline.py`）"，任一不
 过即整 snapshot lane 失败。**Prev snapshot 4-way slice**：orchestrator
 stage 启动前把 prev snapshot 切 4 个 slice 写盘到 `.partial_prev/`
 （`works/{wid}/analysis/progress/.partial_prev/{prev}_{lane}.json`），
@@ -1083,7 +1083,7 @@ Light_novel 模式单 stage 字符数小，4 sub-lane 启动开销可能 > 抽�
   演变要点）和 (D) 消除原因（misunderstanding / concealment /
   failure_mode 在本阶段被 resolve / reveal / 克服 + 为什么）；
   **禁止"无明显变化"敷衍**。三态规则的权威定义见
-  `automation/prompt_templates/character_snapshot_extraction.md`
+  `extraction/persona_extraction/prompts/character_snapshot_extraction.md`
   §核心规则 #2 prev_stage 处理规则
 - `character_arc`：角色从阶段 1 到当前阶段的整体弧线概述，
   **单一字符串**，一句到一段话概括核心变化轨迹。第一个阶段可省略
@@ -1135,7 +1135,7 @@ prompt template + Phase 3.5 一致性审计（§11.5）继续负责把"应有变
 - **prev_stage 处理规则**：抽取阶段对 prev_stage 已有条目的 (A) 未出场
   继承 / (B) 出场且变化 / (C) 出场且无变化 / (D) resolved-revealed-消除
   四态规则 + per-stage 推演原则的权威定义见
-  `automation/prompt_templates/character_snapshot_extraction.md`
+  `extraction/persona_extraction/prompts/character_snapshot_extraction.md`
   §核心规则 #2
 
 ### 9.5 提取产出物清单
@@ -1167,7 +1167,7 @@ prompt template + Phase 3.5 一致性审计（§11.5）继续负责把"应有变
   应对方式是周期性重注入和校准。
 - **自动化提取**（§10.2）：每个 stage 是独立的 `claude -p` 调用（全新
   context），不存在 session 内稀释。但跨 stage 仍可能出现风格不一致、
-  字段详细度递减等**质量退化**。这些风险已由 automation 架构天然满足。
+  字段详细度递减等**质量退化**。这些风险已由 extraction 架构天然满足。
 
 #### 质量保护机制总览
 
@@ -1263,7 +1263,7 @@ prompt template + Phase 3.5 一致性审计（§11.5）继续负责把"应有变
 > **注意**：本节描述的风险是**跨 stage 的质量退化**，不是 session 内的
 > 注意力稀释。自动化提取中每个 stage 都是独立的 `claude -p` 调用（全新
 > context），不存在"上下文增长导致注意力递减"的问题。以下措施已由
-> automation 架构天然满足，无需额外代码。
+> extraction 架构天然满足，无需额外代码。
 
 多阶段提取跨越长时间和多次独立 AI 调用，面临以下质量退化风险：
 
@@ -1280,16 +1280,16 @@ prompt template + Phase 3.5 一致性审计（§11.5）继续负责把"应有变
 - stage_events / memory_timeline 摘要越来越空泛
 - emotional_voice_map、relationship 等复杂字段被敷衍填充
 
-应对措施及 automation 中的实现方式：
+应对措施及 extraction 中的实现方式：
 
-| 措施 | 目的 | automation 实现 |
+| 措施 | 目的 | extraction 实现 |
 |------|------|----------------|
 | Schema 引用 | 确保字段要求在注意力范围内 | `prompt_builder` 每次构建 prompt 时将 schema 路径列入读取清单 |
-| 架构规则内嵌 | 防止退化为增量模式 | `prompt_templates/character_snapshot_extraction.md` + `character_support_extraction.md` 内嵌自包含快照规则 |
+| 架构规则内嵌 | 防止退化为增量模式 | `extraction/persona_extraction/prompts/character_snapshot_extraction.md` + `character_support_extraction.md` 内嵌自包含快照规则 |
 | 前阶段输出参照 | 确保风格和详细度一致 | `prompt_builder` 将前一阶段 snapshot 和 memory_timeline 列为参照文件 |
-| 输出质量检查 | 检测字段粗糙、引用缺失等退化 | `repair_agent`（四层检查 + 四层就地修复，见 §11.4） |
+| 输出质量检查 | 检测字段粗糙、引用缺失等退化 | `repair`（四层检查 + 四层就地修复，见 §11.4） |
 | 跨阶段上下文传递 | 防止信息断裂 | progress 文件 + 前阶段输出 + schema，全部通过文件系统传递 |
-| 跨阶段一致性检查 | 检测全局漂移和退化 | `repair_agent` structural checker（Phase 3.5，全部 stage 完成后运行） |
+| 跨阶段一致性检查 | 检测全局漂移和退化 | `repair` structural checker（Phase 3.5，全部 stage 完成后运行） |
 
 ---
 
@@ -1297,7 +1297,7 @@ prompt template + Phase 3.5 一致性审计（§11.5）继续负责把"应有变
 
 ### 11.1 总体架构
 
-系统提供自动化编排脚本（`automation/`），通过 CLI 调用（`claude -p` 或
+系统提供自动化编排脚本（`extraction/`），通过 CLI 调用（`claude -p` 或
 `codex`）驱动多阶段提取。编排脚本负责：
 
 - 阶段间的状态传递（通过文件系统，不依赖 session 内存）
@@ -1362,7 +1362,7 @@ prompt template + Phase 3.5 一致性审计（§11.5）继续负责把"应有变
 │  │  │   · N char_support  (→ memory_timeline +     │ │            │
 │  │  │                        identity 修正)         │ │            │
 │  │  │ ③ 程序化后处理 (§11.3a)                      │ │            │
-│  │  │ ④ repair_agent.run() (§11.4):                │ │            │
+│  │  │ ④ repair.run() (§11.4):                │ │            │
 │  │  │   · 四层检查 (L0→L1→L2→L3)                   │ │            │
 │  │  │   · 四层就地修复 (T0→T1→T2→T3, 逐层升级)    │ │            │
 │  │  │   · 字段级 patch, 不回滚重提取                │ │            │
@@ -1582,8 +1582,8 @@ stage_catalog 仅用于 bootstrap 阶段选择，**运行时不加载**：
 
 ### 11.4 Repair Agent（统一校验修复系统）
 
-所有 Phase 的产出校验与修复由独立模块 `automation/repair_agent/` 统一处理。
-Orchestrator 只需调用 `repair_agent.run(files, config)` 并根据结果决定
+所有 Phase 的产出校验与修复由独立模块 `extraction/repair/` 统一处理。
+Orchestrator 只需调用 `repair.run(files, config)` 并根据结果决定
 是否继续流程。
 
 **核心原则**：就地修复，逐层升级，永不回滚重提取。修复粒度是**字段级**，
@@ -1592,7 +1592,7 @@ Orchestrator 只需调用 `repair_agent.run(files, config)` 并根据结果决�
 #### 11.4.1 架构总览
 
 ```
-automation/repair_agent/
+extraction/repair/
 ├── coordinator.py           # 编排: check → fix → recheck 循环
 ├── protocol.py              # Issue, RoundReport, RepairResult 等数据类
 ├── tracker.py               # 跨轮次 diff, 收敛/regression 检测
@@ -1613,7 +1613,7 @@ automation/repair_agent/
 **调用方式**（所有 Phase 统一接口）：
 
 ```python
-from automation.repair_agent import run as repair
+from extraction.repair import run as repair
 
 result = repair(
     files=[
@@ -1897,7 +1897,7 @@ stage 进入 ERROR（`error_message` 前缀 `post-repair PP:` 以区分
 - Phase 3 的 `[4/5] Repair agent` 步骤**不再** 把所有文件打包成一次
   `coordinator.run(files=[all])` 调用，而是对每个文件单独调用
   `coordinator.run(files=[single_file])`；orchestrator 用
-  `ThreadPoolExecutor(max_workers=[repair_agent].repair_concurrency)`
+  `ThreadPoolExecutor(max_workers=[repair].repair_concurrency)`
   （默认 10）并发分发
 - 每个 worker 跑完整的 Phase A / Phase B / Phase C 流水线——
   coordinator 内部逻辑**零改动**，因为它本就是纯 per-file 语义
@@ -2112,7 +2112,7 @@ issue 重新走 triage 流程。**本次实现不包含该自动 resume 逻辑**
 | Phase 0 (summarization) | `repair(files=[chunk], config=RepairConfig(run_semantic=False))` | 每个 chunk JSON 格式正确、非空 |
 | Phase 1 (analysis) | 程序化验证（stage plan 章节数硬性门控 8-15，违规重跑 LLM） | 沿用现有逻辑 |
 | Phase 2 (baseline) | `repair(files=[identity, manifest, foundation, ...], config=...)` | 关键文件（identity/manifest/foundation）缺失 = error 阻断 |
-| Phase 3 (extraction) | 每文件独立调用 `repair(files=[single_file], config=RepairConfig(run_semantic=True), source_context=...)`，orchestrator 用 `ThreadPoolExecutor(max_workers=[repair_agent].repair_concurrency)` 并发分发 | 完整四层检查 + 四层修复，per-file 独立事务，全部文件 PASS 才进 commit |
+| Phase 3 (extraction) | 每文件独立调用 `repair(files=[single_file], config=RepairConfig(run_semantic=True), source_context=...)`，orchestrator 用 `ThreadPoolExecutor(max_workers=[repair].repair_concurrency)` 并发分发 | 完整四层检查 + 四层修复，per-file 独立事务，全部文件 PASS 才进 commit |
 | Phase 3.5 (consistency) | `validate_only(files=all_stages, checkers=["structural"])` | 跨阶段程序化检查，不自动修复 |
 | Phase 4 (scene) | per-chapter 程序化校验（沿用现有逻辑） | 行号有效/不重叠/覆盖全章 |
 
@@ -2332,7 +2332,7 @@ Phase 3.5 的产物（`consistency_report.json`）是 tracked 文件；编排器
    `[git].squash_merge_target` 配置）。
 
 同理，Phase 3.5 的一致性检查器只能以**只读**方式加载 JSON / JSONL 源文件——
-不得顺带触发 L1 JSON 修复写盘。原始文件的完整性是 repair_agent 的职责，
+不得顺带触发 L1 JSON 修复写盘。原始文件的完整性是 repair 的职责，
 Phase 3.5 若遇到解析失败应报 `warning/error` 并返回，而不是静默改写
 已 COMMITTED 的产物造成"Phase 3.5 运行完工作区变脏"的路径依赖。
 
@@ -2513,8 +2513,8 @@ CLI `--start-phase` 参数（0/1/1.5/2/3/3.5/4），默认 auto（自动检测�
 
 ### 11.12 配置文件（TOML）
 
-提取流水线的所有"用户可调参数"集中到 `automation/config.toml`，通过
-`automation.persona_extraction.config.load_config()` 加载，避免在多个模块
+提取流水线的所有"用户可调参数"集中到 `extraction/config.toml`，通过
+`extraction.persona_extraction.core.config.load_config()` 加载，避免在多个模块
 内散落硬编码值。
 
 #### 覆盖优先级（高 → 低）
@@ -2545,7 +2545,7 @@ TOML 中的同名键；TOML 缺失键时回落到代码内部 dataclass 默认�
 | `[phase1]` | 出口验证重试 |
 | `[phase3]` | 提取/审校超时、`--max-turns` |
 | `[phase4]` | 场景切分并发、circuit breaker |
-| `[repair_agent]` | 各 tier 重试、lifecycle 上限、triage 接受上限、总轮数、per-file 并发 |
+| `[repair]` | 各 tier 重试、lifecycle 上限、triage 接受上限、总轮数、per-file 并发 |
 | `[backoff]` | 快速空失败的退避序列 |
 | `[rate_limit]` | reset buffer、解析失败 fallback、周限额阈值与动作 |
 | `[runtime]` | 默认 `--max-runtime`、心跳间隔、默认 backend |
@@ -2553,7 +2553,7 @@ TOML 中的同名键；TOML 缺失键时回落到代码内部 dataclass 默认�
 | `[git]` | extraction 分支前缀、squash-merge 目标分支（默认 `library`）、是否自动 squash-merge |
 
 `config.toml` 自身在仓库内提交（含详细中文注释）；各部署可通过本地未跟踪
-的 `automation/config.local.toml` 覆盖（同名键二次覆盖；不存在时忽略）。
+的 `extraction/config.local.toml` 覆盖（同名键二次覆盖；不存在时忽略）。
 
 ### 11.13 Token 限额暂停与恢复
 

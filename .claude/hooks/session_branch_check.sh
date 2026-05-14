@@ -21,7 +21,7 @@ if [ "$branch" = "main" ] || [ "$branch" = "library" ]; then
     exit 0
 fi
 
-if pgrep -f 'automation\.persona_extraction' >/dev/null 2>&1; then
+if pgrep -f 'extraction\.persona_extraction' >/dev/null 2>&1; then
     printf "[git] branch: %s  (orchestrator running — extraction in progress)\n" "$branch"
     exit 0
 fi

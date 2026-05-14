@@ -33,8 +33,8 @@
   - `chunk_factions[]`（maxItems 20；items `{name, description, members_present[]}`，`required: [name]`，`additionalProperties: false`；`members_present` 是本 chunk LLM 看到的 raw 角色名，化名 / 真名 / 称呼任一，phase 1.5 跨 chunk 身份合并后再映射到 `character_id`）
   - `chunk_regions[]`（maxItems 20；items `{name, description}`，`required: [name]`，`additionalProperties: false`）
 - per-summary：`chapter`（`^C[0-9]{4}$` 与 chapter_index `chapter_id` 一致）/ `title` / `summary`（150-200 CJK 字）/ `characters_present` / `emotional_tone` / `identity_notes`
-**消费方**：Phase 1 三 lane（每 lane 各自一份裁剪后 chunks 子集，决策 #52 + #54）—— `automation/prompt_templates/analysis_foundation.md` 用 chunk-level 字段（chunk_world_rules → core_rules / chunk_power_levels → power_system.levels / chunk_factions → major_factions / chunk_regions → world_structure.major_regions / chunk_arc_summary → world_lines.core_conflict），直接落 `world/foundation/foundation.json`；`automation/prompt_templates/analysis_stage_plan.md` 用 per-summary `chapter` + `summary` + chunk_arc_summary + chunk_regions（事件描述由 `summary` 150-200 字承载，原 `key_events` 已删除——决策 #53）；`automation/prompt_templates/analysis_candidate_characters.md` 用 per-summary identity 字段 + chunk_factions members_present。**Phase 2 不再消费 chunk-level 字段产 foundation**（decision #54 — foundation 由 phase 1 foundation lane 直接落盘；phase 2 仅补 `foundation.major_factions.key_figures`，输入是 phase 1 落盘的 foundation + candidate_characters）。
-**生成时机**：Phase 0 by `automation/prompt_templates/summarization.md`，分 chunk 并行 LLM 调用。
+**消费方**：Phase 1 三 lane（每 lane 各自一份裁剪后 chunks 子集，决策 #52 + #54）—— `extraction/persona_extraction/prompts/analysis_foundation.md` 用 chunk-level 字段（chunk_world_rules → core_rules / chunk_power_levels → power_system.levels / chunk_factions → major_factions / chunk_regions → world_structure.major_regions / chunk_arc_summary → world_lines.core_conflict），直接落 `world/foundation/foundation.json`；`extraction/persona_extraction/prompts/analysis_stage_plan.md` 用 per-summary `chapter` + `summary` + chunk_arc_summary + chunk_regions（事件描述由 `summary` 150-200 字承载，原 `key_events` 已删除——决策 #53）；`extraction/persona_extraction/prompts/analysis_candidate_characters.md` 用 per-summary identity 字段 + chunk_factions members_present。**Phase 2 不再消费 chunk-level 字段产 foundation**（decision #54 — foundation 由 phase 1 foundation lane 直接落盘；phase 2 仅补 `foundation.major_factions.key_figures`，输入是 phase 1 落盘的 foundation + candidate_characters）。
+**生成时机**：Phase 0 by `extraction/persona_extraction/prompts/summarization.md`，分 chunk 并行 LLM 调用。
 
 ---
 
@@ -43,8 +43,8 @@
 **用途**：Phase 4 per-chapter 场景切分结果。每个 chapter 一份 LLM 调用结果，按行号自然场景边界切，每章硬上限 5 个场景。
 **位置**：`works/{work_id}/analysis/scene_splits/{chapter}.json`（本地生成，不入 git）
 **关键字段**：array of `{scene_start_line, scene_end_line, time, location, characters_present, summary}`
-**消费方**：`automation/persona_extraction/scene_archive.py` 程序拼接到 `retrieval/scene_archive.jsonl`：`summary` / `time` / `location` / `characters_present` 1:1 直拷，`stage_id` / `scene_id` (`SC-S###-##`) 由程序按 `stage_plan.json` chapter→stage 映射赋值。
-**生成时机**：Phase 4 by `automation/prompt_templates/scene_split.md`，per-chapter 并行 LLM 调用。
+**消费方**：`extraction/persona_extraction/phases/scene_archive.py` 程序拼接到 `retrieval/scene_archive.jsonl`：`summary` / `time` / `location` / `characters_present` 1:1 直拷，`stage_id` / `scene_id` (`SC-S###-##`) 由程序按 `stage_plan.json` chapter→stage 映射赋值。
+**生成时机**：Phase 4 by `extraction/persona_extraction/prompts/scene_split.md`，per-chapter 并行 LLM 调用。
 
 ---
 
@@ -53,7 +53,7 @@
 **用途**：Phase 1 stage 切分计划。下游 Phase 3 按 stage 循环、Phase 4 按 chapter→stage_id 映射、runtime bootstrap 阶段选择都依赖此文件。
 **位置**：`works/{work_id}/analysis/stage_plan.json`（**入 git**）
 **关键字段**：`work_id` / `total_chapters` / `stages[]`（每条 `stage_id` `^S\d{3}$` / `stage_title` / `chapters` `^C[0-9]{4}-C[0-9]{4}$`（与 chapter_id 命名一致；light_novel 模式用 degenerate 单章区间，例 `C0001-C0001`） / `chapter_count` 8-15（schema 硬挡） / `boundary_reason`）
-**生成时机**：monolithic 模式由 Phase 1 stage_plan lane (`automation/prompt_templates/analysis_stage_plan.md`) 产出（与 foundation + candidate_characters lane 并行；决策 #52 + #54）；light_novel 模式由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生，stage_plan lane 整体跳过 LLM（foundation + candidate_characters lane 仍并行跑 LLM）。
+**生成时机**：monolithic 模式由 Phase 1 stage_plan lane (`extraction/persona_extraction/prompts/analysis_stage_plan.md`) 产出（与 foundation + candidate_characters lane 并行；决策 #52 + #54）；light_novel 模式由 orchestrator `_build_light_novel_stage_plan` 程序化 1:1 从 chapter_index 派生，stage_plan lane 整体跳过 LLM（foundation + candidate_characters lane 仍并行跑 LLM）。
 **契约**：schema `chapter_count.minimum = 8` / `maximum = 15` 双向硬挡 LLM 输出（monolithic 路径，决策 #27i schema-gate-as-retry-trigger 注入 prior_error）+ orchestrator `_check_stage_plan_limits` 代码层 belt-and-suspenders 二次兜底。light_novel 派生路径事实上不走 schema validate（既不在 phase 1 `lanes` 列表也无主动 validate 调用，程序产出可信）；`chapter_count=1` 在新 schema 下 schema-invalid 是已知 trade-off，详见 decisions.md #27m。
 
 ---
@@ -64,7 +64,7 @@
 **位置**：`works/{work_id}/analysis/candidate_characters.json`（**入 git**）
 **关键字段**：`work_id` / `candidates[]`（每条 `character_id` / `aliases[]` / `description` / `frequency` 高/中/低 / `importance` 主角/重要配角/次要配角）；`aliases[].items` = `{name, type}`，`type` 走 10 项中文枚举（本名/化名/代称/称呼/昵称/绰号/封号/道号/武器名/其他）。原 `recommended` boolean 与 `aliases.first_appearance` 字段已删除（决策 #53）——LLM 自报推荐不可靠 + first_appearance 字符串无下游消费。
 **消费方**：Phase 1.5 用户从 candidates 选确认建包对象，feed Phase 2 baseline；默认勾选 = 程序按 `importance == "主角"` 判定（用户仍可手选追加 / 取消）。Phase 2 baseline `key_figures` 补齐 LLM call 把本文件作为 character_id ∪ aliases 来源（合法身份集），foundation.major_factions.key_figures 必须 ∈ 已确认目标 ∪ candidate 全集。
-**生成时机**：Phase 1 candidate_characters lane by `automation/prompt_templates/analysis_candidate_characters.md`（与 foundation + stage_plan lane 并行；决策 #52 + #54）。
+**生成时机**：Phase 1 candidate_characters lane by `extraction/persona_extraction/prompts/analysis_candidate_characters.md`（与 foundation + stage_plan lane 并行；决策 #52 + #54）。
 
 ---
 
@@ -76,7 +76,7 @@
 **位置**：`sources/works/{work_id}/manifest.json`
 **关键字段**：work_id, title, language, source_types, ingestion_status, paths, `structure_mode`（enum `monolithic` / `light_novel`，**必填** — schema `required`，缺省即校验失败；phase 0/1 双模式调度信号）
 **生成时机**：`prompts/ingestion/原始资料规范化.md` 执行规范化时产出（`structure_mode` 由 task 步骤 2 LLM 判定：先输出 `判定 + 依据 + 置信度`，置信度 ≥ 0.8 直接填、< 0.8 停手等用户确认）。
-**跨文件契约**：`structure_mode` ⇔ `chapter_index` items profile（monolithic 禁 6 字段、light_novel 必填 4 + 可选 2）由 `automation/ingestion/validator.py` 跨文件断言；canon 端 `works/{work_id}/manifest.json` 由 `manifests.write_works_manifest` 拷贝该字段。
+**跨文件契约**：`structure_mode` ⇔ `chapter_index` items profile（monolithic 禁 6 字段、light_novel 必填 4 + 可选 2）由 `extraction/ingestion/validator.py` 跨文件断言；canon 端 `works/{work_id}/manifest.json` 由 `manifests.write_works_manifest` 拷贝该字段。
 
 ---
 
@@ -85,7 +85,7 @@
 **用途**：canon 作品包 manifest（作品包目录页）。
 **位置**：`works/{work_id}/manifest.json`
 **关键字段**：work_id, title, language, source_package_ref, paths, chapter_count, stage_count, character_count, stage_ids, character_ids, `structure_mode`（enum `monolithic` / `light_novel`，**必填** — schema `required`，从 source manifest 拷贝；下游 phase 0/1 调度依赖此值）
-**生成时机**：Phase 1.5 用户确认完成时由 `automation.persona_extraction.manifests.write_works_manifest` 程序化写出；不走 LLM。
+**生成时机**：Phase 1.5 用户确认完成时由 `extraction.persona_extraction.lifecycle.manifests.write_works_manifest` 程序化写出；不走 LLM。
 
 ---
 
@@ -129,7 +129,7 @@
 **用途**：世界包 manifest（世界包目录页）。
 **位置**：`works/{work_id}/world/manifest.json`
 **关键字段**：work_id, world_id, paths, stage_ids
-**生成时机**：Phase 2 baseline 产出后由 `automation.persona_extraction.manifests.write_world_manifest` 程序化写出；不走 LLM。
+**生成时机**：Phase 2 baseline 产出后由 `extraction.persona_extraction.lifecycle.manifests.write_world_manifest` 程序化写出；不走 LLM。
 
 ---
 
@@ -180,7 +180,7 @@ gate 承担 self-contained 契约而非仅依赖 prompt + L2/L3。
 **位置**：`works/{work_id}/world/foundation/foundation.json`
 **关键字段**：`work_id` / `genre` / `tone` / `world_structure{summary, major_regions[]}`（`major_regions.items` 为 `{name (≤15), description (≤30)}` 对象，对齐 `chunk_regions.items`） / `power_system{summary, levels[]}`（`levels.items` 为 `{name (≤15), description (≤30)}` 对象，对齐 `chunk_power_levels.items`） / `major_factions[]`（每项 `{name, description, key_figures[]}`，`key_figures` items: 字符串 ≤30 字 / maxItems 10，**双阶段填充**：phase 1 foundation lane 写 raw 名（chunk_factions[].members_present[] 跨 chunk 合并去重），phase 2 baseline LLM 替换能匹配 candidate_characters.aliases 的 raw 名为 character_id，匹配不上保留 raw 名；最终 character_id + raw 名混合，决策 #54 修订段） / `world_lines[]` / `core_rules[]`（**字符串数组**，maxItems 30 / items maxLength 150；强制 LLM 重新整理而非照搬 chunk 行）。
 **生命周期**：**Phase 1 foundation lane 落盘**（决策 #54——schema 归位 `schemas/world/` 域；phase 1 LLM 产出所有字段，含 `major_factions[].key_figures` 的 raw 名形态）；**Phase 2 baseline 在同一次 LLM call 内替换 key_figures raw 名 → character_id**（lookup candidate_characters.aliases，能匹配的换，匹配不上保留；schema 不抓 character_id 合法性；决策 #54 修订段）；后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。
-**生成时机**：Phase 1 foundation lane by `automation/prompt_templates/analysis_foundation.md`（与 stage_plan + candidate_characters lane 并行；决策 #52 + #54）；Phase 2 `key_figures` 替换 by `automation/prompt_templates/baseline_production.md` 的「产出 1：替换 foundation.major_factions[].key_figures 内 raw 名为 character_id」段（与 fixed_relationships / identity / target_baseline 同一次 LLM call）。
+**生成时机**：Phase 1 foundation lane by `extraction/persona_extraction/prompts/analysis_foundation.md`（与 stage_plan + candidate_characters lane 并行；决策 #52 + #54）；Phase 2 `key_figures` 替换 by `extraction/persona_extraction/prompts/baseline_production.md` 的「产出 1：替换 foundation.major_factions[].key_figures 内 raw 名为 character_id」段（与 fixed_relationships / identity / target_baseline 同一次 LLM call）。
 **形态**：`additionalProperties: true`（顶层与子对象），容纳 per-work 扩展字段；`required` 仅 `work_id`。字段级上下限以 schema 为准。
 
 ---
@@ -276,7 +276,7 @@ phase 3 各 stage 只读不写。
 承载（已登场→正常填、已见过此 stage 未登场→继承 prev、从未登场→字段
 空）；fixed_relationship 例外可在 relationships 条目预填关系字段。校验
 在 phase 3 单 stage validate 层执行（与 schema validate 同层），违规
-走 file-level repair lifecycle（L1 json_repair → L2 repair_agent
+走 file-level repair lifecycle（L1 json_repair → L2 repair
 cross-file checker `targets_keys_eq_baseline` → L3 re-extract）。
 若 phase 2 漏判某 target，phase 3 不会自动补救——需要人工编辑 baseline
 后重抽对应 stage。**Phase 2 准入门槛**（决策 #54，废除原"宁可多列、
@@ -342,7 +342,7 @@ maxItems 时按 `tier` 优先级裁剪**：核心 > 重要 > 次要 > 普通，�
 `timeline_anchor` + `memory_timeline` 自身锚点完成。
 
 **生成方式**：`[phase3].char_snapshot_sub_lanes = true`（缺省）时由
-`automation/persona_extraction/snapshot_merge.py::merge_partials` 程序
+`extraction/persona_extraction/phases/snapshot_merge.py::merge_partials` 程序
 合并 **4** sub-lane partial（`char_expression` / `char_decision` /
 `char_internal` / `char_social`）产出，merge 前置 5 道 positive gate +
 1 道 anti-rule 保证字段集合互斥 + 全覆盖 + `failure_modes` / `stage_delta`
@@ -487,7 +487,7 @@ permanence_reason?, pinned_at?
 **用途**：`scene_archive.jsonl` 单条记录——Phase 4 `scene_split` 按行号切出的场景。作为 FTS5 检索与 `full_text` 取回的基本单元。
 **位置**：`works/{work_id}/retrieval/scene_archive.jsonl`（本地生成，不入 git）
 **关键字段**：`scene_id`（`SC-S###-##`）/ `stage_id`（`S###`）/ `chapter` / `time` / `location` / `characters_present[]` / `summary` / `full_text`
-**契约**：`summary` / `time` / `location` / `characters_present` 由 `automation/persona_extraction/scene_archive.py` 从 `analysis/scene_split` LLM 输出 1:1 程序直拷，bound 由上游 `scene_split.schema.json` 单源定义，本 schema 不重复约束；`stage_id` 与 `scene_id` 的 `S###` 段由程序按 `stage_plan.json` chapter→stage 映射赋值。新 stage_plan 可纯程序 remap，无需重跑 LLM。
+**契约**：`summary` / `time` / `location` / `characters_present` 由 `extraction/persona_extraction/phases/scene_archive.py` 从 `analysis/scene_split` LLM 输出 1:1 程序直拷，bound 由上游 `scene_split.schema.json` 单源定义，本 schema 不重复约束；`stage_id` 与 `scene_id` 的 `S###` 段由程序按 `stage_plan.json` chapter→stage 映射赋值。新 stage_plan 可纯程序 remap，无需重跑 LLM。
 **运行时**：最近 `scene_fulltext_window` 条在 Tier 0 直接加载 `full_text`，其余由 FTS5 on-demand 取回；`summary` 不单独进入 Tier 0。
 
 ---
@@ -508,7 +508,7 @@ permanence_reason?, pinned_at?
 - `stage_id` — 归属阶段
 - `file` — 触发问题的目标文件相对路径
 - `json_path` — 触发问题的字段 json_path
-- `discrepancy_type` — 枚举（见 `automation/repair_agent/protocol.py DISCREPANCY_TYPES`）
+- `discrepancy_type` — 枚举（见 `extraction/repair/protocol.py DISCREPANCY_TYPES`）
 - `source_evidence.chapter_number`、`source_evidence.line_range`、`source_evidence.quote` — 原文证据锚定
 - `source_evidence.quote_sha256`、`source_evidence.chapter_sha256` — 内容 hash（用于 staleness 检测）
 
@@ -527,7 +527,7 @@ permanence_reason?, pinned_at?
 
 ## 进度跟踪状态（Python dataclass，非 JSON Schema）
 
-以下结构存于 `automation/persona_extraction/progress.py`，不归属
+以下结构存于 `extraction/persona_extraction/lifecycle/progress.py`，不归属
 `schemas/` 目录；序列化到磁盘时位于 `works/{work_id}/analysis/progress/`。
 因其字段跨文档引用频繁，在此登记以便查询。
 

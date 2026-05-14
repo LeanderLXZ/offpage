@@ -33,10 +33,10 @@
     （schema：`schemas/work/book_metadata.schema.json`）
   - `sources/works/{work_id}/metadata/chapter_index.json`
     （schema：`schemas/work/chapter_index.schema.json`；items `oneOf` 双 profile 必须与 `structure_mode` 一致）
-- 交付前 gate：运行 `python -m automation.ingestion.validator <work_id>`，
+- 交付前 gate：运行 `python -m extraction.ingestion.validator <work_id>`，
   任一文件不过 schema 必须回修，才可进入 Phase 0；validator 同时跨文件断言
   `structure_mode` ⇔ `chapter_index` profile 一致（不一致即报错）。
-- 自动 gate：`automation/persona_extraction/cli.py` 在 `acquire_lock()`
+- 自动 gate：`extraction/persona_extraction/cli.py` 在 `acquire_lock()`
   + git preflight 之后、任何 phase 启动之前调用 `validate_source_package`，
   失败则释放锁并 `sys.exit(1)`；这层兜底确保人工跳过手动 gate 也无法绕过。
 
@@ -46,7 +46,7 @@
 
 **双模式调度**（由 source manifest `structure_mode` 字段决定，schema 必填、works manifest 在 Phase 1.5 从 source 拷字段）：
 
-- **monolithic 模式**（既有路径）：将全书按分组（chunk，`chunk_size` 章/组，默认见 `automation/config.toml`）归纳；多 chunk 并行处理（`--concurrency` 控制，默认 10）
+- **monolithic 模式**（既有路径）：将全书按分组（chunk，`chunk_size` 章/组，默认见 `extraction/config.toml`）归纳；多 chunk 并行处理（`--concurrency` 控制，默认 10）
 - **light_novel 模式**：1 sub-section = 1 chunk = 1 chapter；不跑 token-budget batch，`chunks = [(i+1, i+1, i+1) for i in range(total_chapters)]`；仍按 concurrency 并行；chunk_summary 落盘 schema / 路径 / 命名不变（`chunk_001.json` / `chunk_002.json` / ...）
 
 通用流程：
@@ -136,7 +136,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 - 确认完成后 orchestrator 程序化写出
   `works/{work_id}/manifest.json`（schema：
   `schemas/work/works_manifest.schema.json`；写入器：
-  `automation.persona_extraction.manifests.write_works_manifest`）
+  `extraction.persona_extraction.lifecycle.manifests.write_works_manifest`）
 - 进入 baseline 产出和 1+2N 分层提取模式
 
 ### 5. Baseline 产出（Phase 2）
@@ -183,7 +183,7 @@ set(baseline.target_character_ids)`，多/少都 cross-file hard fail。三态�
 绑定 `world/foundation/fixed_relationships.json` 条目，从未登场也可预填
 顶层 relationships 那条目的关系字段（其他结构仍空）。校验在 **phase 3
 单 stage validate 层**（与 schema validate 同层）执行，越界走 file-level
-repair lifecycle（L1 json_repair → L2 repair_agent cross-file checker
+repair lifecycle（L1 json_repair → L2 repair cross-file checker
 `targets_keys_eq_baseline` → L3 re-extract）；phase 3.5 consistency_checker
 不再承担此规则。target_baseline 在 phase 3 全程只读不写——若 phase 2
 漏判某 target，通过人工编辑 baseline + 重抽对应 stage 解决，不引入
@@ -192,7 +192,7 @@ escape hatch。
 Phase 2 baseline 完成后，orchestrator 程序化写出
 `works/{work_id}/world/manifest.json`（schema：
 `schemas/world/world_manifest.schema.json`；写入器：
-`automation.persona_extraction.manifests.write_world_manifest`）。
+`extraction.persona_extraction.lifecycle.manifests.write_world_manifest`）。
 
 **出口验证**：Phase 2 完成后运行 `validate_baseline()`，校验所有
 baseline 文件的 schema 合规性。works manifest / world manifest /
@@ -238,7 +238,7 @@ guard 同时覆盖 `--start-phase 2 force_baseline` 调用路径（用户显式�
 - `world/stage_snapshots/{stage_id}.json` — 当前阶段的世界快照
 - `world/foundation/` — 如有修正
 
-**对应提示词**：`automation/prompt_templates/world_extraction.md`
+**对应提示词**：`extraction/persona_extraction/prompts/world_extraction.md`
 
 #### 6.2 角色快照提取（N 次并行调用，char_snapshot lane）
 
@@ -248,14 +248,14 @@ guard 同时覆盖 `--start-phase 2 force_baseline` 调用路径（用户显式�
   **自包含快照**，包含该阶段的完整 voice_state、behavior_state、
   boundary_state、failure_modes、relationships、personality、mood、knowledge
 
-**对应提示词**：`automation/prompt_templates/character_snapshot_extraction.md`
+**对应提示词**：`extraction/persona_extraction/prompts/character_snapshot_extraction.md`
 
 **Sub-lane 拆分模式**（`[phase3].char_snapshot_sub_lanes = true`，缺省
 开启）：单个角色的 char_snapshot lane 内部再拆 **4** 个并行 sub-lane
 跑同一份 prompt 模板（占位 `{lane_scope}` 切换写哪一份字段子集），缩短
 单 stage wall-time。4 sub-lane 各自落 `.partial/{stage_id}_{lane}.json`，
 由程序合并成完整快照。字段归属表（同源给 prompt + merge 用，定义在
-`automation/persona_extraction/snapshot_merge.py`）：
+`extraction/persona_extraction/phases/snapshot_merge.py`）：
 
 | sub-lane | 字段 |
 |---|---|
@@ -295,7 +295,7 @@ vs 关系/事件"切：`char_internal` 集中知识/隐瞒/失败模式形成
    + 8 子键全覆盖
 5. 三方 keys（`voice_state.target_voice_map` / `behavior_state.target_behavior_map`
    / `relationships`）keys 集合相互相等且 set-equal `target_baseline.targets[].target_character_id`
-   — 复用 `automation/repair_agent/checkers/targets_keys_eq_baseline.py` 做
+   — 复用 `extraction/repair/checkers/targets_keys_eq_baseline.py` 做
    merge 前置预检（与 phase 3 单 stage validate 层同 checker，不重复实现）
 6. **(D) drop entry 不被误判**（anti-rule）：merge 仅查字段集合互斥 + 全覆盖，
    **不查** partial entry 数 ≥ prev。entry 数变化由 `stage_delta` 自由文本
@@ -333,7 +333,7 @@ prev snapshot 已 committed 在 git history + slice 是 `FIELD_ALLOCATION` 的
 前按已 accept fingerprint 过滤（per T-REPAIR-T3-LIFECYCLE-RESET 现状），
 sub-lane 间共享、不各自维护。
 
-**Lifecycle 2 重抽路径**：repair_agent file-level lifecycle 1 末端 T3 触发
+**Lifecycle 2 重抽路径**：repair file-level lifecycle 1 末端 T3 触发
 时（per 决策 #25），若 `char_snapshot_sub_lanes=true` 且文件是
 `characters/<cid>/canon/stage_snapshots/<sid>.json` → T3 fixer 走 **4**
 sub-lane 并行重新 extract + merge 路径（每 sub-lane prompt 注入
@@ -382,7 +382,7 @@ char_snapshot + file-level 2 lifecycle 标准流程——即 sub-lane 拆分前
 - `characters/{character_id}/canon/memory_timeline/{stage_id}.json` —
   该阶段的角色记忆条目
 
-**对应提示词**：`automation/prompt_templates/character_support_extraction.md`
+**对应提示词**：`extraction/persona_extraction/prompts/character_support_extraction.md`
 
 **程序化维护**（0 token，提取后由 `post_processing.py` 自动生成）：
 
@@ -403,7 +403,7 @@ char_snapshot + file-level 2 lifecycle 标准流程——即 sub-lane 拆分前
 - 阶段 N 快照以 identity + 前一阶段快照为参照，产出完整的当前阶段状态
 - **未变化的内容也必须包含在快照中**——快照是自包含的；运行时与 identity 配套加载即可
 - `stage_delta` 记录从上一阶段的变化（自由文本），必须捕捉 (B) 关键变化 + (D) 消除原因，禁止"无明显变化"敷衍
-- **prev_stage 处理规则**：(A) 未出场继承 / (B) 出场且变化 重写 / (C) 出场且无变化 保留 / (D) resolved-revealed-消除 + per-stage 推演原则的权威定义见 `automation/prompt_templates/character_snapshot_extraction.md` §核心规则 #2
+- **prev_stage 处理规则**：(A) 未出场继承 / (B) 出场且变化 重写 / (C) 出场且无变化 保留 / (D) resolved-revealed-消除 + per-stage 推演原则的权威定义见 `extraction/persona_extraction/prompts/character_snapshot_extraction.md` §核心规则 #2
 
 **长度硬门控**：所有字段级长度限制由对应 schema 的 `minLength` /
 `maxLength` 承担——`stage_events` 每条一句话、`event_description` 需有
@@ -520,7 +520,7 @@ Phase 3 全部 stage 提交后、进入 Phase 4 之前，运行跨阶段一致�
 （`phase3.5: consistency_report S###..S###`），不分 pass/fail。未提交的
 报告会以 dirty 状态挡住 `checkout_main`，也会被 squash-merge 漏掉。
 同理，一致性检查器加载 JSON/JSONL 源文件必须**只读**——不再顺带触发
-L1 JSON 修复写盘（修复是 repair_agent 的职责，Phase 3.5 不越权改写已
+L1 JSON 修复写盘（修复是 repair 的职责，Phase 3.5 不越权改写已
 COMMITTED 的产物）。
 
 ### 8. 场景切分（Phase 4）
@@ -644,9 +644,9 @@ voice / behavior / boundary / failure_modes 的状态由 stage_snapshot
 
 ## 自动化编排
 
-手动提取流程可通过 `automation/` 目录下的编排脚本自动化。
+手动提取流程可通过 `extraction/` 目录下的编排脚本自动化。
 
-详见 `automation/README.md` 和 `docs/requirements.md` §十一。
+详见 `extraction/README.md` 和 `docs/requirements.md` §十一。
 
 ### CLI `--resume` 阶段无关续跑
 
@@ -681,7 +681,7 @@ orchestrator (Python)
     │       ├── git preflight
     │       ├── claude -p ×(1+2N) (world + char_snapshot×N + char_support×N, 3600s)
     │       ├── 程序化后处理 (digest/catalog, 0 token, idempotent upsert)
-    │       ├── repair_agent per-file 并发 (ThreadPoolExecutor, 默认 10):
+    │       ├── repair per-file 并发 (ThreadPoolExecutor, 默认 10):
     │       │       └── 对每个待修文件独立跑 coordinator.run(files=[single]):
     │       │               ├── Lifecycle 1 (Phase A→B→C, T3 enabled)
     │       │               │       ├── Phase A: L0–L3 全量检查
@@ -717,7 +717,7 @@ orchestrator (Python)
 - 阶段间上下文通过文件系统传递；char_snapshot 只传最近一个 snapshot；char_support 只传最近一个 memory_timeline（不传全部历史）
 - 每个 stage 都可修正和补充 identity（通过 char_support 提取）
 - **Repair 按文件并发**：`orchestrator` 在每个 stage 的 Repair 步骤
-  用 `ThreadPoolExecutor(max_workers=[repair_agent].repair_concurrency)`
+  用 `ThreadPoolExecutor(max_workers=[repair].repair_concurrency)`
   （默认 10）对每个待修文件独立调用 `coordinator.run(files=[single])`。
   coordinator 本就是纯 per-file 逻辑（跨文件一致性由 Phase 3.5 独立
   承担），per-file 并发是调用方式的改变，不动 coordinator 内部实现。
@@ -734,7 +734,7 @@ orchestrator (Python)
   `progress/` 一并 `.gitignore`；事后可
   用 `jq` 或脚本复盘"S001 里某个文件的第 3 个 issue 是什么 / 在哪个
   tier 被修"。
-- **Repair Agent（统一检测+修复）**：独立模块 `automation/repair_agent/`，
+- **Repair Agent（统一检测+修复）**：独立模块 `extraction/repair/`，
   各 phase 通过统一接口调用。四层检查器（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
   与四层修复器（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成）**正交**——
   任何层的 issue 都可能需要任何 tier 的修复。修复从最低可用 tier 开始逐层升级，
@@ -827,7 +827,7 @@ orchestrator (Python)
   保证每次启动都是干净日志，磁盘占用有上限。设为 0 关闭滚动
 - `--max-runtime` 总时间限制，到期后在 stage 间优雅停止
 - 子进程硬超时（Phase 0 summarize 1800s、Phase 3 提取 3600s、repair
-  agent LLM 调用 600s；阈值分别由 `automation/config.toml` 的
+  agent LLM 调用 600s；阈值分别由 `extraction/config.toml` 的
   `[phase0]` / `[phase3]` 段控制）
 - Token/context limit 与 rate limit 区分：前者不重试（相同 prompt 必定再超限），
   后者由 `RateLimitController` 暂停所有新请求直到 reset，再重发同一 prompt

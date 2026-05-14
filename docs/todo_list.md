@@ -181,7 +181,7 @@ any node ─────────────────(abandoned)───
 | 🔴 Large·Arch | 改动清单 ≥ 7 文件 或 触及任一：新增 Phase / 改 schema 字段 / 改核心接口 / 跨模块协议变更 / 引入新依赖 / 影响多 work 流程 |
 | — | 缺「改动清单」段（多见于 "Discussing" 未拆解的条目）；备注"未拆解，规模待评估" |
 
-**简介撰写要求**：用大白话说清"这是要解决什么问题"和"为什么值得做"。**避免堆砌代码名 / 函数名 / schema 路径 / 行号 / 决策编号 / 专业缩写**——除非那本身就是问题的核心，否则换成普通说法。反例：`phase 2 baseline production 整体接入 repair_agent lifecycle（4 件产物 foundation key_figures patch + fixed_relationships + identity + target_baseline 各自包装 SourceContext + 写 phase 2 专属 checkers）`；正例：`Phase 2 抽人物 baseline 时如果格式错了，目前只会"试一次就硬失败"，不像 phase 3 有自动修复管线。给 phase 2 也接上自动修复`。读者不点开正文也能听懂这是干啥、为啥要做。**总长 ≤ 150 字**——超过先砍细节，保住"是啥 + 为啥"。
+**简介撰写要求**：用大白话说清"这是要解决什么问题"和"为什么值得做"。**避免堆砌代码名 / 函数名 / schema 路径 / 行号 / 决策编号 / 专业缩写**——除非那本身就是问题的核心，否则换成普通说法。反例：`phase 2 baseline production 整体接入 repair framework lifecycle（4 件产物 foundation key_figures patch + fixed_relationships + identity + target_baseline 各自包装 SourceContext + 写 phase 2 专属 checkers）`；正例：`Phase 2 抽人物 baseline 时如果格式错了，目前只会"试一次就硬失败"，不像 phase 3 有自动修复管线。给 phase 2 也接上自动修复`。读者不点开正文也能听懂这是干啥、为啥要做。**总长 ≤ 150 字**——超过先砍细节，保住"是啥 + 为啥"。
 
 **汇总行**：三张表后打印一行：`Total: N — 🟢 In Progress a ｜ 🟡 Next b ｜ ⚪ Discussing c`。
 
@@ -204,7 +204,7 @@ any node ─────────────────(abandoned)───
 
 **当前状态**：schema/code/prompt/ai_context/docs 完成、smoke 全过；
 post-check 第 1 轮残留缺口（stage_title.maxLength 50→80 + 代码层软截断兜底；
-progress.py `_expected_chapter_count` 兼容 `C####-C####`；automation/README
+progress.py `_expected_chapter_count` 兼容 `C####-C####`；extraction/README
 加 dual-mode 指针；todo_list Index 大小写对齐）已修；post-check 第 2 轮
 残留缺口（orchestrator `_STAGE_TITLE_MAX = 80` 硬编码违反 §27b 单源原则
 → 改用启动时从 `stage_plan.schema.json` 读取 maxLength；流程级 docs 加
@@ -237,15 +237,15 @@ phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapt
   放宽容纳 light_novel（`chapter_count.minimum` 5→1、`stages.maxItems`
   200→1000、`stage_title.maxLength` 14→80；`chapters.pattern` 保持
   `^C[0-9]{4}-C[0-9]{4}$` 不变，light_novel 走 degenerate 单章区间）
-- code：`automation/ingestion/validator.py` 跨文件断言 `structure_mode` ⇔
-  chapter_index profile；`automation/persona_extraction/manifests.py` 加
+- code：`extraction/ingestion/validator.py` 跨文件断言 `structure_mode` ⇔
+  chapter_index profile；`extraction/persona_extraction/lifecycle/manifests.py` 加
   `read_structure_mode()` + `write_works_manifest` 拷字段；
-  `automation/persona_extraction/orchestrator.py` 加
+  `extraction/persona_extraction/orchestrator.py` 加
   `_build_light_novel_stage_plan()` 输出 `chapters = f"{chapter_id}-{chapter_id}"`
   degenerate 单章区间，phase 0 / phase 1 入口分支调度，phase 1 STAGE_MIN/MAX
   校验在 light_novel 下绕过；phase 2/3/4 既有 `chapters` 解析器
   （`prompt_builder._parse_chapter_range`、`scene_archive`、
-  `repair_agent.context_retriever`、`post_processing._parse_chapter_scope`）
+  `repair.context_retriever`、`post_processing._parse_chapter_scope`）
   零改动
 - prompt：`prompts/ingestion/原始资料规范化.md` 补 `structure_mode` 填写
   指引 + light_novel 三层 seq 字段说明 + title 派生公式；2026-05-01 14:29
@@ -287,7 +287,7 @@ phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapt
 
 ## Next
 
-### [T-PHASE2-REPAIR-AGENT] phase 2 baseline production 整体接入 repair_agent lifecycle
+### [T-PHASE2-REPAIR-AGENT] phase 2 baseline production 整体接入 repair framework lifecycle
 
 **开始时间**：2026-05-11 EDT（决策 #54 落地时拆出）
 
@@ -295,46 +295,46 @@ phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapt
 
 **上下文**
 
-会话深挖发现 phase 2 baseline production 当前形态 = "**裸单次 LLM + jsonschema gate + length-bound tolerance gate**"，不经 repair_agent lifecycle（[orchestrator.py:run_baseline_production](../automation/persona_extraction/orchestrator.py)）。代码注释自己承认："Phase 2 has no LLM-level retry budget here ... this is the terminal gate."
+会话深挖发现 phase 2 baseline production 当前形态 = "**裸单次 LLM + jsonschema gate + length-bound tolerance gate**"，不经 repair framework lifecycle（[orchestrator.py:run_baseline_production](../extraction/persona_extraction/orchestrator.py)）。代码注释自己承认："Phase 2 has no LLM-level retry budget here ... this is the terminal gate."
 
-repair_agent 实际接入点 grep 全仓库**只有 1 处** = `orchestrator.py` 内 phase 3 stage loop 的 `_repair_one(f)` 调用（per-file 并行 lifecycle，每 stage 1+2N files 各自独立跑 L0-L3 × T0-T3 checker/fixer 矩阵）。phase 0 / 1 / 1.5 / 2 / 3.5 / 4 都没接 repair_agent。
+repair 实际接入点 grep 全仓库**只有 1 处** = `orchestrator.py` 内 phase 3 stage loop 的 `_repair_one(f)` 调用（per-file 并行 lifecycle，每 stage 1+2N files 各自独立跑 L0-L3 × T0-T3 checker/fixer 矩阵）。phase 0 / 1 / 1.5 / 2 / 3.5 / 4 都没接 repair。
 
 历史误解源头：
-1. [decisions.md #48](../ai_context/decisions.md) 原措辞 "Phase 2/3/3.5/4 via repair_agent T3_EXHAUSTED"——把 phase 2/3.5/4 的兜底也写成"经由 repair_agent"，但实际只有 phase 3 走 repair_agent。已在 foundation 重构 /go 同批修正。
-2. commit `e644886 phase1_parallel_lanes` 归档条目 paper trail："原计划集成 `repair_agent.run` 走 L1/L2/L3 + T0/T1/T2/T3 lifecycle，盘点后发现 phase 2 实际不调 repair_agent + phase 1 输出非 stage-anchored，改用更轻的 `prior_error` 注入式 retry"——当时做 phase 1 lane 改造时也误以为 phase 2 接了 repair_agent，盘点后才发现没接。
+1. [decisions.md #48](../ai_context/decisions.md) 原措辞 "Phase 2/3/3.5/4 via repair framework T3_EXHAUSTED"——把 phase 2/3.5/4 的兜底也写成"经由 repair"，但实际只有 phase 3 走 repair。已在 foundation 重构 /go 同批修正。
+2. commit `e644886 phase1_parallel_lanes` 归档条目 paper trail："原计划集成 `extraction.repair.run` 走 L1/L2/L3 + T0/T1/T2/T3 lifecycle，盘点后发现 phase 2 实际不调 repair + phase 1 输出非 stage-anchored，改用更轻的 `prior_error` 注入式 retry"——当时做 phase 1 lane 改造时也误以为 phase 2 接了 repair，盘点后才发现没接。
 
 **改动清单**
 
 设计未拍板，待启动时定。预期改动量 ≈ phase 3 接入当年的工作量：
 
 新增：
-- `automation/repair_agent/checkers/phase2_*.py`（专属 checkers，预估 4-5 个）：
+- `extraction/repair/checkers/phase2_*.py`（专属 checkers，预估 4-5 个）：
   - `foundation_factions_legal`：foundation.major_factions[].key_figures character_id 合法性（必须 ∈ candidate_characters 已合并身份集）
   - `fixed_relationships_legal`：parties[] character_id 必须 ∈ 已确认目标 ∪ candidate_characters
   - `identity_required_fields`：identity.json 含 character_id / canonical_name / aliases 等必填
   - `target_baseline_admission_rule`：targets[] 准入门槛（dialogue/action 交互判定，可能需 LLM）
   - `target_baseline_keys_set`：targets[].target_character_id 集合校验
-- `automation/persona_extraction/orchestrator.py` `run_baseline_production`：包装 SourceContext + 调 `run_repair(...)`，per-file 并行 + lifecycle dispatch
+- `extraction/persona_extraction/orchestrator.py` `run_baseline_production`：包装 SourceContext + 调 `run_repair(...)`，per-file 并行 + lifecycle dispatch
 - baseline 产物 per-file 拆分：4 件产物（foundation patch / fixed_relationships / identity / target_baseline）各自独立 file-level repair entry
 
 修改：
-- `automation/repair_agent/coordinator.py`：可能需要扩 fixer T0-T3 适配 phase 2 产物形态
-- `ai_context/decisions.md` #25：repair_agent 接入点扩到 phase 2
+- `extraction/repair/coordinator.py`：可能需要扩 fixer T0-T3 适配 phase 2 产物形态
+- `ai_context/decisions.md` #25：repair 接入点扩到 phase 2
 - `ai_context/decisions.md` #48：length tolerance gate 接入点同步更新
 
 **完成标准**
 
-- phase 2 baseline production 4 件产物 + foundation.key_figures 补齐都走 repair_agent file-level lifecycle，与 phase 3 同形态
+- phase 2 baseline production 4 件产物 + foundation.key_figures 补齐都走 repair file-level lifecycle，与 phase 3 同形态
 - 现有 phase 2 测试通过（含 length-tolerance gate 兜底）
-- ai_context 措辞 disambiguation 完成（不再把 phase 2/4 描述成"经 repair_agent"）
-- 端到端跑一个 work：phase 2 任意环节产物 schema 违规 → repair_agent 自动修复（无需 user 重跑）
+- ai_context 措辞 disambiguation 完成（不再把 phase 2/4 描述成"经 repair"）
+- 端到端跑一个 work：phase 2 任意环节产物 schema 违规 → repair 自动修复（无需 user 重跑）
 
 **依赖**：无技术依赖（与 foundation 重构正交，可独立启动）；设计前置：先盘点 phase 2 4 件产物的常见违规模式 + 决定 checker / fixer 切分粒度
 
 **暂不做的事**
 
 - 不在 foundation 重构 /go（2026-05-11）一并做——拆出来作独立 todo，避免 PR/log 爆炸
-- 不动 phase 3 现有 repair_agent 接入（已稳定运行多个 stage）
+- 不动 phase 3 现有 repair 接入（已稳定运行多个 stage）
 
 ---
 
@@ -385,8 +385,8 @@ decision #27m 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
 - file: `schemas/analysis/stage_plan.schema.json`：改 `stages.items.chapter_count` 为 `oneOf`，按结构模式分支
   - monolithic: `minimum=8, maximum=15`
   - light_novel: `minimum=1, maximum=1`
-- file: `automation/persona_extraction/_build_light_novel_stage_plan`：产物加 `structure_mode` 字段供 schema dispatch（或在外层 manifest 索引）
-- file: `automation/persona_extraction/validator.py`：派生产物现在走 schema validate
+- file: `extraction/persona_extraction/_build_light_novel_stage_plan`：产物加 `structure_mode` 字段供 schema dispatch（或在外层 manifest 索引）
+- file: `extraction/validation/gates/phase2_baseline.py`：派生产物现在走 schema validate
 - file: `docs/architecture/schema_reference.md` + decision #27m + #56：trade-off 文案改写为已契约化
 
 **完成标准**
@@ -444,7 +444,7 @@ repair，与后续 lane 的 extract 时间重叠，理论最优解。
 
 `ai_context/conventions.md` §"Bounds only in schema" 要求所有
 `maxLength` / `minLength` / `maxItems` 数值只在 schema 写一次。但
-`automation/prompt_templates/character_support_extraction.md` /
+`extraction/persona_extraction/prompts/character_support_extraction.md` /
 `character_snapshot_extraction.md`、`docs/architecture/extraction_workflow.md`
 和 `docs/architecture/schema_reference.md` 的少量段落仍复述具体数字
 （`150–200 字`、`30–50 字`、`≤15 字短语`、`最多 5 条` 等）。当前抽查
@@ -464,7 +464,7 @@ bound 都要扫一遍 prompts。
 
 **改动清单（待路径选定后）**
 
-- 路径 A：`automation/persona_extraction/prompt_builder.py` 增加
+- 路径 A：`extraction/persona_extraction/prompt_builder.py` 增加
   `render_schema_bounds(schema_path, fields=[...])` 渲染段；prompt
   template 把具体 bound 替换为 `{schema_bounds_for_X}` 占位符
 - 路径 B：`ai_context/conventions.md` §"Bounds only in schema" 加例外
@@ -539,7 +539,7 @@ bound 都要扫一遍 prompts。
 
 **上下文**
 
-T-LOG 已落地：[llm_backend.py:565-680](../automation/persona_extraction/llm_backend.py#L565-L680) `run_with_retry` 已能解析 subtype / num_turns / total_cost_usd 并附在 LLMResult 与错误消息上。但 retry 决策本身**还没用上 subtype 分流**，且短时阈值仍是 5s（[config.toml:130](../automation/config.toml#L130) `fast_empty_failure_threshold_s = 5`）。
+T-LOG 已落地：[llm_backend.py:565-680](../extraction/persona_extraction/core/llm_backend.py#L565-L680) `run_with_retry` 已能解析 subtype / num_turns / total_cost_usd 并附在 LLMResult 与错误消息上。但 retry 决策本身**还没用上 subtype 分流**，且短时阈值仍是 5s（[config.toml:130](../extraction/config.toml#L130) `fast_empty_failure_threshold_s = 5`）。
 
 **现有机制**（截至 2026-04-27）
 
@@ -552,10 +552,10 @@ T-LOG 已落地：[llm_backend.py:565-680](../automation/persona_extraction/llm_
 
 **待落地（具体改动）**
 
-1. **短时阈值扩大**：[config.toml:130](../automation/config.toml#L130) `fast_empty_failure_threshold_s` 从 5s 扩大到 60s（候选 120s）。
+1. **短时阈值扩大**：[config.toml:130](../extraction/config.toml#L130) `fast_empty_failure_threshold_s` 从 5s 扩大到 60s（候选 120s）。
    - 理由：char_snapshot 正常 10-20m，任何 <60s 失败几乎一定不是真正工作后失败，是 CLI launch / API 连接错误。
    - 风险极小（<60s 浪费），独立可先行
-2. **长时 exit 按 subtype 分流**：[llm_backend.py `run_with_retry`](../automation/persona_extraction/llm_backend.py) 在"非可重试错误"return 之前加一段判断：
+2. **长时 exit 按 subtype 分流**：[llm_backend.py `run_with_retry`](../extraction/persona_extraction/core/llm_backend.py) 在"非可重试错误"return 之前加一段判断：
    - `subtype == "error_max_turns"` → 不重试（同 prompt 必再次触达）
    - `subtype == "error_during_execution"` → 重试 1 次（瞬态可能性大）
    - 无 subtype / 解析失败 → 可选重试 1 次（默认开 / 可由 config 关）
@@ -563,8 +563,8 @@ T-LOG 已落地：[llm_backend.py:565-680](../automation/persona_extraction/llm_
 
 **改动清单**
 
-1. [automation/config.toml:130](../automation/config.toml#L130) 改 `fast_empty_failure_threshold_s = 60`（或 120，待拍板）
-2. [automation/persona_extraction/llm_backend.py `run_with_retry`](../automation/persona_extraction/llm_backend.py) 加 subtype 分流分支
+1. [extraction/config.toml:130](../extraction/config.toml#L130) 改 `fast_empty_failure_threshold_s = 60`（或 120，待拍板）
+2. [extraction/persona_extraction/core/llm_backend.py `run_with_retry`](../extraction/persona_extraction/core/llm_backend.py) 加 subtype 分流分支
 3. 新增 config 项 `[backoff].long_exit_retry_subtypes`（白名单）或对应布尔开关，默认 `["error_during_execution"]`
 4. 单测覆盖三类 subtype 的决策路径
 5. [docs/requirements.md §11.x](requirements.md) 重试策略小节同步
