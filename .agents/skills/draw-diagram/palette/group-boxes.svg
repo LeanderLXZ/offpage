@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1644" height="540" viewBox="0 0 1644 540" xmlns="http://www.w3.org/2000/svg"
+     role="img" aria-label="Group / region box tints across themes">
+  <style type="text/css"><![CDATA[
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+text { font-family: var(--font); }
+/* Reference plate (NOT a single-theme diagram): the 7 group / region box
+     tints rendered in all three presets at once, so the tint colors live
+     INLINE on each rect/text. A group box is a dashed rounded rect (rx=20)
+     with a colored border + a VERY transparent fill of the same hue — a
+     neutral grouping signal, never a node role. mono has no tints: it uses
+     the plain grey --container (fill:none). See ../SKILL.md
+     §Group / region box tints + §Container / group box. */
+  :root {
+    --bg:   #FFFFFF;
+    --font: "Inter", "Söhne", -apple-system, BlinkMacSystemFont, "Segoe UI",
+            Helvetica, Arial, sans-serif;
+  }
+  .t { font-weight: 700; font-size: 22px; }
+  .b { font-weight: 600; font-size: 18px; }
+]]></style>
+  <rect x="0" y="0" width="1644" height="540" rx="25" ry="25" fill="var(--bg)" />
+
+
+  <!-- ============================ dark ============================ -->
+  <path d="M25 0 H1619 A25 25 0 0 1 1644 25 V180 H0 V25 A25 25 0 0 1 25 0 Z" fill="#020617"/>
+  <text class="t" x="50" y="40" fill="#94A3B8">dark</text>
+  <rect x="50" y="62" width="200" height="80" rx="20" fill="rgba(56,189,248,0.07)" stroke="#38BDF8" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="150" y="108" text-anchor="middle" fill="#38BDF8">sky</text>
+  <rect x="274" y="62" width="200" height="80" rx="20" fill="rgba(59,130,246,0.07)" stroke="#3B82F6" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="374" y="108" text-anchor="middle" fill="#3B82F6">blue</text>
+  <rect x="498" y="62" width="200" height="80" rx="20" fill="rgba(52,211,153,0.07)" stroke="#34D399" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="598" y="108" text-anchor="middle" fill="#34D399">green</text>
+  <rect x="722" y="62" width="200" height="80" rx="20" fill="rgba(251,191,36,0.07)" stroke="#FBBF24" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="822" y="108" text-anchor="middle" fill="#FBBF24">yellow</text>
+  <rect x="946" y="62" width="200" height="80" rx="20" fill="rgba(148,163,184,0.07)" stroke="#94A3B8" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="1046" y="108" text-anchor="middle" fill="#94A3B8">gray</text>
+  <rect x="1170" y="62" width="200" height="80" rx="20" fill="rgba(167,139,250,0.07)" stroke="#A78BFA" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="1270" y="108" text-anchor="middle" fill="#A78BFA">purple</text>
+  <rect x="1394" y="62" width="200" height="80" rx="20" fill="rgba(251,113,133,0.07)" stroke="#FB7185" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="1494" y="108" text-anchor="middle" fill="#FB7185">red</text>
+
+  <!-- ============================ light ============================ -->
+  <rect x="0" y="180" width="1644" height="180" fill="#F0EEE6"/>
+  <text class="t" x="50" y="220" fill="#6B6E64">light</text>
+  <rect x="50" y="242" width="200" height="80" rx="20" fill="rgba(132,182,217,0.07)" stroke="#84B6D9" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="150" y="288" text-anchor="middle" fill="#84B6D9">sky</text>
+  <rect x="274" y="242" width="200" height="80" rx="20" fill="rgba(110,140,175,0.07)" stroke="#6E8CAF" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="374" y="288" text-anchor="middle" fill="#6E8CAF">blue</text>
+  <rect x="498" y="242" width="200" height="80" rx="20" fill="rgba(138,176,127,0.07)" stroke="#8AB07F" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="598" y="288" text-anchor="middle" fill="#8AB07F">green</text>
+  <rect x="722" y="242" width="200" height="80" rx="20" fill="rgba(198,162,79,0.07)" stroke="#C6A24F" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="822" y="288" text-anchor="middle" fill="#C6A24F">yellow</text>
+  <rect x="946" y="242" width="200" height="80" rx="20" fill="rgba(176,173,162,0.07)" stroke="#B0ADA2" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="1046" y="288" text-anchor="middle" fill="#B0ADA2">gray</text>
+  <rect x="1170" y="242" width="200" height="80" rx="20" fill="rgba(158,138,184,0.07)" stroke="#9E8AB8" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="1270" y="288" text-anchor="middle" fill="#9E8AB8">purple</text>
+  <rect x="1394" y="242" width="200" height="80" rx="20" fill="rgba(201,126,98,0.07)" stroke="#C97E62" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="1494" y="288" text-anchor="middle" fill="#C97E62">red</text>
+
+  <!-- ============================ mono ============================ -->
+  <path d="M0 360 H1644 V515 A25 25 0 0 1 1619 540 H25 A25 25 0 0 1 0 515 Z" fill="#FFFFFF"/>
+  <text class="t" x="50" y="400" fill="#555555">mono</text>
+  <rect x="50" y="422" width="200" height="80" rx="20" fill="none" stroke="#888888" stroke-width="2" stroke-dasharray="6 6"/>
+  <text class="b" x="150" y="468" text-anchor="middle" fill="#888888">container (no tint)</text>
+
+</svg>

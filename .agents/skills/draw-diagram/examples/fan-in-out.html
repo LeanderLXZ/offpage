@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fan-in, Fan-out & branch tee — Flowchart pattern (dark)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* dark palette — slate-950 + bright accent borders
+     See ../SKILL.md §Color Palette */
+  :root {
+    --bg:             #020617;
+    --text:           #E2E8F0;
+    --label-text:     #94A3B8;
+    --action-fill:    rgba(19,78,74,0.4);
+    --action-stroke:  #2DD4BF;
+    --agent-fill:     rgba(14,116,144,0.35);
+    --agent-stroke:   #22D3EE;
+    --terminal-fill:  rgba(30,41,59,0.5);
+    --terminal-stroke:#94A3B8;
+    --data-fill:      rgba(76,29,149,0.4);
+    --data-stroke:    #A78BFA;
+    --state-fill:     rgba(120,53,15,0.4);
+    --state-stroke:   #FBBF24;
+    --flow-line:      #94A3B8;
+    --flow-loopback:  #2DD4BF;
+    --container:      #475569;
+    --container-lbl:  #94A3B8;
+    --font: "Inter", "Söhne", -apple-system, BlinkMacSystemFont, "Segoe UI",
+            Helvetica, Arial, sans-serif;
+  }
+
+  html, body { margin: 0; padding: 0; background: var(--bg); font-family: var(--font); }
+  body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 0; box-sizing: border-box; }
+  .diagram { width: 100%; max-width: 1280px; }
+  svg { width: 100%; height: auto; display: block; }
+
+  #arrow-flow path { fill: var(--flow-line); }
+
+  .flow-arrow { stroke: var(--flow-line); stroke-width: 5; fill: none;
+                stroke-linecap: round; stroke-linejoin: round; }
+  .flow-arrow.dashed { stroke-width: 3; stroke-dasharray: 7 5; }
+
+  .node-label   { font-weight: 700; font-size: 18px; fill: var(--text); }
+  .role-action  { fill: var(--action-fill); stroke: var(--action-stroke); stroke-width: 2; }
+  .role-agent   { fill: var(--agent-fill);  stroke: var(--agent-stroke);  stroke-width: 2; }
+  .data-rect    { fill: var(--data-fill);   stroke: var(--data-stroke);   stroke-width: 2; }
+
+  .legend-label { font-weight: 500; font-size: 18px; fill: var(--label-text); }
+</style>
+</head>
+<body>
+<div class="diagram">
+<svg width="825" height="578" viewBox="0 0 1020 715" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fan-in, fan-out and branch-tee patterns">
+
+  <defs>
+    <marker id="arrow-flow" viewBox="0 0 14 12" refX="0" refY="6"
+            markerWidth="14" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M 0 0 L 14 6 L 0 12 z" />
+    </marker>
+  </defs>
+
+  <!-- FAN-IN: A / B / C -> M, three INDEPENDENT arrows (never merged into one stem) -->
+  <path class="flow-arrow" d="M 170,80 L 488,80 Q 500,80 500,92 L 500,156" marker-end="url(#arrow-flow)" />
+  <line class="flow-arrow" x1="170" y1="200" x2="416" y2="200" marker-end="url(#arrow-flow)" />
+  <path class="flow-arrow" d="M 170,320 L 488,320 Q 500,320 500,308 L 500,244" marker-end="url(#arrow-flow)" />
+
+  <!-- FAN-OUT: M -> X / Y, ONE symmetric shared "Y" trunk with an ARCED split.
+       Stem stops 12px short of the split channel (x=630); each branch arcs OUT of it. -->
+  <line class="flow-arrow" x1="570" y1="200" x2="618" y2="200" />
+  <path class="flow-arrow" d="M 618,200 Q 630,200 630,188 L 630,92 Q 630,80 642,80 L 836,80" marker-end="url(#arrow-flow)" />
+  <path class="flow-arrow" d="M 618,200 Q 630,200 630,212 L 630,308 Q 630,320 642,320 L 836,320" marker-end="url(#arrow-flow)" />
+
+  <!-- FAN-OUT off the through-line: P -> Q stays straight; TWO independent branches each arc OFF it
+       (one at x=400 → R SOLID, another at x=620 → S DASHED) and drop straight down. NOT one stem that then splits. -->
+  <path class="flow-arrow" d="M 170,470 L 836,470" marker-end="url(#arrow-flow)" />
+  <path class="flow-arrow" d="M 388,470 Q 400,470 400,482 L 400,546" marker-end="url(#arrow-flow)" />
+  <path class="flow-arrow dashed" d="M 608,470 Q 620,470 620,482 L 620,546" marker-end="url(#arrow-flow)" />
+
+  <!-- nodes row 1: A/B/C sources (agent), M target (action), X/Y outputs (data) -->
+  <rect class="role-agent" x="50"  y="50"  width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="110" y="87"  text-anchor="middle">A</text>
+  <rect class="role-agent" x="50"  y="170" width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="110" y="207" text-anchor="middle">B</text>
+  <rect class="role-agent" x="50"  y="290" width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="110" y="327" text-anchor="middle">C</text>
+
+  <rect class="role-action" x="430" y="170" width="140" height="60" rx="12" ry="12" />
+  <text class="node-label"  x="500" y="207" text-anchor="middle">M</text>
+
+  <rect class="data-rect" x="850" y="50"  width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="910" y="87"  text-anchor="middle">X</text>
+  <rect class="data-rect" x="850" y="290" width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="910" y="327" text-anchor="middle">Y</text>
+
+  <!-- nodes row 2 (fan-out off through-line): P (source/agent) -> Q (output/data) on the through-line, R + S below (output/data) -->
+  <rect class="role-agent" x="50"  y="440" width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="110" y="477" text-anchor="middle">P</text>
+  <rect class="data-rect" x="850" y="440" width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="910" y="477" text-anchor="middle">Q</text>
+  <rect class="data-rect" x="330" y="560" width="140" height="60" rx="12" ry="12" />
+  <text class="node-label" x="400" y="597" text-anchor="middle">R</text>
+  <rect class="data-rect" x="550" y="560" width="140" height="60" rx="12" ry="12" />
+  <text class="node-label" x="620" y="597" text-anchor="middle">S</text>
+
+  <!-- legend -->
+  <g class="legend" transform="translate(50, 653)">
+    <g transform="translate(0, 0)">
+      <rect width="22" height="12" rx="3" fill="var(--agent-fill)" stroke="var(--agent-stroke)" stroke-width="1" />
+      <text x="30" y="11" class="legend-label">source</text>
+    </g>
+    <g transform="translate(150, 0)">
+      <rect width="22" height="12" rx="3" fill="var(--action-fill)" stroke="var(--action-stroke)" stroke-width="1" />
+      <text x="30" y="11" class="legend-label">process</text>
+    </g>
+    <g transform="translate(320, 0)">
+      <rect width="22" height="12" rx="3" fill="var(--data-fill)" stroke="var(--data-stroke)" stroke-width="1.2" />
+      <text x="30" y="11" class="legend-label">output</text>
+    </g>
+  </g>
+
+</svg>
+</div>
+</body>
+</html>

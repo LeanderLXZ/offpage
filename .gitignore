@@ -62,3 +62,24 @@ __pycache__/
 .history/
 .DS_Store
 Thumbs.db
+
+# ↓ plugin-skeleton template additions ↓
+.idea/
+.vscode/
+*.swp
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+node_modules/
+*.local.toml
+*.local.json
+.env
+.env.local
+dist/
+build/
+.cache/
+tmp/holo/

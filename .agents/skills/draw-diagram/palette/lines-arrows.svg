@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1500" height="540" viewBox="0 0 1500 540" xmlns="http://www.w3.org/2000/svg"
+     role="img" aria-label="The 4 edge / arrow styles rendered across dark, light and mono-print themes">
+  <style type="text/css"><![CDATA[
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+text { font-family: var(--font); }
+/* Reference plate (NOT a single-theme diagram): the 4 edge types from
+     ../SKILL.md §Arrows · Stroke widths, rendered in all three presets at
+     once. Colors live INLINE on each line/triangle (one :root can't carry
+     three palettes). Each arrowhead is an inline 14x12 triangle (refX=0
+     geometry: base at the line end, apex 14u further, fill = line color). */
+  :root {
+    --bg:   #FFFFFF;
+    --font: "Inter", "Söhne", -apple-system, BlinkMacSystemFont, "Segoe UI",
+            Helvetica, Arial, sans-serif;
+  }
+  .theme-label { font-weight: 700; font-size: 22px; }
+  .arrow-name  { font-weight: 700; font-size: 18px; }
+  .arrow-spec  { font-weight: 500; font-size: 14px; }
+  .edge        { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+]]></style>
+  <rect x="0" y="0" width="1500" height="540" rx="25" ry="25" fill="var(--bg)" />
+
+
+  <!-- ============================ dark (slate-950) ============================ -->
+  <path d="M25 0 H1475 A25 25 0 0 1 1500 25 V180 H0 V25 A25 25 0 0 1 25 0 Z" fill="#020617" />
+  <text class="theme-label" x="50" y="40" fill="#94A3B8">dark</text>
+
+  <!-- forward flow: 5px solid, flow-line #94A3B8 -->
+  <line class="edge" x1="50"  y1="115" x2="256" y2="115" stroke="#94A3B8" stroke-width="5" />
+  <path d="M256,109 L270,115 L256,121 Z" fill="#94A3B8" />
+  <text class="arrow-name" x="160" y="82"  text-anchor="middle" fill="#E2E8F0">forward flow</text>
+  <text class="arrow-spec" x="160" y="148" text-anchor="middle" fill="#94A3B8">5px solid</text>
+
+  <!-- loop-back: 5px solid, flow-loopback #2DD4BF -->
+  <line class="edge" x1="443" y1="115" x2="649" y2="115" stroke="#2DD4BF" stroke-width="5" />
+  <path d="M649,109 L663,115 L649,121 Z" fill="#2DD4BF" />
+  <text class="arrow-name" x="553" y="82"  text-anchor="middle" fill="#E2E8F0">loop-back</text>
+  <text class="arrow-spec" x="553" y="148" text-anchor="middle" fill="#94A3B8">5px solid</text>
+
+  <!-- conditional: 3px dashed 7 5, flow-line #94A3B8 -->
+  <line class="edge" x1="837" y1="115" x2="1043" y2="115" stroke="#94A3B8" stroke-width="3" stroke-dasharray="7 5" />
+  <path d="M1043,109 L1057,115 L1043,121 Z" fill="#94A3B8" />
+  <text class="arrow-name" x="947" y="82"  text-anchor="middle" fill="#E2E8F0">conditional</text>
+  <text class="arrow-spec" x="947" y="148" text-anchor="middle" fill="#94A3B8">3px dashed 7 5</text>
+
+  <!-- callout: 3px dashed 7 5, callout-stroke #FB923C -->
+  <line class="edge" x1="1230" y1="115" x2="1436" y2="115" stroke="#FB923C" stroke-width="3" stroke-dasharray="7 5" />
+  <path d="M1436,109 L1450,115 L1436,121 Z" fill="#FB923C" />
+  <text class="arrow-name" x="1340" y="82"  text-anchor="middle" fill="#E2E8F0">callout</text>
+  <text class="arrow-spec" x="1340" y="148" text-anchor="middle" fill="#94A3B8">3px dashed 7 5</text>
+
+  <!-- ============================ light (cream #F0EEE6) ======================= -->
+  <rect x="0" y="180" width="1500" height="180" fill="#F0EEE6" />
+  <text class="theme-label" x="50" y="220" fill="#6B6E64">light</text>
+
+  <line class="edge" x1="50"  y1="295" x2="256" y2="295" stroke="#6A6F66" stroke-width="5" />
+  <path d="M256,289 L270,295 L256,301 Z" fill="#6A6F66" />
+  <text class="arrow-name" x="160" y="262" text-anchor="middle" fill="#404442">forward flow</text>
+  <text class="arrow-spec" x="160" y="328" text-anchor="middle" fill="#6B6E64">5px solid</text>
+
+  <line class="edge" x1="443" y1="295" x2="649" y2="295" stroke="#8AB07F" stroke-width="5" />
+  <path d="M649,289 L663,295 L649,301 Z" fill="#8AB07F" />
+  <text class="arrow-name" x="553" y="262" text-anchor="middle" fill="#404442">loop-back</text>
+  <text class="arrow-spec" x="553" y="328" text-anchor="middle" fill="#6B6E64">5px solid</text>
+
+  <line class="edge" x1="837" y1="295" x2="1043" y2="295" stroke="#6A6F66" stroke-width="3" stroke-dasharray="7 5" />
+  <path d="M1043,289 L1057,295 L1043,301 Z" fill="#6A6F66" />
+  <text class="arrow-name" x="947" y="262" text-anchor="middle" fill="#404442">conditional</text>
+  <text class="arrow-spec" x="947" y="328" text-anchor="middle" fill="#6B6E64">3px dashed 7 5</text>
+
+  <line class="edge" x1="1230" y1="295" x2="1436" y2="295" stroke="#D89270" stroke-width="3" stroke-dasharray="7 5" />
+  <path d="M1436,289 L1450,295 L1436,301 Z" fill="#D89270" />
+  <text class="arrow-name" x="1340" y="262" text-anchor="middle" fill="#404442">callout</text>
+  <text class="arrow-spec" x="1340" y="328" text-anchor="middle" fill="#6B6E64">3px dashed 7 5</text>
+
+  <!-- ============================ mono-print (white) ========================== -->
+  <path d="M0 360 H1500 V515 A25 25 0 0 1 1475 540 H25 A25 25 0 0 1 0 515 Z" fill="#FFFFFF" />
+  <text class="theme-label" x="50" y="400" fill="#555555">mono</text>
+
+  <line class="edge" x1="50"  y1="475" x2="256" y2="475" stroke="#3A3A3A" stroke-width="5" />
+  <path d="M256,469 L270,475 L256,481 Z" fill="#3A3A3A" />
+  <text class="arrow-name" x="160" y="442" text-anchor="middle" fill="#1A1A1A">forward flow</text>
+  <text class="arrow-spec" x="160" y="508" text-anchor="middle" fill="#555555">5px solid</text>
+
+  <line class="edge" x1="443" y1="475" x2="649" y2="475" stroke="#999999" stroke-width="5" />
+  <path d="M649,469 L663,475 L649,481 Z" fill="#999999" />
+  <text class="arrow-name" x="553" y="442" text-anchor="middle" fill="#1A1A1A">loop-back</text>
+  <text class="arrow-spec" x="553" y="508" text-anchor="middle" fill="#555555">5px solid</text>
+
+  <line class="edge" x1="837" y1="475" x2="1043" y2="475" stroke="#3A3A3A" stroke-width="3" stroke-dasharray="7 5" />
+  <path d="M1043,469 L1057,475 L1043,481 Z" fill="#3A3A3A" />
+  <text class="arrow-name" x="947" y="442" text-anchor="middle" fill="#1A1A1A">conditional</text>
+  <text class="arrow-spec" x="947" y="508" text-anchor="middle" fill="#555555">3px dashed 7 5</text>
+
+  <line class="edge" x1="1230" y1="475" x2="1436" y2="475" stroke="#1A1A1A" stroke-width="3" stroke-dasharray="7 5" />
+  <path d="M1436,469 L1450,475 L1436,481 Z" fill="#1A1A1A" />
+  <text class="arrow-name" x="1340" y="442" text-anchor="middle" fill="#1A1A1A">callout</text>
+  <text class="arrow-spec" x="1340" y="508" text-anchor="middle" fill="#555555">3px dashed 7 5</text>
+
+</svg>

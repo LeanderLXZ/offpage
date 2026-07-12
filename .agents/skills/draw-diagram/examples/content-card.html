@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Multi-line content card — Flowchart pattern (dark)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* dark palette — slate-950 + bright accent borders
+     See ../SKILL.md §Color Palette */
+  :root {
+    --bg:             #020617;
+    --text:           #E2E8F0;
+    --label-text:     #94A3B8;
+    --action-fill:    rgba(19,78,74,0.4);
+    --action-stroke:  #2DD4BF;
+    --agent-fill:     rgba(14,116,144,0.35);
+    --agent-stroke:   #22D3EE;
+    --terminal-fill:  rgba(30,41,59,0.5);
+    --terminal-stroke:#94A3B8;
+    --flow-line:      #94A3B8;
+    --font: "Inter", "Söhne", -apple-system, BlinkMacSystemFont, "Segoe UI",
+            Helvetica, Arial, sans-serif;
+  }
+
+  html, body { margin: 0; padding: 0; background: var(--bg); font-family: var(--font); }
+  body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 0; box-sizing: border-box; }
+  .diagram { width: 100%; max-width: 825px; }
+  svg { width: 100%; height: auto; display: block; }
+
+  #arrow-flow path { fill: var(--flow-line); }
+
+  .flow-arrow { stroke: var(--flow-line); stroke-width: 5; fill: none;
+                stroke-linecap: round; stroke-linejoin: round; }
+
+  .node-label   { font-weight: 700; font-size: 18px; fill: var(--text); }
+  .node-detail  { font-weight: 500; font-size: 14px; fill: var(--label-text); }
+
+  .role-action   { fill: var(--action-fill);   stroke: var(--action-stroke);   stroke-width: 2; }
+  .role-agent    { fill: var(--agent-fill);    stroke: var(--agent-stroke);    stroke-width: 2; }
+  .role-terminal { fill: var(--terminal-fill); stroke: var(--terminal-stroke); stroke-width: 2; }
+</style>
+</head>
+<body>
+<div class="diagram">
+<!-- A node's WIDTH is text-driven and its HEIGHT grows to fit content. A content card stacks a bold
+  title above one or more 14px detail lines. Two equal-size cards in DIFFERENT role colors
+  (Frontend = agent/cyan, Backend = action/emerald) sit on one flow, centred on the arrow line (y=130).
+  Content x=50→870, y=50→210; 50px symmetric padding. -->
+<svg width="825" height="233" viewBox="0 0 920 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Multi-line content card pattern">
+
+  <defs>
+    <marker id="arrow-flow" viewBox="0 0 14 12" refX="0" refY="6"
+            markerWidth="14" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M 0 0 L 14 6 L 0 12 z" />
+    </marker>
+  </defs>
+
+  <!-- forward flow, horizontal at y=130 (the cards' shared vertical center) -->
+  <line class="flow-arrow" x1="190" y1="130" x2="256" y2="130" marker-end="url(#arrow-flow)" />
+  <line class="flow-arrow" x1="530" y1="130" x2="596" y2="130" marker-end="url(#arrow-flow)" />
+
+  <!-- simple single-line node (60px) -->
+  <rect class="role-terminal" x="50" y="100" width="140" height="60" rx="12" ry="12" />
+  <text class="node-label" x="120" y="137" text-anchor="middle">Client</text>
+
+  <!-- content card — Frontend (agent / cyan), title + 3 detail lines -->
+  <rect class="role-agent" x="270" y="50" width="260" height="160" rx="12" ry="12" />
+  <text class="node-label"  x="400" y="94"  text-anchor="middle">Frontend</text>
+  <text class="node-detail" x="400" y="124" text-anchor="middle">React</text>
+  <text class="node-detail" x="400" y="154" text-anchor="middle">TypeScript</text>
+  <text class="node-detail" x="400" y="184" text-anchor="middle">Tailwind CSS</text>
+
+  <!-- content card — Backend (action / emerald), SAME size, title + 3 detail lines -->
+  <rect class="role-action" x="610" y="50" width="260" height="160" rx="12" ry="12" />
+  <text class="node-label"  x="740" y="94"  text-anchor="middle">Backend</text>
+  <text class="node-detail" x="740" y="124" text-anchor="middle">Node.js</text>
+  <text class="node-detail" x="740" y="154" text-anchor="middle">Express</text>
+  <text class="node-detail" x="740" y="184" text-anchor="middle">PostgreSQL</text>
+</svg>
+</div>
+</body>
+</html>

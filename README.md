@@ -1,7 +1,8 @@
 # Offpage
 
-Offpage is a work-scoped, multi-character roleplay architecture for
-long-form novels.
+Offpage 是一个面向长篇小说的、以作品为作用域（work-scoped）的
+多角色深度扮演架构：从原作提取角色行为与世界设定，
+支撑忽略剧情之外（off-page）的角色模拟。
 
 The project is designed around two work-scoped package families:
 

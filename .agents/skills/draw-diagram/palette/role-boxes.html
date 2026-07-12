@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Node role boxes across themes — Flowchart reference plate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* Reference plate (NOT a single-theme diagram): the 10 node roles rendered
+     in all three presets at once, so colors live INLINE on each rect/text
+     (one :root can't carry three palettes). See ../SKILL.md §Color Palette
+     + §Node shapes (border policy differs by theme). */
+  :root {
+    --bg:   #FFFFFF;
+    --font: "Inter", "Söhne", -apple-system, BlinkMacSystemFont, "Segoe UI",
+            Helvetica, Arial, sans-serif;
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg); font-family: var(--font); }
+  body { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .diagram { width: 100%; }
+  svg { width: 100%; height: auto; display: block; }
+
+  .theme-label { font-weight: 700; font-size: 22px; }
+  .node-label  { font-weight: 700; font-size: 18px; }
+</style>
+</head>
+<body>
+<div class="diagram">
+<!-- The 8 node roles + 2 accent slots, one labelled box each, repeated per theme.
+  Border policy is theme-specific and shown faithfully:
+    dark  → EVERY role bordered, uniform 2px, over a translucent fill
+    light → SOLID fill, NO border, EXCEPT data / state / callout (2px)
+    mono  → SOLID grey fill, NO border, EXCEPT data / state / callout (2px)
+  All bordered boxes share the SAME 2px width across every theme.
+  Box = 60px single-line node (rx=12); label = the role name (18px/700 --text; callout uses --callout-text).
+  Grid: width 140, pitch 160 (gap 20), x = 50 + 160·i; band = 180 tall; box_y = band_top + 72. -->
+<svg width="1680" height="540" viewBox="0 0 1680 540" xmlns="http://www.w3.org/2000/svg"
+     role="img" aria-label="The 8 node roles plus 2 accent slots rendered across light, dark and mono-print themes">
+
+  <!-- ============================ dark (slate-950) ============================ -->
+  <path d="M25 0 H1655 A25 25 0 0 1 1680 25 V180 H0 V25 A25 25 0 0 1 25 0 Z" fill="#020617" />
+  <text class="theme-label" x="50" y="40" fill="#94A3B8">dark</text>
+
+  <rect x="50"   y="72" width="140" height="60" rx="12" ry="12" fill="rgba(19,78,74,0.4)"   stroke="#2DD4BF" stroke-width="2" />
+  <text class="node-label" x="120"  y="109" text-anchor="middle" fill="#E2E8F0">action</text>
+  <rect x="210"  y="72" width="140" height="60" rx="12" ry="12" fill="rgba(14,116,144,0.35)" stroke="#22D3EE" stroke-width="2" />
+  <text class="node-label" x="280"  y="109" text-anchor="middle" fill="#E2E8F0">agent</text>
+  <rect x="370"  y="72" width="140" height="60" rx="12" ry="12" fill="rgba(76,29,149,0.4)"  stroke="#A78BFA" stroke-width="2" />
+  <text class="node-label" x="440"  y="109" text-anchor="middle" fill="#E2E8F0">data</text>
+  <rect x="530"  y="72" width="140" height="60" rx="12" ry="12" fill="rgba(30,58,138,0.4)"  stroke="#60A5FA" stroke-width="2" />
+  <text class="node-label" x="600"  y="109" text-anchor="middle" fill="#E2E8F0">decision</text>
+  <rect x="690"  y="72" width="140" height="60" rx="12" ry="12" fill="rgba(136,19,55,0.35)" stroke="#FB7185" stroke-width="2" />
+  <text class="node-label" x="760"  y="109" text-anchor="middle" fill="#E2E8F0">event</text>
+  <rect x="850"  y="72" width="140" height="60" rx="12" ry="12" fill="rgba(120,53,15,0.4)"  stroke="#FBBF24" stroke-width="2" />
+  <text class="node-label" x="920"  y="109" text-anchor="middle" fill="#E2E8F0">state</text>
+  <rect x="1010" y="72" width="140" height="60" rx="12" ry="12" fill="rgba(30,41,59,0.5)"   stroke="#94A3B8" stroke-width="2" />
+  <text class="node-label" x="1080" y="109" text-anchor="middle" fill="#E2E8F0">terminal</text>
+  <rect x="1170" y="72" width="140" height="60" rx="12" ry="12" fill="rgba(251,146,60,0.25)" stroke="#FB923C" stroke-width="2" />
+  <text class="node-label" x="1240" y="109" text-anchor="middle" fill="#FDBA74">callout</text>
+  <rect x="1330" y="72" width="140" height="60" rx="12" ry="12" fill="rgba(6,78,59,0.4)"    stroke="#34D399" stroke-width="2" />
+  <text class="node-label" x="1400" y="109" text-anchor="middle" fill="#E2E8F0">accent1</text>
+  <rect x="1490" y="72" width="140" height="60" rx="12" ry="12" fill="rgba(112,26,117,0.4)" stroke="#E879F9" stroke-width="2" />
+  <text class="node-label" x="1560" y="109" text-anchor="middle" fill="#E2E8F0">accent2</text>
+
+  <!-- ============================ light (cream #F0EEE6) ======================= -->
+  <rect x="0" y="180" width="1680" height="180" fill="#F0EEE6" />
+  <text class="theme-label" x="50" y="220" fill="#6B6E64">light</text>
+
+  <rect x="50"   y="252" width="140" height="60" rx="12" ry="12" fill="#C3DCB7" />
+  <text class="node-label" x="120"  y="289" text-anchor="middle" fill="#404442">action</text>
+  <rect x="210"  y="252" width="140" height="60" rx="12" ry="12" fill="#C2D6E5" />
+  <text class="node-label" x="280"  y="289" text-anchor="middle" fill="#404442">agent</text>
+  <rect x="370"  y="252" width="140" height="60" rx="12" ry="12" fill="#EAF0F4" stroke="#6E8CAF" stroke-width="2" />
+  <text class="node-label" x="440"  y="289" text-anchor="middle" fill="#404442">data</text>
+  <rect x="530"  y="252" width="140" height="60" rx="12" ry="12" fill="#C2C5D9" />
+  <text class="node-label" x="600"  y="289" text-anchor="middle" fill="#404442">decision</text>
+  <rect x="690"  y="252" width="140" height="60" rx="12" ry="12" fill="#EFC6BA" />
+  <text class="node-label" x="760"  y="289" text-anchor="middle" fill="#404442">event</text>
+  <rect x="850"  y="252" width="140" height="60" rx="12" ry="12" fill="#F7F4E4" stroke="#C6A24F" stroke-width="2" />
+  <text class="node-label" x="920"  y="289" text-anchor="middle" fill="#404442">state</text>
+  <rect x="1010" y="252" width="140" height="60" rx="12" ry="12" fill="#E5DCBE" />
+  <text class="node-label" x="1080" y="289" text-anchor="middle" fill="#404442">terminal</text>
+  <rect x="1170" y="252" width="140" height="60" rx="12" ry="12" fill="#FBF8EE" stroke="#D89270" stroke-width="2" />
+  <text class="node-label" x="1240" y="289" text-anchor="middle" fill="#B26C3F">callout</text>
+  <rect x="1330" y="252" width="140" height="60" rx="12" ry="12" fill="#C4DDD1" />
+  <text class="node-label" x="1400" y="289" text-anchor="middle" fill="#404442">accent1</text>
+  <rect x="1490" y="252" width="140" height="60" rx="12" ry="12" fill="#DBD4C1" />
+  <text class="node-label" x="1560" y="289" text-anchor="middle" fill="#404442">accent2</text>
+
+  <!-- ============================ mono-print (white) ========================== -->
+  <path d="M0 360 H1680 V515 A25 25 0 0 1 1655 540 H25 A25 25 0 0 1 0 515 Z" fill="#FFFFFF" />
+  <text class="theme-label" x="50" y="400" fill="#555555">mono</text>
+
+  <rect x="50"   y="432" width="140" height="60" rx="12" ry="12" fill="#D8D8D8" />
+  <text class="node-label" x="120"  y="469" text-anchor="middle" fill="#1A1A1A">action</text>
+  <rect x="210"  y="432" width="140" height="60" rx="12" ry="12" fill="#ECECEC" />
+  <text class="node-label" x="280"  y="469" text-anchor="middle" fill="#1A1A1A">agent</text>
+  <rect x="370"  y="432" width="140" height="60" rx="12" ry="12" fill="#F2F2F2" stroke="#888888" stroke-width="2" />
+  <text class="node-label" x="440"  y="469" text-anchor="middle" fill="#1A1A1A">data</text>
+  <rect x="530"  y="432" width="140" height="60" rx="12" ry="12" fill="#E0E0E0" />
+  <text class="node-label" x="600"  y="469" text-anchor="middle" fill="#1A1A1A">decision</text>
+  <rect x="690"  y="432" width="140" height="60" rx="12" ry="12" fill="#EAEAEA" />
+  <text class="node-label" x="760"  y="469" text-anchor="middle" fill="#1A1A1A">event</text>
+  <rect x="850"  y="432" width="140" height="60" rx="12" ry="12" fill="#DCDCDC" stroke="#555555" stroke-width="2" />
+  <text class="node-label" x="920"  y="469" text-anchor="middle" fill="#1A1A1A">state</text>
+  <rect x="1010" y="432" width="140" height="60" rx="12" ry="12" fill="#E5E5E5" />
+  <text class="node-label" x="1080" y="469" text-anchor="middle" fill="#1A1A1A">terminal</text>
+  <rect x="1170" y="432" width="140" height="60" rx="12" ry="12" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2" />
+  <text class="node-label" x="1240" y="469" text-anchor="middle" fill="#1A1A1A">callout</text>
+  <rect x="1330" y="432" width="140" height="60" rx="12" ry="12" fill="#EEEEEE" />
+  <text class="node-label" x="1400" y="469" text-anchor="middle" fill="#1A1A1A">accent1</text>
+  <rect x="1490" y="432" width="140" height="60" rx="12" ry="12" fill="#F5F5F5" />
+  <text class="node-label" x="1560" y="469" text-anchor="middle" fill="#1A1A1A">accent2</text>
+</svg>
+</div>
+</body>
+</html>

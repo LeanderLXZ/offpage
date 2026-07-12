@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="825" height="540" viewBox="0 0 840 550" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Hop crossover for solid and dashed edges">
+  <style type="text/css"><![CDATA[
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+text { font-family: var(--font); }
+/* dark palette — slate-950 + bright accent borders
+     See ../SKILL.md §Color Palette */
+  :root {
+    --bg:             #020617;
+    --text:           #E2E8F0;
+    --label-text:     #94A3B8;
+    --action-fill:    rgba(19,78,74,0.4);
+    --action-stroke:  #2DD4BF;
+    --agent-fill:     rgba(14,116,144,0.35);
+    --agent-stroke:   #22D3EE;
+    --terminal-fill:  rgba(30,41,59,0.5);
+    --terminal-stroke:#94A3B8;
+    --data-fill:      rgba(76,29,149,0.4);
+    --data-stroke:    #A78BFA;
+    --state-fill:     rgba(120,53,15,0.4);
+    --state-stroke:   #FBBF24;
+    --callout-fill:   rgba(251,146,60,0.25);
+    --callout-stroke: #FB923C;
+    --callout-text:   #FDBA74;
+    --flow-line:      #94A3B8;
+    --flow-loopback:  #2DD4BF;
+    --container:      #475569;
+    --container-lbl:  #94A3B8;
+    --font: "Inter", "Söhne", -apple-system, BlinkMacSystemFont, "Segoe UI",
+            Helvetica, Arial, sans-serif;
+  }
+
+  #arrow-flow path { fill: var(--flow-line); }
+
+  .flow-arrow        { stroke: var(--flow-line); stroke-width: 5; fill: none;
+                       stroke-linecap: round; stroke-linejoin: round; }
+  .flow-arrow.dashed { stroke-width: 3; stroke-dasharray: 7 5; }
+
+  .edge-label    { font-weight: 500; font-size: 18px; fill: var(--label-text); }
+
+  .node-label    { font-weight: 700; font-size: 18px; fill: var(--text); }
+  .role-action   { fill: var(--action-fill); stroke: var(--action-stroke); stroke-width: 2; }
+  .data-rect     { fill: var(--data-fill);   stroke: var(--data-stroke);   stroke-width: 2; }
+]]></style>
+  <rect x="0" y="0" width="840" height="550" rx="25" ry="25" fill="var(--bg)" />
+
+
+  <defs>
+    <marker id="arrow-flow" viewBox="0 0 14 12" refX="0" refY="6"
+            markerWidth="14" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M 0 0 L 14 6 L 0 12 z" />
+    </marker>
+  </defs>
+
+  <!-- vertical edge E -> F drawn FIRST (straight, solid, no label); the horizontals hop OVER it -->
+  <line class="flow-arrow" x1="420" y1="110" x2="420" y2="426" marker-end="url(#arrow-flow)" />
+
+  <!-- A -> B SOLID horizontal, hopping the vertical at x=420 with an r=8 upward arc -->
+  <path class="flow-arrow"
+        d="M 170,210 L 412,210 A 8 8 0 0 1 428,210 L 656,210"
+        marker-end="url(#arrow-flow)" />
+
+  <!-- C -> D DASHED horizontal, hopping the same vertical at x=420 -->
+  <path class="flow-arrow dashed"
+        d="M 170,340 L 412,340 A 8 8 0 0 1 428,340 L 656,340"
+        marker-end="url(#arrow-flow)" />
+
+  <!-- "hops over" label on each horizontal's long left segment, offset above the line -->
+  <g transform="translate(291,196)">
+    <text class="edge-label" text-anchor="middle" y="4">hops over</text>
+  </g>
+  <g transform="translate(291,326)">
+    <text class="edge-label" text-anchor="middle" y="4">hops over</text>
+  </g>
+
+  <!-- nodes: E / F violet (data) vertical; A/B and C/D green (action) horizontals -->
+  <rect class="data-rect"  x="360" y="50"  width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="420" y="87"  text-anchor="middle">E</text>
+
+  <rect class="data-rect"  x="360" y="440" width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="420" y="477" text-anchor="middle">F</text>
+
+  <rect class="role-action" x="50"  y="180" width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="110" y="217" text-anchor="middle">A</text>
+
+  <rect class="role-action" x="670" y="180" width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="730" y="217" text-anchor="middle">B</text>
+
+  <rect class="role-action" x="50"  y="310" width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="110" y="347" text-anchor="middle">C</text>
+
+  <rect class="role-action" x="670" y="310" width="120" height="60" rx="12" ry="12" />
+  <text class="node-label" x="730" y="347" text-anchor="middle">D</text>
+
+</svg>

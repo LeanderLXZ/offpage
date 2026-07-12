@@ -1,37 +1,47 @@
+<!-- holo:section start -->
 <!--
-MAINTENANCE — read before editing this file.
-This file is an index for fast project follow-up, not a detailed manual.
-1. Write "what / where to find"; link to authoritative sources (code paths, docs/*.md, schemas, logs).
-2. Prefer deletion over addition; check if a new item merges into an existing one before adding.
-3. Describe the current design only — no "legacy / deprecated / formerly / renamed from".
-4. No real book / character / plot names — use placeholders (`<work_id>`, `Character A`, `S001`).
-Shorter is better than longer; push detail into the linked source rather than growing this file.
+MAINTENANCE — 编辑本文件前请先阅读。
+稳定的项目元规则。保持精简；仅在规则本身变化时更新。
+Sentinel 纪律（参见 CLAUDE.md §plugin 管理段）：sentinel `<!-- holo:section start/end -->` 内的内容是 plugin canonical，`/holo:update` 会覆写；项目专属新增内容写在 sentinel 之外的 gap 里。
 -->
+<!-- holo:section end -->
 
-# Project Background
+# 项目背景 <!-- holo:heading -->
 
-Long-lived novel character roleplay system. A reusable character-asset
-system that can be updated and loaded across sessions — not a one-off
-prompt experiment.
+<!-- holo:section start -->
+项目的"为什么" —— 它是什么、解决什么问题、指导原则是什么、
+构建顺序是什么。未来的 AI 会话在动代码之前读这里，
+理解项目的意图。
 
-## Goal
+本文件保持简短稳定。易变细节（当前状态、路线图）属于
+`handoff.md`（`§Current State` 表 + `§Next Steps` 表）。
+<!-- holo:section end -->
 
-Deep, stable roleplay of specific novel characters — consistent
-personality, memory, knowledge boundaries, and behavioral patterns
-across long conversations and multiple sessions.
+长期演进的小说角色扮演系统。一个可跨会话更新与加载的
+可复用角色资产系统 —— 而非一次性的 prompt 实验。
 
-## Guiding Principles
+## 目标 <!-- holo:heading -->
 
-- **Deep roleplay over surface mimicry.** Behavioral / decision consistency is priority; tone is secondary.
-- **Original novel = highest authority.** All character data traces to source text.
-- **Incremental, not from scratch.** Long novels processed in stages; data builds over time.
-- **Layered, not one giant prompt.** Source / world / character / user / runtime — each layer has clear boundaries.
+对特定小说角色进行深度、稳定的角色扮演 —— 在长对话与
+多次会话中保持一致的性格、记忆、知识边界与行为模式。
 
-## Build Order
+## 指导原则 <!-- holo:heading -->
 
-1. Character-asset system (schemas, data model)
-2. Extraction workflows (stage processing, incremental updates)
-3. Runtime roleplay engine (loading, retrieval, session management)
-4. Terminal integrations (agent, app, MCP)
+- **深度扮演优先于表面模仿。** 行为 / 决策一致性是首要目标；语气其次。
+- **原著小说 = 最高权威。** 所有角色数据均可追溯到原文。
+- **增量式，而非从零重来。** 长篇小说分阶段处理；数据随时间积累。
+- **分层，而非单个巨型 prompt。** 原文 / 世界 / 角色 / 用户 / 运行时 —— 每一层边界清晰。
 
-Requirements → `requirements.md`. Architecture → `architecture.md`.
+## 构建顺序 <!-- holo:heading -->
+
+1. 角色资产系统（schema、数据模型）
+2. 提取工作流（阶段化处理、增量更新）
+3. 运行时角色扮演引擎（加载、检索、会话管理）
+4. 终端集成（agent、app、MCP）
+
+## 权威指针 <!-- holo:heading -->
+
+<!-- holo:section start -->
+- 需求细节 → `requirements.md`
+- 架构细节 → `architecture.md`
+<!-- holo:section end -->

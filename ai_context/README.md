@@ -8,11 +8,16 @@ This file is an index for fast project follow-up, not a detailed manual.
 Shorter is better than longer; push detail into the linked source rather than growing this file.
 -->
 
-# AI Context
+# AI 上下文 <!-- holo:heading -->
 
-Compressed handoff index for future AI sessions. Each file points to
-authoritative sources instead of re-stating them.
+<!-- holo:section start -->
+供未来 AI 会话使用的压缩 handoff 索引。每个文件都指向
+权威来源，而不是重述其内容。
 
-Read `instructions.md` first — it lists the session-start reading order.
-Only load heavier layers (`logs/change_logs/`, `logs/review_reports/`,
-`docs/architecture/`, raw sources) when the task directly requires it.
+先读 `instructions.md` —— 它列出会话起点的阅读顺序。
+仅当任务直接需要时才加载更重的层（`logs/change_logs/`、
+`logs/review_reports/`、`docs/`、原始输入）。
+<!-- holo:section end -->
+
+本项目收窄：延迟加载的重层是 `docs/architecture/`（而非整个 `docs/`）——
+`docs/todo_list.md` 等顶层文件已在 `instructions.md` 的会话起点阅读顺序中。
