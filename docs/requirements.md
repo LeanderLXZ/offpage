@@ -1,4 +1,20 @@
-# 项目需求文档
+# 需求 <!-- holo:heading -->
+
+<!-- holo:section start -->
+长篇、权威的需求文档。本文件是真理来源；
+`ai_context/requirements.md` 是其压缩索引。
+
+两层分离：
+
+- **本文件**（`docs/requirements.md`）—— 完整的需求陈述、
+  验收判准、边界情况、理据。可以很长。可以用
+  项目工作语言撰写（不必是英文）。
+- **`ai_context/requirements.md`** —— 压缩索引，每段 2–5 行，
+  以 `→ docs/requirements.md §N` 指回本文件。
+
+这一配对是 `ai_context/conventions.md` §Cross-File
+Alignment 的其中一行 —— 改其一另一方必须同步移动。
+<!-- holo:section end -->
 
 本文档是用户对 Offpage 的核心需求规范。所有架构设计、Schema 定义、
 提取流程和运行时加载策略都应以本文档为最终权威。
@@ -2275,6 +2291,8 @@ Backend `run()` 接受可选 `lane_name` 参数，用于在 PID 打印和 heartb
   `M-S###-##` / `E-S###-##` / `SC-S###-##` / `SN-S###-##` 家族对齐
 - `stage_title` 是人类可读的中文短标题（如"主角初登场"，长度由 schema
   硬门控），仅用于 bootstrap 阶段选择时展示给用户
+- `stage_title` 的内容语言跟随作品语言（中文作品即中文短标题；与
+  `ai_context/conventions.md` §Naming and Identifiers 的规则一致）
 - `stage_id` 在世界包和角色包间必须一致
 
 #### 出口验证：超限 stage 自动重跑
@@ -3386,3 +3404,7 @@ SQLite 是运行时的检索格式，启动时从提取产出导入构建，本�
 3. 构建专有名词表（从提取产出中自动生成）
 4. 构建 SQLite FTS5 索引（从提取产出导入）
 5. （可选）添加 embedding 向量列作为第二级兜底
+
+## 段 <!-- holo:heading -->
+
+_(none yet — delete this marker once content is added)_

@@ -1,10 +1,20 @@
-# TODO List Archived（归档清单）
+# TODO 清单 —— 归档 <!-- holo:heading -->
+
+<!-- holo:section start -->
+已完成 / 已废弃任务的精简归档。**精简**意为：标题 +
+一句话总结 + 链接到对应的 `logs/change_logs/` 条目。完整细节
+存于 git 历史与变更日志中，不在此处。
+
+兄弟文件：`docs/todo_list.md`（活动队列 + 格式契约）。
+活动队列中的任务完成或被废弃时移入此处 —— 精确移动规则参见
+活动文件的 `## File guide → How to update entries`。
+<!-- holo:section end -->
 
 ---
 
 ## File guide
 
-### Purpose
+### 用途
 
 接收从 `docs/todo_list.md` 移走的两类任务条目：
 
@@ -71,7 +81,27 @@
 
 ---
 
-## Completed
+## Format <!-- holo:heading -->
+
+<!-- holo:section start -->
+```
+### [T-XXX] <title>
+
+- **Completion form**: <commit / squash / merge / log-only>
+- **Summary**: <one-line outcome>
+- **Log**: <link to logs/change_logs/YYYY-MM-DD_HHMMSS_slug.md>
+```
+
+条目在各段底部追加，禁止重排。
+
+---
+<!-- holo:section end -->
+
+## Completed <!-- holo:heading -->
+
+<!-- holo:section start -->
+<!-- 已落地的任务。仅精简条目。 -->
+<!-- holo:section end -->
 
 ### [T-EXTRACTION-PKG-RESTRUCTURE] automation 包改名 extraction + 内部目录重排 + validation 框架预留位 · 完成于 2026-05-13 · 完整完成
 
@@ -158,9 +188,12 @@
 - 1 行摘要：原方案候选"字面 17 条" vs 实际方案"指针式"；`docs/architecture/extraction_workflow.md:277` 与 `docs/requirements.md:2139` 改为"以 `schemas/character/stage_snapshot.schema.json` 的 `required` 列表为准"，去掉具体数字与字段示例，避免下次 schema 增减字段时再次漂移。
 - 关联 log: [logs/change_logs/2026-04-27_185531_char-snapshot-required-fields-pointer.md](../logs/change_logs/2026-04-27_185531_char-snapshot-required-fields-pointer.md)
 
----
+## Abandoned <!-- holo:heading -->
 
-## Abandoned
+<!-- holo:section start -->
+<!-- 完成前被放弃的任务。精简条目；对应的 change-log
+     条目必须说明 WHY 该任务被放弃。 -->
+<!-- holo:section end -->
 
 ### [T-CODEX-RATE-LIMIT] CodexBackend 错误分类对齐 rate-limit / 429 / 5h_window · 废弃于 2026-05-12
 

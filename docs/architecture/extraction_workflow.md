@@ -59,7 +59,10 @@
 - 完成门控：每个 chunk 必须**文件存在 + JSON 解析通过 + jsonschema 通过 +
   `len(summaries) == 章节数`** 四条全部满足才视为完成（`_chunk_passes_full_check`
   单一判据，skip 路径 / 最终 gate / `reconcile_with_disk` 三处共用，避免
-  partial / stale 文件从任何一道关漏过）；有任意 chunk 不满足 → 阻断并 `sys.exit(1)`
+  partial / stale 文件从任何一道关漏过）；有任意 chunk 不满足 → 阻断并 `sys.exit(1)`。
+  门控中「章节数」期望值由 `extraction/persona_extraction/lifecycle/progress.py::_expected_chapter_count`
+  从 chunk entry 的 `chapters` 字段解析（`C####-C####` 格式；light_novel 模式
+  degenerate 单章区间如 `C0001-C0001` 解析为期望 1 章，解析失败返回 `None`）
 - **Recovery sweep**（main ThreadPool 之后、最终 gate 之前触发）：扫
   `phase0_summaries.json` 找 `state=='failed'` 且 error_message 含
   `'timed out'` 或 `'error_max_turns'` 且 `recovery_attempted==False`

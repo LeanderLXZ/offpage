@@ -76,7 +76,7 @@
 **位置**：`sources/works/{work_id}/manifest.json`
 **关键字段**：work_id, title, language, source_types, ingestion_status, paths, `structure_mode`（enum `monolithic` / `light_novel`，**必填** — schema `required`，缺省即校验失败；phase 0/1 双模式调度信号）
 **生成时机**：`prompts/ingestion/原始资料规范化.md` 执行规范化时产出（`structure_mode` 由 task 步骤 2 LLM 判定：先输出 `判定 + 依据 + 置信度`，置信度 ≥ 0.8 直接填、< 0.8 停手等用户确认）。
-**跨文件契约**：`structure_mode` ⇔ `chapter_index` items profile（monolithic 禁 6 字段、light_novel 必填 4 + 可选 2）由 `extraction/ingestion/validator.py` 跨文件断言；canon 端 `works/{work_id}/manifest.json` 由 `manifests.write_works_manifest` 拷贝该字段。
+**跨文件契约**：`structure_mode` ⇔ `chapter_index` items profile（monolithic 禁 6 字段、light_novel 必填 4 + 可选 2）由 `extraction/ingestion/validator.py` 跨文件断言；canon 端 `works/{work_id}/manifest.json` 由 `manifests.write_works_manifest` 拷贝该字段。phase 0/1 双模式调度统一经 `extraction.persona_extraction.lifecycle.manifests.read_structure_mode` 读取该字段：source manifest 为唯一权威（决策 #27j），无隐式默认；source 值缺失、或 works manifest 拷贝与 source 不一致时直接 raise `ValueError`（fail-loudly，不静默回填）。
 
 ---
 

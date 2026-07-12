@@ -1,175 +1,145 @@
+<!-- holo:section start -->
 <!--
-MAINTENANCE — read before editing this file.
-This file is an index for fast project follow-up, not a detailed manual.
-1. Write "what / where to find"; link to authoritative sources (code paths, docs/*.md, schemas, logs).
-2. Prefer deletion over addition; check if a new item merges into an existing one before adding.
-3. Describe the current design only — no "legacy / deprecated / formerly / renamed from".
-4. No real book / character / plot names — use placeholders (`<work_id>`, `Character A`, `S001`).
-Shorter is better than longer; push detail into the linked source rather than growing this file.
+MAINTENANCE — 编辑本文件前请先阅读。
+本文件是用于快速回到项目状态的索引，不是详细手册。
+1. 写"是什么 / 去哪找"；链接到权威源（代码路径、docs/*.md、schema、logs）。
+2. 优先删减而非新增；新增前先检查是否能并入已有条目。
+3. 只描述当前设计 —— 不写"legacy / deprecated / formerly / renamed from"。
+4. 不出现真实产品 / 客户 / 私有内容名称 —— 使用结构性占位符。
+5. 精简要求：
+   - 越短越好。每条都是总结，不是细节堆叠。
+   - 精简的同时也要保证信息的准确性和有效性，不要为了精简而漏掉重要信息。
+   - 目标每条 ≤ 5 行，更长的细节推到链接的来源里（docs/<topic>.md）。
+   - 不要压缩或改动与当前编辑无关的内容。
+6. Sentinel 纪律（参见 CLAUDE.md §plugin 管理段）：sentinel `<!-- holo:section start/end -->` 内的内容是 plugin canonical，`/holo:update` 会覆写；项目专属新增内容写在 sentinel 之外的 gap 里。
 -->
+<!-- holo:section end -->
 
-# Architecture Snapshot
+# 架构快照 <!-- holo:heading -->
 
-Compressed summary. Authoritative sources:
-`docs/architecture/system_overview.md`, `data_model.md`,
-`schema_reference.md`, `extraction_workflow.md`,
-`extraction/README.md`, `extraction/repair/`.
+<!-- holo:section start -->
+系统架构的压缩摘要，供快速跟进。
 
-## Top-Level Structure
+**权威来源**：详细架构文档存放于
+`docs/architecture/`。本文件每一段都指向对应的
+细节文档。
 
-- `sources/` — raw novel inputs + normalized source packages
-- `works/` — source-grounded canonical packages (world / characters / analysis / indexes)
-- `users/` — user-specific mutable state, grouped by `user_id`
-- `simulation/` — runtime-engine lifecycle, retrieval, service contracts
-- `prompts/` — manual-only (ingest / review / supplement / cold start)
-- `schemas/` — persistence + runtime-request schemas
-- `interfaces/` — future terminal adapters
-- `extraction/` — extraction orchestrator (Python)
-- `docs/architecture/` — formal architecture docs (incl. schema reference)
-- `ai_context/` — this compressed handoff
+本文件存在的目的是让会话起点无需加载每一份架构文档。
+当架构发生变化时，两层须同步更新 —— 该配对是
+`conventions.md` §Cross-File Alignment 的其中一行。
+<!-- holo:section end -->
 
-## System Layers
+权威来源：
+`docs/architecture/system_overview.md`、`data_model.md`、
+`schema_reference.md`、`extraction_workflow.md`、
+`extraction/README.md`、`extraction/repair/`。
 
-1. **Source** — raw text, normalized chapters, metadata
-2. **Extraction** — `works/{work_id}/analysis/` (progress, evidence, conflicts)
-3. **World** — `works/{work_id}/world/` (foundation, stages, events, locations, factions, cast)
-4. **Character** — `works/{work_id}/characters/{character_id}/` (identity, memory, voice, behavior, boundaries, stage snapshots)
-5. **User** — `users/{user_id}/` (locked binding, long-term profile, relationship core, contexts, sessions)
-6. **Simulation Engine** — bootstrap, load, retrieval, writeback, close/merge
-7. **Interface** — terminal adapters (future)
+## 顶层结构 <!-- holo:heading -->
 
-## Key Boundaries
+- `sources/` —— 原始小说输入 + 规范化的来源包
+- `works/` —— 以原文为据的 canonical 包（world / characters / analysis / indexes）
+- `users/` —— 按 `user_id` 分组的用户侧可变状态
+- `simulation/` —— 运行时引擎的生命周期、检索、服务契约
+- `prompts/` —— 仅手动使用（摄取 / 复审 / 补充 / 冷启动）
+- `schemas/` —— 持久化 + 运行时请求 schema
+- `interfaces/` —— 未来的终端适配器
+- `extraction/` —— 抽取编排器（Python）
+- `docs/architecture/` —— 正式架构文档（含 schema reference）
+- `logs/` —— 变更日志 / 评审报告 / 文件快照（change_logs / review_reports / file_snapshots）
+- `ai_context/` —— 本压缩交接
 
-- Work-scoped canon under `works/`; user-mutable under `users/`.
-- User conversations never rewrite canonical world / character data.
-- One `user_id` = one locked work-target-counterpart binding.
-- Chinese works use Chinese identifiers and path segments.
-- JSON field names may remain English; content text = work language.
+## 系统分层 <!-- holo:heading -->
 
-## Runtime Load Formula
+1. **来源** —— 原始文本、规范化章节、元数据
+2. **抽取** —— `works/{work_id}/analysis/`（progress、evidence、conflicts）
+3. **世界** —— `works/{work_id}/world/`（foundation、stages、events、locations、factions、cast）
+4. **角色** —— `works/{work_id}/characters/{character_id}/`（identity、memory、voice、behavior、boundaries、stage snapshots）
+5. **用户** —— `users/{user_id}/`（锁定绑定、长期档案、关系核心、上下文、会话）
+6. **模拟引擎** —— 启动、加载、检索、回写、关闭 / 合并
+7. **界面** —— 终端适配器（未来）
 
-Startup order:
+## 关键边界 <!-- holo:heading -->
 
-1. World foundation (`foundation.json` + `fixed_relationships.json`) + selected world-stage snapshot
-2. Target character `identity.json` (incl. `core_wounds`, `key_relationships`) + self-contained stage snapshot (carries inline `failure_modes` / `voice_state` / `behavior_state` / `boundary_state`)
-3. `memory_timeline` recent 2 stages full; `memory_digest.jsonl` + `world_event_digest.jsonl` stage 1..N filtered
-4. `scene_archive` most recent `scene_fulltext_window` `full_text` scenes (default 10; summaries via FTS5 only)
-5. Vocab dict → jieba
-6. User role binding + long-term profile + relationship core
-7. Current context manifest + `character_state.json` (relationship_delta + context_memories)
-8. Recent session summaries
+- 作品域 canon 数据在 `works/` 下；用户可变数据在 `users/` 下。
+- 用户对话永不改写权威的世界 / 角色数据。
+- 一个 `user_id` = 一个锁定的「作品-目标角色-对手角色」绑定。
+- 中文作品使用中文标识符与路径段。
+- JSON 字段名可保持英文；内容文本 = 作品语言。
 
-On-demand: events, locations, factions, history, full transcripts,
-archive records, raw chapters, FTS5 / embedding retrieval.
+## 运行时加载公式
 
-Full tier model → `simulation/retrieval/load_strategy.md`.
+启动一次性加载（按序）：世界 foundation（`foundation.json` + `fixed_relationships.json`）+ 选定世界阶段快照 → 角色常量层（`identity.json` + `target_baseline.json`）+ 自包含阶段快照（内联 `failure_modes` / voice / behavior / boundary state）→ `memory_timeline` 最近 2 阶段全量 + `memory_digest.jsonl` / `world_event_digest.jsonl` 按阶段 1..N 过滤 → `scene_archive` 最近 `scene_fulltext_window` 条 `full_text`（默认 10；summary 仅走 FTS5）→ 词表 → jieba → 用户角色绑定 + 长期档案 + 关系核心 → 当前 context manifest + `character_state.json` → 最近会话摘要。
+按需加载：events / locations / factions / history、完整对话转写、archive 记录、原始章节、FTS5 / embedding 检索。
+完整分层模型 → `simulation/retrieval/load_strategy.md` + `docs/architecture/system_overview.md` §运行时加载公式。
 
-## Stage Model
+## 阶段模型
 
-- stage (extraction) = stage (runtime), 1:1 on `stage_id`.
-- `stage_catalog.json` = bootstrap selector (not runtime-loaded).
-- `world_event_digest.jsonl` = startup-loaded, filtered 1..N.
-- Stage N cumulative through 1..N; latest = active present.
-- User picks stage at setup; applies to target + canon-backed user roles.
+- 阶段（抽取）= 阶段（运行时），按 `stage_id` 1:1 对应。
+- `stage_catalog.json` = 启动阶段选择器（运行时不加载）。
+- `world_event_digest.jsonl` = 启动时加载，按 1..N 过滤。
+- 阶段 N 累积覆盖 1..N；最新阶段 = 活跃的当下。
+- 用户在初始设置时选定阶段；同时作用于目标角色 + 有原著依据的用户角色。
 
-## Context Lifecycle
+## 上下文生命周期
 
-`ephemeral` → `persistent` → `merged`. Session state updates
-continuously during live roleplay; `long_term_profile` +
-`relationship_core` update only after explicit merge at close. Merge is
-append-first (never destructive overwrite).
+`ephemeral` → `persistent` → `merged`。实时角色扮演期间会话状态
+持续更新；`long_term_profile` + `relationship_core` 仅在关闭时
+显式合并后更新。合并是追加优先的（永不做破坏性覆盖）。
 
-## Self-Contained Stage Snapshots
+## 自包含阶段快照
 
-Each `stage_snapshots/{stage_id}.json` carries full character state
-(voice_state, behavior_state with `core_goals` / `obsessions`,
-boundary_state, `failure_modes` (inline 4 sub-classes), relationships,
-personality, mood, knowledge, `character_arc`). Runtime loads a single
-snapshot — no baseline merge required.
+每个 `stage_snapshots/{stage_id}.json` 携带完整角色状态（voice / behavior / boundary / `failure_modes` / relationships / personality / mood / knowledge / `character_arc`）——运行时加载单个快照即可，无需 baseline 合并。
+`identity.json` + `target_baseline.json` 是角色级常量（Phase 2 产物，Phase 3 起不可变），与快照一同加载；`target_baseline` 锚定 phase 3 快照的 target 键集合（跨文档硬失败；见 #13）。voice / behavior / boundary / failure_modes **无独立 baseline 文件**——状态由快照演化链承载（S001 从原文 + identity 派生种子；S002+ 从上一快照演化）。
+`target_voice_map` / `target_behavior_map` 以 `target_character_id` 为键、详略随 tier（核心 / 重要 ≥3–5 例，次要 / 普通 / 未出场按 D4 状态 3 从简 / 为空），按用户角色过滤：canon → 精确匹配；OC → 经 role_binding 按条目 `target_type` 回退。无匹配时向前回扫先前快照（纯代码 I/O）。
+详情 → `docs/architecture/data_model.md` §角色包 + `simulation/retrieval/load_strategy.md` Tier 0。
 
-- `identity.json` + `target_baseline.json` are the character-level constants (both Phase 2 outputs, immutable from Phase 3 onward) — load alongside the stage snapshot. `target_baseline` anchors phase 3 stage_snapshot target keys (cross-file hard fail; see #13).
-- voice / behavior / boundary / failure_modes have **no separate baseline files**; their state is carried by the stage_snapshot evolution chain (S001 derives a baseline seed from source + identity; S002+ evolves from prev snapshot).
-- `target_voice_map` / `target_behavior_map` (all entries key by `target_character_id`, detail level varies by tier — 核心 / 重要 targets carry ≥3–5 examples, 次要 / 普通 / never-appeared targets stay terse / empty per D4 state 3) filtered by user role: canon role → exact `target_character_id` match; OC role → fallback via the entry's `target_type` sibling label per role_binding. Fallback for absent matches = backward scan through previous snapshots (pure code I/O).
+## 三层记忆
 
-## Three-Layer Memory
+1. **stage_snapshot** —— 每阶段聚合状态（「我现在信任他」）；运行时仅加载当前阶段。
+2. **memory_timeline** —— 每事件主观过程（`memory_id` = `M-S###-##`，必填简短 `time` / `location` 锚点；字段精确边界 → `schemas/character/memory_timeline_entry.schema.json`）；按阶段存放于 `canon/memory_timeline/{stage_id}.json`。启动最近 2 阶段全量，较远经 `memory_digest.jsonl` + FTS5 / embedding 按需加载。
+3. **scene_archive** —— 按场景切分的原文（`scene_id` = `SC-S###-##`，作品级）；仅加载最近 `scene_fulltext_window` 条 `full_text`，summary 仅走 FTS5。
+关系演化：快照 `relationships` 记录对各 target 的态度 / 信任 / 亲密 / 戒备 / 语言与行为变化 / 驱动事件 / 感知地位 / 1..N 历史；`stage_delta.*_changes` 携带归因。
+字段详情 → `docs/architecture/schema_reference.md` + `docs/architecture/data_model.md` §角色包。
 
-1. **stage_snapshot** — aggregated state per stage ("I trust him now"). Runtime loads current stage only.
-2. **memory_timeline** — subjective process per event. `memory_id` (`M-S###-##`), required short `time` / `location` anchors, `event_description`, `digest_summary`, `subjective_experience` (exact bounds in `schemas/character/memory_timeline_entry.schema.json`). Recent 2 stages full at startup; distant via `memory_digest.jsonl` + FTS5 / embedding on demand.
-3. **scene_archive** — original text split by scene. `scene_id` (`SC-S###-##`), `stage_id`, `chapter`, `time`, `location`, `characters_present`, `summary`, `full_text`. Work-level. Only most recent `scene_fulltext_window` `full_text` loaded; summaries via FTS5 only.
+## 历史回忆与认知冲突
 
-Inter-character relationship evolution: `relationships` per stage snapshot
-records per-target attitude, trust, intimacy, guardedness, voice / behavior
-shifts, driving events, perceived status, history 1..N.
-`stage_delta.*_changes` carry attribution. Memory timeline split per-stage
-at `canon/memory_timeline/{stage_id}.json`.
+- 历史回忆由启动时加载的 `memory_timeline` + `relationship_history_summary` 提供。过往快照按需加载。
+- 认知冲突由运行时 prompt 规则处理，而非预写数据。
+- → `simulation/prompt_templates/历史回忆处理规则.md`、`认知冲突处理规则.md`。
 
-## Historical Recall and Cognitive Conflict
-
-- Historical recall served by `memory_timeline` + `relationship_history_summary` at startup. Past snapshots on demand.
-- Cognitive conflict handled by runtime prompt rules, not pre-written data.
-- → `simulation/prompt_templates/历史回忆处理规则.md`, `认知冲突处理规则.md`.
-
-## Roleplay Logic Chain
+## 角色扮演逻辑链
 
 `memory + relationship → psychological reaction → behavior decision → language realization`
 
-Not: `surface tone imitation → generic reply`.
+而不是：`surface tone imitation → generic reply`。
 
-## Memory Retrieval
+## 记忆检索
 
-Two libraries (`scene_archive` + `memory_timeline`), two-level funnel:
-Level 1 (default, <20ms) — jieba + vocab dict + FTS5 top-K summaries;
-Level 2 (rare, 200–300ms) — LLM `search_memory` tool → embedding on
-summary vectors. Proactive context-state keyword association each turn.
-Tech: `jieba` + `sqlite FTS5` primary + `bge-large-zh-v1.5` optional.
-Single SQLite, no separate vector DB.
-→ `docs/requirements.md` §12 + `simulation/retrieval/index_and_rag.md`.
+两个库（`scene_archive` + `memory_timeline`），两级漏斗：Level 1（默认，<20ms）= jieba + 词表 + FTS5 top-K summary；Level 2（罕见，200–300ms）= LLM `search_memory` 工具 → summary 向量 embedding 检索。每轮主动做上下文状态关键词联想。
+技术选型：`jieba` + `sqlite FTS5` 为主 + `bge-large-zh-v1.5` 可选；单一 SQLite，无独立向量库。
+→ `docs/requirements.md` §12 + `simulation/retrieval/index_and_rag.md`。
 
-## Git Branch Model
+## Git 分支模型
 
-Three-branch model — `main` is the only branch ever pushed to remote:
+三分支，`main` 是唯一推远端的分支：`main` = 仅框架（`works/` 仅 tracked README；用户侧脚手架 = `users/_template/`）；`extraction/{work_id}` = 单作品进行中抽取（仅本地）；`library` = 完成抽取的归档（仅本地，squash-merge 目标，经 `[git].squash_merge_target` 可配）。
+空闲 = `main`。编排器在 Phase 0（第一次 LLM 调用）之前 checkout 抽取分支，全部五个 phase 都在其上运行，无例外；任何退出路径经 `run_full`（fresh-start 外层）/ `run_extraction_loop`（resume 内层）的 `try/finally: checkout_main(...)` 回 `main`。`checkout_main` / `preflight_check` 接受 `scope_paths=["works/{work_id}/"]`——仅 scope 内脏文件阻断。
+框架提交（代码 / schema / prompt / 文档 / `ai_context/`）先进 `main` 再 `git merge main` 到其他分支；抽取数据提交只属于抽取分支。所有 stage `COMMITTED` 后 `_offer_squash_merge` 交互式 squash-merge 到 `library`（永不进 `main`），随后交互式询问（`[y/N]` 默认 N，即使 `auto_squash_merge=true` 也询问）删除源分支 + `git gc --prune=now`。`library` 周期性 `git merge main` 吸收框架更新，永不回流。
+异常防护：holo 插件 SessionStart hook（`scripts/session_branch_check.sh`，经插件 hooks.json 注册）会话启动打印分支横幅，永不阻断启动。
+详情 → `docs/architecture/extraction_workflow.md` §自动化编排（分支纪律段）+ `docs/decisions.md` #26。
 
-- `main` = framework only (code / schema / prompt / docs / `ai_context/` / skills). No real `work_id`-named directories or manifests; `_template/` scaffolding only.
-- `extraction/{work_id}` = per-work in-progress extraction. Local only.
-- `library` = archive of completed extractions. Each finished `extraction/{work_id}` squash-merges here. Local only.
+## 自动化抽取流水线
 
-Flow:
+编排器 `extraction/persona_extraction/`：每步 = 全新 `claude -p` / `codex` 调用（无共享会话，文件传上下文）；双模式由来源 manifest `structure_mode`（schema 必填）决定 `monolithic` / `light_novel`，Phase 2+ 不分支——`stage_plan` 是下游唯一契约。
+- **Phase 0** chunk 摘要并行（3 级 JSON 修复 + schema 门控 + `effort='high'` 恢复扫尾，#49）→ **Phase 1** fan-out lane（monolithic 3 / light_novel 2 + 程序化 stage_plan；foundation lane 直产 `world/foundation/foundation.json`，#52/#54）→ **Phase 1.5** 用户确认角色 + 阶段（推荐 = `importance == "主角"`，#53）。
+- **Phase 2** baseline（`fixed_relationships` + 每角色 `identity` / `target_baseline` / `manifest`；phase 3 三 target 结构与 baseline 双向相等硬门控；重写有 phase 3 产物前置 guard，#56）→ **Phase 3** 逐 stage 1+2N 并行 + char_snapshot 4 sub-lane（`snapshot_merge.py`，#55）+ per-file repair + PP 重跑 + commit SHA 非空才 `COMMITTED` → **Phase 3.5** 程序化一致性检查（error 阻断）→ **Phase 4** 场景归档（独立，仅需 `stage_plan.json`；`--start-phase 4`）。
+- 关键设计：lane 级 resume + 启动磁盘 reconcile 自愈；`RateLimitController` token 限额自动暂停（`docs/requirements.md` §11.13）；长度容差门控最终安全阀（#48）；`--resume` phase 无关续跑 + `--background` 校验（#51/#56）；配置单源 `extraction/config.toml`（CLI > local > toml > 默认）。
+→ `extraction/README.md` + `docs/architecture/extraction_workflow.md`；schema → `docs/architecture/schema_reference.md`。
 
-- Idle = `main`. Orchestrator auto-checks out `extraction/{work_id}` **before Phase 0** (the very first LLM call) and returns to `main` on any exit via `try / finally: checkout_main(...)` in `extraction/persona_extraction/orchestrator.py::run_full`. All five phases (0 chunk summaries / 1 analysis fan-out / 1.5 user confirmation + works manifest write / 2 baseline / 3+ stage extraction) run on the extraction branch — no phase is exempt. Resume paths inherit the same invariant: phase 1.5 not done → fresh-start path's outer try block switches; phase 1.5 done → `run_extraction_loop`'s inner try block switches.
-- `checkout_main` / `preflight_check` accept `scope_paths`; orchestrator passes `["works/{work_id}/"]` — only scope-internal dirt blocks; scope-external dirt tolerated.
-- Code / schema / prompt / docs / `ai_context/` commits → `main` first, then `git merge main` from extraction and library branches.
-- Extraction-data commits (baseline + Phase 3+ products) belong only on the extraction branch. `_offer_squash_merge` squash-merges to **`library`** (configurable via `[git].squash_merge_target`, default `library`) interactively after all stages `COMMITTED` — never to `main`, so the public-facing branch stays artefact-free.
-- After a successful squash-merge the orchestrator interactively offers (`[y/N]`, default N) to delete the source `extraction/{work_id}` branch (`git branch -D`) and run `git gc --prune=now`, reclaiming the accumulated regen commits. Branch deletion is destructive, so the prompt always runs even when `[git].auto_squash_merge=true`; the user must explicitly opt in. Once disposed, the `library` squash is the only retained record; until then `extraction/{work_id}` is preserved as a disposable scratchpad — failed regens may be committed freely without polluting `library` history or long-term disk usage.
-- `library` absorbs framework updates via periodic `git merge main`; never flows back to main.
-- Anomaly guard: SessionStart hook (`.claude/hooks/session_branch_check.sh`) warns when working tree is non-main yet no orchestrator process is running.
+## 运行时 / 入口点 <!-- holo:heading -->
 
-## Automated Extraction Pipeline
-
-Orchestrator: `extraction/persona_extraction/`. Each phase step = fresh
-`claude -p` or `codex` call, no shared session, file-based context.
-
-Phases (full detail → `extraction/README.md` +
-`docs/architecture/extraction_workflow.md`):
-
-- **Phase 0** — chapter summarization, parallel chunks; 3-level JSON repair (L1 regex / L2 LLM / L3 full re-run max 1) **+ jsonschema gate against `schemas/analysis/chapter_summary_chunk.schema.json`** — schema fail routes to L3 with the failure injected as `prior_error` so the LLM gets the bound violation in the retry prompt; gate blocks Phase 1. **Dual-mode dispatch** via source manifest `structure_mode` (schema-required, no default-fill): `monolithic` runs token-budget chunking (`chunk_size` chapters per chunk); `light_novel` sets `1 chunk = 1 chapter = 1 sub-section` (degenerate single-element chunks, no token-budget batch logic) — chunk_summary output schema / path unchanged. Chunk schema carries per-summary fields (`chapter` / `title` / `summary` 150–200 CJK chars / `characters_present` / `emotional_tone` / `identity_notes`) **plus** chunk-level secondary fields aggregating the world / power / faction / region / arc signals across the chunk (`chunk_arc_summary` required, `chunk_world_rules[].{rule,description,observed_impact}` / `chunk_power_levels[].{name,description}` / `chunk_factions[].{name,description,members_present}` / `chunk_regions[].{name,description}` empty arrays when absent); all sub-objects `additionalProperties: false` + `required: [name|rule]`. Phase 1 foundation lane reads these as direct signals to populate `world/foundation/foundation.json` (no genre-template fallback); Phase 2 baseline does NOT re-synthesise foundation (decision #54 — phase 2 缩水到仅补 `key_figures`).
-- **Phase 1** — global analysis fan-out into independent lanes (each = one `claude -p` + projected chunks subset + per-lane jsonschema gate + per-lane `correction_feedback`-style retry). **Monolithic mode = 3 lanes parallel** (`foundation` / `stage_plan` / `candidate_characters`); **light_novel mode = 2 lanes parallel** (`foundation` + `candidate_characters`) plus orchestrator-side programmatic `stage_plan` derivation (zero LLM call — `_build_light_novel_stage_plan` builds 1:1 from `chapter_index` with `stage_id = S{n:03d}`, `chapters = f"{chapter_id}-{chapter_id}"` degenerate single-chapter range, `chapter_count = 1`, `stage_title = chapter_index[i].title` soft-truncated to schema cap + `…`; STAGE_MIN/MAX bypassed). Each lane's chunk inputs are pre-projected and staged at `works/{work_id}/analysis/.phase1_lane_inputs/{lane}/chunk_NNN.json` (gitignored, cleaned on run_analysis exit) — narrow field projection per lane (foundation = chunk-level secondary fields ONLY, `summaries[]` dropped — full-book setting writeup needs no per-chapter anchor; stage_plan = `chunk_arc_summary` + `chunk_regions` + per-summary `chapter` + `summary` only — `characters_present` / `emotional_tone` / `identity_notes` dropped, orthogonal to chapter-boundary plot-arc merging; candidate_characters = per-summary `chapter` + `summary` + `characters_present` + `identity_notes` + `chunk_factions[].{name,members_present}` — `summary` carries event context for cross-chunk identity merging beyond what short `identity_notes` covers). **Foundation lane 输出路径** = `works/{work_id}/world/foundation/foundation.json`（decision #54 — foundation 由 phase 1 直接产到 world 域，phase 2 不再二次综合）；**`major_factions[].key_figures` 双阶段语义**（决策 #54 修订段）：phase 1 lane 写 raw 名（chunk_factions[].members_present[] 跨 chunk 合并去重，化名 / 真名 / 称呼任一），phase 2 baseline LLM 替换能匹配 candidate_characters.aliases 的 raw 名为 character_id，匹配不上保留 raw 名。Per-lane retry budget `[phase1].exit_validation_max_retry` is **independent per lane** (no shared pool); failed lanes inject schema/limit error as `prior_error` into the next attempt's prompt (same pattern as Phase 0 / Phase 4) while successful lanes' artifacts persist; `--resume` reconcile skips schema-valid produced files lane-by-lane. Phase 2+ does not branch on `structure_mode` — `stage_plan` is the single contract downstream. → decision #52 + #54.
-- **Phase 1.5** — user confirms targets + stages. Default-recommended set = candidates with `importance == "主角"` (rule-based program selection; user may add / remove). The `recommended` boolean field on candidates is removed (decision #53); the `RECOMMENDED` display label is now derived from `importance`.
-- **Phase 2** — baseline production. Phase 1 foundation lane 已落 `world/foundation/foundation.json`；phase 2 produces: world `fixed_relationships.json` + per-character `identity.json` + per-character `target_baseline.json` + per-character `manifest.json`，**plus** 在同一次 baseline_prompt LLM call 内**替换** `foundation.major_factions[].key_figures` 的 raw 名为 character_id——输入 phase 1 落盘 foundation（含 raw 名 key_figures）+ candidate_characters（含 character_id + aliases）+ 已确认目标清单；LLM 对每个 raw 名 lookup `candidates[*].aliases`，能匹配换为对应 character_id，匹配不上保留 raw 名（不报错、不删除）；schema 不抓 character_id 合法性，key_figures 最终是 character_id + 未合并 raw 名混合（decision #54 修订段）。**Validation-triggered recovery 与 `--start-phase 2` force_baseline 前置 guard**（决策 #56）：调用 `run_baseline_production` 重写 `target_baseline.json` 前检测已有 phase 3 committed 产物（`phase3_stages.json` 任一 stage state == `COMMITTED` 或扫磁盘 `world/stage_snapshots/*.json` + `characters/*/canon/stage_snapshots/*.json` 非空）；存在 → daemon 模式 hard stop + `sys.exit(1)` 打印清理清单 / 前台 `input("Continue and overwrite phase 3 artifacts? [y/N]: ")` 非 y 退出。`--reset-phase3-after-baseline-change` 自动清理 flag 不实现（二期 todo）。`target_baseline.json` is the full-book-view roster of every target character (with `tier` ∈ {核心 / 重要 / 次要 / 普通} + `relationship_type` flexible Chinese-string with 14 default candidates / out-of-list fallback allowed + ≤100-char description) — **准入门槛 = 本角色与目标角色在 chapter_summaries 摘要描述中被反映为有过 dialogue / action 交互**（decision #54，替换原"宁可多列、不可漏列、被点名提及即纳入"原则；血亲不再默认核心 tier）。`targets` array cap shared via `schemas/character/targets_cap.schema.json` $ref (downstream stage_snapshot's three target structures inherit the same cap, single-source — fragment lives in the character domain since both producer and consumers do). Phase 3 stage_snapshot three structures (`voice_state.target_voice_map` / `behavior_state.target_behavior_map` / top-level `relationships`) MUST be **set-equal** to `targets[].target_character_id` (bidirectional cross-file hard fail; tri-state via content emptiness, fixed_relationship exception). Validation at the phase 3 single-stage validate layer routes violations through the file-level repair lifecycle (L1/L2/L3 per #25 disambiguation——phase 3 stage 抽取产物的 repair framework lifecycle，与 phase 0 JSON repair L1/L2/L3 同名不同物); baseline immutable from phase 3 onward.
-- **Phase 3** — per-stage loop: (1) 1+2N extraction (1 world + N char_snapshot + N char_support) → (2) programmatic post-processing (digests + catalog; summaries 1:1 copy of source) → (3) `repair` per file in parallel → (4) post-repair PP rerun **before** `transition(PASSED)` → (5) commit-ordering contract (commit first; non-empty SHA → `COMMITTED`; empty → `FAILED`). JSONL slice write-back merges by key so prior stages cannot be truncated. Extraction prompts do NOT read digests or catalog (programmatic post-processing handles them); char extraction does NOT read world snapshot. **char_snapshot sub-lane split** (`[phase3].char_snapshot_sub_lanes`, default `true`): each char_snapshot lane internally fans out **4** parallel sub-lanes (`char_expression` / `char_decision` / `char_internal` / `char_social`) sharing one prompt template (placeholder `{lane_scope}` switches the field subset). Sub-lane partials land at `.partial/{stage_id}_{lane}.json` and merge programmatically via `extraction/persona_extraction/phases/snapshot_merge.py` — hard gates: per-lane top-level field set equals its allocation, `failure_modes` 4-subkey mutual-exclusion across **3** lanes (`tone_traps`→expression / `{knowledge_leaks, common_failures}`→internal / `relationship_traps`→social), `stage_delta` 6-subkey mutual-exclusion across `char_decision` (3 subkeys) / `char_social` (3 subkeys), `behavior_state` 8-subkey mutual-exclusion across `char_decision` (7 self-behaviour subkeys: `core_goals` / `obsessions` / `decision_making_style` / `emotional_triggers` / `emotional_reaction_map` / `habitual_behaviors` / `stress_response`) / `char_social` (`target_behavior_map`), tri-target keys set-equal to `target_baseline.targets[].target_character_id` (reuses `extraction/repair/checkers/targets_keys_eq_baseline.py` as merge pre-flight); the (D) drop semantics from decision #11f are honoured because merge **does not** check partial entry count ≥ prev. **Prev snapshot 4-way slice** — orchestrator slices `stage_snapshots/{prev}.json` into `.partial_prev/{char_id}/{prev_stage_id}_{lane}.json` per-lane projections (per-char subdir mirrors `.partial/`) (via `snapshot_merge.slice_snapshot_for_lane`) before each stage runs; `char_expression` / `char_decision` read only their own slice, `char_internal` / `char_social` each read both internal + social slices (covers the knowledge ↔ relationships coupling). Per-lane prev context drops from ~30 KB (whole snapshot) to ~7–13 KB. Slice lifecycle mirrors `.partial/`: R3 cleanup before stage start (unconditional re-write for freshness), explicit clear after repair + before `[5/5] Git commit`, and on sub-lane / merge failure. **2-character peak LLM concurrency** = 1 world + 2×4 snapshot sub-lanes + 2 support = **11**; sub-lane off = 5; both ≤ `[phase3].concurrency=12` cap (raised from 10 in 3-lane era). N≥3 characters peak `1 + 4N + N` exceeds cap and falls back to RateLimitController pause — tracked in todo `T-PHASE3-PEAK-CAP-N-CHARS`. `lane_states` granularity stays `snapshot:{char_id}` — any sub-lane or merge failure re-runs the whole snapshot lane, PENDING / ERROR `.partial/` files are wiped (not re-used). Repair lifecycle 2 T3 regen routes through the same 4-sub-lane re-extract + merge path (each sub-lane prompt injects `prior_attempt_context` ≤600 char summary + error info), preserving `max_lifecycles_per_file = 2` + `T3_EXHAUSTED` semantics. CLI `--char-snapshot-sub-lanes` / `--no-char-snapshot-sub-lanes` overrides toml; light_novel mode keeps the same single bool + flag (no mode-aware default) — switch per-work manually when single-stage size makes sub-lane overhead > savings. → decision #55.
-- **Phase 3.5** — programmatic cross-stage consistency checks (0 token), incl. `memory_digest` / `world_event_digest` 1:1 equality gates. The D4 `targets keys == baseline` rule no longer lives here — it is now enforced in the phase 3 single-stage validate layer (per file, with file-level repair). `consistency_report.json` committed regardless of pass/fail; errors block Phase 4.
-- **Phase 4** — scene archive (independent; needs only `stage_plan.json`). Per-chapter parallel LLM + programmatic extraction → `works/{work_id}/retrieval/scene_archive.jsonl` (git-ignored). `validate_scene_split` runs hand-written line-coverage checks **+ jsonschema gate against `schemas/analysis/scene_split.schema.json`**; any failure (manual or schema) feeds the existing `prior_error` retry path (`build_scene_split_prompt(prior_error=...)`) so the LLM sees the bound violation on retry. Same-run retry budget `[phase4].max_retries_per_chapter` (default 2); circuit breaker `[phase4].circuit_breaker_*`. CLI `--start-phase 4`. Stage assignment (`stage_id` and the `S###` segment of `SC-S###-##`) is program-level: chapter → `stage_plan` range. A new `stage_plan` can be applied to an existing `scene_archive.jsonl` via pure remap (re-derive `stage_id` and renumber per-stage seq) without re-running per-chapter LLM extraction.
-
-### Key Design
-
-- **Lane-level resume (Phase 3)**: `StageEntry.lane_states` per-lane completion; `--resume` re-runs only missing / corrupt lanes. `phase3_stages.json` atomic write.
-- Phase 3 + Phase 4 independent PID locks (can run in parallel).
-- Fast empty-failure backoff (`[backoff].fast_empty_failure_backoff_s`); token / context errors not retried.
-- **Token-limit auto-pause** (§11.13) — `RateLimitController` + flock-merged `rate_limit_pause.json`; failed prompt re-runs without consuming a retry slot. Hard-stops exit 2. Pause excluded from `--max-runtime`. → `extraction/persona_extraction/core/rate_limit.py` + `docs/requirements.md` §11.13.
-- `--end-stage` strict prefix: finalization only after all stages `COMMITTED`.
-- `jsonschema` = HARD dep. Disk reconcile self-heal on every startup (Phase 0/3/4); Phase 3 verifies `committed_sha` via `git cat-file -e`.
-- **Length-bound tolerance gate** — final safety valve after every LLM phase exhausts its strict retry budget (Phase 0 L3, Phase 1 `exit_validation_max_retry`, Phase 2 单次 baseline LLM + validate_baseline 失败, Phase 4 `max_retries_per_chapter`, **Phase 3 repair `T3_EXHAUSTED`**——repair 仅在 phase 3 接入，见决策 #25 disambiguation). If the surviving violations are **only** `minLength`/`maxLength` and a relaxed schema (×0.9 floor / ×1.1 ceil) passes, accept as PASS; otherwise keep the strict failure. All other constraints stay strict. Not applied to `post_processing.py` program-only outputs. → `extraction/validation/gates/phase2_baseline.py::validate_with_length_tolerance` + decision #48.
-- **Phase 0 recovery sweep** — after the main phase 0 ThreadPool finishes, any chunk whose `state == 'failed'` with error matching `'timed out'` or `'error_max_turns'` AND `recovery_attempted == False` reruns once via `_run_recovery_sweep` using `effort='high'` (per-call `LLMBackend.run` kwarg, no backend swap). ThreadPoolExecutor reuses `phase0.concurrency`; full L1/L2/L3 + tolerance pipeline still applies inside `_summarize_chunk`. `recovery_attempted=True` set unconditionally afterward — `--resume` skips already-swept chunks (no救火 loop). Default `[phase0].recovery_effort = 'high'`. → `extraction/persona_extraction/orchestrator.py::_run_recovery_sweep` + decision #49.
-- **CLI `--resume` phase-agnostic resume** — `run_full` is the sole resume entry point: per-phase skip-detection (Phase 0 schema-gated chunk skip / Phase 1 per-lane product check — schema-valid `world/foundation/foundation.json` (decision #54) / `stage_plan.json` / `candidate_characters.json` each independently skips its lane / Phase 1.5 `--characters` bypass / Phase 3 `reconcile_with_disk` + rebuild `phase3_stages.json` from `stage_plan.json`). `--resume` only silences the `'Resume from existing progress?'` prompt inside `run_full`. `--background` validation is stage-aware via `pipeline.json::phases.phase_1_5`: not done → require `--characters` (else daemon hits `confirm_with_user` character-selection stdin); done → require `--resume` or `--characters` (else daemon hits the resume prompt). `--end-stage` 不传 = 全跑（daemon EOFError 路径 `preset_end_stage = None` 兜底，决策 #56）。 → `extraction/persona_extraction/cli.py` + `orchestrator.py::run_full(auto_resume=...)` + decisions #51 & #56.
-- Config: single-source TOML at `extraction/config.toml`; override priority CLI > `config.local.toml` > `config.toml` > dataclass defaults.
-
-Schema docs → `docs/architecture/schema_reference.md`.
+- 抽取入口：`python -m extraction.persona_extraction`
+  （`extraction/persona_extraction/__main__.py` → `cli.py`；配置
+  `extraction/config.toml`）。
+- `simulation/` 无任何运行时代码 —— 全部为 .md 契约 / 流程 /
+  检索策略文档（`contracts/` / `flows/` / `retrieval/` /
+  `prompt_templates/`），运行时角色扮演引擎尚未实现。

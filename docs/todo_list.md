@@ -1,10 +1,18 @@
-# TODO List（待办任务清单）
+# TODO 清单 <!-- holo:heading -->
 
+<!-- holo:section start -->
 ---
+<!-- holo:section end -->
 
-## Index (auto-generated; do not hand-edit)
+## Index (auto-generated; do not hand-edit) <!-- holo:heading -->
 
-> 本段是三张子表的渲染缓存，由维护本文件的人（包括 Claude）在**每次对正文条目增 / 改 / 移段 / 完成 / 废弃后**顺手刷新——具体规则见下方"## File guide → Index maintenance"。`/todo` skill 不解析正文，只读这一段，所以这里的内容必须与正文同步；不同步会让 `/todo` 给出错误结论。
+<!-- holo:section start -->
+> 本段是下方三个子表的缓存，由编辑某条目正文的人在正文段
+> 进行任何 add / edit / segment-move / completion / abandonment
+> 之后**立即**刷新。刷新规则参见 `## File guide → Index maintenance`。
+> `/todo` skill（若使用）不解析正文 —— 它只读这份 Index，所以
+> 本段必须与正文保持同步；这里漂移意味着 `/todo` 会给出错误答案。
+<!-- holo:section end -->
 
 ### 🟢 In Progress (1)
 
@@ -32,169 +40,229 @@
 
 **Total**: 9 — 🟢 In Progress 1 ｜ 🟡 Next 2 ｜ ⚪ Discussing 6
 
+<!-- holo:section start -->
 ---
+<!-- holo:section end -->
 
-## File guide
+## File guide <!-- holo:heading -->
 
-### Purpose
+<!-- holo:section start -->
+### 用途
 
-记录**计划完成但尚未完成**的具体工程任务。区别于：
-- `ai_context/next_steps.md`：**架构方向**和高层 roadmap（用英文）
-- `ai_context/current_status.md`：**当前项目状态快照**
-- `logs/change_logs/`：**历史记录**（时间戳，只追加不修改）
-- `docs/architecture/`：**正式架构文档**
-- `docs/todo_list_archived.md`：**Completed / Abandoned** 任务的瘦身归档（瘦身条目，原文细节去 git history / change_logs）
+记录**已计划但尚未完成**的具体工程任务。
+与兄弟文件区分：
 
-本文件是**工程级**的待办队列，含文件路径、行号、改动清单、验证步骤。
+- `ai_context/handoff.md §Next Steps` —— 架构方向与高层路线图
+  （按优先级的 2 列表格）。
+- `ai_context/handoff.md §Current State` —— 当前项目状态快照
+  （按方面的 2 列表格）。
+- `logs/change_logs/` —— 历史（带时间戳，append-only）。
+- `docs/architecture/` —— 正式架构文档。
+- `docs/todo_list_archived.md` —— 已完成 / 已废弃任务的精简归档
+  （完整细节存于 git 历史 + change logs）。
 
-### Task flow
+本文件是**工程层**的队列：文件路径、行号、
+change manifest、验证步骤。
+
+### 任务流转
 
 ```
-Discussing ──(decided)──▶ Next ──(/go starts)──▶ In Progress ──(commit done)──▶ archived ## Completed
-                                                                                ▲
-any node ─────────────────(abandoned)──────────────────────────────── archived ## Abandoned
+Discussing ──(decided)──▶ Next ──(start)──▶ In Progress ──(commit done)──▶ archived ## Completed
+                                                                            ▲
+any node ─────────────────(abandoned)──────────────────────────── archived ## Abandoned
 ```
 
-三个段落的语义：
+段位语义：
 
-- **In Progress**（单槽位）：`/go` 已启动、尚未 commit 完成的任务。同时**只能 1 条**——目的是中途 ctrl-c / 用户暂停 / 切换会话时，能立刻从这里看到"正在做什么"，不用翻 git status / progress 文件
-- **Next**：依赖与设计已基本就绪、随时可以 `/go` 启动的任务队列。条目按用户优先级排序，第一条就是下一个该启动的
-- **Discussing**：有未决策项 / 有外部依赖 / 方案未拍板的任务；不要 `/go` 启动它们，先收敛决策
+- **In Progress**（单槽）—— 已开始但尚未提交的任务。
+  **同一时刻只有一条** —— 这样在工作被打断（ctrl-c / 暂停 /
+  会话切换）时，下一个 AI 会话能直接看到"当前在做什么"，
+  无需解析 git status 或进度文件。
+- **Next** —— 依赖与设计均已就绪、随时可以开始的任务。
+  按用户优先级排序 —— 第一条就是下一个要开始的。
+- **Discussing** —— 仍有待决策项 / 外部依赖 / 设计未定的任务。
+  不要开始；先把决策收敛掉。
 
-### What to record
+### 记录什么
 
-✓ 具体到文件 / 函数级的改动任务
-✓ 每条任务必须包含：**上下文**（动机 + 现状 + 触发链）、**改动清单**（含文件路径和行号；Discussing 段可暂缺）、**完成标准**、**依赖**
-✓ 视情况补：**待决策项**（Discussing 段必有）、**预估**、**未落地原因**、**暂不做的事**
-✓ Discussing 段尚未定案的方案及其权衡
+✓ 文件 / 函数级别的具体改动任务。
+✓ 每条目必须包含：**Context**（动机 + 当前状态 +
+  trigger）、**Change manifest**（文件路径 + 行号；在 `Discussing`
+  中可以是部分的）、**Done criteria**、**Deps**。
+✓ 视情况：**Open decisions**（在 `Discussing` 中必填）、
+  **Estimate**、**Why not landed yet**、**Out of scope**。
+✓ **Requirements**（可选；位置在 **Context** 与 **Change manifest**
+  之间）：用户要做什么 / 要达成什么效果。纯文字段，无特殊格式规则。
+  本会话收敛了值得保留的用户需求时填。
+✓ **Solution details**（可选；位置在 **Requirements** 与
+  **Change manifest** 之间）：最终落定的方案是什么、由哪些部分组成。
+  **只装最终落定版** —— 不写废弃方案、不写否决备选、不写讨论历史。
+  纯文字段，无特殊格式规则。本会话收敛了值得保留的具体方案时填。
+✓ 在 `Discussing` 条目中，列出未解决的选项及其权衡。
 
-### What NOT to record
+### 不记录什么
 
-✗ 架构方向 / 高层 roadmap → 写进 `ai_context/next_steps.md`
-✗ Completed / Abandoned 任务 → 移到 `docs/todo_list_archived.md`（瘦身），不留在本文件
-✗ 临时调试笔记 / 中间思考 → 对话上下文或 plan，不持久化
-✗ 当前运行状态 / 进度 → 写进运行时进度产物（按 skills_config.md `## Background processes` 的进程产物路径）
+✗ 架构方向 / 高层路线图 → `ai_context/handoff.md §Next Steps`（2 列表格）。
+✗ 已完成 / 已废弃任务 → 移到 `docs/todo_list_archived.md`（精简）。
+✗ 临时调试笔记 / 思考过程中的分析 → 放到对话或 plan 里，
+  不要持久化。
+✗ 运行时状态 / 进度 → 写到运行时进度产物里
+  （参见 `ai_context/skills_config.md` §Background processes）。
 
-### How to update entries
+### 如何更新条目
 
-**所有段位条目共同字段**：每条 `### [T-XXX]` 块都必须含 `**更新时间**`
-（YYYY-MM-DD HH:MM 时区缩写——按 skills_config.md `## Timezone`）。CREATE 时
-初始化 = 创建时刻；正文任意字段被改 / 跨段移动时刷新 = 改动时刻。**纯索引
-刷新本身不刷该字段**——索引是缓存，正文没动就是没动。该字段是 `/recent-activity`
-判定"何时讨论 / 改过该 task"的唯一锚点。
+**所有段位通用**：每个 `### [T-XXX]` 块都必须有
+**Updated** 时间戳（`YYYY-MM-DD HH:MM` + 时区，遵循
+`ai_context/skills_config.md` §Timezone）。创建时设置；
+任何正文字段被修改或条目在段位间移动时刷新。
+**只刷新 Index 缓存不算** —— 该字段标记的是"正文实际变更的时间"。
 
-**添加任务**：放进合适的分节（Next / Discussing）。新任务必须有上方"What to record"
-列出的字段 + `**更新时间**`。**不要直接添加到"In Progress"**——那个段位仅由 `/go`
-启动动作填入。
+**添加新任务**：放入合适的段位（Next 或
+Discussing）。新条目必须包含 "What to record" 中的字段，
+加上 `**Updated**`。**不要直接加进 "In Progress"** ——
+该段位只有任务实际开始时才填入。
 
-**任务进入执行（/go 启动）**：
-1. 把整条从 "Next" 移到 "In Progress"
-2. 在条目里追加 `**开始时间**`（YYYY-MM-DD HH:MM 时区缩写——按 skills_config.md `## Timezone`）和 `**当前状态**`（进行中 / 等用户决策 / 暂停）字段
-3. 刷新 `**更新时间**` = 启动时刻
-4. **In Progress 段位单槽**——若已有占用，先把当前那条 commit 完成或显式暂停回退到 "Next" 再启动新任务
-5. 同步刷新索引段（见 "Index maintenance"）
+**任务开始（移入 In Progress）**：
+1. 把整条目从 "Next" 移到 "In Progress"。
+2. 添加 `**Start time**`（同样的时间戳格式）和 **Current state**
+   （in-progress / awaiting decision / paused）。
+3. 刷新 `**Updated**` = start time。
+4. **单槽** —— 如果 "In Progress" 已被占用，
+   先完成或显式 pause-back 那条任务。
+5. 刷新 Index（参见 "Index maintenance"）。
 
-**任务完成（commit 完成 + 验证通过）**：
-1. 把整条**移到** `docs/todo_list_archived.md` 的 `## Completed` 段，按归档格式瘦身（标题 + 完成形式 + 1 行摘要 + log 链接），原条目从本文件删除
-2. 若该任务产生了值得沉淀的结论 / 新架构决策 / 可复用经验，写一条 `logs/change_logs/{YYYY-MM-DD}_{HHMMSS}_{slug}.md`
-3. 若完成涉及 `ai_context/` 的持久事实变化（current_status / decisions / next_steps 等），同步更新
-4. **从 "Next" 首条提升一条到 "In Progress"**——只在用户立刻 `/go` 下一条时做；非紧凑流程则保持 "In Progress" 为空，等下次 `/go` 启动时再移
-5. 同步刷新索引段
+**任务完成（已 commit + 已验证）**：
+1. 把条目移到 `docs/todo_list_archived.md` `## Completed`
+   （精简条目：标题 + completion form + 一行总结 + log 链接）；
+   从本文件删除。
+2. 如果该任务产生了持久结论 / 新的架构
+   决策 / 可复用洞见，写一份
+   `logs/change_logs/YYYY-MM-DD_HHMMSS_slug.md`。
+3. 如果完成会改变 `ai_context/` 中的持久事实（`handoff.md` 的
+   Current State / Next Steps 表，或 `decisions.md`），相应更新。
+4. 刷新 Index。
 
-**任务废弃**：写一条 `logs/change_logs/` 记录废弃原因后，把整条**移到** `docs/todo_list_archived.md` 的 `## Abandoned` 段（同样瘦身：标题 + 废弃原因 + log 链接）。同步刷新索引段。
+**任务废弃**：写一份 `logs/change_logs/` 条目说明原因，然后
+把条目移到 `docs/todo_list_archived.md` `## Abandoned`（同样的
+精简格式）。刷新 Index。
 
-**讨论转落地**：Discussing 章节产生结论时，无论整体定案还是阶段性结论，都要立即把结果反映到对应章节——
-- **整体定案**：把条目从 "Discussing" 整条移到 "Next"，补全成完整任务（上下文 / 改动清单 / 完成标准 / 依赖）。同步刷新索引段
-- **部分定案**：把已定案的子任务单独拆出迁移到 "Next"（作为独立任务条目），未定案部分继续留在 "Discussing" 并更新上下文说明已拆分出去的部分。同步刷新索引段
-- **结论颠覆原假设**：若讨论结果反而证明某已在 "Next / In Progress" 的任务不再必要，按"任务废弃"流程处理
+**讨论落地**：当一条 `Discussing` 条目得出结论时：
+- **完整决策** —— 把条目移到 `Next`，补齐缺失的
+  字段（Change manifest / Done criteria / Deps）。刷新 Index。
+- **部分决策** —— 把已决策的子任务拆成独立的
+  `Next` 条目；未决的余下部分留在 `Discussing` 中，
+  context 已更新。刷新 Index。
+- **结论使现有 `Next` / `In Progress` 任务失效**
+  —— 当作 "任务废弃" 处理。
 
 ### Index maintenance
 
-文件顶部 `## Index (auto-generated; do not hand-edit)` 段是三张子表的缓存。**每次对正文条目增 / 改 / 移段 / 完成 / 废弃**后必须刷新这一段；`/todo` skill 不解析正文，只读这一段。
+文件顶部的 `## Index (auto-generated; do not hand-edit)` 段
+缓存了三个子表。**在正文进行任何 add / edit /
+segment-move / completion / abandonment 之后刷新。** `/todo`
+skill 只读这一段。
 
-**触发时机**：以下任一发生时刷新：
+**触发**刷新 —— 以下任一：
 
-- 添加新任务条目
-- 修改现有条目的：标题、上下文摘要、依赖、待决策项、改动清单文件数、是否触及 schema / 架构 / 多 phase、`**更新时间**`
-- 任务移段：Discussing → Next、Next → In Progress、In Progress → archived、任意 → archived（abandoned）
-- 任务在 "In Progress" 段内的"当前状态"变化（进行中 / 等用户决策 / 暂停）
+- 添加新条目。
+- 编辑现有条目的标题、context 摘要、deps、open
+  decisions、change-manifest 文件数、schema/architecture/multi-phase
+  涉及范围、或 `**Updated**`。
+- 段位移动：Discussing → Next、Next → In Progress、In Progress →
+  archived、any → archived（废弃）。
+- `In Progress` 条目内的 "Current state" 变更。
 
-**三张子表的列定义**：
+**列定义**：
 
 **In Progress**
 
-| 列 | 取值 |
+| Column | Source |
 |---|---|
-| ID | 反引号包裹的 T-XXX slug |
-| Title | 方括号后的中文短语 |
-| Start time | 条目里的 `**开始时间**` 字段，YYYY-MM-DD HH:MM 时区缩写 |
-| Updated | 条目里的 `**更新时间**` 字段，YYYY-MM-DD（仅日期，省 HH:MM）；缺字段 → "—" |
-| Status | 条目里的 `**当前状态**` 字段：进行中 / 等用户决策 / 暂停 |
+| ID | 反引号包起来的 T-XXX slug |
+| Title | 方括号之后的人类可读短语 |
+| Start time | 条目的 `**Start time**` 字段，完整时间戳 |
+| Updated | 条目的 `**Updated**` 字段，仅日期（不含 HH:MM）；缺失 → `—` |
+| Status | 条目的 `**Current state**` 值 |
 
 **Next**
 
-| 列 | 取值 |
+| Column | Source |
 |---|---|
-| ID | 反引号包裹的 T-XXX slug |
-| Brief | 上下文段首句 + 1-2 句关键背景，**总长 ≤ 150 字**；去掉 markdown 链接的反引号让表格不破，但保留 `[text](url)` 形式 |
-| Importance | 🔴 High / 🟢 Med-Low / 🟡 Medium（推断规则见下） |
-| Ready | ✅ Ready / 💬 Discuss first / ⏸ Blocked（推断规则见下） |
-| Scope | 🟢 Small / 🟡 Medium / 🔴 Large·Arch / —（推断规则见下） |
-| Updated | 条目里的 `**更新时间**` 字段，YYYY-MM-DD；缺字段 → "—" |
-| Deps | 条目"**依赖**"段首句 |
+| ID | 反引号包起来的 T-XXX slug |
+| Brief | Context 的第一句 + 1–2 行关键背景。**总长度 ≤ 150 字符。** 去掉 markdown 链接反引号以便表格渲染，但保留 `[text](url)` 形式。 |
+| Importance | 🔴 High / 🟡 Medium / 🟢 Med-Low（规则见下） |
+| Ready | ✅ Ready / 💬 Discuss first / ⏸ Blocked（规则见下） |
+| Scope | 🟢 Small / 🟡 Medium / 🔴 Large·Arch / —（规则见下） |
+| Updated | 条目的 `**Updated**` 字段，仅日期 |
+| Deps | 条目 `**Deps**` 字段的第一句 |
 
 **Discussing**
 
-| 列 | 取值 |
+| Column | Source |
 |---|---|
-| ID | 反引号包裹的 T-XXX slug |
-| Brief | 同上，≤ 150 字 |
-| Open decisions | 数 `**待决策项**` 段下的列表条目数；缺该段 → 0 |
-| Updated | 条目里的 `**更新时间**` 字段，YYYY-MM-DD；缺字段 → "—" |
-| Blocked by | "**依赖**"段首句 |
+| ID | 反引号包起来的 T-XXX slug |
+| Brief | 同 Next，≤ 150 字符 |
+| Open decisions | `**Open decisions**` 下 bullet 项的数量；缺该段 → 0 |
+| Updated | 条目的 `**Updated**` 字段，仅日期 |
+| Blocked by | `**Deps**` 的第一句 |
 
-**字段推断规则**（确定性，不要灵活发挥）：
+**推断规则**（确定性 —— 不要自由发挥）：
 
-**Importance**（仅用于 "Next" 段；In Progress 段不显示，Discussing 段不显示）
+**Importance**（仅 Next）
 
-| 等级 | 触发条件 |
+| Level | Trigger |
 |---|---|
-| 🔴 High | 段落 = Next 且 用户曾标注高优先 / 阻塞其他任务 |
-| 🟢 Med-Low | 段落 = Next 且（依赖 blocked 或 待决策项 ≥ 2 或 用户未明确高优先） |
+| 🔴 High | 用户已标记为高优先级 OR 阻塞其他任务 |
+| 🟡 Medium | 既未标 High 也未标 Med-Low 的默认 |
+| 🟢 Med-Low | Deps 被阻塞 OR open decisions ≥ 2 OR 用户未标过优先级 |
 
 **Ready**
 
-| 标签 | 触发条件 |
+| Tag | Trigger |
 |---|---|
-| ✅ Ready | 依赖 ready 且 待决策项 = 0 |
-| 💬 Discuss first | 待决策项 ≥ 1 |
-| ⏸ Blocked | 依赖中含具体阻塞名（外部 CLI、未实装模块、未发生事件 等） |
+| ✅ Ready | Deps 已就绪 AND open decisions = 0 |
+| 💬 Discuss first | Open decisions ≥ 1 |
+| ⏸ Blocked | Deps 中含具体阻塞项（外部 CLI、未实现模块、待发生事件） |
 
-优先级：⏸ > 💬 > ✅。同时满足"待决策 ≥ 1"和"被阻塞"时取 ⏸。
+优先级：⏸ > 💬 > ✅。
 
 **Scope**
 
-| 规模 | 触发条件 |
+| Size | Trigger |
 |---|---|
-| 🟢 Small | 改动清单 ≤ 2 文件 且 不动 schema / 不动接口 / 单点修复 |
-| 🟡 Medium | 改动清单 3–6 文件 或 涉及多函数协作 / 单模块内重构；不触发架构层调整 |
-| 🔴 Large·Arch | 改动清单 ≥ 7 文件 或 触及任一：新增 Phase / 改 schema 字段 / 改核心接口 / 跨模块协议变更 / 引入新依赖 / 影响多 work 流程 |
-| — | 缺「改动清单」段（多见于 "Discussing" 未拆解的条目）；备注"未拆解，规模待评估" |
+| 🟢 Small | Change manifest ≤ 2 个文件 AND 无 schema / interface 改动 |
+| 🟡 Medium | Change manifest 3–6 个文件 OR 模块内多函数 refactor；无架构层改动 |
+| 🔴 Large·Arch | Change manifest ≥ 7 个文件 OR 触及：新 phase / schema field / 核心 interface / 跨模块协议 / 新依赖 |
+| — | 缺 change manifest（在未拆解的 `Discussing` 条目中常见） |
 
-**简介撰写要求**：用大白话说清"这是要解决什么问题"和"为什么值得做"。**避免堆砌代码名 / 函数名 / schema 路径 / 行号 / 决策编号 / 专业缩写**——除非那本身就是问题的核心，否则换成普通说法。反例：`phase 2 baseline production 整体接入 repair framework lifecycle（4 件产物 foundation key_figures patch + fixed_relationships + identity + target_baseline 各自包装 SourceContext + 写 phase 2 专属 checkers）`；正例：`Phase 2 抽人物 baseline 时如果格式错了，目前只会"试一次就硬失败"，不像 phase 3 有自动修复管线。给 phase 2 也接上自动修复`。读者不点开正文也能听懂这是干啥、为啥要做。**总长 ≤ 150 字**——超过先砍细节，保住"是啥 + 为啥"。
+**Brief 写作规则**：用大白话写 —— 这件事解决什么
+问题、为什么值得做。**避免代号 / 函数名 /
+schema 路径 / 行号 / 决策编号 / 行话**，除非
+它们本身就是问题。总长度 ≤ 150 字符；超出时砍掉
+细节，直到只剩 "what + why"。
 
-**汇总行**：三张表后打印一行：`Total: N — 🟢 In Progress a ｜ 🟡 Next b ｜ ⚪ Discussing c`。
+**Summary line**：三个表之后，打印一行：
+`Total: N — 🟢 In Progress a ｜ 🟡 Next b ｜ ⚪ Discussing c`。
 
-### When to read
+### 何时阅读
 
-- 用户问及待办 / 即将做什么 / 接下来该做什么 → `/todo` skill（只读索引段）
-- 开始任意改动前 **先查一次**，避免重复规划
-- 讨论到可能已登记的话题时
-- **默认不主动读取**（不进入 session 启动的 `ai_context/` 读取序列）
+- 用户问待办 / 接下来做啥 → `/todo` skill（只读
+  Index）。
+- 开始任何改动之前，**读一次**避免
+  重复规划。
+- 在讨论某个可能已在此跟踪的话题时。
+- **默认不加载** —— 不属于 `ai_context/`
+  会话启动阅读顺序。
 
 ---
+<!-- holo:section end -->
 
-## In Progress
+## In Progress <!-- holo:heading -->
+
+<!-- holo:section start -->
+<!-- Single-slot. Filled only when a task is actually started.
+     Format: see "How to update entries → Task starts". -->
+<!-- holo:section end -->
 
 ### [T-INGEST-STRUCTURE-MODE] Phase 0/1 双模式（monolithic / light_novel）调度
 
@@ -285,7 +353,12 @@ phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapt
 
 ---
 
-## Next
+## Next <!-- holo:heading -->
+
+<!-- holo:section start -->
+<!-- Ordered by user priority. First entry is the next to start.
+     Format: see "What to record". -->
+<!-- holo:section end -->
 
 ### [T-PHASE2-REPAIR-AGENT] phase 2 baseline production 整体接入 repair framework lifecycle
 
@@ -404,7 +477,13 @@ decision #27m 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
 
 ---
 
-## Discussing (Undecided)
+## Discussing (Undecided) <!-- holo:heading -->
+
+<!-- holo:section start -->
+<!-- Tasks with open decisions / external deps / unsettled design.
+     Don't start; converge the decision first.
+     Format: see "What to record" + "Open decisions" section mandatory. -->
+<!-- holo:section end -->
 
 ### [T-REPAIR-EVENT-DRIVEN] Repair 事件驱动 · extract→repair overlap（E2）
 
@@ -488,8 +567,8 @@ bound 都要扫一遍 prompts。
 **上下文**
 
 多处 canonical docs 宣称 `works/*/indexes/` 是 committed 产物
-（`ai_context/current_status.md:157`、`ai_context/requirements.md:229`、
-`ai_context/decisions.md:174,225`、`docs/architecture/data_model.md:160,475`、
+（`ai_context/requirements.md`、`ai_context/decisions.md` #38/#42、
+`docs/architecture/data_model.md:160,475`、
 `docs/architecture/system_overview.md:36,326`），但当前没有任何 Phase
 承担生成职责——首作 `works/{work_id}/indexes/` 目录在磁盘上不存在。
 
@@ -518,8 +597,8 @@ bound 都要扫一遍 prompts。
 
 **未落地原因**
 
-- retrieval 层整体设计尚未动工（见 `ai_context/current_status.md` Current
-  Gaps：No retrieval implementation）
+- retrieval 层整体设计尚未动工（见 `ai_context/handoff.md` §当前状态
+  gap：无检索实现）
 - Phase 3 仍在进行（1/49 committed），且即将回滚重跑，Phase 5 要等
   Phase 3 真正完成有完整 stage_snapshots 作为源
 
