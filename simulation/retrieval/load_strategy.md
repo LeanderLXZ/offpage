@@ -96,7 +96,7 @@ Load only if the turn needs it:
 > 现状：timeline / location / faction 详情全部 inline 进 `world_stage_snapshot`
 > 的 `timeline_anchor` / `location_anchor` 字段 + `foundation.json` 的
 > `major_factions` / `world_lines`（决策 #27c — no separate
-> `evidence_refs` / `source_type` / `scene_refs`；`ai_context/current_status.md` §36）。
+> `evidence_refs` / `source_type` / `scene_refs`）。
 > 未来 loader 实现时再决定要不要拆 standalone schema。
 
 - `world/events/{event_id}.json` *(future)*
