@@ -24,7 +24,7 @@
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
-| `T-PHASE2-REPAIR-AGENT` | Phase 2 抽人物 baseline 时如果格式错了，目前只会"试一次就硬失败"，不像 phase 3 有自动修复管线。给 phase 2 也接上自动修复，让 baseline 抽错能自动重试 / 调整，而不用手动 rerun。改动大、设计还没拍板。 | 🟡 Med | ⏸ Blocked | 🔴 Large·Arch | 2026-05-11 EDT | 无（与本次 foundation 重构正交） |
+| `T-PHASE2-REPAIR-AGENT` | Phase 2 现在一次大 call 产 4 件基线，格式错了只能整体硬失败手动重跑。拆成 2+N 个并行 lane 各自生成、各自校验修复（与 phase 3 同构），修坏只重跑自己 lane。方向已定，剩 4 个待决策。 | 🟢 Med-Low | 💬 Discuss first | 🔴 Large·Arch | 2026-07-13 | 无技术依赖（与 foundation 重构正交） |
 
 ### ⚪ Discussing (6)
 
@@ -359,11 +359,13 @@ phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapt
      Format: see "What to record". -->
 <!-- holo:section end -->
 
-### [T-PHASE2-REPAIR-AGENT] phase 2 baseline production 整体接入 repair framework lifecycle
+### [T-PHASE2-REPAIR-AGENT] phase 2 拆 lane 并行 + baseline production 接入 repair framework lifecycle（缩水版，合并任务）
 
 **开始时间**：2026-05-11 EDT（决策 #54 落地时拆出）
 
-**当前状态**：Blocked（设计未拍板）。本任务从决策 #54 的 foundation 重构 /go 中拆出来作单独 todo，工程量大、与 foundation 重构正交。
+**更新时间**：2026-07-13 05:32 EDT
+
+**当前状态**：方向已收敛（2026-07-13 /plan 讨论：拆 lane 并行与 repair 接入合并为同一任务、缩水版接入），剩 4 个待决策项；In Progress 单槽被 T-INGEST-STRUCTURE-MODE 占用，启动前先收尾或显式 pause。
 
 **上下文**
 
@@ -375,38 +377,60 @@ repair 实际接入点 grep 全仓库**只有 1 处** = `orchestrator.py` 内 ph
 1. [decisions.md #48](../ai_context/decisions.md) 原措辞 "Phase 2/3/3.5/4 via repair framework T3_EXHAUSTED"——把 phase 2/3.5/4 的兜底也写成"经由 repair"，但实际只有 phase 3 走 repair。已在 foundation 重构 /go 同批修正。
 2. commit `e644886 phase1_parallel_lanes` 归档条目 paper trail："原计划集成 `extraction.repair.run` 走 L1/L2/L3 + T0/T1/T2/T3 lifecycle，盘点后发现 phase 2 实际不调 repair + phase 1 输出非 stage-anchored，改用更轻的 `prior_error` 注入式 retry"——当时做 phase 1 lane 改造时也误以为 phase 2 接了 repair，盘点后才发现没接。
 
+2026-07-13 /plan 讨论新增结论：phase 2 的 4 件产物**互相之间没有产出依赖**（共同依赖 phase 1 三件 + chunk summaries 这组不可变输入，见 [prompt_builder.py:392-452](../extraction/persona_extraction/prompt_builder.py) read list），可以像 phase 1 一样拆 lane 并行；拆 lane 后 per-file repair 的 T3 语义自然变成"只重跑自己 lane"，原设计障碍（单次组合 call 产 4 件强耦合产物 → 单文件 T3 重抽会跨文件漂移）直接消失。故把"拆 lane 并行"与"repair 接入"合并为同一任务——单独做并行不接 repair 收益撑不起改动（phase 2 每 work 只跑一次，wall-clock 收益小；真正价值是形态与 phase 3 同构）。
+
+**Requirements**
+
+phase 2 像 phase 3 一样：产物并行生成、validate 和 fix 都 per-file 化，schema 违规能自动修复而不是整体硬失败手动重跑。
+
+**Solution details**
+
+- **拆 2+N lane**：lane A = foundation `major_factions[].key_figures` 替换（与其他 lane 有同文件读写并发，需先行跑完或挪位，见待决策 2）；lane B = fixed_relationships；每个目标角色 1 个 lane 产 identity + target_baseline 两件（同角色"自我视角"合一个 call，默认不再拆）。
+- 每 lane 独立 prompt + 独立 schema gate；per-lane 输入裁剪照搬 phase 1 `_project_chunk_for_*` 模式，控住 2+N 倍 token 成本。
+- **repair 缩水版接入**：per-file lifecycle 只开 T0/T1（程序修 + 局部 patch，覆盖绝大多数格式错）+ 便宜程序 checker（纯集合运算的 character_id 合法性 / target keys 集合）；LLM 类 checker（target_baseline 准入判定）等真实失败样本再立项。T3 = 重跑自己 lane。
+- merge 点视待决策 1 结果补跨产物一致性 checker（fixed_relationships ↔ target_baseline，纯集合运算）。
+- `SourceContext` 是 stage-scoped（必填 `stage_id`），phase 2 全书视野需合成 stage_id 或 whole-book 变体（待决策 4）。
+
+**待决策项**
+
+1. `baseline_production.md` 模板里是否存在 fixed_relationships ↔ target_baseline 的跨产物一致性约束（需读模板确认）——决定 merge 点 checker 是否必要。
+2. key_figures lane 的位置：phase 2 内先行 lane，还是挪为 phase 1 之后的独立小步（它只依赖 candidate_characters，phase 1 结束即可跑）。
+3. per-char lane 是否再拆 identity / target_baseline 两个 lane（默认不拆——翻倍调用费，checker 收益小）。
+4. `SourceContext`：合成 stage_id（如 `S000`）vs 加 whole-book 变体。
+
 **改动清单**
 
-设计未拍板，待启动时定。预期改动量 ≈ phase 3 接入当年的工作量：
-
 新增：
-- `extraction/repair/checkers/phase2_*.py`（专属 checkers，预估 4-5 个）：
-  - `foundation_factions_legal`：foundation.major_factions[].key_figures character_id 合法性（必须 ∈ candidate_characters 已合并身份集）
-  - `fixed_relationships_legal`：parties[] character_id 必须 ∈ 已确认目标 ∪ candidate_characters
-  - `identity_required_fields`：identity.json 含 character_id / canonical_name / aliases 等必填
-  - `target_baseline_admission_rule`：targets[] 准入门槛（dialogue/action 交互判定，可能需 LLM）
-  - `target_baseline_keys_set`：targets[].target_character_id 集合校验
-- `extraction/persona_extraction/orchestrator.py` `run_baseline_production`：包装 SourceContext + 调 `run_repair(...)`，per-file 并行 + lifecycle dispatch
-- baseline 产物 per-file 拆分：4 件产物（foundation patch / fixed_relationships / identity / target_baseline）各自独立 file-level repair entry
+- `extraction/persona_extraction/prompts/` lane 专用 prompt 2 + 1 件（拆自 `baseline_production.md`：key_figures 替换 / fixed_relationships / per-char identity+target_baseline）
+- `extraction/persona_extraction/prompt_builder.py`：`build_baseline_prompt` 拆 per-lane 入口 + per-lane 输入裁剪函数（照搬 phase 1 projector 模式）
+- `extraction/repair/checkers/phase2_*.py` 便宜程序 checker 2-3 个：
+  - `foundation_factions_legal`：key_figures character_id ∈ candidate_characters 已合并身份集
+  - `fixed_relationships_legal`：parties[] character_id ∈ 已确认目标 ∪ candidate_characters
+  - `target_baseline_keys_set`：targets[].target_character_id 集合校验（+ 视待决策 1 的跨产物一致性）
 
 修改：
-- `extraction/repair/coordinator.py`：可能需要扩 fixer T0-T3 适配 phase 2 产物形态
-- `ai_context/decisions.md` #25：repair 接入点扩到 phase 2
-- `ai_context/decisions.md` #48：length tolerance gate 接入点同步更新
+- `extraction/persona_extraction/orchestrator.py` `run_baseline_production`：重写为 fan-out（lane A 先行 → lane B + per-char lanes 并行）+ per-file repair（包装 SourceContext + 调 `run_repair(...)`）
+- `extraction/validation/gates/phase2_baseline.py`：与 per-file repair 的分工调整（`extraction/validation/README.md` 已预告 gates → BaseChecker 迁移）
+- `extraction/repair/protocol.py` `SourceContext`：按待决策 4 落地
+- `extraction/repair/fixers/file_regen.py`：T3 对 phase 2 产物路由到"重跑自己 lane"回调（参照决策 #55 sub_lane_regen 模式）
+- `extraction/config.toml`：phase 2 lane 并发配置
+- `ai_context/decisions.md` #25（repair 接入点扩到 phase 2）+ #48（tolerance gate 接入点同步）+ `ai_context/architecture.md` Phase 2 描述 + `docs/architecture/extraction_workflow.md` / `docs/requirements.md` 同步
 
 **完成标准**
 
-- phase 2 baseline production 4 件产物 + foundation.key_figures 补齐都走 repair file-level lifecycle，与 phase 3 同形态
+- phase 2 产物由 2+N lane 并行产出，每 lane 独立 schema gate，per-lane 输入裁剪落地
+- 4 件产物走 repair file-level lifecycle（T0/T1 + 程序 checker），T3 = 重跑自己 lane，与 phase 3 同形态
 - 现有 phase 2 测试通过（含 length-tolerance gate 兜底）
-- ai_context 措辞 disambiguation 完成（不再把 phase 2/4 描述成"经 repair"）
-- 端到端跑一个 work：phase 2 任意环节产物 schema 违规 → repair 自动修复（无需 user 重跑）
+- ai_context 措辞 disambiguation 完成（phase 2 改为"已接 repair"，phase 4 仍不经 repair）
+- 端到端跑一个 work：任一 lane 产物 schema 违规 → repair 自动修复（无需 user 重跑）
 
-**依赖**：无技术依赖（与 foundation 重构正交，可独立启动）；设计前置：先盘点 phase 2 4 件产物的常见违规模式 + 决定 checker / fixer 切分粒度
+**依赖**：无技术依赖（与 foundation 重构正交）；启动前置：4 个待决策项收敛 + In Progress 单槽（T-INGEST-STRUCTURE-MODE）腾出
 
 **暂不做的事**
 
-- 不在 foundation 重构 /go（2026-05-11）一并做——拆出来作独立 todo，避免 PR/log 爆炸
+- LLM 类 checker（`target_baseline_admission_rule` dialogue/action 准入判定）——等真实失败样本再立项
 - 不动 phase 3 现有 repair 接入（已稳定运行多个 stage）
+- 不单独做"并行但不接 repair"的中间形态
 
 ---
 
