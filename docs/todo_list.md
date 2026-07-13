@@ -14,11 +14,9 @@
 > 本段必须与正文保持同步；这里漂移意味着 `/todo` 会给出错误答案。
 <!-- holo:section end -->
 
-### 🟢 In Progress (1)
+### 🟢 In Progress (0)
 
-| ID | Title | Start time | Updated | Status |
-|---|---|---|---|---|
-| `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | 2026-05-01 | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
+_(none)_
 
 ### 🟡 Next (1)
 
@@ -37,7 +35,7 @@
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。等真有外部消费方校验这个文件再改 schema。 | 1 | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
-**Total**: 8 — 🟢 In Progress 1 ｜ 🟡 Next 1 ｜ ⚪ Discussing 6
+**Total**: 7 — 🟢 In Progress 0 ｜ 🟡 Next 1 ｜ ⚪ Discussing 6
 
 <!-- holo:section start -->
 ---
@@ -263,95 +261,6 @@ schema 路径 / 行号 / 决策编号 / 行话**，除非
      Format: see "How to update entries → Task starts". -->
 <!-- holo:section end -->
 
-### [T-INGEST-STRUCTURE-MODE] Phase 0/1 双模式（monolithic / light_novel）调度
-
-**开始时间**：2026-05-01 07:04 EDT
-
-**更新时间**：2026-05-01 14:29 EDT
-
-**当前状态**：schema/code/prompt/ai_context/docs 完成、smoke 全过；
-post-check 第 1 轮残留缺口（stage_title.maxLength 50→80 + 代码层软截断兜底；
-progress.py `_expected_chapter_count` 兼容 `C####-C####`；extraction/README
-加 dual-mode 指针；todo_list Index 大小写对齐）已修；post-check 第 2 轮
-残留缺口（orchestrator `_STAGE_TITLE_MAX = 80` 硬编码违反 §27b 单源原则
-→ 改用启动时从 `stage_plan.schema.json` 读取 maxLength；流程级 docs 加
-软截断 safeguard 注；todo_list 累计 50→80）已修；end-to-end runtime 验证
-待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归）
-
-**上下文**
-
-phase 0/1 流程原本仅为单卷非结构化作品（典型中文网络小说）设计：phase 0
-按 token-budget 启发式切 batch、phase 1 自主发现 stage 边界。多卷结构化
-轻小说的天然结构（卷 → 印刷章 → sub-section）这套流程没有利用，且
-`1 stage = 1 sub-section` 的粒度需求与启发式不匹配。
-
-方向：phase 0/1 支持双模式，由 source manifest `structure_mode` 字段调度——
-
-- **monolithic**：维持现有 token-budget 启发式 + 自动 stage 发现
-- **light_novel**：1 phase 0 chunk = 1 phase 1 stage = 1 sub-section
-  （normalization 后的 1 个 C-id）；stage_plan 直接 1:1 从 chapter_index
-  派生，不跑 boundary discovery
-
-phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapter_index
-里 profile-B 字段携带，character / world schema 不动。
-
-**已落地（schema/code/prompt/ai_context/docs，2026-05-01）**
-
-- schema：`schemas/work/chapter_index.schema.json` items 改 `oneOf` 双
-  profile（monolithic 禁 6 字段、light_novel 必填 4 + 可选 2）；
-  `schemas/work/work_manifest.schema.json` + `schemas/work/works_manifest.schema.json`
-  加 `structure_mode` enum（默认 `monolithic`）；`schemas/analysis/stage_plan.schema.json`
-  放宽容纳 light_novel（`chapter_count.minimum` 5→1、`stages.maxItems`
-  200→1000、`stage_title.maxLength` 14→80；`chapters.pattern` 保持
-  `^C[0-9]{4}-C[0-9]{4}$` 不变，light_novel 走 degenerate 单章区间）
-- code：`extraction/ingestion/validator.py` 跨文件断言 `structure_mode` ⇔
-  chapter_index profile；`extraction/persona_extraction/lifecycle/manifests.py` 加
-  `read_structure_mode()` + `write_works_manifest` 拷字段；
-  `extraction/persona_extraction/orchestrator.py` 加
-  `_build_light_novel_stage_plan()` 输出 `chapters = f"{chapter_id}-{chapter_id}"`
-  degenerate 单章区间，phase 0 / phase 1 入口分支调度，phase 1 STAGE_MIN/MAX
-  校验在 light_novel 下绕过；phase 2/3/4 既有 `chapters` 解析器
-  （`prompt_builder._parse_chapter_range`、`scene_archive`、
-  `repair.context_retriever`、`post_processing._parse_chapter_scope`）
-  零改动
-- prompt：`prompts/ingestion/原始资料规范化.md` 补 `structure_mode` 填写
-  指引 + light_novel 三层 seq 字段说明 + title 派生公式；2026-05-01 14:29
-  update：把 task 步骤 2 改成"判定 `structure_mode`"流程——先输出 monolithic
-  / light_novel 判定 + 依据 + 置信度，≥ 0.8 直接进 / < 0.8 停手等用户拍板，
-  任意识别信号"不确定" → 置信度上限 0.7（必走人工确认）；manifest 段
-  `structure_mode` 子项的旧"判定要点" bullet 删除（迁到 step 2 单源）
-- ai_context：`decisions.md` 加 27j/27k/27l + 更新 10a；`conventions.md`
-  Cross-File Alignment 加 `structure_mode` 行；`architecture.md` Phase 0/1
-  描述加双模式
-- docs：`docs/architecture/{schema_reference,extraction_workflow}.md`、
-  `docs/requirements.md` §8.4 / §9.2 同步双模式说明
-- smoke：chapter_index oneOf（monolithic + 字段误用拒绝、light_novel +
-  缺字段拒绝）4 case；validator 跨文件断言（pass + fail 双向）4 case；
-  `_build_light_novel_stage_plan` 12-sub-section fixture 通过 stage_plan
-  schema；`write_works_manifest` 拷 `structure_mode` + `read_structure_mode`
-  prefer works → source 全过
-
-**待跑（runtime 验证）**
-
-- 拿一份完整规范化的多卷 light_novel fixture 跑一遍 phase 0 + phase 1：
-  phase 0 chunk 数 == chapter_index 长度；phase 1 stage 数 == chapter_index
-  长度；stage_plan 顺序、stage_id、stage_title 正确
-- 既有 monolithic fixture dry-run 一遍 phase 0/1，与历史结果一致——确认
-  默认路径不退化
-
-**暂不做的事**
-
-- normalization-时 LLM 形态判断的 prompt 设计 / 落地（独立后续 todo）
-- 第三种 mode（western_epub / webnovel_serialized 等）— 不预设 schema 扩
-  展点，等真有 fixture 再说
-- chunking_strategy / stage_strategy 解耦的 feature-flag 重构 — 现 2 个
-  mode 用 if/else 够用
-- light_novel 模式 phase 0/1 LLM call 合并优化 — take 这份冗余成本
-- 上/下卷合并、短篇集粒度细化 — 由 normalization 阶段控制 volume_id
-  （同卷给同 id）；不在 phase 0/1 处理
-
----
-
 ## Next <!-- holo:heading -->
 
 <!-- holo:section start -->
@@ -363,9 +272,9 @@ phase 2+ 不分叉，统一消费 stage_plan，volume / 印刷章语义靠 chapt
 
 **开始时间**：2026-05-11 EDT（决策 #54 落地时拆出）
 
-**更新时间**：2026-07-13 05:32 EDT
+**更新时间**：2026-07-13 05:47 EDT
 
-**当前状态**：方向已收敛（2026-07-13 /plan 讨论：拆 lane 并行与 repair 接入合并为同一任务、缩水版接入），剩 4 个待决策项；In Progress 单槽被 T-INGEST-STRUCTURE-MODE 占用，启动前先收尾或显式 pause。
+**当前状态**：方向已收敛（2026-07-13 /plan 讨论：拆 lane 并行与 repair 接入合并为同一任务、缩水版接入），剩 4 个待决策项收敛即可启动（In Progress 单槽已空，T-INGEST-STRUCTURE-MODE 2026-07-13 归档）。
 
 **上下文**
 
@@ -424,7 +333,7 @@ phase 2 像 phase 3 一样：产物并行生成、validate 和 fix 都 per-file 
 - ai_context 措辞 disambiguation 完成（phase 2 改为"已接 repair"，phase 4 仍不经 repair）
 - 端到端跑一个 work：任一 lane 产物 schema 违规 → repair 自动修复（无需 user 重跑）
 
-**依赖**：无技术依赖（与 foundation 重构正交）；启动前置：4 个待决策项收敛 + In Progress 单槽（T-INGEST-STRUCTURE-MODE）腾出
+**依赖**：无技术依赖（与 foundation 重构正交）；启动前置：4 个待决策项收敛
 
 **暂不做的事**
 
