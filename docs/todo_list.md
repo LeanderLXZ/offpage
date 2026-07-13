@@ -20,12 +20,11 @@
 |---|---|---|---|---|
 | `T-INGEST-STRUCTURE-MODE` | Phase 0/1 双模式（monolithic / light_novel）调度 | 2026-05-01 07:04 EDT | 2026-05-01 | schema/code/prompt/ai_context/docs 完成 + post-check 两轮残留缺口（stage_title 软截断改用启动时动态读取 schema cap + progress.py reconcile C 前缀兼容 + cosmetic 全过）已修；end-to-end runtime 验证待跑（需 light_novel fixture 与 monolithic 既有 fixture 双向回归） |
 
-### 🟡 Next (2)
+### 🟡 Next (1)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
 | `T-PHASE2-REPAIR-AGENT` | Phase 2 抽人物 baseline 时如果格式错了，目前只会"试一次就硬失败"，不像 phase 3 有自动修复管线。给 phase 2 也接上自动修复，让 baseline 抽错能自动重试 / 调整，而不用手动 rerun。改动大、设计还没拍板。 | 🟡 Med | ⏸ Blocked | 🔴 Large·Arch | 2026-05-11 EDT | 无（与本次 foundation 重构正交） |
-| `T-PLUGIN-README` | 现在这套 skill plugin 想接到新项目上时，没有文档说"该填哪些字段、模板长啥样、漏填了会发生什么"——这些信息散在各处。写一个 README 当 setup 入口，告诉新项目 plugin 装上后该怎么开干。 | 🟢 Med-Low | ✅ Ready | 🟢 Small | — | 无 |
 
 ### ⚪ Discussing (6)
 
@@ -38,7 +37,7 @@
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。等真有外部消费方校验这个文件再改 schema。 | 1 | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
-**Total**: 9 — 🟢 In Progress 1 ｜ 🟡 Next 2 ｜ ⚪ Discussing 6
+**Total**: 8 — 🟢 In Progress 1 ｜ 🟡 Next 1 ｜ ⚪ Discussing 6
 
 <!-- holo:section start -->
 ---
@@ -408,38 +407,6 @@ repair 实际接入点 grep 全仓库**只有 1 处** = `orchestrator.py` 内 ph
 
 - 不在 foundation 重构 /go（2026-05-11）一并做——拆出来作独立 todo，避免 PR/log 爆炸
 - 不动 phase 3 现有 repair 接入（已稳定运行多个 stage）
-
----
-
-### [T-PLUGIN-README] 写 .agents/skills 的 plugin README
-
-**上下文**
-
-2026-04-28 把 6 个 skill（commit/go/full-review/post-check/monitor/check-review）
-里的项目专属 hardcode 抽到 `ai_context/skills_config.md`，新项目接 plugin
-只需复制 `.agents/skills/` + `.claude/commands/` + 在 ai_context 下填一份
-`skills_config.md` 即可跑。但目前 plugin 装上去后，新项目不知道去哪读
-"每节怎么填 / 缺失行为 / 模板"——这些信息散落在 skills_config.md 注释
-和各 skill 的 0a 段里，没有单一入口文档。
-
-**改动清单**
-
-- file: `.agents/skills/README.md`（新增）→ 列出 plugin 装上去后的 setup 流程：
-  1) 在目标项目 `ai_context/` 下创建 `skills_config.md` + 9 节模板
-  2) 每节字段语义、可空值约定、缺失行为
-  3) 每节由哪些 skill 用、怎么用
-  4) Cross-File Alignment 提醒
-- file: `ai_context/skills_config.md`（offpage 实例）→ 顶部加一行链接
-  "字段语义 / 模板 / 缺失行为详见 .agents/skills/README.md"
-
-**完成标准**
-
-- README 存在，9 节字段全覆盖，含每节"完整填值 / `(none)` / 缺失"
-  三态在各 skill 中的具体行为表
-- 拿一个新项目模拟接入：跟着 README 填 skills_config.md → 跑 `/commit`
-  / `/full-review` 都能正常降级或运行
-
-**依赖**：无（skills_config.md 已落地、6 skill 改造已完成）
 
 ---
 

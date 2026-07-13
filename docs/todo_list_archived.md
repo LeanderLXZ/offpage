@@ -195,6 +195,11 @@
      条目必须说明 WHY 该任务被放弃。 -->
 <!-- holo:section end -->
 
+### [T-PLUGIN-README] 写 .agents/skills 的 plugin README · 废弃于 2026-07-13
+
+- 废弃原因：前提消失——这套 skill plugin 已产品化为 holo 插件（本仓库当前 1.18.0），新项目接入走 `/holo:init` 交互式初始化 + `/holo:update` 同步检查，"每节怎么填 / 缺失行为 / 模板"由插件模板与 init/update 流程自身承接，手写 README 作 setup 入口不再需要。
+- 关联 log: [logs/change_logs/2026-07-13_040101_abandon_t_plugin_readme.md](../logs/change_logs/2026-07-13_040101_abandon_t_plugin_readme.md)
+
 ### [T-CODEX-RATE-LIMIT] CodexBackend 错误分类对齐 rate-limit / 429 / 5h_window · 废弃于 2026-05-12
 
 - 废弃原因：codex backend 未启用（默认 `--backend claude`），本机连 codex CLI 都没装无法实测；代码侧 `CodexBackend.run` 顶上已有相关注释作为提醒。切到 codex 时一定会读该文件、注释自动跳出，todo 行只是冗余索引。真要用 codex 时和 T-CODEX-STDIN 一起修。
