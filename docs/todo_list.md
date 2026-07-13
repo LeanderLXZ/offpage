@@ -270,11 +270,11 @@ schema 路径 / 行号 / 决策编号 / 行话**，除非
 
 **开始时间**：2026-05-12 EDT（决策 #56 复审时确认推迟）
 
-**当前状态**：Discussing（无外部消费方，决策 #27m 现状保留；本 todo 是预备工作，等首个外部 validator 出现时启动）
+**当前状态**：Discussing（无外部消费方，决策 #27n 现状保留；本 todo 是预备工作，等首个外部 validator 出现时启动）
 
 **上下文**
 
-decision #27m 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标记为已知 trade-off：light_novel 模式 orchestrator 程序化 1:1 派生不走 schema validate，事实上没有外部消费方校验该产物。codex `gpt-5` 2026-05-12 复审报告 OQ3 指出：如果未来出现外部 artifact validator 独立校验 `stage_plan.json`，这会重新变成契约问题。
+decision #27n 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标记为已知 trade-off：light_novel 模式 orchestrator 程序化 1:1 派生不走 schema validate，事实上没有外部消费方校验该产物。codex `gpt-5` 2026-05-12 复审报告 OQ3 指出：如果未来出现外部 artifact validator 独立校验 `stage_plan.json`，这会重新变成契约问题。
 
 **改动清单（设计）**
 
@@ -283,7 +283,7 @@ decision #27m 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
   - light_novel: `minimum=1, maximum=1`
 - file: `extraction/persona_extraction/_build_light_novel_stage_plan`：产物加 `structure_mode` 字段供 schema dispatch（或在外层 manifest 索引）
 - file: `extraction/validation/gates/phase2_baseline.py`：派生产物现在走 schema validate
-- file: `docs/architecture/schema_reference.md` + decision #27m + #56：trade-off 文案改写为已契约化
+- file: `docs/architecture/schema_reference.md` + decision #27n + #56：trade-off 文案改写为已契约化
 
 **完成标准**
 

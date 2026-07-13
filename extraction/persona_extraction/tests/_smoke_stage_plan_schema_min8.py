@@ -18,7 +18,7 @@ Five scenarios:
         the known trade-off that ``_build_light_novel_stage_plan``-
         derived stage_plan.json is schema-invalid by design — the
         derivation path bypasses schema validation entirely, see
-        decisions.md #27m)
+        decisions.md #27n)
 
 Run:  python -m extraction.persona_extraction.tests._smoke_stage_plan_schema_min8
 """
@@ -87,7 +87,7 @@ def main() -> int:
     results.append(_scenario("D", 16, expect_valid=False,
                              expect_msg_substr="maximum"))
     # (E) light_novel-style chapter_count=1 — invalid (known trade-off
-    #     documented in decisions.md #27m; derivation path bypasses schema)
+    #     documented in decisions.md #27n; derivation path bypasses schema)
     results.append(_scenario("E", 1, expect_valid=False,
                              expect_msg_substr="minimum"))
 

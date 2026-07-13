@@ -224,14 +224,24 @@ class FileRegenFixer(BaseFixer):
                 verdict = self._lane_regen(
                     file_path, file_issues, prior_attempt_context)
                 if verdict is True:
-                    try:
-                        with Path(file_path).open(
-                                "r", encoding="utf-8") as fh:
-                            f.content = json.load(fh)
-                    except (OSError, json.JSONDecodeError) as exc:
-                        logger.warning(
-                            "lane regen claimed success but file "
-                            "unreadable at %s: %s", file_path, exc)
+                    # The lane rerun regenerated EVERY file the lane
+                    # owns — reload all entries, not just the one that
+                    # carried this issue group, so siblings whose
+                    # `content` was set by an earlier T1 patch don't go
+                    # stale against the freshly written disk state.
+                    reload_failed = False
+                    for entry in files:
+                        try:
+                            with Path(entry.path).open(
+                                    "r", encoding="utf-8") as fh:
+                                entry.content = json.load(fh)
+                        except (OSError, json.JSONDecodeError) as exc:
+                            logger.warning(
+                                "lane regen claimed success but file "
+                                "unreadable at %s: %s", entry.path, exc)
+                            if entry.path == file_path:
+                                reload_failed = True
+                    if reload_failed:
                         continue
                     for issue in file_issues:
                         patched.append(issue.json_path)

@@ -84,7 +84,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 
 - **monolithic 模式 = 3 lane 并行**：
   - **foundation lane**：题材 / 力量体系 / 主要势力 / 地理结构 / 大世界线划分 / 核心设定规则。输出：`works/{work_id}/world/foundation/foundation.json`（决策 #54——foundation 由 phase 1 直接产到 world 域，phase 2 仅补 `major_factions[].key_figures`）
-  - **stage_plan lane**：按自然剧情边界切分（拐点先行，章数硬范围 8–15；详见决策 #27m 步骤 2.1/2.2/2.3 反锚定自检）。输出：`works/{work_id}/analysis/stage_plan.json`
+  - **stage_plan lane**：按自然剧情边界切分（拐点先行，章数硬范围 8–15；详见决策 #27n 步骤 2.1/2.2/2.3 反锚定自检）。输出：`works/{work_id}/analysis/stage_plan.json`
   - **candidate_characters lane**：跨 chunk 角色身份合并 + 候选角色识别 + aliases 归并。输出：`works/{work_id}/analysis/candidate_characters.json`
 - **light_novel 模式 = 2 lane 并行 + 程序化 stage_plan**：
   - **foundation lane** + **candidate_characters lane** 同 monolithic（沿用同一 prompt + 同一裁剪契约）
@@ -123,7 +123,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 
 1. **schema gate**：lane 输出 jsonschema 校验
    （`schemas/world/foundation.schema.json` for foundation lane + `schemas/analysis/{stage_plan,candidate_characters}.schema.json`）
-2. **stage `chapter_count` 8-15 限制**（仅 stage_plan lane，monolithic 模式）：schema `chapter_count.minimum=8` / `maximum=15` 直接硬挡 LLM 输出（决策 #27i schema-gate-as-retry-trigger 注入 prior_error），orchestrator `_check_stage_plan_limits` 代码层 belt-and-suspenders 二次兜底；light_novel 模式整体跳过 schema gate（stage_plan 由 `_build_light_novel_stage_plan` 程序派生不走 LLM 也不走 phase 1 lanes 列表，`chapter_count=1` 在新 schema 下 schema-invalid 是已知 trade-off，详见决策 #27m）
+2. **stage `chapter_count` 8-15 限制**（仅 stage_plan lane，monolithic 模式）：schema `chapter_count.minimum=8` / `maximum=15` 直接硬挡 LLM 输出（决策 #27i schema-gate-as-retry-trigger 注入 prior_error），orchestrator `_check_stage_plan_limits` 代码层 belt-and-suspenders 二次兜底；light_novel 模式整体跳过 schema gate（stage_plan 由 `_build_light_novel_stage_plan` 程序派生不走 LLM 也不走 phase 1 lanes 列表，`chapter_count=1` 在新 schema 下 schema-invalid 是已知 trade-off，详见决策 #27n）
 
 校验失败 → 把首条 schema 错误（含 stage 限制违规）作为 `prior_error` 注入下一次重试 prompt，
 **与 Phase 0 chunk-level / Phase 4 chapter-level prior_error 注入同形态**——失败文件单独删除，重跑该 lane 的 prompt（带 prior_error 段），通过校验的 lane 产物保留。

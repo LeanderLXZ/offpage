@@ -121,6 +121,13 @@ T-PHASE2-REPAIR-AGENT（2026-05-11 从决策 #54 拆出）启动。触发链：
    行；`extraction/validation/README.md` 终点校验口径放宽为全清单；
    `chapter_summary_chunk.schema.json` core_rules description 清除历史
    叙事（pre-existing 违反"只描述当前设计"）。
+9. **勘误（/post-check M4，2026-07-13 补记）**：上条 #8 与 commit
+   `577722f` message 所称「#27l 指针改指 baseline_key_figures.md」编号
+   有误——实际被改的指针行位于当时归档中**第一条 "27m."**（chunk 级
+   二级字段）条目内；#27l（title 派生）与该改动无关。误因是归档彼时
+   存在重复编号 "27m." ×2（已由后续 fix 轮改号：stage_plan 条目 →
+   "27n."，见 2026-07-13_152847_fix_from_postcheck_phase2_lane_split.md）。
+   commit message 不可改，勘误以本条为准。
 
 <!-- POST phase fills in -->
 

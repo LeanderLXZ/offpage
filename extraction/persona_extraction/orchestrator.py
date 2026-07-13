@@ -2229,6 +2229,11 @@ class ExtractionOrchestrator:
         """
         from .core.schema_loader import load_schema as _load_schema_inlined
 
+        # Dedupe while preserving order — a duplicate id from the phase
+        # 1.5 manual input would spawn two same-slug per-char lanes
+        # writing the same files concurrently.
+        target_characters = list(dict.fromkeys(target_characters))
+
         cfg = get_config()
         work_dir = self.project_root / "works" / self.work_id
         schemas_dir = self.project_root / "schemas"

@@ -187,7 +187,7 @@ N. <决策陈述，一行>。
 26. 抽取跑在 `extraction/{work_id}` 分支上。每个通过的 stage 都提交。回滚 = `git reset`。
     → docs/decisions.md #26。
 
-27. Orchestrator 预先计算每次调用的读取清单（仅最新 snapshot + memory_timeline）。Agent 不自由探索。（含子条目 27a–27m，细节见归档）
+27. Orchestrator 预先计算每次调用的读取清单（仅最新 snapshot + memory_timeline）。Agent 不自由探索。（含子条目 27a–27n，细节见归档）
     → docs/decisions.md #27。
 
 ## Memory System
