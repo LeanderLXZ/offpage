@@ -63,6 +63,7 @@ push 默认值等）。skill 不再跨分支自动合并 —
 - `caches/`
 - `works/`（extraction 产物）
 - `users/`（真实用户包）
+- `logs/file_snapshots/`（skill 快照备份，仅本地）
 
 ## Source directories <!-- holo:heading -->
 

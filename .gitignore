@@ -83,3 +83,9 @@ dist/
 build/
 .cache/
 tmp/holo/
+
+# ===== 项目专属扩展 =====
+# skill 快照备份（smart-merge / prune / compress 前的文件副本）：
+# 仅本地保留，git 历史本身已是回滚安全网。
+# 与 ai_context/skills_config.md §Do-not-commit paths 保持同步。
+logs/file_snapshots/
