@@ -66,8 +66,8 @@ N. <决策陈述>。
 
 9. 中文作品：中文 `work_id`、实体名、标识符取值、路径段。
 
-10. `ai_context/` 保持英文。JSON 字段名可以是英文。
-    → `conventions.md` §Naming。
+10. `ai_context/` 与 `docs/` 的书面语言跟随 `ai_context/skills_config.md` §Language 的 `content_language`（单源；当前 zh，2026-07-12 /holo:init 设定——曾为 English-only，随语言轴引入就地替换本条）。代码标识符与 JSON 字段名保持英文；内容文本 = 作品语言。
+    → `conventions.md` §Naming + `ai_context/skills_config.md` §Language。
 10a. `chapter_id` = `^C[0-9]{4}$`（4 位），`volume_id` = `^V[0-9]{3}$`（3 位，仅 light_novel source 使用）。位宽差异 = 预期基数（每作品章节 ≤ 9999，卷 ≤ 999）；字母前缀与 `S###` / `M-S###-##` ID 家族对齐。`chapter_index.schema.json` 的 `items` 是覆盖两个 profile 的 `oneOf`：**monolithic** profile（单卷非结构化作品 —— 禁止 6 个 light_novel 专属字段）与 **light_novel** profile（多卷结构化作品 —— required `volume_id` + `volume_seq` + `original_chapter_seq` + `original_sub_chapter_seq` 三层 seq，optional `volume_title` + `original_chapter_title`）。Profile 由 `manifest.structure_mode` 分派。**没有独立的 `volume_index.json`** —— `chapter_index` 承载全部交叉积信息。每个 `C####` 是一个 ingestion 单元（light_novel 下是 sub-section；monolithic 下是章）。**Phase 0 / 1 / 3 / 4 的 schema + prompt + 代码端到端消费 `C####`**（`chapter_summary_chunk.chapter`、`stage_plan.chapters` 为 `C####-C####`；light_novel 使用 start == end 的退化区间 `C####-C####`，phase 2/3/4 消费方按同一方式解析）；`extraction/persona_extraction/prompt_builder.py` + `extraction/persona_extraction/phases/scene_archive.py` 用 `C` 前缀构建路径与章 → stage 映射。卷 / 原书章的展示信息挂在 `chapter_index` profile-B 字段上、经派生的 `title` 呈现，不在 `stage_plan.chapters` 上。标识符改名审计用 `conventions.md` §Cross-File Alignment 的 4-form 清单。
     → `conventions.md` §Naming + §Cross-File Alignment、`schemas/work/chapter_index.schema.json`、`schemas/analysis/{chapter_summary_chunk,stage_plan}.schema.json`。
 

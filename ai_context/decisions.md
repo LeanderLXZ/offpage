@@ -112,7 +112,7 @@ N. <决策陈述，一行>。
 9. 中文作品：中文 `work_id`、实体名、标识符取值、路径段。
     → docs/decisions.md #9。
 
-10. `ai_context/` 保持英文。JSON 字段名可以是英文。（含子条目 10a，细节见归档）
+10. `ai_context/` 与 `docs/` 的书面语言跟随 `skills_config.md` §Language 的 `content_language`（当前 zh）；代码标识符与 JSON 字段名保持英文。（含子条目 10a，细节见归档）
     → docs/decisions.md #10。
 
 ## Character Depth

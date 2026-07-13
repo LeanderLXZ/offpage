@@ -214,7 +214,8 @@
   （3 位零填充）。宽度拆分理由：单部作品章节数可达数千
   （≤ 9999 足以覆盖）；卷数保持很小
   （≤ 999），因此 `V###` 让 ID 紧凑且无歧义。
-- `ai_context/` 保持英文。JSON 字段名可以是英文；
+- `ai_context/` 与 `docs/` 的书面语言跟随 `skills_config.md` §Language
+  的 `content_language`（当前 zh）。JSON 字段名可以是英文；
   内容文本跟随作品语言。
 
 ## Data Separation <!-- holo:heading -->
