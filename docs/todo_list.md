@@ -18,11 +18,9 @@
 
 _(none)_
 
-### 🟡 Next (1)
+### 🟡 Next (0)
 
-| ID | Brief | Importance | Ready | Scope | Updated | Deps |
-|---|---|---|---|---|---|---|
-| `T-PHASE2-REPAIR-AGENT` | Phase 2 现在一次大 call 产 4 件基线，格式错了只能整体硬失败手动重跑。拆成 2+2N 个并行 lane 各自生成、各自校验修复（与 phase 3 同构），修坏只重跑自己 lane。4 个决策已全部拍板，随时可启动。 | 🟡 Medium | ✅ Ready | 🔴 Large·Arch | 2026-07-13 | 无（决策已收敛，可直接启动） |
+_(none)_
 
 ### ⚪ Discussing (6)
 
@@ -35,7 +33,7 @@ _(none)_
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。等真有外部消费方校验这个文件再改 schema。 | 1 | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
-**Total**: 7 — 🟢 In Progress 0 ｜ 🟡 Next 1 ｜ ⚪ Discussing 6
+**Total**: 6 — 🟢 In Progress 0 ｜ 🟡 Next 0 ｜ ⚪ Discussing 6
 
 <!-- holo:section start -->
 ---
@@ -267,80 +265,6 @@ schema 路径 / 行号 / 决策编号 / 行话**，除非
 <!-- Ordered by user priority. First entry is the next to start.
      Format: see "What to record". -->
 <!-- holo:section end -->
-
-### [T-PHASE2-REPAIR-AGENT] phase 2 拆 lane 并行 + baseline production 接入 repair framework lifecycle（缩水版，合并任务）
-
-**开始时间**：2026-05-11 EDT（决策 #54 落地时拆出）
-
-**更新时间**：2026-07-13 09:40 EDT
-
-**当前状态**：Ready——4 个待决策项已于 2026-07-13 全部收敛（见下方"已收敛决策"），In Progress 单槽已空，随时可 /go 启动。
-
-**上下文**
-
-会话深挖发现 phase 2 baseline production 当前形态 = "**裸单次 LLM + jsonschema gate + length-bound tolerance gate**"，不经 repair framework lifecycle（[orchestrator.py:run_baseline_production](../extraction/persona_extraction/orchestrator.py)）。代码注释自己承认："Phase 2 has no LLM-level retry budget here ... this is the terminal gate."
-
-repair 实际接入点 grep 全仓库**只有 1 处** = `orchestrator.py` 内 phase 3 stage loop 的 `_repair_one(f)` 调用（per-file 并行 lifecycle，每 stage 1+2N files 各自独立跑 L0-L3 × T0-T3 checker/fixer 矩阵）。phase 0 / 1 / 1.5 / 2 / 3.5 / 4 都没接 repair。
-
-历史误解源头：
-1. [decisions.md #48](../ai_context/decisions.md) 原措辞 "Phase 2/3/3.5/4 via repair framework T3_EXHAUSTED"——把 phase 2/3.5/4 的兜底也写成"经由 repair"，但实际只有 phase 3 走 repair。已在 foundation 重构 /go 同批修正。
-2. commit `e644886 phase1_parallel_lanes` 归档条目 paper trail："原计划集成 `extraction.repair.run` 走 L1/L2/L3 + T0/T1/T2/T3 lifecycle，盘点后发现 phase 2 实际不调 repair + phase 1 输出非 stage-anchored，改用更轻的 `prior_error` 注入式 retry"——当时做 phase 1 lane 改造时也误以为 phase 2 接了 repair，盘点后才发现没接。
-
-2026-07-13 /plan 讨论新增结论：phase 2 的 4 件产物**互相之间没有产出依赖**（共同依赖 phase 1 三件 + chunk summaries 这组不可变输入，见 [prompt_builder.py:392-452](../extraction/persona_extraction/prompt_builder.py) read list），可以像 phase 1 一样拆 lane 并行；拆 lane 后 per-file repair 的 T3 语义自然变成"只重跑自己 lane"，原设计障碍（单次组合 call 产 4 件强耦合产物 → 单文件 T3 重抽会跨文件漂移）直接消失。故把"拆 lane 并行"与"repair 接入"合并为同一任务——单独做并行不接 repair 收益撑不起改动（phase 2 每 work 只跑一次，wall-clock 收益小；真正价值是形态与 phase 3 同构）。
-
-**Requirements**
-
-phase 2 像 phase 3 一样：产物并行生成、validate 和 fix 都 per-file 化，schema 违规能自动修复而不是整体硬失败手动重跑。
-
-**Solution details**
-
-- **拆 2+2N lane**：lane A = foundation `major_factions[].key_figures` 替换（**先行跑完**再放其余 lane，避免对 foundation.json 的同文件读写并发）；lane B = fixed_relationships；每个目标角色 2 个 lane——identity lane（产 identity.json + manifest.json）+ target_baseline lane（产 target_baseline.json）。lane B 与全部 per-char lanes 并行。
-- 每 lane 独立 prompt + 独立 schema gate；per-lane 输入裁剪照搬 phase 1 `_project_chunk_for_*` 模式，控住多倍 token 成本。
-- **repair 缩水版接入**：per-file lifecycle 只开 T0/T1（程序修 + 局部 patch，覆盖绝大多数格式错）+ 便宜程序 checker（纯集合运算的 character_id 合法性 / target keys 集合）；LLM 类 checker（target_baseline 准入判定）等真实失败样本再立项。T3 = 重跑自己 lane。
-- **不做 merge 点跨产物 checker**：`baseline_production.md` 确认 fixed_relationships ↔ target_baseline 无跨产物一致性约束（模板明说血亲等 fixed 关系无交互时不入 baseline，分叉合法）；各 lane 只对照 candidate_characters（不可变共享输入）做合法性检查，lane 间完全独立。
-- `run_repair` 的 `source_context` 传 `None`（本就 Optional；T0/T1 + 程序 checker 用不到原文检索），不改 `protocol.py`。
-
-**已收敛决策**（2026-07-13）
-
-1. 跨产物一致性约束：模板确认**不存在**（fixed_relationships 与 target_baseline 合法分叉）→ 不做 merge checker。
-2. key_figures lane 位置：**phase 2 内先行 lane**（不动 phase 1 编排）。
-3. per-char lane：**拆成 identity / target_baseline 两个 lane**（2+2N 形态，产物隔离更彻底、T3 重跑范围更小，接受 token 成本）。
-4. `SourceContext`：**传 `None`，不改 protocol**；将来真开 T2 再补合成 stage_id 或 whole-book 变体。
-
-**改动清单**
-
-新增：
-- `extraction/persona_extraction/prompts/` lane 专用 prompt 4 件（拆自 `baseline_production.md`：key_figures 替换 / fixed_relationships / per-char identity+manifest / per-char target_baseline）
-- `extraction/persona_extraction/prompt_builder.py`：`build_baseline_prompt` 拆 4 个 per-lane 入口 + per-lane 输入裁剪函数（照搬 phase 1 projector 模式）
-- `extraction/repair/checkers/phase2_*.py` 便宜程序 checker 2-3 个：
-  - `foundation_factions_legal`：key_figures character_id ∈ candidate_characters 已合并身份集
-  - `fixed_relationships_legal`：parties[] character_id ∈ 已确认目标 ∪ candidate_characters
-  - `target_baseline_keys_set`：targets[].target_character_id 集合校验
-
-修改：
-- `extraction/persona_extraction/orchestrator.py` `run_baseline_production`：重写为 fan-out（lane A 先行 → lane B + per-char 2N lanes 并行）+ per-file repair（`source_context=None` 调 `run_repair(...)`）
-- `extraction/validation/gates/phase2_baseline.py`：与 per-file repair 的分工调整（`extraction/validation/README.md` 已预告 gates → BaseChecker 迁移）
-- `extraction/repair/fixers/file_regen.py`：T3 对 phase 2 产物路由到"重跑自己 lane"回调（参照决策 #55 sub_lane_regen 模式）
-- `extraction/config.toml`：phase 2 lane 并发配置
-- `ai_context/decisions.md` #25（repair 接入点扩到 phase 2）+ #48（tolerance gate 接入点同步）+ `ai_context/architecture.md` Phase 2 描述 + `docs/architecture/extraction_workflow.md` / `docs/requirements.md` 同步
-
-**完成标准**
-
-- phase 2 产物由 2+2N lane 并行产出（lane A 先行），每 lane 独立 schema gate，per-lane 输入裁剪落地
-- 4 件产物走 repair file-level lifecycle（T0/T1 + 程序 checker），T3 = 重跑自己 lane，与 phase 3 同形态
-- 现有 phase 2 测试通过（含 length-tolerance gate 兜底）
-- ai_context 措辞 disambiguation 完成（phase 2 改为"已接 repair"，phase 4 仍不经 repair）
-- 端到端跑一个 work：任一 lane 产物 schema 违规 → repair 自动修复（无需 user 重跑）
-
-**依赖**：无（4 个待决策项已收敛，单槽已空，可直接启动）
-
-**暂不做的事**
-
-- LLM 类 checker（`target_baseline_admission_rule` dialogue/action 准入判定）——等真实失败样本再立项
-- 不动 phase 3 现有 repair 接入（已稳定运行多个 stage）
-- 不单独做"并行但不接 repair"的中间形态
-
----
 
 ### [T-LIGHTNOVEL-SCHEMA-ONEOF] light_novel `chapter_count=1` schema 正式契约化
 

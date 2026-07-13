@@ -103,6 +103,11 @@
 <!-- 已落地的任务。仅精简条目。 -->
 <!-- holo:section end -->
 
+### [T-PHASE2-REPAIR-AGENT] phase 2 拆 2+2N lane 并行 + baseline production 接入 repair framework lifecycle（缩水版） · 完成于 2026-07-13 · 完整完成
+
+- 1 行摘要：phase 2 由单次组合 LLM call 改为 2+2N lane fan-out（lane A `key_figures` 替换先行串行 + fixed_relationships / 每目标角色 identity+manifest / target_baseline lane 并行，`[phase2].lane_concurrency` 默认 5）——`baseline_production.md` 拆 4 件 lane prompt + prompt_builder 4 入口 + 3 个 phase 2 chunk projector（`.phase2_lane_inputs/` staging，gitignored）；per-lane repair 缩水版接入（决策 #59）：T0/T1 + schema checker + `phase2_baseline_refs.py` 3 个程序 checker（key_figures 溯源/去重/势力集稳定、fixed_relationships parties warning + id 去重、target_baseline character_id 一致 + target ∈ candidate 集 + 去重 + 自引用），L3/T2/triage 不开（`source_context=None`），T3 = `lane_regen` 回调重跑本 lane；repair 框架加通用 `extra_checkers` / `lane_regen` hook（顺带修 `FileRegenFixer` llm_call=None 早退绕过回调 + `_collect_stage_files` 内 restructure 遗留断链 import）；终点 `validate_baseline` strict→tolerance 保留；`[phase2]` config 节（lane_concurrency / output_missing_max_retry / repair_enabled）。决策 #59 durable + #25/#48/#54 就地 supersede，docs/ai_context/README/schema description 全链同步。Smoke 全过（投影字段集精确 / 4 prompt read list 隔离 / checker 10 case 双向 / run_repair T3 lane_regen 端到端 / config round-trip / 既有回归 7/7）；runtime 端到端验证（真实 work 跑 phase 2 + 违规自动修复实测）留给下一次 phase 2 真实启动。
+- 关联 log: [logs/change_logs/2026-07-13_104934_phase2_lane_split_repair_integration.md](../logs/change_logs/2026-07-13_104934_phase2_lane_split_repair_integration.md)
+
 ### [T-INGEST-STRUCTURE-MODE] Phase 0/1 双模式（monolithic / light_novel）调度 · 完成于 2026-07-13 · 完整完成
 
 - 1 行摘要：source manifest `structure_mode` 字段调度 phase 0/1 双模式——monolithic 维持 token-budget 启发式 + 自动 stage 发现；light_novel 1 chunk = 1 stage = 1 sub-section，stage_plan 程序化 1:1 从 chapter_index 派生跳过 boundary discovery；phase 2+ 不分叉统一消费 stage_plan。schema（chapter_index oneOf 双 profile + structure_mode enum + stage_plan 放宽）/ code（validator 跨文件断言 + `read_structure_mode` + `_build_light_novel_stage_plan` + 入口分支）/ prompt（规范化步骤 2 改判定流程 + 置信度门槛）/ ai_context（#27j/k/l）/ docs 全量落地 2026-05-01，smoke 全过；post-check 两轮残留缺口（stage_title 软截断改启动时动态读 schema cap、progress.py reconcile `C` 前缀兼容等）已修。end-to-end runtime 双向回归验证未单独跑——用户 2026-07-13 拍板不需单独跟踪（下次真实跑 pipeline 自然覆盖，出问题再立项），据此收尾。

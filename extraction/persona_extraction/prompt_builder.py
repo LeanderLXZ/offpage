@@ -386,75 +386,289 @@ def build_candidate_characters_prompt(
 
 
 # ---------------------------------------------------------------------------
-# Baseline production prompt
+# Phase 2 baseline lane fan-out — chunk projection + per-lane prompt builders
 # ---------------------------------------------------------------------------
+#
+# Phase 2 fans out into 2+2N lanes (decision #59):
+#
+#   - key_figures lane (lane A, runs FIRST — in-place edit of
+#     world/foundation/foundation.json; serialized to avoid concurrent
+#     read/write on the same file by sibling lanes): raw name →
+#     character_id replacement. Reads foundation.json +
+#     candidate_characters.json only — no chunk summaries.
+#   - fixed_relationships lane: world/foundation/fixed_relationships.json.
+#     Projection: per-summary chapter + summary + characters_present +
+#     chunk_factions[].{name, members_present}.
+#   - identity lane (×N, one per target character):
+#     characters/{cid}/canon/identity.json + characters/{cid}/manifest.json.
+#     Projection: per-summary chapter + summary + characters_present +
+#     identity_notes.
+#   - target_baseline lane (×N): characters/{cid}/canon/target_baseline.json.
+#     Projection: per-summary chapter + summary + characters_present.
+#
+# Projected chunks are staged at
+#   works/{work_id}/analysis/.phase2_lane_inputs/{lane}/chunk_NNN.json
+# (gitignored; cleaned by orchestrator on run_baseline_production exit).
+# Per-char lanes share one projection dir per lane kind — the projection
+# is character-independent; the prompt names the character.
 
-def build_baseline_prompt(
+# Lane kinds that consume projected chunk inputs. Deliberately excludes
+# lane A (key_figures) — that lane reads no chunk summaries at all.
+PHASE2_PROJECTED_LANES: tuple[str, ...] = (
+    "fixed_relationships",
+    "identity",
+    "target_baseline",
+)
+
+
+def _phase2_lane_inputs_root(project_root: Path, work_id: str) -> Path:
+    return (project_root / "works" / work_id / "analysis"
+            / ".phase2_lane_inputs")
+
+
+def _project_chunk_for_fixed_relationships(chunk: dict) -> dict:
+    """Per-summary chapter + summary + characters_present, plus
+    chunk_factions[].{name, members_present} — 势力归属信号 + 摘要文本
+    足以判定"贯穿不变"的结构性关系；identity_notes / chunk world 字段
+    与固定关系判定正交，裁掉。"""
+    factions = []
+    for fac in chunk.get("chunk_factions") or []:
+        factions.append({
+            "name": fac.get("name", ""),
+            "members_present": fac.get("members_present") or [],
+        })
+    return {
+        "work_id": chunk.get("work_id"),
+        "chunk_index": chunk.get("chunk_index"),
+        "chapters": chunk.get("chapters"),
+        "chunk_factions": factions,
+        "summaries": [
+            {
+                "chapter": s.get("chapter"),
+                "summary": s.get("summary", ""),
+                "characters_present": s.get("characters_present") or [],
+            }
+            for s in chunk.get("summaries") or []
+            if s.get("chapter")
+        ],
+    }
+
+
+def _project_chunk_for_identity(chunk: dict) -> dict:
+    """Per-summary chapter + summary + characters_present + identity_notes
+    — identity baseline 需要全书事件文本（core_wounds / key_relationships
+    弧线）+ 身份线索；chunk world 字段正交，裁掉。"""
+    return {
+        "work_id": chunk.get("work_id"),
+        "chunk_index": chunk.get("chunk_index"),
+        "chapters": chunk.get("chapters"),
+        "summaries": [
+            {
+                "chapter": s.get("chapter"),
+                "summary": s.get("summary", ""),
+                "characters_present": s.get("characters_present") or [],
+                "identity_notes": s.get("identity_notes", ""),
+            }
+            for s in chunk.get("summaries") or []
+            if s.get("chapter")
+        ],
+    }
+
+
+def _project_chunk_for_target_baseline(chunk: dict) -> dict:
+    """Per-summary chapter + summary + characters_present — dialogue /
+    action 交互准入判定只依赖摘要文本 + 在场角色；其余字段裁掉。"""
+    return {
+        "work_id": chunk.get("work_id"),
+        "chunk_index": chunk.get("chunk_index"),
+        "chapters": chunk.get("chapters"),
+        "summaries": [
+            {
+                "chapter": s.get("chapter"),
+                "summary": s.get("summary", ""),
+                "characters_present": s.get("characters_present") or [],
+            }
+            for s in chunk.get("summaries") or []
+            if s.get("chapter")
+        ],
+    }
+
+
+_PHASE2_LANE_PROJECTORS = {
+    "fixed_relationships": _project_chunk_for_fixed_relationships,
+    "identity": _project_chunk_for_identity,
+    "target_baseline": _project_chunk_for_target_baseline,
+}
+
+
+def prepare_phase2_lane_inputs(
     project_root: Path,
     work_id: str,
-    target_characters: list[str],
-) -> str:
-    """Build prompt for phase 2 baseline production (decision #54 + #58 —
-    phase 2 缩水到 4 件：foundation.major_factions[].key_figures 替换
-    （raw 名 → character_id）+ fixed_relationships + identity +
-    target_baseline + manifest；foundation 主体由 phase 1 foundation
-    lane 直接产出，phase 2 不再二次综合。stage_catalog 由 phase 3 第一个
-    stage 的 post_processing.upsert_stage_catalog 程序级首次落盘，phase 2
-    LLM 完全不沾——决策 #58)."""
-    template = _load_template("baseline_production.md")
+    *,
+    lanes: tuple[str, ...] = PHASE2_PROJECTED_LANES,
+) -> dict[str, Path]:
+    """Project every chapter_summaries/chunk_*.json into a per-lane tmpdir.
 
+    Returns ``{lane_kind: lane_inputs_dir}``. Caller is responsible for
+    ``cleanup_phase2_lane_inputs`` after the lanes' LLM calls complete
+    (run_baseline_production wraps both in try/finally). Same pattern as
+    ``prepare_phase1_lane_inputs`` (decision #52 — narrow per-lane field
+    surface keeps lane input tokens proportional to lane scope). The
+    key_figures lane needs no projection (it reads no chunk summaries).
+    """
+    summaries_dir = (project_root / "works" / work_id
+                     / "analysis" / "chapter_summaries")
+    if not summaries_dir.exists():
+        raise FileNotFoundError(
+            f"chapter_summaries dir not found: {summaries_dir}; "
+            f"phase 0 must complete before phase 2 lane fan-out")
+
+    root = _phase2_lane_inputs_root(project_root, work_id)
+    out: dict[str, Path] = {}
+    for lane in lanes:
+        if lane not in _PHASE2_LANE_PROJECTORS:
+            raise ValueError(f"unknown phase 2 lane: {lane}")
+        lane_dir = root / lane
+        if lane_dir.exists():
+            for f in lane_dir.iterdir():
+                if f.is_file():
+                    f.unlink()
+        lane_dir.mkdir(parents=True, exist_ok=True)
+        projector = _PHASE2_LANE_PROJECTORS[lane]
+        for chunk_file in sorted(summaries_dir.glob("chunk_*.json")):
+            try:
+                chunk = json.loads(chunk_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as exc:
+                raise RuntimeError(
+                    f"failed to read chunk for projection: "
+                    f"{chunk_file} ({exc})") from exc
+            projected = projector(chunk)
+            (lane_dir / chunk_file.name).write_text(
+                json.dumps(projected, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        out[lane] = lane_dir
+    return out
+
+
+def cleanup_phase2_lane_inputs(project_root: Path, work_id: str) -> None:
+    """Remove the .phase2_lane_inputs tmpdir tree (idempotent)."""
+    root = _phase2_lane_inputs_root(project_root, work_id)
+    if not root.exists():
+        return
+    import shutil
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def _phase2_common_context(project_root: Path, work_id: str) -> dict[str, Any]:
     source_dir = project_root / "sources" / "works" / work_id
     manifest = _read_json(source_dir / "manifest.json")
-    work_dir = project_root / "works" / work_id
-
-    # Build file read list
-    files: list[str] = []
-
-    # Schemas needed — includes the two stage_catalog schemas the
-    # baseline must produce empty instances of, plus foundation schema
-    # (decision #54 — phase 2 reads foundation.json to补齐 key_figures).
-    for schema in ("character/identity.schema.json",
-                   "character/character_manifest.schema.json",
-                   "character/target_baseline.schema.json",
-                   "world/foundation.schema.json",
-                   "world/fixed_relationships.schema.json",
-                   "world/world_stage_catalog.schema.json",
-                   "character/stage_catalog.schema.json"):
-        files.append(f"- `{project_root / 'schemas' / schema}`")
-
-    # Phase 1 foundation lane output (decision #54 — foundation.json is now
-    # produced by phase 1 foundation lane at world/foundation/foundation.json;
-    # phase 2 reads it to补齐 major_factions[].key_figures via a separate LLM
-    # call within this same baseline_production run).
-    foundation_path = work_dir / "world" / "foundation" / "foundation.json"
-    if foundation_path.exists():
-        files.append(f"- `{foundation_path}`")
-
-    # Other phase 1 analysis outputs
-    for name in ("candidate_characters.json", "stage_plan.json"):
-        p = work_dir / "analysis" / name
-        if p.exists():
-            files.append(f"- `{p}`")
-
-    # Chapter summaries (for reference)
-    summaries_dir = work_dir / "analysis" / "chapter_summaries"
-    if summaries_dir.exists():
-        for p in sorted(summaries_dir.glob("chunk_*.json")):
-            files.append(f"- `{p}`")
-
-    context = {
+    return {
         "work_id": work_id,
         "title": manifest.get("title", work_id) if manifest else work_id,
         "language": manifest.get("language", "zh") if manifest else "zh",
-        "target_characters": ", ".join(target_characters),
-        "target_characters_list": json.dumps(
-            target_characters, ensure_ascii=False),
-        "work_dir": str(work_dir),
+        "work_dir": str(project_root / "works" / work_id),
         "schemas_dir": str(project_root / "schemas"),
-        "summaries_dir": str(summaries_dir),
-        "files_to_read": "\n".join(files),
     }
 
+
+def build_key_figures_prompt(
+    project_root: Path,
+    work_id: str,
+    *,
+    prior_error: str = "",
+) -> str:
+    """Phase 2 lane A prompt — foundation.major_factions[].key_figures
+    raw 名 → character_id 替换（决策 #54 / #59）。Reads foundation.json +
+    candidate_characters.json only; no chunk summaries."""
+    template = _load_template("baseline_key_figures.md")
+    work_dir = project_root / "works" / work_id
+    files = [
+        f"- `{project_root / 'schemas' / 'world' / 'foundation.schema.json'}`",
+        f"- `{work_dir / 'world' / 'foundation' / 'foundation.json'}`",
+        f"- `{work_dir / 'analysis' / 'candidate_characters.json'}`",
+    ]
+    context = _phase2_common_context(project_root, work_id)
+    context["files_to_read"] = "\n".join(files)
+    context["retry_note"] = _phase1_retry_note(prior_error)
+    return _render_template(template, context)
+
+
+def build_fixed_relationships_prompt(
+    project_root: Path,
+    work_id: str,
+    target_characters: list[str],
+    lane_inputs_dir: Path,
+    *,
+    prior_error: str = "",
+) -> str:
+    """Phase 2 fixed_relationships lane prompt (决策 #59)."""
+    template = _load_template("baseline_fixed_relationships.md")
+    work_dir = project_root / "works" / work_id
+    files = [
+        f"- `{project_root / 'schemas' / 'world' / 'fixed_relationships.schema.json'}`",
+        f"- `{work_dir / 'analysis' / 'candidate_characters.json'}`",
+        f"- `{lane_inputs_dir}/` 下所有 `chunk_*.json`（已裁剪的全书摘要）",
+    ]
+    context = _phase2_common_context(project_root, work_id)
+    context["target_characters"] = ", ".join(target_characters)
+    context["lane_inputs_dir"] = str(lane_inputs_dir)
+    context["files_to_read"] = "\n".join(files)
+    context["retry_note"] = _phase1_retry_note(prior_error)
+    return _render_template(template, context)
+
+
+def build_identity_prompt(
+    project_root: Path,
+    work_id: str,
+    char_id: str,
+    lane_inputs_dir: Path,
+    *,
+    prior_error: str = "",
+) -> str:
+    """Phase 2 per-character identity lane prompt (决策 #59) — produces
+    identity.json + manifest.json for one character."""
+    template = _load_template("baseline_identity.md")
+    work_dir = project_root / "works" / work_id
+    files = [
+        f"- `{project_root / 'schemas' / 'character' / 'identity.schema.json'}`",
+        f"- `{project_root / 'schemas' / 'character' / 'character_manifest.schema.json'}`",
+        f"- `{work_dir / 'analysis' / 'candidate_characters.json'}`",
+        f"- `{work_dir / 'world' / 'foundation' / 'foundation.json'}`"
+        "（affiliations 势力名对齐用；只读）",
+        f"- `{lane_inputs_dir}/` 下所有 `chunk_*.json`（已裁剪的全书摘要）",
+    ]
+    context = _phase2_common_context(project_root, work_id)
+    context["char_id"] = char_id
+    context["lane_inputs_dir"] = str(lane_inputs_dir)
+    context["files_to_read"] = "\n".join(files)
+    context["retry_note"] = _phase1_retry_note(prior_error)
+    return _render_template(template, context)
+
+
+def build_target_baseline_prompt(
+    project_root: Path,
+    work_id: str,
+    char_id: str,
+    lane_inputs_dir: Path,
+    *,
+    prior_error: str = "",
+) -> str:
+    """Phase 2 per-character target_baseline lane prompt (决策 #59) —
+    admission-gated target list for one character."""
+    template = _load_template("baseline_target_baseline.md")
+    work_dir = project_root / "works" / work_id
+    files = [
+        f"- `{project_root / 'schemas' / 'character' / 'target_baseline.schema.json'}`",
+        f"- `{project_root / 'schemas' / 'character' / 'targets_cap.schema.json'}`",
+        f"- `{work_dir / 'analysis' / 'candidate_characters.json'}`",
+        f"- `{lane_inputs_dir}/` 下所有 `chunk_*.json`（已裁剪的全书摘要）",
+    ]
+    context = _phase2_common_context(project_root, work_id)
+    context["char_id"] = char_id
+    context["lane_inputs_dir"] = str(lane_inputs_dir)
+    context["files_to_read"] = "\n".join(files)
+    context["retry_note"] = _phase1_retry_note(prior_error)
     return _render_template(template, context)
 
 

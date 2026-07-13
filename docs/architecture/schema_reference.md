@@ -171,6 +171,7 @@ gate 承担 self-contained 契约而非仅依赖 prompt + L2/L3。
 **位置**：`works/{work_id}/world/foundation/fixed_relationships.json`
 **关键字段**：relationships[].relationship_id, relationships[].type, relationships[].parties, relationships[].description
 **生命周期**：Phase 2 产出骨架，后续阶段可修正。运行时 Tier 0 加载。
+**生成时机**：Phase 2 fixed_relationships lane 由 LLM 按 `baseline_fixed_relationships.md` 产出（与 per-char lanes 并行，决策 #59）。
 
 ---
 
@@ -179,8 +180,8 @@ gate 承担 self-contained 契约而非仅依赖 prompt + L2/L3。
 **用途**：世界基础设定（genre / tone / world_structure / power_system / core_rules / world_lines / major_factions）。不含 stage-scoped 信息，作为运行时 Tier 0 的静态背景加载。
 **位置**：`works/{work_id}/world/foundation/foundation.json`
 **关键字段**：`work_id` / `genre` / `tone` / `world_structure{summary, major_regions[]}`（`major_regions.items` 为 `{name (≤15), description (≤30)}` 对象，对齐 `chunk_regions.items`） / `power_system{summary, levels[]}`（`levels.items` 为 `{name (≤15), description (≤30)}` 对象，对齐 `chunk_power_levels.items`） / `major_factions[]`（每项 `{name, description, key_figures[]}`，**`key_figures` 在 items.required 中**——无成员势力写 `[]`（决策 #58）；items: 字符串 ≤30 字 / maxItems 10，**双阶段填充**：phase 1 foundation lane 写 raw 名（chunk_factions[].members_present[] 跨 chunk 合并去重），phase 2 baseline LLM 替换能匹配 candidate_characters.aliases 的 raw 名为 character_id，匹配不上保留 raw 名；最终 character_id + raw 名混合，决策 #54 修订段） / `world_lines[]` / `core_rules[]`（**字符串数组**，maxItems 30 / items maxLength 150；强制 LLM 重新整理而非照搬 chunk 行）。
-**生命周期**：**Phase 1 foundation lane 落盘**（决策 #54——schema 归位 `schemas/world/` 域；phase 1 LLM 产出所有字段，含 `major_factions[].key_figures` 的 raw 名形态）；**Phase 2 baseline 在同一次 LLM call 内替换 key_figures raw 名 → character_id**（lookup candidate_characters.aliases，能匹配的换，匹配不上保留；schema 不抓 character_id 合法性；决策 #54 修订段）；后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。
-**生成时机**：Phase 1 foundation lane by `extraction/persona_extraction/prompts/analysis_foundation.md`（与 stage_plan + candidate_characters lane 并行；决策 #52 + #54）；Phase 2 `key_figures` 替换 by `extraction/persona_extraction/prompts/baseline_production.md` 的「产出 1：替换 foundation.major_factions[].key_figures 内 raw 名为 character_id」段（与 fixed_relationships / identity / target_baseline 同一次 LLM call）。
+**生命周期**：**Phase 1 foundation lane 落盘**（决策 #54——schema 归位 `schemas/world/` 域；phase 1 LLM 产出所有字段，含 `major_factions[].key_figures` 的 raw 名形态）；**Phase 2 lane A（先行串行 lane）替换 key_figures raw 名 → character_id**（lookup candidate_characters.aliases，能匹配的换，匹配不上保留；schema 不抓 character_id 合法性；替换语义决策 #54，lane 拓扑决策 #59——repair 层由 `FoundationKeyFiguresChecker` 做溯源 / 去重 / 势力集合稳定检查）；后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。
+**生成时机**：Phase 1 foundation lane by `extraction/persona_extraction/prompts/analysis_foundation.md`（与 stage_plan + candidate_characters lane 并行；决策 #52 + #54）；Phase 2 `key_figures` 替换 by `extraction/persona_extraction/prompts/baseline_key_figures.md`（lane A 独立 LLM call，先行于其余 phase 2 lanes，决策 #59）。
 **形态**：`additionalProperties: true`（顶层与子对象），容纳 per-work 扩展字段。**Required**（决策 #58 收紧）：顶层 `required` 含 `work_id / genre / tone / world_structure / power_system / major_factions / world_lines / core_rules` 共 8 项——避免最小骨架 `{"work_id":"..."}` 通过 schema 让 phase 1 lane skip / phase 2 gate 静默放行。字段级上下限以 schema 为准。
 
 ---
@@ -209,7 +210,7 @@ gate 承担 self-contained 契约而非仅依赖 prompt + L2/L3。
 **用途**：角色包 manifest（角色包目录页）。
 **位置**：`works/{work_id}/characters/{character_id}/manifest.json`
 **关键字段**：schema_version, character_id, work_id, canonical_name, aliases（扁平字符串数组）, paths, source_scope
-**生成时机**：Phase 2 baseline 由 LLM 按 `baseline_production.md` 产出。
+**生成时机**：Phase 2 identity lane 由 LLM 按 `baseline_identity.md` 产出（与 identity.json 同一 per-char lane，决策 #59）。
 
 ---
 
@@ -217,6 +218,7 @@ gate 承担 self-contained 契约而非仅依赖 prompt + L2/L3。
 
 **用途**：角色基线身份信息（不变层）。
 **位置**：`characters/{character_id}/canon/identity.json`
+**生成时机**：Phase 2 per-char identity lane 由 LLM 按 `baseline_identity.md` 产出（与 manifest.json 同 lane，决策 #59）。
 **运行时**：始终加载。
 
 **别名系统**：`aliases` 字段为结构化对象数组，每条记录包含：
@@ -287,8 +289,8 @@ cross-file checker `targets_keys_eq_baseline` → L3 re-extract）。
 （核心 / 重要 / 次要 / 普通）不动，准入门槛与 tier 分级正交。**触顶
 maxItems 时按 `tier` 优先级裁剪**：核心 > 重要 > 次要 > 普通，普通先弃。
 
-**生成时机**：Phase 2 baseline 由 LLM 按 `baseline_production.md` 产出
-（产出 3 段）。Phase 3 全程不重新生成。
+**生成时机**：Phase 2 per-char target_baseline lane 由 LLM 按
+`baseline_target_baseline.md` 产出（决策 #59）。Phase 3 全程不重新生成。
 
 ---
 

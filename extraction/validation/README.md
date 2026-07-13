@@ -6,7 +6,8 @@
 - `gates/` — **相位边界 validator**。由 orchestrator 在 phase 完成时调一次，
   返回 `ValidationReport`，pass/fail 即终点；**不触发 repair 循环**。
   目前住户：
-  - `phase2_baseline.py` — Phase 2 baseline 4 件产物程序化校验
+  - `phase2_baseline.py` — Phase 2 终点校验（baseline 4 件产物 +
+    works / world manifest + foundation）
   - `phase3_5_consistency.py` — Phase 3.5 跨 stage 一致性校验
 - `shared/` — **纯函数原语**。`gates/` 内的 validator 与
   `extraction.repair.checkers.*` 都直接 import。这一层不依赖任何具体相位
@@ -21,22 +22,23 @@
 ## 与 `extraction.repair` 的关系
 
 `extraction.repair.checkers/*` 是已经接进 framework 的 `BaseChecker` 子类
-（L0=json_syntax / L1=schema / L2=structural + targets_keys_eq_baseline /
-L3=semantic）；`extraction.repair.coordinator.run` 在 L×T 循环里调用它们。
+（L0=json_syntax / L1=schema / L2=structural + targets_keys_eq_baseline +
+phase2_baseline_refs / L3=semantic）；`extraction.repair.coordinator.run`
+在 L×T 循环里调用它们（`extra_checkers` 参数支持按调用注册附加 checker，
+决策 #59——phase 2 引用 checker 经此注入，hint 走构造函数）。
 
-本目录下的 `gates/` 是**还没接 framework 的 validator**——它们与
-checkers 的 `Issue` 数据契约几乎一致，但被 orchestrator 直接调用、不喂
-fixer 循环。
+本目录下的 `gates/` 是**终点 validator**——它们与 checkers 的 `Issue`
+数据契约几乎一致，但被 orchestrator 直接调用、不喂 fixer 循环。Phase 2
+自决策 #59 起是**双层**形态：per-lane repair lifecycle（framework 内，
+T0/T1 缩水版）先修，全部 lane 完成后 `gates/phase2_baseline.py` 的
+`validate_baseline`（strict → ±10% tolerance）作最后安全阀。
 
 ## 未来去向
 
-按 `T-PHASE2-REPAIR-AGENT`（`docs/todo_list.md` Next 段）方向，所有相位
-validation 最终都会重构成 `BaseChecker` 子类并入 `extraction.repair.checkers/`，
-届时：
-- `gates/phase2_baseline.py` 切成 4-5 个 phase-2 checker 移入 `repair/checkers/`
-- `gates/phase3_5_consistency.py` 同理拆 phase-3.5 checker
+- `gates/phase2_baseline.py` **保留为终点安全阀**（决策 #59 落地形态：
+  phase 2 修复职责已由 `repair/checkers/phase2_baseline_refs.py` +
+  per-lane lifecycle 承担；本文件不再计划整体迁移）
+- `gates/phase3_5_consistency.py` 如未来接 framework，拆 phase-3.5
+  checker 移入 `repair/checkers/`（尚无立项）
 - `shared/` 保留——这一层与 framework 状态无关，无论 gate 还是 checker
   都会继续 import
-
-本目录当前的物理位置使未来重构改动半径最小：gates 内文件转 checker 后
-直接 git mv 到 `repair/checkers/`，不跨模块迁移。

@@ -75,6 +75,33 @@ lane_concurrency          = 3
 
 
 # ----------------------------------------------------------------
+# [phase2] Phase 2 baseline production（lane fan-out，决策 #59）
+# ----------------------------------------------------------------
+[phase2]
+# Lane fan-out 并发度（ThreadPoolExecutor max_workers）。lane A
+# (key_figures) 先行串行跑完（对 foundation.json 就地改写，须与其他
+# lane 错开）；其余 1+2N 个 lane（fixed_relationships + 每目标角色
+# identity + target_baseline 两 lane）共享此并发池。默认 5 = N=2
+# 目标角色时的 lane 总数。订阅模式高并发易撞 5h 限额，可调低。
+lane_concurrency          = 5
+
+# 输出文件缺失时的 LLM 重跑上限。LLM call 结束后声明的输出文件不
+# 存在（生成失败，file-based repair 无从修起）→ prior_error 注入
+# 重跑，最多这么多次。单 lane 总尝试数 = 1 + 此值。
+output_missing_max_retry  = 1
+
+# Per-lane file-level repair 开关（决策 #59 缩水版接入）。
+# true：每 lane 产物过 repair lifecycle——T0 程序修 / T1 局部 patch +
+#       schema checker + phase2 引用 checker（character_id 合法性 /
+#       target keys 集合，纯集合运算）；L3 语义 checker / T2
+#       source_patch / triage 不开（source_context=None）；T3 = 重跑
+#       本 lane 自己的 LLM call（lane_regen 回调）。
+# false：跳过 per-lane repair，仅靠终点 validate_baseline gate
+#        （strict → ±10% length tolerance）兜底——旧行为等价。
+repair_enabled            = true
+
+
+# ----------------------------------------------------------------
 # [phase3] Phase 3 阶段提取
 # ----------------------------------------------------------------
 [phase3]

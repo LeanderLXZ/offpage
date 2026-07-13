@@ -35,7 +35,7 @@
     "chunk_world_rules": {
       "type": "array",
       "maxItems": 5,
-      "description": "本 chunk 揭示的世界规则（修炼 / 转世 / 天道 / 契约等结构性规则；最多 5 条）。Phase 1 foundation lane 综合多 chunk 产 foundation.core_rules（字符串数组，决策 #54——`core_rules` 形态由原 phase 2 的 `{rule,description,impact}` 对象改为 phase 1 的字符串数组，user 决策 1 明确不改 core_rules 结构）。",
+      "description": "本 chunk 揭示的世界规则（修炼 / 转世 / 天道 / 契约等结构性规则；最多 5 条）。Phase 1 foundation lane 综合多 chunk 产 foundation.core_rules（字符串数组形态，决策 #54）。",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -84,7 +84,7 @@
     "chunk_factions": {
       "type": "array",
       "maxItems": 20,
-      "description": "本 chunk 出现的势力 / 组织 / 阵营 / 国家 / 门派清单。Phase 1 foundation lane 综合多 chunk 产 foundation.major_factions.{name,description}（决策 #54）；同 lane 把 members_present[] 跨 chunk 合并去重写入 foundation.major_factions.key_figures[] 作 raw 名；Phase 2 baseline LLM 再在 build_baseline_prompt 单次调用内替换能匹配 candidate_characters.aliases 的 raw 名为 character_id。",
+      "description": "本 chunk 出现的势力 / 组织 / 阵营 / 国家 / 门派清单。Phase 1 foundation lane 综合多 chunk 产 foundation.major_factions.{name,description}（决策 #54）；同 lane 把 members_present[] 跨 chunk 合并去重写入 foundation.major_factions.key_figures[] 作 raw 名；Phase 2 lane A（key_figures 先行 lane，决策 #59）再替换能匹配 candidate_characters.aliases 的 raw 名为 character_id。",
       "items": {
         "type": "object",
         "additionalProperties": false,

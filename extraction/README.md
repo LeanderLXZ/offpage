@@ -61,6 +61,10 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
 - `[stage]` 章节数边界（target/min/max）
 - `[phase0]` chunk 并发、summarize 子进程超时、L2 修复超时
 - `[phase1]` stage_plan 出口验证重试上限
+- `[phase2]` baseline lane fan-out 并发（`lane_concurrency`，默认 5）、
+  输出缺失重跑上限（`output_missing_max_retry`）、per-lane repair 开关
+  （`repair_enabled`，决策 #59 缩水版：T0/T1 + 程序 checker，T3 =
+  lane 重跑）
 - `[phase3]` 提取 / 审校超时、`max_turns`、`concurrency`（默认 **12**，
   覆盖 2 角色场景 sub-lane on 时峰值 `1 + 2×4 + 2 = 11`）、
   `char_snapshot_sub_lanes`（缺省 `true` — 单 char_snapshot lane 内部拆
@@ -269,7 +273,10 @@ extraction/
 │   │   ├── analysis_foundation.md            ← Phase 1 lane: foundation (decision #54)
 │   │   ├── analysis_stage_plan.md            ← Phase 1 lane: stage_plan (monolithic only)
 │   │   ├── analysis_candidate_characters.md  ← Phase 1 lane: candidate_characters
-│   │   ├── baseline_production.md            ← Phase 2 baseline 产出
+│   │   ├── baseline_key_figures.md           ← Phase 2 lane A：key_figures 替换（先行，决策 #59）
+│   │   ├── baseline_fixed_relationships.md   ← Phase 2 lane：fixed_relationships
+│   │   ├── baseline_identity.md              ← Phase 2 per-char lane：identity + manifest
+│   │   ├── baseline_target_baseline.md       ← Phase 2 per-char lane：target_baseline
 │   │   ├── world_extraction.md               ← Phase 3 世界层提取
 │   │   ├── character_snapshot_extraction.md  ← Phase 3 角色快照提取
 │   │   ├── character_support_extraction.md   ← Phase 3 角色支持层提取
@@ -444,6 +451,7 @@ retry 通路接住，不引入新模块：
 |---|---|---|
 | Phase 0 | `_chunk_validator()` in `orchestrator._summarize_chunk` ([schemas/analysis/chapter_summary_chunk.schema.json](../schemas/analysis/chapter_summary_chunk.schema.json)) | L3 全 chunk 重跑（max 1 次）；`build_summarization_prompt(prior_error=...)` 的 `{retry_note}` 槽注入 |
 | Phase 1 | `_foundation_validator()` ([schemas/world/foundation.schema.json](../schemas/world/foundation.schema.json)) / `_stage_plan_validator()` / `_candidate_characters_validator()` per-lane in `orchestrator.run_analysis` fan-out ([schemas/analysis/{stage_plan,candidate_characters}.schema.json](../schemas/analysis/)) — foundation schema lives under `schemas/world/` per decision #54 (foundation 前移到 phase 1 + schema 合并入 world domain) | 失败 lane 把首条违规作为 `prior_error` 注入下一次重试 prompt（与 Phase 0 / Phase 4 同形态）；per-lane 独立 `[phase1].exit_validation_max_retry` 预算（不共享池）；用尽走 #48 length-tolerance 兜底 |
+| Phase 2 | per-lane repair lifecycle（schema checker + [repair/checkers/phase2_baseline_refs.py](repair/checkers/phase2_baseline_refs.py) 程序 checker；决策 #59 缩水版——T0/T1，L3/T2/triage 不开）+ 终点 `validate_baseline()`（[validation/gates/phase2_baseline.py](validation/gates/phase2_baseline.py)） | 输出缺失 → `[phase2].output_missing_max_retry` prior_error 重跑；schema / 引用违规 → repair T0/T1，升级 T3 = `lane_regen` 重跑本 lane；终点 gate strict → #48 length-tolerance 兜底 |
 | Phase 4 | `_scene_split_validator()` in `scene_archive.validate_scene_split` ([schemas/analysis/scene_split.schema.json](../schemas/analysis/scene_split.schema.json)) | per-chapter 重跑（`[phase4].max_retries_per_chapter`）；`build_scene_split_prompt(prior_error=...)` 注入 |
 
 详细决策依据 → `ai_context/decisions.md` #27b（Bounds-only-in-schema） + #27i（schema-gate-as-retry-trigger pattern）。

@@ -86,7 +86,14 @@ class StructuralChecker(BaseChecker):
             ))
 
         # --- relationships: driving_events + relationship_history_summary ---
-        if "relationships" in data and isinstance(data["relationships"], list):
+        # Scoped to stage_snapshot-shaped relationships. The world-level
+        # fixed_relationships.json has a same-named top-level key with a
+        # different entry shape (relationship_id/type/parties/description)
+        # — flagging those would be pure false positives (decision #59
+        # runs this checker on phase 2 files too).
+        if (p.name != "fixed_relationships.json"
+                and "relationships" in data
+                and isinstance(data["relationships"], list)):
             for idx, rel in enumerate(data["relationships"]):
                 if not isinstance(rel, dict):
                     continue

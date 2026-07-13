@@ -63,6 +63,24 @@ class Phase1Config:
 
 
 @dataclass(frozen=True)
+class Phase2Config:
+    # Phase 2 baseline lane fan-out (decision #59). Lane A (key_figures)
+    # runs alone first; the remaining 1+2N lanes (fixed_relationships +
+    # per-char identity + per-char target_baseline) share this pool.
+    # Default 5 = 1+2N at N=2 target characters.
+    lane_concurrency: int = 5
+    # Extra LLM re-runs when a lane's declared output file(s) are missing
+    # after the call (a generation failure the file-based repair stack
+    # can't touch). Total attempts per lane = 1 + this.
+    output_missing_max_retry: int = 1
+    # Per-lane file-level repair (缩水版 — T0/T1 + schema/程序 checker;
+    # no L3 semantic checker / T2 source_patch / triage; T3 = lane
+    # re-run). ``false`` skips repair and relies solely on the terminal
+    # ``validate_baseline`` gate (strict → ±10% length tolerance).
+    repair_enabled: bool = True
+
+
+@dataclass(frozen=True)
 class Phase3Config:
     extraction_timeout_s: int = 3600
     review_timeout_s: int = 600
@@ -171,6 +189,7 @@ class Config:
     stage: StageConfig = field(default_factory=StageConfig)
     phase0: Phase0Config = field(default_factory=Phase0Config)
     phase1: Phase1Config = field(default_factory=Phase1Config)
+    phase2: Phase2Config = field(default_factory=Phase2Config)
     phase3: Phase3Config = field(default_factory=Phase3Config)
     phase4: Phase4Config = field(default_factory=Phase4Config)
     repair: RepairAgentConfig = field(default_factory=RepairAgentConfig)
@@ -189,6 +208,7 @@ _SECTION_TYPES: dict[str, type] = {
     "stage": StageConfig,
     "phase0": Phase0Config,
     "phase1": Phase1Config,
+    "phase2": Phase2Config,
     "phase3": Phase3Config,
     "phase4": Phase4Config,
     "repair": RepairAgentConfig,

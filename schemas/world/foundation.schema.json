@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offpage/world/foundation.schema.json",
   "title": "WorldFoundation",
-  "description": "世界基础设定 baseline——genre / tone / world_structure / power_system / core_rules / world_lines / major_factions。作为运行时 Tier 0 静态背景加载，不含 stage-scoped 信息（阶段化内容归 world_stage_snapshot）。**由 Phase 1 foundation lane 直接产出**（决策 #54），phase 1 落盘的 foundation.json 已含全部 7 个核心字段 + `major_factions[].key_figures` 的 raw 名；phase 2 baseline 在 `build_baseline_prompt` 单次 LLM call 内**仅替换** `major_factions[].key_figures` 中能匹配 candidate_characters.aliases 的 raw 名为 character_id（patch-style，决策 #54 + #58）。决策 #58 把 7 核心字段 + items.key_figures 加入 required——`{\"work_id\":\"demo\"}` 类骨架不再通过 schema，phase 1 lane skip / phase 2 validate_baseline gate 双重收紧。后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。顶层 additionalProperties=true 以兼容 per-work 扩展字段；子对象按需收紧。",
+  "description": "世界基础设定 baseline——genre / tone / world_structure / power_system / core_rules / world_lines / major_factions。作为运行时 Tier 0 静态背景加载，不含 stage-scoped 信息（阶段化内容归 world_stage_snapshot）。**由 Phase 1 foundation lane 直接产出**（决策 #54），phase 1 落盘的 foundation.json 已含全部 7 个核心字段 + `major_factions[].key_figures` 的 raw 名；phase 2 lane A（key_figures 先行 lane，独立 LLM call）**仅替换** `major_factions[].key_figures` 中能匹配 candidate_characters.aliases 的 raw 名为 character_id（patch-style，决策 #54 + #58 + #59）。决策 #58 把 7 核心字段 + items.key_figures 加入 required——`{\"work_id\":\"demo\"}` 类骨架不再通过 schema，phase 1 lane skip / phase 2 validate_baseline gate 双重收紧。后续 stage 可通过 world_stage_snapshot.foundation_corrections 增量修正。顶层 additionalProperties=true 以兼容 per-work 扩展字段；子对象按需收紧。",
   "type": "object",
   "required": [
     "work_id",
@@ -87,7 +87,7 @@
     "major_factions": {
       "type": "array",
       "maxItems": 20,
-      "description": "主要势力（≤20 项）。**双阶段填充**（决策 #54 + #58）：(1) phase 1 foundation lane 综合 chunk_factions 写 `name` / `description` / **`key_figures` raw 名**（chunk_factions[].members_present[] 跨 chunk 合并去重，化名 / 真名 / 称呼任一）；(2) phase 2 baseline LLM 在 build_baseline_prompt 单次 LLM call 内**替换** `key_figures` 中能匹配 candidate_characters.aliases 的 raw 名为 character_id，匹配不上保留 raw 名。`key_figures` items.required（决策 #58）——无成员势力 phase 1 写 `[]`。",
+      "description": "主要势力（≤20 项）。**双阶段填充**（决策 #54 + #58）：(1) phase 1 foundation lane 综合 chunk_factions 写 `name` / `description` / **`key_figures` raw 名**（chunk_factions[].members_present[] 跨 chunk 合并去重，化名 / 真名 / 称呼任一）；(2) phase 2 lane A（key_figures 先行 lane，决策 #59）**替换** `key_figures` 中能匹配 candidate_characters.aliases 的 raw 名为 character_id，匹配不上保留 raw 名。`key_figures` items.required（决策 #58）——无成员势力 phase 1 写 `[]`。",
       "items": {
         "type": "object",
         "required": ["name", "description", "key_figures"],

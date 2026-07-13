@@ -117,7 +117,7 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
 `identity_notes` + `chunk_factions[].members_present`。三件输出之间无硬数据依赖
 （唯一交叉 = `chunk_arc_summary` 同时被 foundation + stage_plan 两 lane 用）。
 
-**foundation lane 写 `major_factions[].key_figures` 的 raw 名**（决策 #54 修订段）——chunk_factions[].members_present[] 跨 chunk 合并去重直接写入 key_figures（化名 / 真名 / 称呼任一，不做身份合并）。phase 1 阶段身份合并尚未完成（candidate_characters lane 与 foundation lane 并行），foundation lane 拿不到 character_id 终态，所以只写 raw 名。phase 2 baseline LLM 在同一次 baseline_prompt LLM call 内 lookup candidate_characters.aliases 把能匹配的 raw 名替换为 character_id，匹配不上保留 raw 名。最终 key_figures 是 character_id + 未合并 raw 名混合。
+**foundation lane 写 `major_factions[].key_figures` 的 raw 名**（决策 #54 修订段）——chunk_factions[].members_present[] 跨 chunk 合并去重直接写入 key_figures（化名 / 真名 / 称呼任一，不做身份合并）。phase 1 阶段身份合并尚未完成（candidate_characters lane 与 foundation lane 并行），foundation lane 拿不到 character_id 终态，所以只写 raw 名。phase 2 lane A（`key_figures` 先行 lane，决策 #59）lookup candidate_characters.aliases 把能匹配的 raw 名替换为 character_id，匹配不上保留 raw 名。最终 key_figures 是 character_id + 未合并 raw 名混合。
 
 **出口验证（硬性门控，per-lane）**：每个 lane 的 LLM 产物落盘后，独立跑：
 
@@ -142,27 +142,64 @@ chunks 子集 + 独立的 schema gate + 独立的 `prior_error` 注入式 retry�
   `extraction.persona_extraction.lifecycle.manifests.write_works_manifest`）
 - 进入 baseline 产出和 1+2N 分层提取模式
 
-### 5. Baseline 产出（Phase 2）
+### 5. Baseline 产出（Phase 2，2+2N lane fan-out）
 
-Phase 1 foundation lane 已落 `world/foundation/foundation.json`；phase 2 基于全书摘要上下文和确认的角色，产出：
+Phase 1 foundation lane 已落 `world/foundation/foundation.json`；phase 2
+基于全书摘要上下文和确认的角色，以 **2+2N 个独立 lane**（决策 #59）产出：
 
-- `world/foundation/fixed_relationships.json` — 世界级固定关系骨架
-- `characters/{character_id}/canon/identity.json` — 角色身份初稿
-- `characters/{character_id}/canon/target_baseline.json` — 角色 target
-  baseline（per-character，全书视野下的目标关系全集）
-- `characters/{character_id}/manifest.json` — 角色包 manifest（`paths`
-  对象含 `target_baseline_path` 指向上条文件）
-- **替换 `world/foundation/foundation.json::major_factions[].key_figures` 内 raw 名为 character_id**（决策 #54 修订段）——在同一次 baseline_prompt LLM call 内（与 fixed_relationships / identity / target_baseline / manifest 同步），LLM 对 phase 1 lane 写入的每个 key_figures raw 名 lookup `candidate_characters.candidates[*].aliases[*].name`，能匹配的换为对应 `candidates[].character_id`，匹配不上保留 raw 名（不报错、不删除）。最终 key_figures 是 character_id + 未合并 raw 名混合；schema 不抓 character_id 合法性（key_figures 字符串数组无 enum 硬卡）
+| Lane | 输出 | 输入投影 |
+|---|---|---|
+| **lane A `key_figures`**（**先行串行**） | `world/foundation/foundation.json` 就地替换 `major_factions[].key_figures` raw 名 → character_id | 无 chunk 输入（仅 foundation + candidate_characters） |
+| **`fixed_relationships`** | `world/foundation/fixed_relationships.json` | 每章 chapter + summary + characters_present + `chunk_factions[].{name,members_present}` |
+| **`identity_{cid}` ×N** | `characters/{cid}/canon/identity.json` + `characters/{cid}/manifest.json`（`paths.target_baseline_path` 指向 target_baseline） | 每章 chapter + summary + characters_present + identity_notes |
+| **`target_baseline_{cid}` ×N** | `characters/{cid}/canon/target_baseline.json` | 每章 chapter + summary + characters_present |
 
-**`foundation.json` 已不再是 phase 2 LLM 产出**（决策 #54——foundation 前移到 phase 1 foundation lane 直接产；phase 2 仅在同一次 baseline LLM 内替换 `key_figures` 内 raw 名为 character_id）；`fixed_relationships.json` 仍由 phase 2 baseline 一次性产出，因为它需要 phase 1.5 后的 character_id 集合。
+lane A 与其余 lane 对 `foundation.json` 有同文件读写并发，必须先行跑完；
+之后 `fixed_relationships` + 全部 per-char lanes 并行
+（`[phase2].lane_concurrency`，默认 5）。每 lane 独立 prompt 模板
+（`extraction/persona_extraction/prompts/baseline_{key_figures,fixed_relationships,identity,target_baseline}.md`），
+chunk 输入按 lane 投影裁剪到 `works/{work_id}/analysis/.phase2_lane_inputs/{lane}/`
+（gitignored，run 结束清理——同 phase 1 projector 模式，决策 #52/#59）。
+**resume 语义**：产物在盘 + schema-valid 的 lane 直接 skip；lane A 例外——
+替换幂等（已替换的 character_id 经 exact match 命中自身）且"已替换"无法
+从 schema 判定（raw 名残留合法），phase 2 未 done 时总是跑。输出文件缺失
+（生成失败，file-based repair 无从修起）走 `[phase2].output_missing_max_retry`
+prior_error 重跑。
+
+**lane A 替换语义**（决策 #54 语义不变，call 拓扑归 #59）：LLM 对 phase 1
+lane 写入的每个 key_figures raw 名 lookup
+`candidate_characters.candidates[*].aliases[*].name`，能匹配的换为对应
+`candidates[].character_id`，匹配不上保留 raw 名（不报错、不删除）。最终
+key_figures 是 character_id + 未合并 raw 名混合；schema 不抓 character_id
+合法性（无 enum 硬卡），repair 层由 `FoundationKeyFiguresChecker` 做
+势力集合稳定 / 条目溯源 / 去重三条程序检查。
+
+**per-lane repair（决策 #59 缩水版）**：每 lane 产物落盘后进 file-level
+repair lifecycle——T0 程序修 + T1 局部 patch + schema checker + phase 2
+引用 checker（`extraction/repair/checkers/phase2_baseline_refs.py`，纯集合
+运算：key_figures 溯源 / fixed_relationships parties warning + id 去重 /
+target_baseline character_id 一致 + target ∈ candidate 集 + 去重 + 自引用）。
+**L3 语义 checker / T2 source_patch / triage 不开**（`source_context=None`；
+phase 2 输入契约是摘要初稿，拿原文修会越过 phase 2/3 分工边界）。T3 经
+`lane_regen` 回调 = 重跑本 lane 自己的 LLM call（repair 框架的
+`extra_checkers` / `lane_regen` 通用 hook，见 `extraction/repair/coordinator.py`）。
+`[phase2].repair_enabled = false` 退回"lane 并行 + 仅终点 gate"。
+
+**`foundation.json` 主体不是 phase 2 产出**（决策 #54——foundation 前移到
+phase 1 foundation lane 直接产；phase 2 lane A 仅替换 `key_figures`）；
+`fixed_relationships.json` 由 phase 2 产出，因为它需要 phase 1.5 后的
+character_id 集合。
 
 identity 与 target_baseline 都是 character-level 恒定文件——identity 记录
 角色基础事实（aliases / core_wounds / key_relationships 等），target_baseline
 记录该角色与其它角色之间的全部 target 关系（含 `tier` ∈ {核心 / 重要 /
 次要 / 普通} + `relationship_type` 中文短词柔性 string，14 候选 +
-fallback 详见 `baseline_production.md` + ≤100 字描述）。`targets` 数组
+fallback 详见 `baseline_target_baseline.md` + ≤100 字描述）。`targets` 数组
 容量上限通过 `schemas/character/targets_cap.schema.json` $ref 共享继承
 （下游 stage_snapshot 三结构通过同一份 $ref 单源同步）。
+fixed_relationships 与 target_baseline **无跨产物一致性约束**——血亲等
+fixed 关系无 dialogue/action 交互时不入 baseline，两者合法分叉（决策 #59
+据此不设 merge 点 cross-artifact checker，lane 间完全独立）。
 
 **target_baseline 准入门槛**（决策 #54）：**本角色与目标角色在 chapter_summaries
 摘要描述中被反映为有过 dialogue / action 交互**（如"X 对 Y 说……" / "X
@@ -197,9 +234,10 @@ Phase 2 baseline 完成后，orchestrator 程序化写出
 `schemas/world/world_manifest.schema.json`；写入器：
 `extraction.persona_extraction.lifecycle.manifests.write_world_manifest`）。
 
-**出口验证**：Phase 2 完成后运行 `validate_baseline()`，校验所有
-baseline 文件的 schema 合规性。works manifest / world manifest /
-identity / 角色 manifest / target_baseline / foundation /
+**出口验证**：全部 lane 完成后运行 `validate_baseline()`（strict →
+±10% length tolerance，决策 #48），校验所有 baseline 文件的 schema
+合规性——per-lane repair 之外的最后安全阀。works manifest / world
+manifest / identity / 角色 manifest / target_baseline / foundation /
 fixed_relationships 全部为必须（error）。target_baseline 缺失 / schema
 违规 / `character_id` 与目录名不一致均阻断 Phase 3。
 

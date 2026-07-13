@@ -78,6 +78,7 @@ logger = logging.getLogger(__name__)
 def _build_pipeline(
     llm_call: Callable[..., str] | None = None,
     importance_map: dict[str, str] | None = None,
+    extra_checkers: list[Any] | None = None,
 ) -> CheckerPipeline:
     pipeline = CheckerPipeline()
     pipeline.register(JsonSyntaxChecker())
@@ -85,6 +86,8 @@ def _build_pipeline(
     pipeline.register(StructuralChecker(importance_map=importance_map))
     pipeline.register(TargetsKeysEqBaselineChecker())
     pipeline.register(SemanticChecker(llm_call=llm_call))
+    for checker in extra_checkers or []:
+        pipeline.register(checker)
     return pipeline
 
 
@@ -92,6 +95,7 @@ def _build_fixers(
     llm_call: Callable[..., str] | None = None,
     retriever: ContextRetriever | None = None,
     sub_lane_regen: Callable[..., Any] | None = None,
+    lane_regen: Callable[..., Any] | None = None,
 ) -> dict[int, object]:
     return {
         0: ProgrammaticFixer(),
@@ -101,6 +105,7 @@ def _build_fixers(
             llm_call=llm_call,
             retriever=retriever,
             sub_lane_regen=sub_lane_regen,
+            lane_regen=lane_regen,
         ),
     }
 
@@ -152,11 +157,13 @@ def validate_only(
     llm_call: Callable[..., str] | None = None,
     run_semantic: bool = False,
     importance_map: dict[str, str] | None = None,
+    extra_checkers: list[Any] | None = None,
 ) -> list[Issue]:
     """Run all checkers without any repair. Returns issue list."""
     pipeline = _build_pipeline(
         llm_call=llm_call,
         importance_map=importance_map,
+        extra_checkers=extra_checkers,
     )
     return pipeline.run(files, run_semantic=run_semantic)
 
@@ -169,6 +176,8 @@ def run(
     importance_map: dict[str, str] | None = None,
     recorder: RepairRecorder | None = None,
     sub_lane_regen: Callable[..., Any] | None = None,
+    lane_regen: Callable[..., Any] | None = None,
+    extra_checkers: list[Any] | None = None,
 ) -> RepairResult:
     """Three-phase repair, possibly across two lifecycles.
 
@@ -186,6 +195,16 @@ def run(
             routes char_snapshot regen through the orchestrator's
             4-sub-lane parallel extract + merge path; ``None`` keeps the
             single-LLM full-file regen path.
+        lane_regen: optional generic T3 callback (decision #59) —
+            ``(file_path, issues, prior_attempt_context) -> bool | None``.
+            When wired, T3 delegates regeneration of ANY file to the
+            caller (e.g. phase 2 re-runs the producing lane's own LLM
+            call) instead of the default single-LLM full-file rewrite.
+            ``sub_lane_regen`` (path-specific) is consulted first.
+        extra_checkers: optional additional ``BaseChecker`` instances
+            registered on top of the built-in pipeline (decision #59 —
+            phase 2 baseline reference checkers carry their hints via
+            constructor injection, keeping ``FileEntry.content`` clean).
     """
     if config is None:
         config = RepairConfig()
@@ -193,12 +212,14 @@ def run(
     pipeline = _build_pipeline(
         llm_call=llm_call,
         importance_map=importance_map,
+        extra_checkers=extra_checkers,
     )
     retriever = ContextRetriever()
     fixers = _build_fixers(
         llm_call=llm_call,
         retriever=retriever,
         sub_lane_regen=sub_lane_regen,
+        lane_regen=lane_regen,
     )
 
     triager: Triager | None = None

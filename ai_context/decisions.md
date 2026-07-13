@@ -276,6 +276,9 @@ N. <决策陈述，一行>。
 58. **Foundation schema 收紧（核心字段 required）+ `key_figures` required allow-empty + Phase 2 不再让 LLM 写空 stage_catalog。**
     → docs/decisions.md #58。
 
+59. **Phase 2 baseline 拆 2+2N lane 并行 + per-lane repair 缩水版接入。** lane A `key_figures` 先行串行，fixed_relationships + 每角色 identity / target_baseline 两 lane 并行（输入按 lane 投影裁剪）；repair 只开 T0/T1 + 程序 checker（`source_context=None`，L3/T2/triage 不开），T3 = `lane_regen` 重跑本 lane，终点 `validate_baseline` 保留为最后安全阀。
+    → docs/decisions.md #59。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

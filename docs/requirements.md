@@ -803,11 +803,12 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 │  │ 用户选择目标角色 + 确认 stage 边界                   │              │
 │  └───────────────────────┬───────────────────────────┘              │
 │                          ▼                                          │
-│  Phase 2 ─ Baseline 产出（全书视野；foundation 由 phase 1 已落）      │
+│  Phase 2 ─ Baseline 产出（全书视野；2+2N lane fan-out，#59）          │
 │  ┌───────────────────────────────────────────────────┐              │
-│  │ 世界: fixed_relationships.json + foundation        │              │
-│  │       .major_factions[].key_figures 补齐 LLM call   │              │
-│  │ 角色: identity.json + target_baseline.json + manifest│             │
+│  │ lane A: foundation.key_figures 替换（先行串行）      │              │
+│  │ ∥ fixed_relationships lane                          │              │
+│  │ ∥ per-char identity lane + target_baseline lane     │              │
+│  │ 每 lane 独立 LLM call + per-lane repair 缩水版       │              │
 │  │ └─ 初稿，后续 stage 可修正                          │              │
 │  └───────────────────────┬───────────────────────────┘              │
 │                          ▼                                          │
@@ -863,7 +864,7 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
    - **monolithic = 3 lane 并行**：`foundation` lane (产 `works/{work_id}/world/foundation/foundation.json`——决策 #54 把 foundation 前移到 phase 1 直接产，phase 2 仅补 `key_figures`) / `stage_plan` lane (产 `analysis/stage_plan.json`，stage 边界由 LLM 按自然剧情切分，章数硬范围 8–15) / `candidate_characters` lane (产 `analysis/candidate_characters.json`，跨 chunk 身份合并 + 候选识别)
    - **light_novel = 2 lane 并行 + 程序化 stage_plan**：`foundation` lane + `candidate_characters` lane 同 monolithic，`stage_plan` lane 整体跳过 LLM——由 orchestrator 程序化 1:1 从 chapter_index 派生（`stage_id = S{n:03d}`、`chapters = f"{chapter_id}-{chapter_id}"` degenerate 单章区间（与 monolithic 共享 `^C[0-9]{4}-C[0-9]{4}$` 模式，phase 2/3/4 消费方零分叉）、`chapter_count = 1`、`stage_title` 取 `chapter_index[i].title`）；STAGE_MIN/MAX 校验自动跳过
 4. **活跃角色确认**（Phase 1.5）：用户从候选中选择要建包的目标角色
-5. **Baseline 产出**（Phase 2）：phase 1 foundation lane 已落 `world/foundation/foundation.json`；phase 2 基于全书摘要 + 已确认角色，产出 `world/foundation/fixed_relationships.json` + 每角色 `identity.json` + `target_baseline.json` + `manifest.json`；**plus** 单独一个轻量 LLM call 补齐 `foundation.major_factions[].key_figures`（输入 phase 1 落盘 foundation + candidate_characters + 已确认目标清单；补丁式 `{faction_name: [character_id, ...]}` 输出后程序 merge into foundation.json）。`target_baseline` 准入门槛 = 本角色与目标角色在 chapter_summaries 摘要描述中被反映为有过 dialogue / action 交互（决策 #54——血亲不再默认核心 tier）。
+5. **Baseline 产出**（Phase 2，2+2N lane fan-out，决策 #59）：phase 1 foundation lane 已落 `world/foundation/foundation.json`；phase 2 基于全书摘要 + 已确认角色，拆独立 lane 产出——lane A `key_figures`（**先行串行**，就地替换 `foundation.major_factions[].key_figures` raw 名 → character_id，输入仅 foundation + candidate_characters）→ `fixed_relationships` lane + 每角色 identity lane（`identity.json` + `manifest.json`）+ target_baseline lane 并行（`[phase2].lane_concurrency`）。每 lane 独立 prompt + chunk 输入按 lane 投影裁剪 + per-lane repair 缩水版（T0/T1 + 程序 checker，T3 = lane 重跑）。`target_baseline` 准入门槛 = 本角色与目标角色在 chapter_summaries 摘要描述中被反映为有过 dialogue / action 交互（决策 #54——血亲不再默认核心 tier）。
 6. **协同阶段提取**（Phase 3）：每个 stage 读原文，1+2N 全并行产出
    （1 世界 + N 角色快照 + N 角色支撑）。每个 stage 经过 JSON 修复 →
    程序校验 → 语义审核 → git 提交。每个 stage 都可修正和补充 baseline
@@ -902,10 +903,10 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 **世界层 baseline**（写入 `world/foundation/`）：
 - `foundation.json`：力量体系基本框架、世界地理/空间结构、主要势力/阵营
   格局、核心设定规则、大世界线/篇章划分。**由 phase 1 foundation lane
-  直接产**（决策 #54——原 phase 2 baseline 不再二次综合 foundation；
-  `major_factions[].key_figures` 字段由 phase 2 baseline 单独 LLM call
-  补齐，输入 phase 1 落盘 foundation + candidate_characters + 已确认
-  目标清单，补丁式 merge into foundation.json）
+  直接产**（决策 #54——phase 2 不二次综合 foundation；
+  `major_factions[].key_figures` 由 phase 2 lane A（先行串行的独立
+  LLM call，决策 #59）就地替换 raw 名 → character_id，输入 phase 1
+  落盘 foundation + candidate_characters）
 - `fixed_relationships.json`：世界视角的固定关系网络（血缘、师承、门派
   归属等不随阶段变化的结构性纽带），骨架初稿由 Phase 2 产出，后续
   stage 维护修正
@@ -1361,12 +1362,13 @@ prompt template + Phase 3.5 一致性审计（§11.5）继续负责把"应有变
 │  ┌─ Phase 1.5 ─ 用户确认（交互 / --characters 预设）─┐             │
 │  └──────────────────────┬──────────────────────────┘            │
 │                         ▼                                       │
-│  ┌─ Phase 2 ─ Baseline 产出 (claude -p) ────────┐             │
-│  │  foundation.key_figures 替换 raw→character_id     │             │
-│  │  + fixed_relationships.json                        │             │
-│  │  + identity.json + target_baseline.json           │             │
-│  │    (两件 character-level 恒定文件, 全书视野初稿)   │             │
-│  │  + manifest.json （决策 #54 + #58）              │             │
+│  ┌─ Phase 2 ─ Baseline 产出 (2+2N lane fan-out) ─┐             │
+│  │  lane A: foundation.key_figures 替换（先行串行）  │             │
+│  │  ∥ fixed_relationships lane                        │             │
+│  │  ∥ per-char identity lane (identity + manifest)   │             │
+│  │  ∥ per-char target_baseline lane                   │             │
+│  │  每 lane 独立 claude -p + per-lane repair 缩水版   │             │
+│  │  （决策 #54 + #58 + #59）                         │             │
 │  └──────────────────────┬──────────────────────────┘            │
 │                         ▼                                       │
 │  ┌─ Phase 3 ─ 1+2N 分层阶段提取（串行循环）────────┐             │
@@ -2125,13 +2127,15 @@ issue 重新走 triage 流程。**本次实现不包含该自动 resume 逻辑**
 
 #### 11.4.8 各 Phase 出口验证
 
-每个 Phase 完成后通过 repair agent 统一校验，避免错误延迟到下游：
+每个 Phase 完成后有各自的出口校验装置，避免错误延迟到下游（repair
+framework 接入点 = phase 2 + phase 3，见决策 #25/#59；其余 phase 走
+原生 retry 路径）：
 
 | Phase | 调用方式 | 说明 |
 |-------|---------|------|
-| Phase 0 (summarization) | `repair(files=[chunk], config=RepairConfig(run_semantic=False))` | 每个 chunk JSON 格式正确、非空 |
+| Phase 0 (summarization) | L1/L2/L3 JSON 修复阶梯 + schema gate（决策 #40 原生路径，不经 repair framework） | 每个 chunk JSON 格式正确、schema 合规 |
 | Phase 1 (analysis) | 程序化验证（stage plan 章节数硬性门控 8-15，违规重跑 LLM） | 沿用现有逻辑 |
-| Phase 2 (baseline) | `validate_baseline` 跑 schema + length-tolerance（决策 #48），失败 fatal，**不接 repair**（repair 当前仅 phase 3，决策 #25/#54） | 关键文件（works_manifest / world_manifest / foundation / fixed_relationships / identity / target_baseline）缺失 = error 阻断；自动 repair 接入由 `T-PHASE2-REPAIR-AGENT` 跟踪 |
+| Phase 2 (baseline) | per-lane `repair(files=[lane 产物], config=缩水版, source_context=None, extra_checkers=[phase2 引用 checker], lane_regen=lane 重跑回调)`（决策 #59——T0/T1 + 程序 checker，L3/T2/triage 不开）；终点 `validate_baseline` 跑 schema + length-tolerance（决策 #48），失败 fatal | 关键文件（works_manifest / world_manifest / foundation / fixed_relationships / identity / target_baseline）缺失 = error 阻断；`[phase2].repair_enabled=false` 退回仅终点 gate |
 | Phase 3 (extraction) | 每文件独立调用 `repair(files=[single_file], config=RepairConfig(run_semantic=True), source_context=...)`，orchestrator 用 `ThreadPoolExecutor(max_workers=[repair].repair_concurrency)` 并发分发 | 完整四层检查 + 四层修复，per-file 独立事务，全部文件 PASS 才进 commit |
 | Phase 3.5 (consistency) | `validate_only(files=all_stages, checkers=["structural"])` | 跨阶段程序化检查，不自动修复 |
 | Phase 4 (scene) | per-chapter 程序化校验（沿用现有逻辑） | 行号有效/不重叠/覆盖全章 |

@@ -48,6 +48,18 @@ SubLaneRegenCallback = Callable[
     bool | None,
 ]
 
+# Decision #59 — generic lane-rerun T3 callback:
+# ``(file_path, issues, prior_attempt_context) -> bool | None``. Same
+# True / False / None verdict semantics as ``SubLaneRegenCallback``.
+# Used by phase 2 baseline lanes: T3 = re-run the producing lane's own
+# LLM call (fresh generation) instead of the default single-LLM rewrite.
+# ``sub_lane_regen`` (path-specific, char stage_snapshot only) is
+# consulted first when both are wired.
+LaneRegenCallback = Callable[
+    [str, list[Issue], dict[str, list[str]] | None],
+    bool | None,
+]
+
 
 _CHAR_SNAPSHOT_PATH_RE = re.compile(
     r"works/(?P<wid>[^/]+)/characters/(?P<cid>[^/]+)/canon/"
@@ -113,13 +125,17 @@ class FileRegenFixer(BaseFixer):
 
     def __init__(self, llm_call: Callable[..., str] | None = None,
                  retriever: ContextRetriever | None = None,
-                 sub_lane_regen: SubLaneRegenCallback | None = None):
+                 sub_lane_regen: SubLaneRegenCallback | None = None,
+                 lane_regen: LaneRegenCallback | None = None):
         self._llm_call = llm_call
         self._retriever = retriever or ContextRetriever()
         # Decision #55 — when set, T3 routes char_snapshot files through
         # the orchestrator's 4-sub-lane parallel re-extract + merge path
         # instead of the default single-LLM full-file regen.
         self._sub_lane_regen = sub_lane_regen
+        # Decision #59 — generic lane-rerun callback (any file path);
+        # consulted after sub_lane_regen, before the default regen.
+        self._lane_regen = lane_regen
 
     def fix(
         self,
@@ -131,7 +147,11 @@ class FileRegenFixer(BaseFixer):
         max_attempts: int = 1,
         prior_attempt_context: dict | None = None,
     ) -> FixResult:
-        if self._llm_call is None:
+        # Regen callbacks (sub_lane_regen / lane_regen) run their own
+        # extraction paths and don't need this fixer's llm_call; only
+        # bail early when neither a callback nor an LLM is available.
+        if (self._llm_call is None and self._sub_lane_regen is None
+                and self._lane_regen is None):
             return FixResult()
 
         patched: list[str] = []
@@ -194,6 +214,40 @@ class FileRegenFixer(BaseFixer):
                             file_path)
                         continue
                     # verdict is False → callback declined; fall through
+
+            # Decision #59 — generic lane-rerun regen (phase 2 baseline
+            # lanes). Same verdict semantics as the sub-lane path above:
+            # True → reload + mark resolved; None → skip (no fallback,
+            # the lane's own LLM call already failed once); False →
+            # declined, fall through to default regen.
+            if self._lane_regen is not None:
+                verdict = self._lane_regen(
+                    file_path, file_issues, prior_attempt_context)
+                if verdict is True:
+                    try:
+                        with Path(file_path).open(
+                                "r", encoding="utf-8") as fh:
+                            f.content = json.load(fh)
+                    except (OSError, json.JSONDecodeError) as exc:
+                        logger.warning(
+                            "lane regen claimed success but file "
+                            "unreadable at %s: %s", file_path, exc)
+                        continue
+                    for issue in file_issues:
+                        patched.append(issue.json_path)
+                        resolved.add(issue.fingerprint)
+                    continue
+                if verdict is None:
+                    logger.warning(
+                        "lane regen failed for %s; lifecycle will "
+                        "re-surface remaining issues", file_path)
+                    continue
+                # verdict is False → callback declined; fall through
+
+            # Default single-LLM full-file regen path from here on —
+            # requires an LLM (callbacks above already had their chance).
+            if self._llm_call is None:
+                continue
 
             content = f.content if f.content is not None else f.load()
             if content is None:

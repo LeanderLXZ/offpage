@@ -84,14 +84,19 @@ from .lifecycle.progress import (
     _atomic_write_json,
 )
 from .prompt_builder import (
-    build_baseline_prompt,
     build_candidate_characters_prompt,
     build_char_snapshot_prompt,
     build_char_support_prompt,
+    build_fixed_relationships_prompt,
     build_foundation_prompt,
+    build_identity_prompt,
+    build_key_figures_prompt,
     build_stage_plan_prompt,
+    build_target_baseline_prompt,
     cleanup_phase1_lane_inputs,
+    cleanup_phase2_lane_inputs,
     prepare_phase1_lane_inputs,
+    prepare_phase2_lane_inputs,
     build_summarization_prompt,
     build_world_extraction_prompt,
 )
@@ -197,6 +202,11 @@ from ..repair import (
     RetryPolicy,
     SourceContext,
     run as run_repair,
+)
+from ..repair.checkers.phase2_baseline_refs import (
+    FixedRelationshipsPartiesChecker,
+    FoundationKeyFiguresChecker,
+    TargetBaselineKeysChecker,
 )
 from ..repair.checkers.semantic import SemanticReviewLLMUnavailable
 from ..repair.protocol import Issue as RepairIssue
@@ -1399,7 +1409,7 @@ class ExtractionOrchestrator:
         """
         import json as _json
         import re as _re
-        from .schema_loader import load_schema as _load_schema_inlined
+        from .core.schema_loader import load_schema as _load_schema_inlined
         schema_dir = self.project_root / "schemas"
         files: list[RepairFileEntry] = []
 
@@ -2173,13 +2183,26 @@ class ExtractionOrchestrator:
     def run_baseline_production(
         self, target_characters: list[str]
     ) -> None:
-        """Produce phase 2 baseline (decision #54 + #58 — phase 2 缩水到 4 件):
-        - foundation.major_factions[].key_figures 替换（phase 1 foundation
-          lane 已落 foundation.json 含 raw 名 key_figures，phase 2 LLM 在
-          build_baseline_prompt 单次 call 内替换能匹配 candidate_characters
-          .aliases 的 raw 名为 character_id，匹配不上保留 raw 名）
-        - fixed_relationships.json
-        - per-character identity.json + manifest.json + target_baseline.json
+        """Produce phase 2 baseline as a 2+2N lane fan-out (decision #59;
+        artifact set per decision #54 + #58):
+
+        - **lane A (key_figures, runs FIRST, serialized)**：foundation.
+          major_factions[].key_figures raw 名 → character_id 替换（in-place
+          edit of foundation.json — 先行跑完再放其余 lane，避免同文件
+          读写并发）
+        - **lane B (fixed_relationships)**：world/foundation/
+          fixed_relationships.json
+        - **identity lane ×N**（每目标角色一个）：canon/identity.json +
+          manifest.json
+        - **target_baseline lane ×N**：canon/target_baseline.json
+
+        lane B 与全部 per-char lanes 并行（``[phase2].lane_concurrency``）。
+        每 lane：独立 prompt（chunk 输入按 lane 投影裁剪，同 phase 1
+        projector 模式）→ 输出落盘 → per-file repair 缩水版（决策 #59：
+        T0/T1 + schema/程序 checker；L3 语义 checker / T2 source_patch /
+        triage 不开——``source_context=None``；T3 = ``lane_regen`` 回调
+        重跑本 lane 自己的 LLM call）。``[phase2].repair_enabled = false``
+        时跳过 per-lane repair，仅靠终点 ``validate_baseline`` gate。
 
         foundation.json 主体由 phase 1 foundation lane 直接产出，phase 2
         不再二次综合 foundation。stage_catalog 不再由 phase 2 LLM 写空占位
@@ -2204,20 +2227,22 @@ class ExtractionOrchestrator:
         本函数不自动清理 phase 3 产物——清理是破坏性动作，需用户
         显式执行（例如 ``rm -rf`` + ``git rm``）。
         """
-        print("\n" + "=" * 60)
-        print("  Phase 2: Baseline Production")
-        print("=" * 60 + "\n")
+        from .core.schema_loader import load_schema as _load_schema_inlined
 
+        cfg = get_config()
+        work_dir = self.project_root / "works" / self.work_id
+        schemas_dir = self.project_root / "schemas"
+        foundation_path = work_dir / "world" / "foundation" / "foundation.json"
+
+        print("\n" + "=" * 60)
+        print("  Phase 2: Baseline Production [2+2N lane fan-out]")
+        print("=" * 60 + "\n")
         print(f"  Characters: {target_characters}")
-        print("  Producing: foundation.key_figures 补齐 + fixed_relationships + "
-              "identity + target_baseline + manifest\n")
 
         # Pre-check: foundation.json must exist (phase 1 foundation lane
         # output). Phase 2 reads + 补齐 key_figures, never re-creates the
         # file from scratch (decision #54). If missing, phase 1 must be
         # re-run before phase 2 can proceed.
-        work_dir = self.project_root / "works" / self.work_id
-        foundation_path = work_dir / "world" / "foundation" / "foundation.json"
         if not foundation_path.exists():
             print(f"[ERROR] phase 1 foundation lane output missing: "
                   f"{foundation_path}.")
@@ -2226,51 +2251,382 @@ class ExtractionOrchestrator:
             print("  Re-run with --resume to retry phase 1 foundation lane.")
             sys.exit(1)
 
-        prompt = build_baseline_prompt(
-            self.project_root, self.work_id, target_characters)
-        result = run_with_retry(
-            self.backend, prompt,
-            timeout_seconds=get_config().phase3.extraction_timeout_s,
-            lane_name="baseline",
-        )
-
-        if not result.success:
-            print(f"[ERROR] Baseline production failed: {result.error}")
+        # Legal character_id set — replacement lookup for lane A and the
+        # anchor every phase-2 reference checker validates against
+        # (decision #59: checkers compare only against this immutable
+        # shared input; no cross-artifact merge checker).
+        candidates_data = _load_json(
+            work_dir / "analysis" / "candidate_characters.json")
+        legal_ids = {
+            c["character_id"]
+            for c in (candidates_data or {}).get("candidates", [])
+            if isinstance(c, dict) and c.get("character_id")
+        }
+        if not legal_ids:
+            print("[ERROR] candidate_characters.json missing or empty — "
+                  "phase 2 lanes need the legal character_id set. "
+                  "Re-run with --resume to retry phase 1.")
             sys.exit(1)
 
-        # Verify outputs — these are critical for extraction
-        missing_critical: list[str] = []
+        # Lane A checker hint: pre-lane key_figures state ("不新增" 契约
+        # 的对照基线)。Loaded BEFORE lane A mutates the file.
+        pre_foundation = _load_json(foundation_path) or {}
+        pre_key_figures: dict[str, list[str]] = {}
+        for fac in pre_foundation.get("major_factions") or []:
+            if isinstance(fac, dict):
+                pre_key_figures[fac.get("name", "")] = [
+                    e for e in (fac.get("key_figures") or [])
+                    if isinstance(e, str)
+                ]
 
-        # foundation.json must still exist after phase 2 LLM call — phase 2
-        # only edits key_figures field in-place, never deletes the file.
-        if foundation_path.exists():
-            print("  [OK] World foundation present (phase 1 produced; phase 2 补齐 key_figures).")
-        else:
-            missing_critical.append("world/foundation/foundation.json")
-            print("  [MISS] World foundation gone after phase 2 — should not happen.")
+        # --- repair plumbing (shared by every lane) ---
+        repair_enabled = cfg.phase2.repair_enabled
+        ra_cfg = cfg.repair
+        repair_logs_dir = work_dir / "analysis" / "progress" / "repair_logs"
+        if repair_enabled:
+            repair_logs_dir.mkdir(parents=True, exist_ok=True)
 
-        fixed_rel = (work_dir / "world" / "foundation"
-                     / "fixed_relationships.json")
-        if fixed_rel.exists():
-            print("  [OK] World fixed_relationships produced.")
-        else:
-            print("  [WARN] World fixed_relationships.json not found "
-                  "(Phase 2 should create).")
+        default_review_timeout = cfg.phase3.review_timeout_s
 
-        for char_id in target_characters:
-            canon_dir = work_dir / "characters" / char_id / "canon"
-            identity = canon_dir / "identity.json"
-            if identity.exists():
-                print(f"  [OK] {char_id}/identity.json produced.")
+        def _llm_call(prompt: str, timeout: int | None = None) -> str:
+            result = run_with_retry(
+                self.reviewer_backend or self.backend,
+                prompt,
+                timeout_seconds=timeout or default_review_timeout,
+                lane_name="repair[phase2]",
+            )
+            if not result.success:
+                raise SemanticReviewLLMUnavailable(
+                    result.error or "LLM call failed")
+            return result.text
+
+        def _phase2_repair_cfg() -> RepairConfig:
+            # 缩水版（决策 #59）：run_semantic / l3_gate / triage 全关
+            # （无失败样本 + phase 2 输入契约是摘要，语义层不适用）；
+            # t2_max=0 跳过 T2 source_patch（phase 2 产物不该拿原文修）。
+            return RepairConfig(
+                max_rounds=ra_cfg.total_round_limit,
+                run_semantic=False,
+                l3_gate_enabled=False,
+                triage_enabled=False,
+                max_lifecycles_per_file=ra_cfg.max_lifecycles_per_file,
+                retry_policy=RetryPolicy(
+                    t0_max=ra_cfg.t0_retry,
+                    t1_max=ra_cfg.t1_retry,
+                    t2_max=0,
+                    t3_max=ra_cfg.t3_retry,
+                    max_total_rounds=ra_cfg.total_round_limit,
+                ),
+            )
+
+        # --- lane table -------------------------------------------------
+        # Each lane: slug / outputs [(path, schema_path)] / builder
+        # (prior_error -> prompt) / extra checker factory. Builders close
+        # over lane_dirs, which is populated before any lane runs.
+        lane_dirs: dict[str, Path] = {}
+
+        def _lane_a_builder(prior_error: str) -> str:
+            return build_key_figures_prompt(
+                self.project_root, self.work_id, prior_error=prior_error)
+
+        lane_a: dict[str, Any] = {
+            "slug": "key_figures",
+            "outputs": [(foundation_path,
+                         schemas_dir / "world" / "foundation.schema.json")],
+            "builder": _lane_a_builder,
+            "checkers": lambda: [FoundationKeyFiguresChecker(
+                legal_ids, pre_key_figures)],
+        }
+
+        def _make_fixed_rel_lane() -> dict[str, Any]:
+            def _builder(prior_error: str) -> str:
+                return build_fixed_relationships_prompt(
+                    self.project_root, self.work_id, target_characters,
+                    lane_dirs["fixed_relationships"],
+                    prior_error=prior_error)
+            return {
+                "slug": "fixed_relationships",
+                "outputs": [(
+                    work_dir / "world" / "foundation"
+                    / "fixed_relationships.json",
+                    schemas_dir / "world"
+                    / "fixed_relationships.schema.json")],
+                "builder": _builder,
+                "checkers": lambda: [
+                    FixedRelationshipsPartiesChecker(legal_ids)],
+            }
+
+        def _make_identity_lane(cid: str) -> dict[str, Any]:
+            def _builder(prior_error: str) -> str:
+                return build_identity_prompt(
+                    self.project_root, self.work_id, cid,
+                    lane_dirs["identity"], prior_error=prior_error)
+            char_dir = work_dir / "characters" / cid
+            return {
+                "slug": f"identity_{cid}",
+                "outputs": [
+                    (char_dir / "canon" / "identity.json",
+                     schemas_dir / "character" / "identity.schema.json"),
+                    (char_dir / "manifest.json",
+                     schemas_dir / "character"
+                     / "character_manifest.schema.json"),
+                ],
+                "builder": _builder,
+                "checkers": lambda: [],
+            }
+
+        def _make_target_baseline_lane(cid: str) -> dict[str, Any]:
+            def _builder(prior_error: str) -> str:
+                return build_target_baseline_prompt(
+                    self.project_root, self.work_id, cid,
+                    lane_dirs["target_baseline"], prior_error=prior_error)
+            return {
+                "slug": f"target_baseline_{cid}",
+                "outputs": [(
+                    work_dir / "characters" / cid / "canon"
+                    / "target_baseline.json",
+                    schemas_dir / "character"
+                    / "target_baseline.schema.json")],
+                "builder": _builder,
+                "checkers": lambda: [
+                    TargetBaselineKeysChecker(legal_ids, cid)],
+            }
+
+        parallel_lanes: list[dict[str, Any]] = [_make_fixed_rel_lane()]
+        for cid in target_characters:
+            parallel_lanes.append(_make_identity_lane(cid))
+            parallel_lanes.append(_make_target_baseline_lane(cid))
+
+        # --- resume skip: parallel lanes with valid outputs on disk are
+        # skipped (same semantics as phase 1). "Valid" = schema pass AND
+        # the lane's phase-2 reference checkers report no error — the
+        # skip criterion must be at least as strict as the lane's own
+        # pass criterion, otherwise a repair-FAIL run that left a
+        # schema-legal but reference-illegal file on disk would be
+        # silently skipped on --resume and reach phase 3. Lane A always
+        # runs — replacement is idempotent (already-replaced ids match
+        # themselves via exact character_id lookup) and "已替换" 无法从
+        # schema 判定（raw 名残留合法）。
+        def _outputs_valid(lane: dict[str, Any]) -> bool:
+            entries: list[RepairFileEntry] = []
+            for path, schema_path in lane["outputs"]:
+                data = _load_json(path)
+                if data is None:
+                    return False
+                try:
+                    schema = _load_schema_inlined(schema_path)
+                except (OSError, ValueError):
+                    return False
+                if list(_jsonschema.Draft202012Validator(
+                        schema).iter_errors(data)):
+                    return False
+                entries.append(RepairFileEntry(path=str(path), content=data))
+            for checker in lane["checkers"]():
+                if any(i.severity == "error"
+                       for i in checker.check(entries)):
+                    return False
+            return True
+
+        pending = [l for l in parallel_lanes if not _outputs_valid(l)]
+        pending_slugs = {l["slug"] for l in pending}
+        skipped = [l["slug"] for l in parallel_lanes
+                   if l["slug"] not in pending_slugs]
+
+        print("  [run] key_figures → world/foundation/foundation.json "
+              "(lane A, serialized)")
+        for lane in parallel_lanes:
+            mark = ("[SKIP — valid on disk (schema + ref checks)]"
+                    if lane["slug"] in skipped else "[run]")
+            print(f"  {mark} {lane['slug']}")
+        lane_concurrency = max(1, cfg.phase2.lane_concurrency)
+        if pending:
+            print(f"  Lane concurrency: {lane_concurrency} "
+                  f"(after lane A)")
+        print(f"  Per-lane repair: "
+              f"{'enabled (T0/T1, 决策 #59 缩水版)' if repair_enabled else 'disabled'}\n")
+
+        # --- single-lane runner ------------------------------------------
+        def _run_phase2_lane(
+                lane: dict[str, Any]) -> tuple[str, str, str | None]:
+            slug = lane["slug"]
+            outputs: list[tuple[Path, Path]] = lane["outputs"]
+            for path, _ in outputs:
+                path.parent.mkdir(parents=True, exist_ok=True)
+
+            prior_error = ""
+            missing: list[str] = []
+            missing_retry_budget = max(0, cfg.phase2.output_missing_max_retry)
+            for attempt in range(missing_retry_budget + 1):
+                if attempt > 0:
+                    print(f"  [RETRY {attempt}/{missing_retry_budget}] "
+                          f"phase2 lane {slug}: output missing, re-running")
+                prompt = lane["builder"](prior_error)
+                result = run_with_retry(
+                    self.backend, prompt,
+                    timeout_seconds=cfg.phase3.extraction_timeout_s,
+                    lane_name=f"phase2_{slug}",
+                )
+                if not result.success:
+                    return slug, "lane_failed", (
+                        f"claude -p failed: {result.error or 'unknown'}")
+                missing = [str(p) for p, _ in outputs if not p.exists()]
+                if not missing:
+                    break
+                prior_error = (
+                    f"上一次运行后输出文件未生成：{missing}。"
+                    f"请按 prompt 要求把产物写入声明的路径。")
             else:
-                missing_critical.append(f"{char_id}/identity.json")
-                print(f"  [MISS] {char_id}/identity.json not found.")
+                return slug, "lane_failed", (
+                    f"outputs missing after "
+                    f"{missing_retry_budget} retries: {missing}")
 
-        if missing_critical:
-            print(f"\n[ERROR] Missing critical baseline files: "
-                  f"{', '.join(missing_critical)}")
-            print("  Cannot proceed to extraction without these files.")
-            print("  Re-run with --resume to retry baseline production.")
+            if not repair_enabled:
+                return slug, "ok", None
+
+            # Schema load failures degrade to schema=None (SchemaChecker
+            # skips such entries; reference checkers still run) — same
+            # posture as phase 3's _collect_stage_files. Raising here
+            # would burn the whole pool after the lane's LLM tokens are
+            # already spent.
+            def _safe_schema(sp: Path) -> dict | None:
+                try:
+                    return _load_schema_inlined(sp)
+                except (OSError, ValueError) as exc:
+                    logger.warning(
+                        "phase2 lane %s: cannot load schema %s (%s); "
+                        "schema check skipped for this file", slug, sp, exc)
+                    return None
+
+            files = [
+                RepairFileEntry(path=str(p), schema=_safe_schema(sp))
+                for p, sp in outputs
+            ]
+
+            # T3 = re-run this lane's own LLM call (decision #59). One
+            # rerun per repair run: for a 2-file lane (identity) the
+            # callback may fire once per file — the first rerun already
+            # regenerated both outputs, so later calls return the first
+            # rerun's verdict instead of re-running. Success requires
+            # every output to re-parse as JSON post-regen (mere existence
+            # is vacuous — the pre-repair missing-output loop already
+            # guaranteed existence); the real acceptance check is
+            # lifecycle 2's full Phase A re-validation.
+            regen_state = {"ran": False, "ok": False}
+
+            def _outputs_parse_ok() -> bool:
+                for p, _ in outputs:
+                    try:
+                        json.loads(p.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError):
+                        return False
+                return True
+
+            def _lane_regen(file_path: str, issues: list[RepairIssue],
+                            prior_ctx: dict | None) -> bool | None:
+                if regen_state["ran"]:
+                    return True if regen_state["ok"] else None
+                regen_state["ran"] = True
+                lines = [
+                    f"- {i.json_path}: [{i.rule}] {i.message}"
+                    for i in issues[:8]
+                ]
+                regen_prior = (
+                    "上一轮产物经修复仍存在以下问题，请重新生成本 lane "
+                    "全部输出并修正：\n" + "\n".join(lines))
+                regen_prompt = lane["builder"](regen_prior)
+                regen_result = run_with_retry(
+                    self.backend, regen_prompt,
+                    timeout_seconds=cfg.phase3.extraction_timeout_s,
+                    lane_name=f"phase2_{slug}_t3",
+                )
+                if not regen_result.success:
+                    return None
+                regen_state["ok"] = _outputs_parse_ok()
+                return True if regen_state["ok"] else None
+
+            rec_path = repair_logs_dir / f"repair_phase2_{slug}.jsonl"
+            with RepairRecorder(rec_path) as recorder:
+                repair_result = run_repair(
+                    files=files,
+                    config=_phase2_repair_cfg(),
+                    source_context=None,
+                    llm_call=_llm_call,
+                    recorder=recorder,
+                    lane_regen=_lane_regen,
+                    extra_checkers=lane["checkers"](),
+                )
+            if not repair_result.passed:
+                return slug, "lane_failed", (
+                    f"repair FAIL: {repair_result.report[:300]}")
+            return slug, "ok", None
+
+        # --- execution: lane A first (serialized), then the rest ---------
+        failed: list[tuple[str, str]] = []
+        try:
+            needed_kinds = set()
+            for lane in pending:
+                if lane["slug"] == "fixed_relationships":
+                    needed_kinds.add("fixed_relationships")
+                elif lane["slug"].startswith("identity_"):
+                    needed_kinds.add("identity")
+                elif lane["slug"].startswith("target_baseline_"):
+                    needed_kinds.add("target_baseline")
+            if needed_kinds:
+                lane_dirs.update(prepare_phase2_lane_inputs(
+                    self.project_root, self.work_id,
+                    lanes=tuple(sorted(needed_kinds)),
+                ))
+
+            name, status, err = _run_phase2_lane(lane_a)
+            msg = f"  [{status.upper()}] phase 2 lane: {name}"
+            if err:
+                msg += f" — {err}"
+            print(msg)
+            if status != "ok":
+                print("\n[FATAL] Phase 2 lane A (key_figures) failed. "
+                      "Aborting before parallel lanes.")
+                sys.exit(1)
+
+            if pending:
+                with ThreadPoolExecutor(
+                        max_workers=lane_concurrency) as pool:
+                    futures = {
+                        pool.submit(_run_phase2_lane, lane): lane["slug"]
+                        for lane in pending
+                    }
+                    for fut in as_completed(futures):
+                        submitted = futures[fut]
+                        try:
+                            name, status, err = fut.result()
+                        except RateLimitHardStop:
+                            # Cancel siblings so the implicit ``with``
+                            # exit doesn't block on still-sleeping lanes
+                            # (decision #55 R2 pattern).
+                            pool.shutdown(wait=False, cancel_futures=True)
+                            raise
+                        except Exception as exc:  # noqa: BLE001
+                            # Worker raised (unreadable file, unexpected
+                            # bug). Don't abort the pool — mark this lane
+                            # failed and let siblings finish (same
+                            # posture as the phase 3 repair pool).
+                            logger.exception(
+                                "phase 2 lane worker raised for %s",
+                                submitted)
+                            name, status, err = (
+                                submitted, "lane_failed",
+                                f"worker exception: {exc!r}")
+                        msg = f"  [{status.upper()}] phase 2 lane: {name}"
+                        if err:
+                            msg += f" — {err}"
+                        print(msg)
+                        if status != "ok":
+                            failed.append((name, err or ""))
+        finally:
+            cleanup_phase2_lane_inputs(self.project_root, self.work_id)
+
+        if failed:
+            print(f"\n[FATAL] Phase 2 failed lanes: "
+                  f"{', '.join(n for n, _ in failed)}. Aborting.")
             sys.exit(1)
 
         # Write world manifest programmatically now that foundation exists.
