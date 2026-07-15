@@ -842,8 +842,8 @@ def _format_prev_char_snapshot_reference(
     if prev_stage is None:
         return ""
 
-    from .lane_output import prev_snapshot_slice_path
-    from .snapshot_merge import SUB_LANE_NAMES
+    from .lifecycle.lane_output import prev_snapshot_slice_path
+    from .phases.snapshot_merge import SUB_LANE_NAMES
 
     work_dir = project_root / "works" / work_id
     char_dir = work_dir / "characters" / character_id / "canon"
@@ -893,7 +893,7 @@ def _render_lane_scope_block(lane_scope: str) -> tuple[str, str]:
     if lane_scope == "ALL":
         return "", ""
 
-    from .snapshot_merge import (
+    from .phases.snapshot_merge import (
         FIELD_ALLOCATION, SHARED_KEY_SUBKEYS, SUB_LANE_NAMES,
     )
     if lane_scope not in SUB_LANE_NAMES:
@@ -1068,8 +1068,8 @@ def _build_char_snapshot_read_list(
     """
     # Local import to avoid an import-time cycle with snapshot_merge /
     # lane_output (this module is imported early by orchestrator).
-    from .lane_output import prev_snapshot_slice_path
-    from .snapshot_merge import SUB_LANE_NAMES
+    from .lifecycle.lane_output import prev_snapshot_slice_path
+    from .phases.snapshot_merge import SUB_LANE_NAMES
 
     files: list[str] = []
     work_dir = project_root / "works" / work_id
