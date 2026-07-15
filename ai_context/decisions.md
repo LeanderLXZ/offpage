@@ -279,6 +279,9 @@ N. <决策陈述，一行>。
 59. **Phase 2 baseline 拆 2+2N lane 并行 + per-lane repair 缩水版接入。** lane A `key_figures` 先行串行，fixed_relationships + 每角色 identity / target_baseline 两 lane 并行（输入按 lane 投影裁剪）；repair 只开 T0/T1 + 程序 checker（`source_context=None`，L3/T2/triage 不开），T3 = `lane_regen` 重跑本 lane，终点 `validate_baseline` 保留为最后安全阀。
     → docs/decisions.md #59。
 
+60. **未决语义（L3）repair 问题 record-and-continue，不再停机。** `[repair].defer_unresolved_semantic`（代码默认 false，本项目 true）：某 stage repair 收尾后残留 `error` 只剩 `category=="semantic"` 时，写台账 `deferred_repairs/{stage}.jsonl`（随 stage commit）并当 PASS 继续，不判 ERROR；残留含 schema/structural/cross_file 或 worker 崩溃仍硬 ERROR。台账留待未来 Phase 3.5 收尾修复 pass 逐条精准修（不重跑 stage）。
+    → docs/decisions.md #60。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

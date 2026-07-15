@@ -408,6 +408,14 @@ name_mixup / pronoun_confusion / title_drift / time_shift / space_conflict
 note_id 格式 `SN-S{stage:03d}-{seq:02d}`；stage 保持 COMMITTED，不新增状态。
 **Runtime 不消费 extraction_notes/，仅审计。**
 
+**未决语义延后**（`[repair].defer_unresolved_semantic`，代码默认 false，本项目开）：
+与 triage（源小说 bug）不同，这里处理"提取确有错但自动修复追不平"的 L3 残留。
+某 stage repair 收尾后残留 `error` **只剩 `category=="semantic"`** 时，不判 ERROR
+停机——写台账 `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`（随 stage
+commit 提交），stage 当 PASS 继续。残留含 json_syntax/schema/structural/cross_file
+或 worker 崩溃仍硬 ERROR。台账留待 Phase 3.5 收尾修复 pass 逐条精准修（不重跑
+stage）。判据 + 写出：`persona_extraction/lifecycle/deferred_repair_log.py`。
+
 **Lifecycle 重置**：T3 跑完后**不做即时 corruption 检查** — T3 输出
 直接进入 lifecycle 2 的 Phase A，全量重扫（L0/L1/L2/L3）会自动捕获任何
 机械损坏并按正常 fixer 链处理；新 error 升 T3 即 `T3_EXHAUSTED`（lifecycle 2

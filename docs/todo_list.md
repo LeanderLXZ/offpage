@@ -22,10 +22,11 @@ _(none)_
 
 _(none)_
 
-### ⚪ Discussing (6)
+### ⚪ Discussing (7)
 
 | ID | Brief | Open decisions | Updated | Blocked by |
 |---|---|---|---|---|
+| `T-PHASE35-DEFERRED-FIX` | 决策 #60 落地了"记录不停机"——repair 修不平的 L3 语义残留写进 deferred_repairs 台账、stage 照常继续。本 todo 是那个"跑完全部 stage 后读台账逐条 field-level 精准修 + 复验"的收尾 pass（Part B），不重跑整个 stage。等真实台账数据积累后据此设计 fixer 形态。 | 4 | 2026-07-15 EDT | deferred_repairs 台账在真实运行中积累出样本 |
 | `T-REPAIR-EVENT-DRIVEN` | Phase 3 一抽完一个文件就立刻去修复、跟下一文件的抽取并行——理论最快。但实测算过只比当前方案省 4 分钟/stage，要为这点收益引入双线程池 + 撞限额风险，性价比太低。先做简单版（E1），等真实跑数据出来再决定要不要做这个。 | 0 | — | T-REPAIR-PARALLEL 先落地 |
 | `T-PROMPT-SCHEMA-INJECT` | 项目约定"长度上限这种数字只在 schema 写一份"，但少数 prompt 和 doc 里仍有手写的数字（"150-200 字"之类）。万一 schema 改了，这些地方就会偷偷不一致。要么写代码让 prompt 自动从 schema 读，要么修约定明说"prompt 允许例外"。 | 3 | — | 无（路径决策即可启动） |
 | `T-PHASE5-RETRIEVAL` | 好几份架构文档都在说"每部作品下应该有个 indexes/ 目录"，但实际没有任何阶段在生成它——目录在磁盘上压根不存在。打算加一个 Phase 5 专门做检索类产物（词典、关键词、向量索引、RAG 数据等）。等 phase 3 跑完 + 检索层设计定稿再启动。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
@@ -33,7 +34,7 @@ _(none)_
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。等真有外部消费方校验这个文件再改 schema。 | 1 | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
-**Total**: 6 — 🟢 In Progress 0 ｜ 🟡 Next 0 ｜ ⚪ Discussing 6
+**Total**: 7 — 🟢 In Progress 0 ｜ 🟡 Next 0 ｜ ⚪ Discussing 7
 
 <!-- holo:section start -->
 ---
@@ -307,6 +308,51 @@ decision #27n 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
      Don't start; converge the decision first.
      Format: see "What to record" + "Open decisions" section mandatory. -->
 <!-- holo:section end -->
+
+### [T-PHASE35-DEFERRED-FIX] Phase 3.5 收尾精准修复 pass（消费 deferred_repairs 台账）
+
+**上下文**
+
+决策 #60 落地了 record-and-continue：repair 修不平的 L3 语义残留不再停机，
+写进 `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`（随 stage
+commit），stage 照常继续。但**只记录、还没修**——本 todo 是那个"跑完全部
+stage 后逐条精准修"的收尾 pass（决策 #60 显式登记的 Part B）。
+
+**要做什么**
+
+- 读取全部已 commit 的 `deferred_repairs/*.jsonl`（每行含
+  file/json_path/category/severity/rule/message）。
+- 对每条 issue 做 field-level 精准修（复用 `repair/field_patch.py` 的
+  `apply_field_patch(json_path)` + `context_retriever` 取原文），修完复验
+  （L3 gate），不重跑整个 stage。
+- 修成的从台账移除；仍修不平的保留 + 标记，供人工兜底。
+- 定位：跑在 Phase 3 全部 COMMITTED 之后（Phase 3.5 一致性检查前后待定），
+  作为独立 pass / CLI 子命令。
+
+**待决策项**
+
+1. 触发形态：并入现有 Phase 3.5（`validation/gates/phase3_5_consistency.py`）
+   还是独立 CLI 子命令 / `--start-phase` 变体？
+2. fixer 预算：给比行内 repair 更强的预算吗（更多轮次 / 允许 T3 / 跨 stage
+   全局上下文）——这正是延后的价值所在。
+3. 修完的 stage 要不要重新 commit（amend 该 stage 的 commit 还是追一个
+   `phase3.5-fix` commit）？下游 stage 已基于旧数据抽取，传播如何兜底
+   （靠 Phase 3.5 一致性检查，还是要局部重抽受影响 stage）？
+4. 台账"同类错反复出现"的聚合诊断——是否顺便产一个汇总，指导回改提取
+   prompt？
+
+**未落地原因**
+
+- 先让真实台账数据积累（跑几个 work / 几十个 stage），据此判断残留语义错
+  的真实分布与可 field-level 修复的比例，再定 fixer 形态；过早设计易脱靶。
+
+**暂不做的事**
+
+- 本轮（决策 #60）只做"记录 + 不停机"，不碰任何自动修复逻辑。
+
+**依赖**：deferred_repairs 台账在真实运行中积累出样本
+
+---
 
 ### [T-REPAIR-EVENT-DRIVEN] Repair 事件驱动 · extract→repair overlap（E2）
 

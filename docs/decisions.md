@@ -769,6 +769,39 @@ N. <决策陈述>。
     `docs/requirements.md` + `extraction/README.md` +
     `ai_context/{architecture,conventions}.md` 同步。
 
+60. **未决语义（L3）repair 问题 record-and-continue，不再停机。**
+    **背景**：Phase 3 首次端到端运行时 S002 的 repair 在快照里查出真实的跨字段
+    语义自相矛盾（同一事实既 known 又 uncertain；current_status 与
+    relationships 对同一物件来源打架）。这类 L3 问题 field-level 的 T1/T2
+    追不平（跨字段一致性），T3 又在 lifecycle 2 被禁用；叠加 L3 semantic
+    reviewer 本身非确定性（每轮 flag 集合跳动），修复循环不收敛，stage 判
+    ERROR、整条 Phase 3 停在 S002。检测本身是对的（问题真实），卡的是"自动
+    修复稳定收敛"。**决策**：repair 检测/修复逻辑不动，只改终局门控——加
+    `[repair].defer_unresolved_semantic`（代码默认 `false` 保留停机语义，
+    `config.toml` 本项目 `true`）。开启时，某 stage 全部文件 repair 收尾后
+    残留 `error` **只剩 `category=="semantic"`**（判据纯函数
+    `deferrable_semantic_issues`）→ 把未决 issue 写 durable 台账
+    `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`（每行
+    stage_id/file/json_path/category/severity/rule/message；置于 `works/` 下
+    非 gitignored 的 `progress/`，随 `commit_stage` 的 `git add -A
+    works/{work_id}/` 一并提交），stage 当 PASS 处理 → post-repair PP rerun →
+    PASSED → commit，继续下一个 stage。**边界**：只延后 semantic——残留含
+    json_syntax / schema / structural / cross_file（会让下游 stage 读不了）或
+    repair worker 崩溃（synthetic result 无 error issue）仍走原 hard ERROR。
+    **与 triage 的区别**：triage（#25 source_inherent）处理"源小说自带 bug"，
+    写 `extraction_notes/`；本决策处理"提取确有错但自动修不平"，写
+    `deferred_repairs/`，两者台账与语义分离。**显式不做（登记为 todo）**：
+    读台账逐条精准修的 Phase 3.5 收尾修复 pass（Part B）本轮不实现——先让
+    真实台账数据积累，据此设计 fixer 形态（可给比行内 repair 更充足的预算：
+    更多轮次 / 允许 T3 / 跨 stage 全局上下文），台账同时把"同类错反复出现"
+    显性化，成为回改提取 prompt 的诊断信号。Plumbing →
+    `extraction/persona_extraction/lifecycle/deferred_repair_log.py`（新增：
+    `deferrable_semantic_issues` 判据 + `write_deferred_repairs` 台账）、
+    `orchestrator.py`（Phase 3 `_process_stage` Step 4 出口三分支重构：PASS /
+    DEFER / hard-ERROR）、`core/config.py` + `config.toml`（`[repair]`
+    `defer_unresolved_semantic`）、`docs/architecture/extraction_workflow.md`
+    + `extraction/README.md` 同步。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

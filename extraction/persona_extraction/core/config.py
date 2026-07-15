@@ -128,6 +128,18 @@ class RepairAgentConfig:
     # claude -p calls; reduce to 4-5 if frequent rate_limit_pause entries
     # appear. 1 = legacy single-threaded repair.
     repair_concurrency: int = 10
+    # Record-and-continue for unresolved SEMANTIC (L3) repair issues. When
+    # ``true`` and a stage's repair ends with only ``category=="semantic"``
+    # error issues remaining, the stage is NOT failed: the unresolved
+    # issues are written to a durable ledger
+    # (``works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl``,
+    # committed with the stage) and the stage proceeds to commit. A later
+    # Phase 3.5 fix pass consumes the ledger for precise targeted repair
+    # without re-extracting. Any remaining json_syntax / schema /
+    # structural / cross_file error (or a repair worker exception) still
+    # forces the stage to ERROR — those break downstream reads. Default
+    # ``false`` preserves the stop-on-error behaviour (opt-in per project).
+    defer_unresolved_semantic: bool = False
 
 
 @dataclass(frozen=True)

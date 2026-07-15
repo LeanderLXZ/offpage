@@ -32,6 +32,10 @@ from typing import Any, Callable
 
 from .core.config import get_config
 from ..validation.gates.phase3_5_consistency import run_consistency_check, save_report
+from .lifecycle.deferred_repair_log import (
+    deferrable_semantic_issues,
+    write_deferred_repairs,
+)
 from .lifecycle.failed_lane_log import write_failed_lane_log
 from .core.git_utils import (
     branch_exists,
@@ -3614,9 +3618,35 @@ class ExtractionOrchestrator:
 
             tracker.record_step(ProgressTracker.STEP_REVIEW)
 
+            # Record-and-continue gate (decision — deferred semantic
+            # repair). When enabled and the only remaining error issues are
+            # semantic (L3), defer them to a durable ledger and let the
+            # stage commit instead of failing; a later Phase 3.5 fix pass
+            # repairs them precisely without re-extracting. Any remaining
+            # json_syntax / schema / structural / cross_file error (or a
+            # repair worker exception, which yields no error issues) still
+            # forces ERROR — those break downstream reads.
+            deferrable: list | None = None
+            if (not all_pass
+                    and get_config().repair.defer_unresolved_semantic):
+                deferrable = deferrable_semantic_issues(failed_entries)
+
             if all_pass:
                 tracker.print_step_done(
                     4, 5, "Repair agent", "PASS")
+            elif deferrable:
+                write_deferred_repairs(
+                    work_root, stage.stage_id, deferrable)
+                tracker.print_step_done(
+                    4, 5, "Repair agent",
+                    f"DEFER — {len(deferrable)} semantic issue(s) recorded "
+                    f"to deferred_repairs/{stage.stage_id}.jsonl")
+                for f, r in failed_entries:
+                    print(f"    [DEFER] {f.path}")
+                # Deferred issues are not a stage failure: clear any prior
+                # error_message and fall through to the PASS path (post-
+                # repair PP rerun → PASSED → commit).
+                stage.error_message = ""
             else:
                 n_errors = sum(
                     1 for i in merged_issues if i.severity == "error")

@@ -743,7 +743,10 @@ orchestrator (Python)
     │       │           SIGKILL 中断 → state 留 REVIEWING, --resume
     │       │             重入 Step 4 再跑 repair + PP (幂等)
     │       ├── [全部文件 PASS + PP 重跑成功] → transition(PASSED) → git commit
-    │       └── [任一文件 FAIL 或 PP 重跑失败] → stage ERROR (--resume 重置 → PENDING)
+    │       ├── [残留 error 只剩 semantic(L3) ∧ defer_unresolved_semantic]
+    │       │       → 写 deferred_repairs/{stage}.jsonl → 当 PASS 处理 → commit
+    │       └── [任一文件 FAIL(含 schema/structural/cross_file 残留或 worker 崩溃)
+    │             或 PP 重跑失败] → stage ERROR (--resume 重置 → PENDING)
     │
     ├── 跨阶段一致性检查 (Phase 3.5):
     │       ├── 程序化检查 (Python, 0 token)
@@ -821,6 +824,21 @@ orchestrator (Python)
   痕迹和未来 fixer 的线索；**runtime 不消费这些 notes**（仅审计）。Phase 3.5
   一致性检查遇到 min_examples 不足时，若有匹配 json_path 的 coverage_shortage
   SourceNote 则视为已达标、不报 warning。
+- **未决语义延后（record-and-continue，`[repair].defer_unresolved_semantic`）**：
+  与 triage 不同——triage 处理"源小说自带 bug"，这里处理"提取确有错但自动修
+  复追不平"的 L3 残留（跨字段一致性、L3 semantic reviewer 非确定性导致修复
+  循环不收敛）。开关开启时，若某 stage 全部文件 repair 收尾后残留的 `error`
+  **只剩 `category=="semantic"`**（判据纯函数 `deferrable_semantic_issues`），
+  则不判 ERROR 停机：把未决 issue 写进 durable 台账
+  `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`（每行含
+  stage_id/file/json_path/category/severity/rule/message；置于 `works/` 下
+  非 `progress/`，随 `commit_stage` 的 `git add -A works/{work_id}/` 一并提交），
+  stage 当 PASS 处理继续提交。**只延后 semantic**——残留里含 json_syntax /
+  schema / structural / cross_file（会让下游 stage 读不了）或 repair worker
+  崩溃（无 error issue）仍走硬 ERROR。台账由未来的 Phase 3.5 收尾修复 pass
+  消费，逐条精准修（field-level）而不重跑整个 stage。代码默认 `false`（保留
+  停机语义），本项目 `config.toml` 开启。写出装置：
+  `extraction/persona_extraction/lifecycle/deferred_repair_log.py`。
 - **Lifecycle 重置**：T3 跑完后**不做即时 corruption 检查**；T3 输出
   直接作为 lifecycle 2 的输入。Lifecycle 2 的 Phase A 会重扫所有 checker
   层（L0/L1/L2/L3）——若 T3 真把文件结构破坏了，L0/L1/L2 会在 lifecycle 2
