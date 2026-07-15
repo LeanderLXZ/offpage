@@ -15,6 +15,7 @@ from .core.llm_backend import create_backend
 from .orchestrator import ExtractionOrchestrator
 from .core.process_guard import launch_background
 from .core.rate_limit import RateLimitHardStop, WEEKLY_EXIT_CODE
+from .core import run_metrics
 from .phases.scene_archive import run_scene_archive
 
 # Phase 4 does not need git preflight (no commits) and uses its own lock.
@@ -236,6 +237,8 @@ def main(argv: list[str] | None = None) -> None:
             args.backend, project_root,
             max_turns=args.max_turns, model=args.model,
             effort=args.effort)
+        run_metrics.init_run_metrics(project_root, args.work_id)
+        run_metrics.set_phase("phase4")
         try:
             success = run_scene_archive(
                 project_root, args.work_id, backend,
@@ -248,6 +251,8 @@ def main(argv: list[str] | None = None) -> None:
             print("  See works/<work_id>/analysis/progress/"
                   "rate_limit_exit.log and re-run --resume after reset.")
             sys.exit(WEEKLY_EXIT_CODE)
+        finally:
+            run_metrics.summarize()
         sys.exit(0 if success else 1)
 
     # --- Background mode (Phase 0-3.5) ---
@@ -348,6 +353,7 @@ def main(argv: list[str] | None = None) -> None:
         orch.release_lock()
         sys.exit(1)
 
+    run_metrics.init_run_metrics(project_root, args.work_id)
     try:
         # Decision #51: run_full is the phase-agnostic resume entry point.
         # It internally does migrate_legacy_progress + load + self-heal
@@ -374,6 +380,7 @@ def main(argv: list[str] | None = None) -> None:
               "rate_limit_exit.log and re-run --resume after reset.")
         sys.exit(WEEKLY_EXIT_CODE)
     finally:
+        run_metrics.summarize()
         orch.release_lock()
 
 

@@ -22,6 +22,7 @@ from typing import Any, Iterator
 from .config import get_config
 from .process_guard import fmt_memory, get_rss_mb
 from .rate_limit import classify_error, get_active as get_active_rl
+from .run_metrics import record as _record_run_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -632,6 +633,10 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
                              timeout_seconds=timeout_seconds,
                              lane_name=lane_name,
                              effort=effort)
+        # Record per-call time / token / cost to the run ledger (no-op when
+        # uninitialised; every attempt — incl. retries — is a real subprocess
+        # that spent tokens, so record each one).
+        _record_run_metrics(lane_name, result)
         if not result.success and on_failure is not None:
             try:
                 on_failure(result, attempt)

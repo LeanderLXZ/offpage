@@ -90,3 +90,6 @@ tmp/holo/
 # 仅本地保留，git 历史本身已是回滚安全网。
 # 与 ai_context/skills_config.md §Do-not-commit paths 保持同步。
 logs/file_snapshots/
+# run 指标账本（core/run_metrics.py 产出）：含真实 work_id / 角色名的
+# 运行数据，仅本地诊断用，绝不入库。
+logs/runs/*.jsonl

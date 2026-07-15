@@ -885,6 +885,15 @@ orchestrator (Python)
 - 启动时滚动 `extraction.log`：现有日志重命名为 `.1`，旧的 `.N` 依次后移，
   超过 `[logging].extraction_log_backup_count`（默认 3）的最旧一份被删除。
   保证每次启动都是干净日志，磁盘占用有上限。设为 0 关闭滚动
+- Run 指标账本（`core/run_metrics.py`）：每次 `claude -p` / `codex` 调用
+  在唯一接入点 `run_with_retry` 落一行结构化记录到
+  `logs/runs/{work_id}_{YYYY-MM-DD_HHMMSS}.jsonl`（run 启动时间戳进文件名，
+  每 run 独立）；字段 `{ts, phase, lane, success, duration_s, num_turns,
+  input_tokens, output_tokens, cache_read, cache_creation, cost}`，token /
+  cost 取自成功路径 `LLMResult.raw.usage`（失败路径回退解析 stdout）。
+  `phase` 由各 phase 方法顶部 `set_phase()` 标注（phase0–4）。run 结束打印
+  按 phase / lane 聚合小表。best-effort：未 init 或异常均静默 no-op，绝不
+  阻断提取。区别于 §6.4 的 `failed_lane_log`（仅失败时、单 lane 全量 dump）。
 - `--max-runtime` 总时间限制，到期后在 stage 间优雅停止
 - 子进程硬超时（Phase 0 summarize 1800s、Phase 3 提取 3600s、repair
   agent LLM 调用 600s；阈值分别由 `extraction/config.toml` 的

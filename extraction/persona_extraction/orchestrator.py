@@ -194,6 +194,7 @@ from .core.rate_limit import (
     set_active as set_active_rl,
 )
 from .phases.scene_archive import run_scene_archive
+from .core.run_metrics import set_phase as _set_run_phase
 from ..validation.gates.phase2_baseline import (
     load_importance_map,
     validate_baseline,
@@ -1547,6 +1548,7 @@ class ExtractionOrchestrator:
 
     def run_summarization(self) -> Path:
         """Summarize all chapters in chunks, return summaries directory."""
+        _set_run_phase("phase0")
         structure_mode = read_structure_mode(self.project_root, self.work_id)
         is_light_novel = structure_mode == "light_novel"
 
@@ -1875,6 +1877,7 @@ class ExtractionOrchestrator:
         AND passes its schema gate (and stage-limit check, for stage_plan
         monolithic) is skipped without rebuilding tmpdir inputs for it.
         """
+        _set_run_phase("phase1")
         structure_mode = read_structure_mode(self.project_root, self.work_id)
         is_light_novel = structure_mode == "light_novel"
 
@@ -2231,6 +2234,7 @@ class ExtractionOrchestrator:
         本函数不自动清理 phase 3 产物——清理是破坏性动作，需用户
         显式执行（例如 ``rm -rf`` + ``git rm``）。
         """
+        _set_run_phase("phase2")
         from .core.schema_loader import load_schema as _load_schema_inlined
 
         # Dedupe while preserving order — a duplicate id from the phase
@@ -2847,6 +2851,7 @@ class ExtractionOrchestrator:
             max_stages: Stop after this many stages complete.
                          None = all, 0 = baseline only.
         """
+        _set_run_phase("phase3")
         pipeline = pipeline or self.pipeline
         phase3 = phase3 or self.phase3
         if not pipeline or not phase3:
@@ -3850,6 +3855,7 @@ class ExtractionOrchestrator:
     def _run_scene_archive(self, *, end_stage: int = 0,
                            resume: bool = True) -> None:
         """Run Phase 4: scene archive generation."""
+        _set_run_phase("phase4")
         run_scene_archive(
             self.project_root, self.work_id, self.backend,
             concurrency=self.concurrency,
