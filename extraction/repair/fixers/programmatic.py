@@ -17,7 +17,9 @@ from typing import Any
 
 from . import BaseFixer
 from ..protocol import FileEntry, FixResult, Issue, SourceContext
-from ..field_patch import apply_field_patch, write_file_entry
+from ..field_patch import (
+    apply_field_patch, delete_field, extract_subtree, write_file_entry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -169,15 +171,21 @@ class ProgrammaticFixer(BaseFixer):
         validator_type = ctx.get("validator", "")
 
         if validator_type == "additionalProperties":
-            # Remove extra properties — needs schema traversal
-            # For now, skip complex fixes
+            # The checker narrows each unexpected key to its own leaf
+            # `json_path` and records the key name in context; delete it.
+            extra_key = ctx.get("extra_key")
+            if extra_key:
+                try:
+                    return delete_field(content, issue.json_path)
+                except (KeyError, IndexError):
+                    return None
             return None
 
         if validator_type == "type":
             return self._fix_type_mismatch(content, issue)
 
         if validator_type == "required":
-            return self._fix_missing_required(content, issue)
+            return self._fix_missing_required(content, issue, schema)
 
         if validator_type in ("maxLength", "minLength"):
             return self._fix_string_length(content, issue)
@@ -186,7 +194,6 @@ class ProgrammaticFixer(BaseFixer):
 
     def _fix_type_mismatch(self, content: Any, issue: Issue) -> Any | None:
         """Coerce types: str↔number, scalar→array."""
-        from ..field_patch import extract_subtree
         try:
             current = extract_subtree(content, issue.json_path)
         except (KeyError, IndexError):
@@ -212,10 +219,17 @@ class ProgrammaticFixer(BaseFixer):
 
         return None
 
-    def _fix_missing_required(self, content: Any,
-                              issue: Issue) -> Any | None:
-        """Add missing required fields with safe defaults."""
-        # The message from jsonschema includes the missing field name
+    def _fix_missing_required(self, content: Any, issue: Issue,
+                              schema: dict) -> Any | None:
+        """Add a missing required field with a safe default.
+
+        Only inserts a default that will NOT immediately re-fail on the
+        next validation round. In particular a required string field that
+        also carries a ``minLength`` is left to a higher tier — inserting
+        ``""`` would just trip ``minLength`` and spin the repair loop.
+        When the field's schema can't be resolved, skip rather than guess.
+        """
+        # The message from jsonschema includes the missing field name.
         msg = issue.message
         # Pattern: "'field_name' is a required property"
         m = re.search(r"'([^']+)' is a required property", msg)
@@ -223,15 +237,21 @@ class ProgrammaticFixer(BaseFixer):
             return None
         field_name = m.group(1)
         parent_path = issue.json_path
-        new_path = f"{parent_path}.{field_name}" if parent_path != "$" else f"$.{field_name}"
+
+        field_schema = _resolve_field_schema(schema, parent_path, field_name)
+        default = _safe_required_default(field_schema)
+        if default is _NO_SAFE_DEFAULT:
+            return None
+
+        new_path = (f"{parent_path}.{field_name}"
+                    if parent_path != "$" else f"$.{field_name}")
         try:
-            return apply_field_patch(content, new_path, "")
+            return apply_field_patch(content, new_path, default)
         except (KeyError, IndexError):
             return None
 
     def _fix_string_length(self, content: Any, issue: Issue) -> Any | None:
         """Truncate or pad strings to meet length constraints."""
-        from ..field_patch import extract_subtree
         try:
             current = extract_subtree(content, issue.json_path)
         except (KeyError, IndexError):
@@ -254,3 +274,64 @@ class ProgrammaticFixer(BaseFixer):
                 return apply_field_patch(content, issue.json_path, padded)
 
         return None
+
+
+# ---------------------------------------------------------------------------
+# Schema-default helpers for _fix_missing_required
+# ---------------------------------------------------------------------------
+
+# Sentinel: no default is safe to insert (skip → leave to a higher tier).
+_NO_SAFE_DEFAULT = object()
+
+
+def _resolve_field_schema(schema: dict, parent_path: str,
+                          field_name: str) -> dict | None:
+    """Best-effort lookup of the subschema for ``parent_path.field_name``.
+
+    Walks ``properties`` for object keys and ``items`` for array indices.
+    Returns ``None`` when the path can't be resolved (nested combinators,
+    ``$ref``, etc.) — the caller then declines to guess a default.
+    """
+    from ..field_patch import _parse_path
+
+    node: Any = schema
+    for tok in _parse_path(parent_path):
+        if not isinstance(node, dict):
+            return None
+        if isinstance(tok, int):
+            node = node.get("items")
+        else:
+            node = (node.get("properties") or {}).get(tok)
+    if not isinstance(node, dict):
+        return None
+    fs = (node.get("properties") or {}).get(field_name)
+    return fs if isinstance(fs, dict) else None
+
+
+def _safe_required_default(field_schema: dict | None) -> Any:
+    """A default value for a missing required field that won't re-fail.
+
+    Returns ``_NO_SAFE_DEFAULT`` when no safe default exists — notably a
+    string with a ``minLength`` (``""`` would trip the length check), an
+    array with ``minItems`` > 0, or an object with its own ``required``.
+    """
+    if not isinstance(field_schema, dict):
+        return _NO_SAFE_DEFAULT
+    ftype = field_schema.get("type")
+    if ftype == "string":
+        if field_schema.get("minLength", 0) > 0 or field_schema.get("enum"):
+            return _NO_SAFE_DEFAULT
+        return ""
+    if ftype in ("number", "integer"):
+        return 0
+    if ftype == "boolean":
+        return False
+    if ftype == "array":
+        if field_schema.get("minItems", 0) > 0:
+            return _NO_SAFE_DEFAULT
+        return []
+    if ftype == "object":
+        if field_schema.get("required"):
+            return _NO_SAFE_DEFAULT
+        return {}
+    return _NO_SAFE_DEFAULT

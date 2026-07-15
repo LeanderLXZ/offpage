@@ -711,6 +711,9 @@ N. <决策陈述>。
 
 59. **Phase 2 baseline 拆 2+2N lane 并行 + per-lane repair 缩水版接入（T0/T1 +
     程序 checker；T3 = lane 重跑）。** 2026-07-13 /plan 讨论收敛 + 4 项决策拍板后
+    > **经 #62 收紧**：T3 `lane_regen` / 全文重跑已删——phase 2 per-lane repair
+    > 现只有 T0/T1 + 程序 checker，无 lane 重生成；`validate_baseline` 仍是最后
+    > 安全阀。
     落地（`T-PHASE2-REPAIR-AGENT`）。动机：phase 2 原为单次组合 LLM call 产 4 件
     强耦合产物 + 终点 `validate_baseline` 硬失败（#54 形态），格式错只能整体手动
     重跑；同时单文件 T3 重抽在组合 call 拓扑下会跨文件漂移，堵死 repair 接入。
@@ -770,6 +773,10 @@ N. <决策陈述>。
     `ai_context/{architecture,conventions}.md` 同步。
 
 60. **未决语义（L3）repair 问题 record-and-continue，不再停机。**
+    > **经 #62 扩展**：可 defer 的 `category` 从"仅 semantic"扩到
+    > {semantic, schema, structural, cross_file}；只有 `json_syntax`（文件
+    > 不可解析）与 worker 崩溃仍硬 ERROR。判据函数 `deferrable_semantic_issues`
+    > → `deferrable_issues`，`DEFERRABLE_CATEGORY` → `DEFERRABLE_CATEGORIES`。
     **背景**：Phase 3 首次端到端运行时 S002 的 repair 在快照里查出真实的跨字段
     语义自相矛盾（同一事实既 known 又 uncertain；current_status 与
     relationships 对同一物件来源打架）。这类 L3 问题 field-level 的 T1/T2
@@ -841,6 +848,39 @@ N. <决策陈述>。
     某角色 S002.json 的 schema 违规 + `--resume`）为独立后续，在 extraction
     分支上、待本修复经 `/forward` 合入后进行。
     → logs/change_logs/2026-07-15_134148_digest-derived-no-repair.md。
+
+62. **repair 去掉全文重跑（T3）+ 按 rule 分层路由 + 每 tier 封顶 + defer 扩展。**
+    **背景**：决策 #61 落地后重跑 phase 3，S001 的 repair 在
+    `Character B voice_state.target_voice_map[*].dialogue_examples` 的 `min_examples`
+    （coverage_shortage）与 L3 语义 issue 之间**死循环 1.5h**——T2 fixer 凑对白
+    满足 min_examples → 凑的内容触发语义矛盾 → 语义 fixer 删掉 → min_examples
+    又不足；期间还触发一次 T3 全文重生烧 ~20min。逐调用分析（`logs/runs/`）显示
+    T3 `file_regen` 是最贵单一事件（一次 sub_lane_regen 把 4 个 sub-lane 从头重抽
+    ~17min），且 T1/T2 的 23 次 patch 里有近空转（apply 即算 resolved → 阻断升级 →
+    跨轮打转）与巨型 patch（29k token，根因是 checker 把 issue 锚在大容器、T1
+    `extract_subtree` 退化成整段重写）。**决策**：repair 只保留 3 层就地修复
+    T0（程序 0 token）→ T1（`local_patch`，LLM，**不载 source**）→ T2
+    （`source_patch`，LLM，载章节原文），**彻底删除 T3 全文重生成**（`file_regen.py`
+    + `sub_lane_regen`（#55）+ `lane_regen`（#59），全 phase），**单轮** Phase A→B→C
+    （删 lifecycle 2 / `max_lifecycles_per_file` / `T3_TRIGGERED` / `T3_EXHAUSTED` /
+    `prior_attempt_context`）。**按 rule（回退 category）路由** `(start_tier, max_tier)`
+    ——机械类 起 T0 封顶 T1；判断类无源（enum）起 T1 封顶 T1；语义 / cross_file /
+    需原文 起 T2 封顶 T2；`coverage_shortage` → T2 + 0-token SourceNote 接受，不进
+    fixer padding（砍 min_examples↔semantic 打地鼠源头）。**每 tier ≤2 次**，第 2
+    次只针对即时复验仍未过的字段。**T1 即时复验**：apply patch 后立即 scoped
+    L0–L2 复验，fingerprint 不再出现才算 resolved（止空转 spin）+ 同文件多 issue
+    批量单次 call + related context 提前到 attempt 0。修不平的残留按 #60 defer
+    （已扩展到 semantic/schema/structural/cross_file 四类）。decision #48 长度容差门
+    保留，改在封顶后触发。**开放决策落定**：(#2) 薄内容走 coverage_shortage 接受、
+    不单点修（门在跟稀疏源现实打架就改门，同 #61 哲学）；(#1) 非语义残留连 T1 都
+    修不掉也 defer（承担 Phase 3.5 可能 error、人工兜底）。**净删 ~630 行**。Plumbing →
+    `extraction/repair/{coordinator,protocol,field_patch}.py`、
+    `extraction/repair/fixers/{local_patch,programmatic}.py`（删 `file_regen.py`）、
+    `extraction/repair/checkers/{schema,semantic}.py`（叶子锚点）、
+    `extraction/persona_extraction/orchestrator.py`（删 sub_lane/lane_regen 接线）、
+    `lifecycle/deferred_repair_log.py`（`DEFERRABLE_CATEGORIES`）、`config.toml` +
+    `core/config.py`（去 `max_lifecycles_per_file` / `t3_retry`）。
+    → logs/change_logs/2026-07-15_155408_repair-no-reextract.md。
 
 ## Repository
 

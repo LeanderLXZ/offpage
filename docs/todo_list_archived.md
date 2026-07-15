@@ -103,6 +103,16 @@
 <!-- 已落地的任务。仅精简条目。 -->
 <!-- holo:section end -->
 
+### [T-REPAIR-NO-REEXTRACT] repair 去掉全文重跑（T3）+ 定点修复治本 · 完成于 2026-07-15 · 完整完成
+
+repair 只剩 T0→T1→T2 三层就地修复，删除 T3 `file_regen` 全文重生成（含
+`sub_lane_regen`/`lane_regen`，全 phase）+ 塌 lifecycle 2 为单轮；issue 按 rule
+路由 `(start_tier,max_tier)` + 每 tier 封顶 2 次；T1 apply 后即时 L0–L2 复验
+（止 spin）+ 同文件批量单 call；`coverage_shortage` 薄内容直接 0-token 接受不
+padding；残留按 #60 defer（扩到 semantic/schema/structural/cross_file 四类）。
+净删 ~630 行。决策 #62。日志
+`logs/change_logs/2026-07-15_155408_repair-no-reextract.md`。
+
 ### [T-PHASE2-REPAIR-AGENT] phase 2 拆 2+2N lane 并行 + baseline production 接入 repair framework lifecycle（缩水版） · 完成于 2026-07-13 · 完整完成
 
 - 1 行摘要：phase 2 由单次组合 LLM call 改为 2+2N lane fan-out（lane A `key_figures` 替换先行串行 + fixed_relationships / 每目标角色 identity+manifest / target_baseline lane 并行，`[phase2].lane_concurrency` 默认 5）——`baseline_production.md` 拆 4 件 lane prompt + prompt_builder 4 入口 + 3 个 phase 2 chunk projector（`.phase2_lane_inputs/` staging，gitignored）；per-lane repair 缩水版接入（决策 #59）：T0/T1 + schema checker + `phase2_baseline_refs.py` 3 个程序 checker（key_figures 溯源/去重/势力集稳定、fixed_relationships parties warning + id 去重、target_baseline character_id 一致 + target ∈ candidate 集 + 去重 + 自引用），L3/T2/triage 不开（`source_context=None`），T3 = `lane_regen` 回调重跑本 lane；repair 框架加通用 `extra_checkers` / `lane_regen` hook（顺带修 `FileRegenFixer` llm_call=None 早退绕过回调 + `_collect_stage_files` 内 restructure 遗留断链 import）；终点 `validate_baseline` strict→tolerance 保留；`[phase2]` config 节（lane_concurrency / output_missing_max_retry / repair_enabled）。决策 #59 durable + #25/#48/#54 就地 supersede，docs/ai_context/README/schema description 全链同步。Smoke 全过（投影字段集精确 / 4 prompt read list 隔离 / checker 10 case 双向 / run_repair T3 lane_regen 端到端 / config round-trip / 既有回归 7/7）；runtime 端到端验证（真实 work 跑 phase 2 + 违规自动修复实测）留给下一次 phase 2 真实启动。

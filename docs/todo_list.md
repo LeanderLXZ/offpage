@@ -33,9 +33,8 @@ _(none)_
 | `T-RETRY` | LLM 调用失败时的重试策略能更聪明些。现在不到 5 秒就失败的会重试，但人物抽取正常要跑 10-20 分钟，5 秒太短了——那种短时失败几乎都是启动错、不是真活干完才挂。打算扩到 60 秒，再按失败类型分流要不要重试。改动小，两个数值要拍板。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。等真有外部消费方校验这个文件再改 schema。 | 1 | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
-| `T-REPAIR-NO-REEXTRACT` | repair 去掉 T3"全文重跑"（全 phase），改为按"修复需要什么"分层路由 + 每 tier 封顶 + defer，不合并 T1/T2、不碰 cache/API。三步：A 止 spin（resolved 即时复验）+ 做厚 T0 + 叶子锚点；B 删 T3 + 塌 lifecycle 2；C 按 rule 分流起始/封顶 tier（机械封顶 T1、语义直起 T2、每 tier ≤2 次）。保留轻量 LLM 定点层（T1 初衷），source 只在少数 T2 出现 → cache 非问题。 | 2 | 2026-07-15 EDT | 无（Step A 可立即起） |
 
-**Total**: 8 — 🟢 In Progress 0 ｜ 🟡 Next 0 ｜ ⚪ Discussing 8
+**Total**: 7 — 🟢 In Progress 0 ｜ 🟡 Next 0 ｜ ⚪ Discussing 7
 
 <!-- holo:section start -->
 ---
@@ -562,60 +561,3 @@ T-LOG 已落地：[llm_backend.py:565-680](../extraction/persona_extraction/core
 
 **依赖**：simulation runtime loader 选型 / 设计定稿
 
----
-
-### [T-REPAIR-NO-REEXTRACT] repair 去掉全文重跑（T3）+ 定点修复治本
-
-**上下文**
-
-Phase 3 单 stage 墙钟实测 ~26min（S001+S002 run 账本 `logs/runs/`）。逐调用分析后定位：repair 的 T3（`FileRegenFixer`，"全文重跑"）是最贵的单一事件——上一 run 里 Character B char_snapshot 触发一次 T3 `sub_lane_regen`，把 4 个 sub-lane 从头重抽（632/904/1031/1057s），单这一次加 ~17min 墙钟，且是在 23 次 T1/T2 patch 都没收敛之后才升上去的。用户要求：**任何 phase、任何情况都不再"重抽/全文重写"，只做定点修复，修不掉就记台账跳过。**
-
-进一步分析（本轮读代码得出）：那 23 次 patch 里有 ~6 次近空转（输出 14–77 token）、~4 次巨型 patch（输出 23–29k token / 350–440s）。巨型 patch 的根因是 T1 `local_patch` 用 `extract_subtree(content, issue.json_path)` 取子树重写，**patch 成本 = issue 锚点子树大小**；当 checker 把问题锚在大容器（如整个 `$.relationships`）而非叶子字段时，"定点修"退化成 29k-token 整段重写。所以"加 T1/T2 次数"无效——瓶颈是锚点粒度 + T0 覆盖，不是次数。
-
-**要求（用户）**
-
-- 删掉 T3 全文重跑能力，覆盖全部 phase（Phase 2 `lane_regen` + Phase 3 `sub_lane_regen` + 默认单次 LLM 重写）。
-- 保留一个**轻量 LLM 定点修**层（T1 的原始初衷）——T0 兜不住的判断类问题（如 52→50 干净改写、enum 选值、薄内容）交给它，不是一律 defer 遗留。
-- 不盲目加次数、不引 cache 工程、不换直连 API；让定点修复"按需分层"、每层封顶，仍不平就记台账跳过（`defer_unresolved_semantic`，决策 #60）。
-
-**方案（按"修复需要什么"分层路由 + 每 tier 封顶 + defer；不合并 T1/T2、不碰 cache）**
-
-本轮否掉了上一版"合并 T1/T2 + 每次载 source + 解决 cache"——那是给自造问题打补丁的过度工程（且换 API = 从订阅改按 token 计费，得不偿失）。正解是让 T1 保持**不载 source** 的轻量层，source 只在少数真需要的 issue 上出现，cache 从此不是问题。三步可分批落地：
-
-Step A — 止 spin + 做厚 T0（低风险，独立于删 T3，先做）：
-- **resolved 改即时复验**：T1 apply patch 后立刻对该字段跑 L0–L2 复验，过了才算 resolved（现 `local_patch.py` L89 是 apply 即算）。堵掉"自证成功→阻断升级→跨轮在 T1 打转"（那 6 次空转的根因）。L3 语义仍留轮末 gate（每 patch 跑 L3 会爆调用量）。
-- **做厚 T0**（`programmatic.py`，0 token）：补 `additionalProperties` 删多余键（现 L171 跳过）；`required`-缺失不再补空串致下一轮 minLength spin（L228）。纯机械（语法/括号/ID/明确截断）全在 T0 了结。
-- **叶子锚点**：checker 把 `json_path` 锚在叶子字段而非大容器（`checkers/semantic.py`/`schema.py`/`structural.py`），消灭 29k-token 巨型 patch。
-
-Step B — 删 T3：
-- `coordinator.py`：`build_fixers`（~L104）去 tier 3；T3 分支（L744–828）删；外层 lifecycle 循环（L236–273）塌成单轮——`max_lifecycles_per_file`/`T3_TRIGGERED`/`T3_EXHAUSTED`/`prior_attempt_context`/`existing_accepted_fps` + `_TERMINAL_TYPES` 的 T3_* 全删（已确认 lifecycle 2 仅为 T3 后清理存在）。
-- 删 `extraction/repair/fixers/file_regen.py`（整文件）。
-- `orchestrator.py`：`_build_sub_lane_regen_callback`（L1158）+ 接线（L3488–3510）删；Phase 2 `_lane_regen`（L2467–2498）删。
-- `config.toml`：去 `[repair].max_lifecycles_per_file`。
-
-Step C — 按需路由 + 封顶（替代原"合并 T1/T2"）：
-- 按 **rule（非 category）** 给每个 issue 定"起始 tier + 封顶 tier"（改 `protocol.py` 的 `START_TIER` + `_issue_max_tier`），按"修复需要什么"分流：
-  - **机械类**（json_parse/type/maxLength/id_format/additionalProperties）→ 起始 T0，**封顶 T1**（T0 兜不住的交轻量 LLM，如 52→50 干净改写、enum 选值），永不进带源层/T3。
-  - **需判断、不需原文** → 起始 **T1**（轻量 LLM，**不载 source** → 无 cache 问题），封顶 T1。
-  - **语义/需读原文才能修对** → **直接起始 T2**（带 source，不再浪费一轮无源瞎猜），封顶 T2。
-  - 每 tier **最多 2 次**，第 2 次只针对仍没过复验的字段（别整文件重来，防退化成大 patch）；仍不平 → defer。
-- `local_patch.py` 同文件多 issue **批量单次** patch（现 L59 逐 issue 一 call）；related context 从 attempt≥1 提前到 attempt 0（L106）。
-- source 只在 T2 出现、且 T2 少而罕见 + 按文件批量 → **cache 无需专门处理**。
-
-**开放决策**
-
-1. schema/结构级 error 若连 T1（轻量 LLM）都修不掉：一律 defer（承担 Phase 3.5 一致性检查可能 error、人工兜底）——用户倾向全 defer，待确认 Phase 3.5 对 deferred 文件的容忍逻辑。
-2. `minLength`-太短（内容太薄）归类：T0 补 `"…"`（垃圾内容）/ 轻量 T1 补真内容 / 当 warning 接受不单点修。用户倾向"接受、记 warning，不单修"（薄内容多是抽取本身偏薄，单点补也补不出质量），待定。
-
-**完成标准**
-
-- 全 phase 无重抽/全文重写：`grep -r "sub_lane_regen\|lane_regen\|file_regen\|FileRegen"` 生产代码无调用；`file_regen.py` 删除。
-- 未新增直连 API / cache 工程：repair 仍走 `claude -p`；T1 不载 source（grep 确认）。
-- 单 stage repair 墙钟显著下降、账本无 20k+ token 级 patch、无"空转"类无效调用（即时复验止 spin）。
-- 回归：`extraction/repair/tests/` 现有单测 + phase2/phase3 smoke 全过。
-
-**依赖**：无。Step A 可立即起（独立于删 T3）；A→B→C 顺序落地。关联：T-PHASE35-DEFERRED-FIX（消费 deferred 台账的收尾 pass）、T-REPAIR-EVENT-DRIVEN（后续 overlap 优化）。
-
-**更新时间**：2026-07-15 15:31 EDT
-
----

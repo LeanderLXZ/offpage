@@ -41,6 +41,30 @@ def extract_subtree(data: dict | list, json_path: str) -> Any:
     return node
 
 
+def delete_field(original: dict | list, json_path: str) -> dict | list:
+    """Delete the value at *json_path* in *original*, returning a new copy.
+
+    Used by T0 to remove `additionalProperties` keys that the schema does
+    not allow. Missing keys / out-of-range indices are a no-op (the value
+    is already absent). Raises KeyError / IndexError only when an
+    *intermediate* path segment does not exist.
+    """
+    obj = copy.deepcopy(original)
+    tokens = _parse_path(json_path)
+    if not tokens:
+        return obj  # cannot delete the root
+    parent = obj
+    for tok in tokens[:-1]:
+        parent = _navigate(parent, tok)
+    last = tokens[-1]
+    if isinstance(last, int):
+        if isinstance(parent, list) and -len(parent) <= last < len(parent):
+            del parent[last]
+    elif isinstance(parent, dict):
+        parent.pop(last, None)
+    return obj
+
+
 def write_patched_file(path: str, patched: dict | list) -> None:
     """Write *patched* content back to *path*, preserving JSON formatting."""
     p = Path(path)

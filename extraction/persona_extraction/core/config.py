@@ -74,8 +74,8 @@ class Phase2Config:
     # can't touch). Total attempts per lane = 1 + this.
     output_missing_max_retry: int = 1
     # Per-lane file-level repair (缩水版 — T0/T1 + schema/程序 checker;
-    # no L3 semantic checker / T2 source_patch / triage; T3 = lane
-    # re-run). ``false`` skips repair and relies solely on the terminal
+    # no L3 semantic checker / T2 source_patch / triage; no regen).
+    # ``false`` skips repair and relies solely on the terminal
     # ``validate_baseline`` gate (strict → ±10% length tolerance).
     repair_enabled: bool = True
 
@@ -117,8 +117,6 @@ class RepairAgentConfig:
     t0_retry: int = 1
     t1_retry: int = 3
     t2_retry: int = 3
-    t3_retry: int = 1
-    max_lifecycles_per_file: int = 2
     total_round_limit: int = 5
     triage_enabled: bool = True
     triage_accept_cap_per_file: int = 5

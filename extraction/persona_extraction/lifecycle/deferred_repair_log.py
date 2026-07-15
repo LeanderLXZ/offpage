@@ -1,9 +1,9 @@
-"""Deferred-repair ledger for unresolved SEMANTIC (L3) repair issues.
+"""Deferred-repair ledger for unresolved repair issues.
 
 When ``[repair].defer_unresolved_semantic`` is on and a Phase 3 stage's
-repair ends with only ``category=="semantic"`` error issues remaining, the
-stage is committed anyway (record-and-continue) instead of failing. The
-unresolved issues are written here to a durable, per-stage ledger:
+repair ends with only deferrable error issues remaining, the stage is
+committed anyway (record-and-continue) instead of failing. The unresolved
+issues are written here to a durable, per-stage ledger:
 
     works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl
 
@@ -13,11 +13,16 @@ commits it alongside the stage. A later Phase 3.5 fix pass reads the
 committed ledgers and applies precise field-level repairs without
 re-extracting the stage.
 
-Only semantic issues are deferrable: any remaining json_syntax / schema /
-structural / cross_file error would leave the file schema-invalid or
-structurally broken for downstream stages, so those still force ERROR.
-``deferrable_semantic_issues`` is the pure decision helper; it returns the
-issue list to defer, or ``None`` when the stage must hard-fail.
+Deferrable categories (decision #60 extended by T-REPAIR-NO-REEXTRACT):
+the capped tiers (T0–T2, no full-file regen) may leave semantic, schema,
+structural or cross_file errors that no automatic tier could fix — those
+are all recorded to the ledger and the stage continues. A ``json_syntax``
+error is NOT deferrable: it leaves the file unparseable, which breaks
+every downstream read, so it still forces ERROR. A repair-worker crash
+(no error issues at all) also still hard-fails.
+
+``deferrable_issues`` is the pure decision helper; it returns the issue
+list to defer, or ``None`` when the stage must hard-fail.
 """
 
 from __future__ import annotations
@@ -32,22 +37,26 @@ if TYPE_CHECKING:  # avoid a runtime import cycle with the repair package
 
 logger = logging.getLogger(__name__)
 
-DEFERRABLE_CATEGORY = "semantic"
+# Error categories the capped tiers may leave behind and that a Phase 3.5
+# fix pass can still repair precisely. ``json_syntax`` is deliberately
+# excluded — an unparseable file must hard-fail, not commit.
+DEFERRABLE_CATEGORIES: frozenset[str] = frozenset(
+    {"semantic", "schema", "structural", "cross_file"})
 
 
-def deferrable_semantic_issues(
+def deferrable_issues(
     failed_entries: Iterable[tuple["RepairFileEntry", "RepairResult"]],
 ) -> list["Issue"] | None:
     """Decide whether a stage's repair failure is safe to defer.
 
     ``failed_entries`` is the ``(entry, result)`` pairs whose repair did NOT
     pass. Returns the list of remaining error-severity issues to defer when
-    **every** such issue is ``category=="semantic"``; otherwise ``None``
-    (the stage must hard-fail).
+    **every** such issue's category is in ``DEFERRABLE_CATEGORIES``;
+    otherwise ``None`` (the stage must hard-fail).
 
     ``None`` is also returned when there are no error-severity issues at all
     — e.g. a repair worker raised an exception (synthetic ``RepairResult``
-    with empty ``issues``): a crash is not a deferrable semantic finding.
+    with empty ``issues``): a crash is not a deferrable finding.
     """
     error_issues: list[Issue] = [
         i
@@ -57,7 +66,7 @@ def deferrable_semantic_issues(
     ]
     if not error_issues:
         return None
-    if all(i.category == DEFERRABLE_CATEGORY for i in error_issues):
+    if all(i.category in DEFERRABLE_CATEGORIES for i in error_issues):
         return error_issues
     return None
 

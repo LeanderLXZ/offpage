@@ -276,14 +276,17 @@ N. <决策陈述，一行>。
 58. **Foundation schema 收紧（核心字段 required）+ `key_figures` required allow-empty + Phase 2 不再让 LLM 写空 stage_catalog。**
     → docs/decisions.md #58。
 
-59. **Phase 2 baseline 拆 2+2N lane 并行 + per-lane repair 缩水版接入。** lane A `key_figures` 先行串行，fixed_relationships + 每角色 identity / target_baseline 两 lane 并行（输入按 lane 投影裁剪）；repair 只开 T0/T1 + 程序 checker（`source_context=None`，L3/T2/triage 不开），T3 = `lane_regen` 重跑本 lane，终点 `validate_baseline` 保留为最后安全阀。
+59. **Phase 2 baseline 拆 2+2N lane 并行 + per-lane repair 缩水版接入。** lane A `key_figures` 先行串行，fixed_relationships + 每角色 identity / target_baseline 两 lane 并行（输入按 lane 投影裁剪）；repair 只开 T0/T1 + 程序 checker（`source_context=None`，L3/T2/triage 不开），无全文重跑（#62 起 T3/`lane_regen` 已删），终点 `validate_baseline` 保留为最后安全阀。
     → docs/decisions.md #59。
 
-60. **未决语义（L3）repair 问题 record-and-continue，不再停机。** `[repair].defer_unresolved_semantic`（代码默认 false，本项目 true）：某 stage repair 收尾后残留 `error` 只剩 `category=="semantic"` 时，写台账 `deferred_repairs/{stage}.jsonl`（随 stage commit）并当 PASS 继续，不判 ERROR；残留含 schema/structural/cross_file 或 worker 崩溃仍硬 ERROR。台账留待未来 Phase 3.5 收尾修复 pass 逐条精准修（不重跑 stage）。
+60. **未决 repair 问题 record-and-continue，不再停机。** `[repair].defer_unresolved_semantic`（代码默认 false，本项目 true）：某 stage repair 收尾后残留 `error` 的 `category` 全部 ∈ {semantic, schema, structural, cross_file} 时，写台账 `deferred_repairs/{stage}.jsonl`（随 stage commit）并当 PASS 继续，不判 ERROR；残留含 `json_syntax`（文件不可解析）或 worker 崩溃仍硬 ERROR。台账留待未来 Phase 3.5 收尾修复 pass 逐条精准修（不重跑 stage）。可 defer 类别经 #62 从"仅 semantic"扩到四类。
     → docs/decisions.md #60。
 
-61. **primary / derived 二分：派生文件永不进 repair。** repair 只作用于 primary（LLM 产出的 world / character stage_snapshots + memory_timeline）；派生文件 `world_event_digest.jsonl` / `memory_digest.jsonl` 是 primary 的 1:1 代码投影，移出 repair 文件集（`_collect_stage_files`），不经 L0–L3/T0–T3、尤其不被 T3 整文件 LLM 重写。正确性由确定性幂等重投影（生成器按 `event_id`/`memory_id` 全量去重，自愈历史重复）+ 现有 `phase3_5_consistency` §32/§33 门保证；语义错误归属 primary。消除了 repair 改写 digest 与 §32/§33「digest.summary 逐字==源」的自相矛盾（旧路径曾把 S001 事件 LLM 重写重复 13 次）。`involved_characters` 归一到 canonical_name。
+61. **primary / derived 二分：派生文件永不进 repair。** repair 只作用于 primary（LLM 产出的 world / character stage_snapshots + memory_timeline）；派生文件 `world_event_digest.jsonl` / `memory_digest.jsonl` 是 primary 的 1:1 代码投影，移出 repair 文件集（`_collect_stage_files`），不经 L0–L3/T0–T2、尤其不被 LLM 整文件重写。正确性由确定性幂等重投影（生成器按 `event_id`/`memory_id` 全量去重，自愈历史重复）+ 现有 `phase3_5_consistency` §32/§33 门保证；语义错误归属 primary。消除了 repair 改写 digest 与 §32/§33「digest.summary 逐字==源」的自相矛盾（旧路径曾把 S001 事件 LLM 重写重复 13 次）。`involved_characters` 归一到 canonical_name。
     → docs/decisions.md #61。
+
+62. **repair 去掉全文重跑（T3）+ 按 rule 分层路由 + 每 tier 封顶 + defer 扩展。** repair 只剩 3 层就地修复：T0（程序，0 token）→ T1（`local_patch`，LLM，**不载 source**）→ T2（`source_patch`，LLM，载章节原文）。**删除 T3 `file_regen` 全文重生成**（含 `sub_lane_regen` / `lane_regen`，全 phase），删 `file_regen.py`；**单轮** Phase A→B→C（去掉 lifecycle 2 / `max_lifecycles_per_file` / `T3_TRIGGERED` / `T3_EXHAUSTED`）。issue 按 **rule（回退 category）** 路由到 `(start_tier, max_tier)`：机械类（json_parse / schema type·min-maxLength·additionalProperties·required / id-format / stage_id_alignment）起 T0 封顶 T1；判断类无源（enum）起 T1 封顶 T1；语义 / cross_file / 需原文 起 T2 封顶 T2；`coverage_shortage`（min_examples 薄内容）→ T2 + 0-token SourceNote 接受（不进 padding，砍打地鼠）。每 tier ≤2 次，第 2 次只针对即时复验仍未过的字段。T1 apply patch 后立即 scoped L0–L2 复验，过了才算 resolved（止 self-report-resolved spin）+ 同文件多 issue 批量单次 call。修不平的残留按 #60 defer（四类），不再靠 T3 硬扛。decision #48 长度容差门保留，改在封顶后触发。
+    → docs/decisions.md #62。
 
 ## Repository
 

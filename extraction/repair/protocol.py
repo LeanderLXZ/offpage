@@ -67,11 +67,15 @@ class SourceContext:
 
 @dataclass
 class RetryPolicy:
-    """Per-tier retry limits (within a single lifecycle)."""
+    """Per-tier retry limits (within a single repair run).
+
+    Each tier is additionally hard-capped at 2 attempts by the
+    coordinator (T-REPAIR-NO-REEXTRACT); the 2nd attempt only re-targets
+    fields the immediate re-verify still flags.
+    """
     t0_max: int = 1
     t1_max: int = 3
     t2_max: int = 3
-    t3_max: int = 1
     max_total_rounds: int = 5
 
 
@@ -84,16 +88,10 @@ class RepairConfig:
     l3_gate_enabled: bool = True
     triage_enabled: bool = True          # source-discrepancy triage on L3
     accept_cap_per_file: int = 5         # max SourceNotes per file per
-                                         # lifecycle (shared by L3
+                                         # run (shared by L3
                                          # source_inherent + L2
-                                         # coverage_shortage; resets per
-                                         # lifecycle, accumulates on disk)
-    max_lifecycles_per_file: int = 2     # one file walks at most this
-                                         # many full check→fix→verify
-                                         # lifecycles. Lifecycle 1 may
-                                         # trigger T3; lifecycle 2 disables
-                                         # T3 (any escalation to T3 →
-                                         # T3_EXHAUSTED).
+                                         # coverage_shortage; accumulates
+                                         # on disk)
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
 
 
@@ -150,7 +148,7 @@ class SourceNote:
     extraction_choice: str
     future_fixer_hint: dict[str, Any]
     accepted_at: str                   # ISO 8601 with timezone
-    triage_round: int                  # 1 = pre-T3, 2 = post-T3
+    triage_round: int                  # 1 = residual (post-cap), 2 = post-gate
 
 
 @dataclass
@@ -158,7 +156,7 @@ class TriageVerdict:
     """Per-issue output of one triage decision, pre-validation.
 
     Either produced by the standalone triage LLM call, or self-reported
-    by T2 / T3 fixers through their ``source_inherent`` return channel.
+    by T2 fixers through their ``source_inherent`` return channel.
     The coordinator only accepts a verdict when both ``source_inherent``
     and ``evidence_verified`` are true.
     """
@@ -197,18 +195,77 @@ class Issue:
         return f"[{self.severity}] {self.file} {self.json_path}: {self.message}"
 
 
-# Mapping from issue category to the lowest fixer tier that can handle it.
-# `cross_file` (D4 targets-keys-eq-baseline) starts at L2: L1 json_repair is
-# scoped to the same file, T3 file-regen is too costly for what is usually
-# a small key-set drift; L2 reads sibling files so the cross-file checker
-# itself plus L2 fixers can resolve it.
-START_TIER: dict[str, int] = {
-    "json_syntax": 0,
-    "schema": 0,
-    "structural": 0,
-    "semantic": 1,
-    "cross_file": 2,
+# ---------------------------------------------------------------------------
+# Rule-based tier routing (T-REPAIR-NO-REEXTRACT Step C)
+# ---------------------------------------------------------------------------
+#
+# Route each issue by "what fixing it needs", keyed on the issue *rule*
+# first and falling back to *category*. Each entry is (start_tier,
+# max_tier); tiers are 0=programmatic (0 token), 1=local_patch (LLM, NO
+# source), 2=source_patch (LLM WITH chapter text). T3 (full-file regen)
+# no longer exists.
+#
+#   * MECHANICAL (start T0, cap T1): deterministic-ish fixes. T0 handles
+#     most; the few it can't → one light no-source T1 rewrite. Never
+#     loads source. Covers json_parse, schema type/min-max length,
+#     additionalProperties, id-format, stage_id alignment.
+#   * JUDGEMENT, no source (start T1, cap T1): needs a model but not the
+#     original text — enum choice, a clean length rewrite. Skips T0.
+#   * SEMANTIC / needs original text (start T2, cap T2): must read the
+#     source chapters — skip the wasted no-source T1 round.
+#   * coverage_shortage: handled separately (start/cap T2 + 0-token
+#     accept) via ``is_coverage_shortage``.
+
+_MECHANICAL_TIERS = (0, 1)
+_JUDGEMENT_TIERS = (1, 1)
+_SEMANTIC_TIERS = (2, 2)
+
+# Per-rule overrides (checked before the category fallback).
+RULE_TIERS: dict[str, tuple[int, int]] = {
+    # --- mechanical ---
+    "json_parse": _MECHANICAL_TIERS,
+    "schema_type": _MECHANICAL_TIERS,
+    "schema_maxLength": _MECHANICAL_TIERS,
+    "schema_minLength": _MECHANICAL_TIERS,
+    "schema_additionalProperties": _MECHANICAL_TIERS,
+    "schema_required": _MECHANICAL_TIERS,
+    "memory_id_format": _MECHANICAL_TIERS,
+    "event_id_format": _MECHANICAL_TIERS,
+    "stage_id_alignment": _MECHANICAL_TIERS,
+    "relationship_history_summary_max_length": _MECHANICAL_TIERS,
+    # --- judgement, no source ---
+    "schema_enum": _JUDGEMENT_TIERS,
 }
+
+# Category fallback when the rule isn't explicitly routed above.
+CATEGORY_TIERS: dict[str, tuple[int, int]] = {
+    "json_syntax": (0, 1),
+    "schema": (0, 1),
+    "structural": (0, 1),
+    "semantic": _SEMANTIC_TIERS,
+    "cross_file": _SEMANTIC_TIERS,
+}
+
+
+def route_tiers(issue: "Issue") -> tuple[int, int]:
+    """Return ``(start_tier, max_tier)`` for an issue.
+
+    coverage_shortage routes to T2 only (0-token accept downstream);
+    otherwise the per-rule table wins, then the per-category fallback.
+    """
+    if is_coverage_shortage(issue):
+        return (COVERAGE_SHORTAGE_START_TIER, COVERAGE_SHORTAGE_MAX_TIER)
+    if issue.rule in RULE_TIERS:
+        return RULE_TIERS[issue.rule]
+    return CATEGORY_TIERS.get(issue.category, (0, 1))
+
+
+def issue_start_tier(issue: "Issue") -> int:
+    return route_tiers(issue)[0]
+
+
+def issue_max_tier(issue: "Issue") -> int:
+    return route_tiers(issue)[1]
 
 
 def is_coverage_shortage(issue: "Issue") -> bool:
@@ -217,9 +274,8 @@ def is_coverage_shortage(issue: "Issue") -> bool:
 
     Such issues are demoted to `severity=warning` and carry a
     `context.coverage_shortage=True` flag. They must:
-      * route `START_TIER=2, MAX_TIER=2` (skip T0/T1/T3) — T0 can't
-        invent examples, T1 has no source access, T3 file-regen won't
-        make the novel longer.
+      * route start=T2, cap=T2 (skip T0/T1) — T0 can't invent examples,
+        T1 has no source access.
       * after a failed T2 try, trigger a 0-token program-constructed
         SourceNote (see ``Triager.build_coverage_shortage_verdict``)
         instead of a blocking error.
@@ -228,8 +284,8 @@ def is_coverage_shortage(issue: "Issue") -> bool:
     return bool(ctx.get("coverage_shortage"))
 
 
-# Coverage-shortage issues try T2 exactly once; they never escalate
-# to T3 (file regeneration can't add source material that isn't there).
+# Coverage-shortage issues try T2 exactly once, then take the 0-token
+# accept fast path (no source material can be invented).
 COVERAGE_SHORTAGE_START_TIER = 2
 COVERAGE_SHORTAGE_MAX_TIER = 2
 
@@ -265,7 +321,7 @@ class FixResult:
     """Result from a single fixer invocation."""
     patched_paths: list[str] = field(default_factory=list)
     resolved_fingerprints: set[str] = field(default_factory=set)
-    # T2/T3 self-reported source_inherent candidates. Keyed by issue
+    # T2 self-reported source_inherent candidates. Keyed by issue
     # fingerprint; each value is an un-validated TriageVerdict. The
     # coordinator runs the same quote-substring verification on these
     # as it does on the standalone triage LLM output.

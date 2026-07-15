@@ -9,11 +9,11 @@ with a stub LLM that:
     verbatim quote from the fake chapter
 
 Scenarios exercised:
-  (a) pre-T3 triage accepts a valid quote → T3 never fires
+  (a) triage accepts a valid quote → the semantic residual is accepted
+      as a SourceNote (no regeneration tier exists to fire)
   (b) bad-quote triage is rejected by program verification
-  (c) accept_cap_per_file caps acceptance
+  (c) accept_cap_per_file caps acceptance within a single run
   (d) non-semantic issues cannot reach the LLM-triage path
-  (e) T3-only self-reports are still tracked for post-gate triage
   (f) coverage_shortage accepted via 0-token verdict;
       Phase C must not resurface the accepted issue (H1 regression guard)
 
@@ -142,7 +142,7 @@ def scenario_a_pre_t3_accept() -> None:
         max_rounds=2, run_semantic=True, l3_gate_enabled=True,
         triage_enabled=True, accept_cap_per_file=3,
         retry_policy=RetryPolicy(
-            t0_max=1, t1_max=1, t2_max=1, t3_max=1,
+            t0_max=1, t1_max=1, t2_max=1,
             max_total_rounds=2),
     )
 
@@ -184,7 +184,7 @@ def scenario_b_bad_quote_rejected() -> None:
         max_rounds=1, run_semantic=True, l3_gate_enabled=True,
         triage_enabled=True, accept_cap_per_file=3,
         retry_policy=RetryPolicy(
-            t0_max=1, t1_max=1, t2_max=1, t3_max=1,
+            t0_max=1, t1_max=1, t2_max=1,
             max_total_rounds=1),
     )
 
@@ -246,7 +246,7 @@ def scenario_c_cap_enforced() -> None:
         max_rounds=1, run_semantic=True, l3_gate_enabled=True,
         triage_enabled=True, accept_cap_per_file=2,
         retry_policy=RetryPolicy(
-            t0_max=1, t1_max=1, t2_max=1, t3_max=1,
+            t0_max=1, t1_max=1, t2_max=1,
             max_total_rounds=1),
     )
 
@@ -261,22 +261,17 @@ def scenario_c_cap_enforced() -> None:
     else:
         lines = []
 
-    # Cap is per-lifecycle (independent counters per cycle); disk JSONL
-    # is append-only across lifecycles. With cap=2 and the default
-    # max_lifecycles_per_file=2, lifecycle 1 may accept 2 and lifecycle 2
-    # may accept up to 2 more before hitting cap again — total ≤ 4 lines
-    # on disk. The PER-CYCLE invariant is the one being enforced.
-    cycles = cfg.max_lifecycles_per_file
+    # A run is a single pass now — accept_cap_per_file caps the notes
+    # accepted, and the disk JSONL matches 1:1.
     cap = cfg.accept_cap_per_file
     print(f"[C] passed={result.passed}  notes={len(result.accepted_notes)}  "
           f"persisted_lines={len(lines)}")
-    assert len(result.accepted_notes) <= cycles * cap, (
-        f"per-lifecycle cap × {cycles} cycles breached: "
-        f"{len(result.accepted_notes)} > {cycles * cap}")
+    assert len(result.accepted_notes) <= cap, (
+        f"accept_cap breached: {len(result.accepted_notes)} > {cap}")
     assert len(lines) == len(result.accepted_notes)
 
-    print(f"[C] OK — per-lifecycle accept_cap_per_file enforced "
-          f"(cap={cap}, cycles={cycles}, total notes={len(result.accepted_notes)})")
+    print(f"[C] OK — accept_cap_per_file enforced "
+          f"(cap={cap}, total notes={len(result.accepted_notes)})")
 
 
 def scenario_d_non_semantic_rejected() -> None:
@@ -369,102 +364,6 @@ def scenario_d_non_semantic_rejected() -> None:
     print("[D] OK — non-semantic issue refused, semantic one accepted")
 
 
-def scenario_e_t3_self_report_tracked() -> None:
-    """Regression: T3 that only self-reports must still be tracked.
-
-    With bug B present, ``t3_files`` would be derived from
-    ``resolved_fingerprints`` only. When T3 self-reports every issue,
-    that set is empty → L3 gate skips the file → post-gate triage never
-    fires → no SourceNote is accepted. Post-fix, the union with
-    ``source_inherent_candidates`` keeps the file in ``modified_files``
-    so the gate runs, post-gate triage accepts, and the T3 cap increments.
-    """
-    tmp = Path(tempfile.mkdtemp(prefix="repair_smoke_triage_e_"))
-    target, ctx = _write_work_layout(tmp)
-
-    valid_quote = (
-        "Later, the narrator called A001 'the wanderer' but A001 was "
-        "already named 'the seeker' in chapter one.")
-
-    state = {"triage": 0, "regen": 0, "semantic": 0}
-
-    def stub(prompt: str, timeout: int = 600) -> str:
-        if "quality reviewer" in prompt:
-            state["semantic"] += 1
-            return json.dumps([{
-                "json_path": "$.summary",
-                "severity": "error",
-                "rule": "fact_mismatch",
-                "message": "summary contradicts source",
-            }])
-        if "source-discrepancy triage tool" in prompt:
-            state["triage"] += 1
-            # Pre-T3 (first triage call): refuse, force T3 to run.
-            if state["triage"] == 1:
-                return json.dumps({"verdicts": []})
-            # Post-gate triage: accept with the fixer's prior.
-            fps = [l.split("fingerprint:", 1)[1].strip()
-                   for l in prompt.splitlines()
-                   if l.strip().startswith("fingerprint:")]
-            return json.dumps({"verdicts": [
-                {"issue_fingerprint": fp,
-                 "source_inherent": True,
-                 "discrepancy_type": "author_contradiction",
-                 "chapter_number": 1,
-                 "line_range": [3, 3],
-                 "quote": valid_quote,
-                 "rationale": "source has conflicting names",
-                 "extraction_choice": "kept 'the wanderer'"}
-                for fp in fps
-            ]})
-        if "regeneration tool" in prompt:
-            state["regen"] += 1
-            # T3 writes a valid file AND self-reports the issue — nothing
-            # is "resolved" from T3's own accounting.
-            return json.dumps({
-                "summary": "A001 is called 'the wanderer' and 'the seeker'",
-                "__source_inherent__": [{
-                    "issue_fingerprint":
-                        f"{target}::$.summary::fact_mismatch",
-                    "discrepancy_type": "author_contradiction",
-                    "chapter_number": 1,
-                    "line_range": [3, 3],
-                    "quote": valid_quote,
-                    "rationale": "source conflicts",
-                    "extraction_choice": "preserved both",
-                }],
-            })
-        # Force T1/T2 to fail parse so escalation reaches T3.
-        return "NOT_JSON_FORCE_ESCALATE"
-
-    cfg = RepairConfig(
-        max_rounds=2, run_semantic=True, l3_gate_enabled=True,
-        triage_enabled=True, accept_cap_per_file=3,
-        retry_policy=RetryPolicy(
-            t0_max=1, t1_max=1, t2_max=1, t3_max=1,
-            max_total_rounds=2),
-    )
-
-    result = run(files=[FileEntry(path=str(target))],
-                 config=cfg, source_context=ctx, llm_call=stub)
-
-    notes_path = (Path(ctx.work_path) / "characters" / "A001" / "canon"
-                  / "extraction_notes" / "S001.jsonl")
-
-    print(f"[E] passed={result.passed}  notes={len(result.accepted_notes)}  "
-          f"T3 calls={state['regen']}  triage calls={state['triage']}")
-    # T3 ran (pre-T3 triage refused).
-    assert state["regen"] >= 1, "T3 should have run after pre-T3 refusal"
-    # Post-gate triage fired — only possible if modified_files includes
-    # the T3-touched file (Bug B fix).
-    assert result.accepted_notes, (
-        "post-gate triage should have accepted the T3 self-report; "
-        "if empty, Bug B likely regressed (T3 file not in modified_files)")
-    assert notes_path.exists(), "notes file should be persisted"
-
-    print("[E] OK — T3 self-report tracked, post-gate triage accepted")
-
-
 def scenario_f_coverage_shortage_accepted() -> None:
     """Regression guard for the L2 ``coverage_shortage`` fast path (H1).
 
@@ -548,7 +447,7 @@ def scenario_f_coverage_shortage_accepted() -> None:
         max_rounds=2, run_semantic=False, l3_gate_enabled=True,
         triage_enabled=True, accept_cap_per_file=5,
         retry_policy=RetryPolicy(
-            t0_max=1, t1_max=1, t2_max=1, t3_max=1,
+            t0_max=1, t1_max=1, t2_max=1,
             max_total_rounds=2),
     )
 
@@ -592,7 +491,6 @@ def main() -> int:
     scenario_b_bad_quote_rejected()
     scenario_c_cap_enforced()
     scenario_d_non_semantic_rejected()
-    scenario_e_t3_self_report_tracked()
     scenario_f_coverage_shortage_accepted()
     print("\nAll triage smoke scenarios passed.")
     return 0

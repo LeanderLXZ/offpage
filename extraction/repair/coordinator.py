@@ -1,30 +1,27 @@
 """Coordinator — three-phase check → fix → verify orchestration.
 
 Phase A: Full validation (L0–L3 if configured)
-Phase B: Fix loop — escalate T0→T1→T2→T3 with scoped recheck and
-         an embedded L3 gate (re-runs semantic checker on files that
-         were modified this round AND had semantic issues in Phase A)
+Phase B: Fix loop — escalate T0→T1→T2 (each tier capped at 2 attempts,
+         routed per issue rule by ``protocol.route_tiers``) with a scoped
+         L0–L2 recheck and an embedded L3 gate (re-runs the semantic
+         checker on files modified this round AND that had semantic
+         issues in Phase A). There is NO full-file regeneration tier —
+         issues the capped tiers can't fix are left for Phase C to
+         surface (and the caller to defer).
 Phase C: Final confirmation — reuses the last L3 gate result instead of
          issuing a fresh semantic call when possible
 
 Source-discrepancy triage (when ``config.triage_enabled``) hooks into
 Phase B at two points:
-  round 1 — pre-T3, to skip the expensive T3 regen when all residual
-            L3 issues are author bugs in the source novel
+  round 1 — post-capped-tiers, to accept residual L3 issues that are
+            author bugs in the source novel as SourceNotes
   round 2 — post-L3-gate and pre-FAIL, to accept any remaining L3
             residuals that program-verify as source-inherent
 
-Lifecycle reset:
-  One file may walk at most ``config.max_lifecycles_per_file`` complete
-  Phase A→B→C lifecycles. Lifecycle 1 may invoke T3; the moment T3 fires
-  the lifecycle returns immediately (no post-T3 corruption check, no
-  same-cycle L3 gate / Phase C) and the outer ``run()`` resets the state
-  machine and enters lifecycle 2 with ``prior_attempt_context`` summarising
-  what lifecycle 1 fixed and what still failed. Lifecycle 2 disables T3:
-  any escalation that would call T3 returns ``T3_EXHAUSTED`` instead.
-  Disk-side ``extraction_notes/{stage_id}.jsonl`` is append-only across
-  lifecycles; lifecycle 2 reads back already-accepted fingerprints so the
-  same issue is never written twice.
+A run is a single Phase A→B→C pass (no lifecycle reset — that machinery
+existed only to host the removed T3 regen). Residual length-bound schema
+misses are accepted via the decision #48 tolerance gate after the capped
+tiers rather than hard-failing.
 
 Public API:
     run(files, config, ...) → RepairResult
@@ -48,12 +45,9 @@ from .context_retriever import ContextRetriever
 from .fixers.programmatic import ProgrammaticFixer
 from .fixers.local_patch import LocalPatchFixer
 from .fixers.source_patch import SourcePatchFixer
-from .fixers.file_regen import FileRegenFixer
 from .notes_writer import NotesWriter
 from .recorder import RepairRecorder
 from .protocol import (
-    COVERAGE_SHORTAGE_MAX_TIER,
-    COVERAGE_SHORTAGE_START_TIER,
     FileEntry,
     Issue,
     RepairAttempt,
@@ -61,9 +55,10 @@ from .protocol import (
     RepairResult,
     SourceContext,
     SourceNote,
-    START_TIER,
     TriageVerdict,
     is_coverage_shortage,
+    issue_max_tier,
+    issue_start_tier,
 )
 from .tracker import IssueTracker
 from .triage import Triager
@@ -91,33 +86,40 @@ def _build_pipeline(
     return pipeline
 
 
+# Hard cap on attempts per tier (T-REPAIR-NO-REEXTRACT): a tier tries at
+# most twice; the 2nd attempt only re-targets fields the immediate
+# re-verify still flags. Configured ``t*_max`` above this is clamped down.
+_TIER_ATTEMPT_CAP = 2
+
+
 def _build_fixers(
     llm_call: Callable[..., str] | None = None,
     retriever: ContextRetriever | None = None,
-    sub_lane_regen: Callable[..., Any] | None = None,
-    lane_regen: Callable[..., Any] | None = None,
+    pipeline: CheckerPipeline | None = None,
 ) -> dict[int, object]:
+    # T1's immediate re-verify: scoped L0–L2 recheck (0 token) returning
+    # the set of issue fingerprints still present after a patch.
+    verify_fn: Callable[[list[FileEntry]], set[str]] | None = None
+    if pipeline is not None:
+        def verify_fn(files: list[FileEntry]) -> set[str]:
+            issues = pipeline.run_scoped(files, patched_paths=[], max_layer=2)
+            return {i.fingerprint for i in issues}
+
     return {
         0: ProgrammaticFixer(),
-        1: LocalPatchFixer(llm_call=llm_call),
+        1: LocalPatchFixer(llm_call=llm_call, verify_fn=verify_fn),
         2: SourcePatchFixer(llm_call=llm_call, retriever=retriever),
-        3: FileRegenFixer(
-            llm_call=llm_call,
-            retriever=retriever,
-            sub_lane_regen=sub_lane_regen,
-            lane_regen=lane_regen,
-        ),
     }
 
 
 def _tier_max(config: RepairConfig, tier: int) -> int:
-    """Max retry attempts for a given tier."""
-    return {
+    """Max retry attempts for a given tier (hard-capped at 2)."""
+    configured = {
         0: config.retry_policy.t0_max,
         1: config.retry_policy.t1_max,
         2: config.retry_policy.t2_max,
-        3: config.retry_policy.t3_max,
     }.get(tier, 1)
+    return min(configured, _TIER_ATTEMPT_CAP)
 
 
 # ---------------------------------------------------------------------------
@@ -125,13 +127,10 @@ def _tier_max(config: RepairConfig, tier: int) -> int:
 # ---------------------------------------------------------------------------
 
 # Terminal reasons:
-#   PASS           — Phase C confirmed no blocking issues
-#   FAIL           — Phase C surfaced blocking issues; lifecycle done
-#   T3_TRIGGERED   — lifecycle 1 invoked T3 and returns immediately so the
-#                    outer loop can reset and run lifecycle 2
-#   T3_EXHAUSTED   — lifecycle 2 wanted to escalate to T3; not allowed,
-#                    lifecycle ends FAIL
-_TERMINAL_TYPES = ("PASS", "FAIL", "T3_TRIGGERED", "T3_EXHAUSTED")
+#   PASS — Phase C confirmed no blocking issues (or the decision #48
+#          length-tolerance gate accepted the residual)
+#   FAIL — Phase C surfaced blocking issues; run done
+_TERMINAL_TYPES = ("PASS", "FAIL")
 
 
 @dataclass
@@ -141,11 +140,6 @@ class _LifecycleOutcome:
     final_blocking: list[Issue] = field(default_factory=list)
     accepted_notes: list[SourceNote] = field(default_factory=list)
     tracker_history: dict[str, list[RepairAttempt]] = field(default_factory=dict)
-    # Compact summaries fed into the next lifecycle's T3 prior-attempt
-    # context. Each list entry is a single-line "path: rule" / "path:
-    # rule (message)" string.
-    resolved_summary: list[str] = field(default_factory=list)
-    remaining_summary: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -175,11 +169,9 @@ def run(
     llm_call: Callable[..., str] | None = None,
     importance_map: dict[str, str] | None = None,
     recorder: RepairRecorder | None = None,
-    sub_lane_regen: Callable[..., Any] | None = None,
-    lane_regen: Callable[..., Any] | None = None,
     extra_checkers: list[Any] | None = None,
 ) -> RepairResult:
-    """Three-phase repair, possibly across two lifecycles.
+    """Single-pass three-phase repair (Phase A → B → C).
 
     Args:
         importance_map: ``{character_id: importance}`` — raises the
@@ -188,19 +180,6 @@ def run(
         recorder: optional ``RepairRecorder`` that receives a structured
             JSONL event at each phase / round / issue / fix / triage /
             completion transition. ``None`` disables structured logging.
-            Every event is tagged with ``cycle`` (0 = lifecycle 1,
-            1 = lifecycle 2).
-        sub_lane_regen: optional T3 callback for character
-            stage_snapshot files (decision #55). When wired, the fixer
-            routes char_snapshot regen through the orchestrator's
-            4-sub-lane parallel extract + merge path; ``None`` keeps the
-            single-LLM full-file regen path.
-        lane_regen: optional generic T3 callback (decision #59) —
-            ``(file_path, issues, prior_attempt_context) -> bool | None``.
-            When wired, T3 delegates regeneration of ANY file to the
-            caller (e.g. phase 2 re-runs the producing lane's own LLM
-            call) instead of the default single-LLM full-file rewrite.
-            ``sub_lane_regen`` (path-specific) is consulted first.
         extra_checkers: optional additional ``BaseChecker`` instances
             registered on top of the built-in pipeline (decision #59 —
             phase 2 baseline reference checkers carry their hints via
@@ -218,8 +197,7 @@ def run(
     fixers = _build_fixers(
         llm_call=llm_call,
         retriever=retriever,
-        sub_lane_regen=sub_lane_regen,
-        lane_regen=lane_regen,
+        pipeline=pipeline,
     )
 
     triager: Triager | None = None
@@ -228,66 +206,32 @@ def run(
         triager = Triager(llm_call=llm_call, retriever=retriever)
         notes_writer = NotesWriter(source_context.work_path)
 
-    accepted_notes_total: list[SourceNote] = []
-    aggregated_history: dict[str, list[RepairAttempt]] = {}
-    last_outcome: _LifecycleOutcome | None = None
-    prior_attempt_context: dict | None = None
+    outcome = _run_one_lifecycle(
+        files=files,
+        config=config,
+        source_context=source_context,
+        pipeline=pipeline,
+        fixers=fixers,
+        triager=triager,
+        notes_writer=notes_writer,
+        recorder=recorder,
+    )
 
-    for cycle in range(max(1, config.max_lifecycles_per_file)):
-        t3_disabled = cycle >= 1
-
-        # Lifecycle 2: read back fingerprints already accepted on disk
-        # so the same issue isn't written twice.
-        existing_accepted_fps: set[str] = set()
-        if t3_disabled and notes_writer is not None and source_context is not None:
-            for f in files:
-                existing_accepted_fps |= notes_writer.load_existing_fingerprints(
-                    f.path, source_context.stage_id)
-
-        outcome = _run_one_lifecycle(
-            cycle=cycle,
-            files=files,
-            config=config,
-            source_context=source_context,
-            pipeline=pipeline,
-            fixers=fixers,
-            triager=triager,
-            notes_writer=notes_writer,
-            recorder=recorder,
-            t3_disabled=t3_disabled,
-            prior_attempt_context=prior_attempt_context,
-            existing_accepted_fps=existing_accepted_fps,
-        )
-
-        accepted_notes_total.extend(outcome.accepted_notes)
-        for fp, attempts in outcome.tracker_history.items():
-            aggregated_history.setdefault(fp, []).extend(attempts)
-        last_outcome = outcome
-
-        if outcome.terminated_by == "T3_TRIGGERED":
-            prior_attempt_context = {
-                "resolved": list(outcome.resolved_summary),
-                "remaining": list(outcome.remaining_summary),
-            }
-            continue
-        break
-
-    assert last_outcome is not None
-    passed = last_outcome.terminated_by == "PASS"
+    passed = outcome.terminated_by == "PASS"
     report_text = _build_report(
-        last_outcome.final_issues,
-        aggregated_history,
+        outcome.final_issues,
+        outcome.tracker_history,
         passed,
-        terminated_by=last_outcome.terminated_by,
-        accepted_notes=accepted_notes_total,
+        terminated_by=outcome.terminated_by,
+        accepted_notes=outcome.accepted_notes,
     )
 
     return RepairResult(
         passed=passed,
-        issues=last_outcome.final_issues,
-        history=aggregated_history,
+        issues=outcome.final_issues,
+        history=outcome.tracker_history,
         report=report_text,
-        accepted_notes=accepted_notes_total,
+        accepted_notes=outcome.accepted_notes,
     )
 
 
@@ -297,7 +241,6 @@ def run(
 
 def _run_one_lifecycle(
     *,
-    cycle: int,
     files: list[FileEntry],
     config: RepairConfig,
     source_context: SourceContext | None,
@@ -306,19 +249,15 @@ def _run_one_lifecycle(
     triager: Triager | None,
     notes_writer: NotesWriter | None,
     recorder: RepairRecorder | None,
-    t3_disabled: bool,
-    prior_attempt_context: dict | None,
-    existing_accepted_fps: set[str],
 ) -> _LifecycleOutcome:
     """Execute one complete Phase A → B → C pass.
 
-    Returns a ``_LifecycleOutcome`` describing why the lifecycle ended
-    and what state is needed by either the outer loop (for lifecycle 2
-    setup) or the final ``RepairResult`` builder.
+    Returns a ``_LifecycleOutcome`` describing why the run ended and the
+    state the final ``RepairResult`` builder needs.
     """
     def _emit(event: str, **fields: Any) -> None:
         if recorder is not None:
-            recorder.write(event, cycle=cycle, **fields)
+            recorder.write(event, cycle=0, **fields)
 
     tracker = IssueTracker()
     accepted_notes: list[SourceNote] = []
@@ -327,27 +266,12 @@ def _run_one_lifecycle(
     # =================================================================
     # Phase A — Full check (L0–L3)
     # =================================================================
-    logger.info("Phase A (lifecycle %d): full validation", cycle + 1)
+    logger.info("Phase A: full validation")
     _emit("phase_start", phase="A",
           file_count=len(files), run_semantic=config.run_semantic)
     all_issues = pipeline.run(files, run_semantic=config.run_semantic)
 
     blocking = _filter_blocking(all_issues, config)
-
-    # Lifecycle 2: drop issues already accepted on disk so they don't
-    # cycle again (the underlying JSON wasn't modified — only the sidecar
-    # note exists — so structural checks resurface them otherwise).
-    if existing_accepted_fps:
-        before = len(blocking)
-        blocking = [
-            i for i in blocking if i.fingerprint not in existing_accepted_fps
-        ]
-        dropped = before - len(blocking)
-        if dropped:
-            logger.info(
-                "Lifecycle %d: dropped %d issue(s) already accepted on disk",
-                cycle + 1, dropped)
-            _emit("existing_notes_filtered", dropped=dropped)
 
     if not blocking:
         logger.info("Phase A: no blocking issues — pass")
@@ -365,9 +289,7 @@ def _run_one_lifecycle(
     logger.info("Phase A: %d blocking issues found", len(blocking))
     _emit("phase_a_result", blocking=len(blocking), total=len(all_issues))
     for i in blocking:
-        start_tier = (COVERAGE_SHORTAGE_START_TIER
-                      if is_coverage_shortage(i)
-                      else START_TIER.get(i.category, 0))
+        start_tier = issue_start_tier(i)
         _emit("issue",
               fingerprint=i.fingerprint,
               file=i.file,
@@ -391,7 +313,7 @@ def _run_one_lifecycle(
     current_issues = list(blocking)
     last_gate_issues: list[Issue] | None = None
     gate_ever_ran = False
-    lifecycle_signal = ""  # "" | "T3_TRIGGERED" | "T3_EXHAUSTED" | "LENGTH_TOLERANCE_PASS"
+    lifecycle_signal = ""  # "" | "LENGTH_TOLERANCE_PASS"
 
     for round_num in range(config.max_rounds):
         logger.info("Fix round %d — %d issues remaining",
@@ -402,7 +324,7 @@ def _run_one_lifecycle(
         tier_groups = _group_by_start_tier(current_issues)
 
         modified_files: set[str] = set()
-        round_t3_candidates: dict[str, TriageVerdict] = {}
+        round_fixer_candidates: dict[str, TriageVerdict] = {}
 
         for tier in sorted(tier_groups.keys()):
             fixer = fixers.get(tier)
@@ -410,7 +332,7 @@ def _run_one_lifecycle(
                 continue
 
             tier_issues = tier_groups[tier]
-            tier_modified, tier_t3_cands, tier_signal = (
+            tier_modified, tier_cands, tier_signal = (
                 _run_fixer_with_escalation(
                     fixer, fixers, tier, tier_issues, files,
                     source_context, config, tracker,
@@ -419,38 +341,22 @@ def _run_one_lifecycle(
                     notes_writer=notes_writer,
                     accepted_notes=accepted_notes,
                     notes_per_file=notes_per_file,
-                    t3_disabled=t3_disabled,
-                    prior_attempt_context=prior_attempt_context,
                 )
             )
             modified_files.update(tier_modified)
-            round_t3_candidates.update(tier_t3_cands)
+            round_fixer_candidates.update(tier_cands)
             if tier_signal:
                 lifecycle_signal = tier_signal
                 break
 
-        # T3 fired (lifecycle 1) or was blocked (lifecycle 2). Skip the
-        # rest of this round and let the outer loop decide whether to
-        # reset into another lifecycle or finalise.
-        if lifecycle_signal in ("T3_TRIGGERED", "T3_EXHAUSTED"):
-            _emit("lifecycle_signal", round=round_num + 1,
-                  signal=lifecycle_signal)
-            return _build_signal_outcome(
-                signal=lifecycle_signal,
-                tracker=tracker,
-                current_issues=current_issues,
-                modified_files=modified_files,
-                accepted_notes=accepted_notes,
-            )
         if lifecycle_signal == "LENGTH_TOLERANCE_PASS":
-            # Lifecycle 2 length-bound tolerance gate accepted all
-            # residual schema_validation issues (decision #48). The
-            # lifecycle terminates as PASS without re-running Phase C
-            # — Phase C uses strict pipeline and would re-flag the
-            # same length issues we just intentionally relaxed.
+            # The length-bound tolerance gate accepted the residual
+            # schema minLength/maxLength issues (decision #48). Terminate
+            # as PASS without re-running Phase C — Phase C uses the strict
+            # pipeline and would re-flag the same length issues we just
+            # intentionally relaxed.
             logger.info(
-                "Length-bound tolerance gate: lifecycle %d PASS "
-                "(decision #48)", cycle + 1)
+                "Length-bound tolerance gate: PASS (decision #48)")
             _emit("complete", status="PASS",
                   issues_remaining=0,
                   accepted_notes=len(accepted_notes))
@@ -478,7 +384,6 @@ def _run_one_lifecycle(
         recheck_issues = pipeline.run_scoped(
             files, patched_paths=[], max_layer=2)
         accepted_fps = {n.issue_fingerprint for n in accepted_notes}
-        accepted_fps |= existing_accepted_fps
         recheck_blocking = [
             i for i in _filter_blocking(recheck_issues, config)
             if i.fingerprint not in accepted_fps
@@ -510,7 +415,7 @@ def _run_one_lifecycle(
                     triage_round=2,
                     accepted_notes=accepted_notes,
                     notes_per_file=notes_per_file,
-                    fixer_candidates=round_t3_candidates,
+                    fixer_candidates=round_fixer_candidates,
                 )
 
             last_gate_issues = gate_blocking
@@ -562,7 +467,6 @@ def _run_one_lifecycle(
     # =================================================================
     final_issues = pipeline.run(files, max_layer=2, run_semantic=False)
     accepted_fps = {n.issue_fingerprint for n in accepted_notes}
-    accepted_fps |= existing_accepted_fps
     if accepted_fps:
         final_issues = [
             i for i in final_issues if i.fingerprint not in accepted_fps
@@ -586,8 +490,8 @@ def _run_one_lifecycle(
     final_blocking = _filter_blocking(final_issues, config)
     passed = len(final_blocking) == 0
 
-    logger.info("Lifecycle %d complete: %s (%d issues remaining, %d note(s))",
-                cycle + 1, "PASS" if passed else "FAIL",
+    logger.info("Repair complete: %s (%d issues remaining, %d note(s))",
+                "PASS" if passed else "FAIL",
                 len(final_blocking), len(accepted_notes))
     _emit("complete",
           status="PASS" if passed else "FAIL",
@@ -603,51 +507,6 @@ def _run_one_lifecycle(
     )
 
 
-def _build_signal_outcome(
-    *,
-    signal: str,
-    tracker: IssueTracker,
-    current_issues: list[Issue],
-    modified_files: set[str],
-    accepted_notes: list[SourceNote],
-) -> _LifecycleOutcome:
-    """Pack tracker state into summaries for the next lifecycle's T3 prompt."""
-    history = tracker.get_history()
-    resolved_summary: list[str] = []
-    for fp, attempts in history.items():
-        if any(a.result == "resolved" for a in attempts):
-            # fingerprint format: file::json_path::rule
-            resolved_summary.append(_format_fp_summary(fp))
-    remaining_summary = [
-        _format_issue_summary(i) for i in current_issues
-    ]
-    return _LifecycleOutcome(
-        terminated_by=signal,
-        final_issues=list(current_issues),
-        final_blocking=list(current_issues),
-        accepted_notes=accepted_notes,
-        tracker_history=history,
-        resolved_summary=resolved_summary,
-        remaining_summary=remaining_summary,
-    )
-
-
-def _format_fp_summary(fp: str) -> str:
-    """fingerprint = ``file::json_path::rule`` → ``json_path: rule``."""
-    parts = fp.split("::", 2)
-    if len(parts) == 3:
-        _, jp, rule = parts
-        return f"{jp}: {rule}"
-    return fp
-
-
-def _format_issue_summary(issue: Issue) -> str:
-    msg = issue.message
-    if len(msg) > 80:
-        msg = msg[:80] + "…"
-    return f"{issue.json_path}: {issue.rule} ({msg})"
-
-
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -659,9 +518,9 @@ def _filter_blocking(issues: list[Issue],
     Errors are always blocking. `coverage_shortage` warnings are also
     blocking: they carry a severity=warning demotion so they can't
     legitimately FAIL the stage, but they still need to enter the fix
-    pipeline (START_TIER=T2) and then the 0-token triage fast path. If
-    we dropped them here, they'd be silently ignored and leave the
-    stage under the `importance_min_examples` floor.
+    pipeline (start=T2) and then the 0-token triage fast path. If we
+    dropped them here, they'd be silently ignored and leave the stage
+    under the `importance_min_examples` floor.
     """
     if config.block_on == "all":
         return list(issues)
@@ -672,24 +531,8 @@ def _filter_blocking(issues: list[Issue],
 def _group_by_start_tier(issues: list[Issue]) -> dict[int, list[Issue]]:
     groups: dict[int, list[Issue]] = {}
     for issue in issues:
-        if is_coverage_shortage(issue):
-            tier = COVERAGE_SHORTAGE_START_TIER
-        else:
-            tier = START_TIER.get(issue.category, 0)
-        groups.setdefault(tier, []).append(issue)
+        groups.setdefault(issue_start_tier(issue), []).append(issue)
     return groups
-
-
-def _issue_max_tier(issue: Issue) -> int:
-    """Highest fixer tier allowed for an issue.
-
-    `coverage_shortage` issues cap at T2 — T3 can't add source material
-    the novel doesn't contain, so escalation is pointless and just
-    burns tokens. Everything else can escalate up to T3.
-    """
-    if is_coverage_shortage(issue):
-        return COVERAGE_SHORTAGE_MAX_TIER
-    return 3
 
 
 def _run_fixer_with_escalation(
@@ -707,125 +550,35 @@ def _run_fixer_with_escalation(
     notes_writer: NotesWriter | None,
     accepted_notes: list[SourceNote],
     notes_per_file: dict[str, int],
-    t3_disabled: bool,
-    prior_attempt_context: dict | None,
 ) -> tuple[set[str], dict[str, TriageVerdict], str]:
-    """Run a fixer tier; if retries exhausted, escalate to next tier.
+    """Run a fixer tier; if attempts are exhausted, escalate to the next
+    tier (capped per issue by ``protocol.route_tiers``; no tier > 2).
 
-    Returns ``(modified_files, t3_candidates, lifecycle_signal)``:
+    Returns ``(modified_files, fixer_candidates, lifecycle_signal)``:
       * ``modified_files`` — file paths touched by at least one
         successful fix in this invocation (feeds the L3 gate).
-      * ``t3_candidates`` — self-reported source_inherent verdicts
-        emitted by T3 this round, carried forward to post-gate triage.
-      * ``lifecycle_signal`` — ``""`` for normal completion,
-        ``"T3_TRIGGERED"`` when T3 was invoked in lifecycle 1 (caller
-        must abort the current lifecycle and reset),
-        ``"T3_EXHAUSTED"`` when T3 was needed but disabled (lifecycle 2),
-        ``"LENGTH_TOLERANCE_PASS"`` when lifecycle 2 was about to declare
-        T3_EXHAUSTED but every residual issue was a pure
-        ``minLength``/``maxLength`` schema violation that passed the
-        relaxed (×0.9 floor / ×1.1 ceil) re-validation per decision #48
-        — caller treats this as a PASS terminal state for the lifecycle.
+      * ``fixer_candidates`` — T2 self-reported source_inherent verdicts,
+        carried forward as priors for the post-gate triage.
+      * ``lifecycle_signal`` — ``""`` for normal completion, or
+        ``"LENGTH_TOLERANCE_PASS"`` when the residual issues were all
+        pure ``minLength``/``maxLength`` schema misses that passed the
+        relaxed (×0.9 floor / ×1.1 ceil) re-validation (decision #48) —
+        the caller treats this as a terminal PASS.
     """
     modified_files: set[str] = set()
     remaining = list(issues)
     tier = start_tier
-    # T2 self-report verdicts — used as priors for pre-T3 triage.
+    # T2 self-report verdicts — used as priors for the residual triage.
     t2_self_report: dict[str, TriageVerdict] = {}
-    t3_self_report: dict[str, TriageVerdict] = {}
+    # Issues that hit their per-issue max_tier without being fixed.
+    capped_out: list[Issue] = []
     lifecycle_signal = ""
 
-    while remaining and tier <= 3:
+    while remaining and tier <= 2:
         fixer_obj = all_fixers.get(tier)
         if fixer_obj is None:
             tier += 1
             continue
-
-        if tier == 3:
-            # ---- Pre-T3 triage (round 1) ----
-            if (triager is not None and notes_writer is not None
-                    and source_context is not None):
-                remaining = _run_triage_round(
-                    triager=triager,
-                    notes_writer=notes_writer,
-                    config=config,
-                    source_ctx=source_context,
-                    issues=remaining,
-                    triage_round=1,
-                    accepted_notes=accepted_notes,
-                    notes_per_file=notes_per_file,
-                    fixer_candidates=t2_self_report,
-                )
-                if not remaining:
-                    logger.info(
-                        "T3 skipped: all residual L3 issues accepted "
-                        "as source_inherent")
-                    break
-
-            # Lifecycle 2 forbids T3 entirely.
-            if t3_disabled:
-                # Length-bound tolerance gate (decision #48).
-                # Before declaring T3_EXHAUSTED, check if every residual
-                # issue is purely a schema_validation minLength /
-                # maxLength miss; if so, re-validate each affected file
-                # with a relaxed schema (×0.9 floor / ×1.1 ceil) — pass
-                # → drop the issue and keep the lifecycle alive.
-                length_only = remaining and all(
-                    i.category == "schema"
-                    and i.rule in ("schema_minLength", "schema_maxLength")
-                    for i in remaining)
-                if length_only:
-                    from extraction.validation.shared.schema_tolerance import (
-                        validate_with_length_tolerance)
-                    affected_paths = {i.file for i in remaining}
-                    files_by_path = {f.path: f for f in files}
-                    all_pass = True
-                    for fp in affected_paths:
-                        fe = files_by_path.get(fp)
-                        if fe is None or fe.schema is None:
-                            all_pass = False
-                            break
-                        content = fe.content if fe.content is not None \
-                            else fe.load()
-                        if content is None:
-                            all_pass = False
-                            break
-                        # JSONL files validate per-entry (mirrors
-                        # SchemaChecker._validate_one for is_jsonl_slice).
-                        if isinstance(content, list):
-                            ok_all = True
-                            for entry in content:
-                                ok, _ = validate_with_length_tolerance(
-                                    entry, fe.schema)
-                                if not ok:
-                                    ok_all = False
-                                    break
-                            if not ok_all:
-                                all_pass = False
-                                break
-                        else:
-                            ok, _ = validate_with_length_tolerance(
-                                content, fe.schema)
-                            if not ok:
-                                all_pass = False
-                                break
-                    if all_pass:
-                        logger.info(
-                            "Length-bound tolerance gate accepted %d "
-                            "residual issue(s) across %d file(s) "
-                            "(decision #48); skipping T3_EXHAUSTED.",
-                            len(remaining), len(affected_paths))
-                        remaining = []
-                        lifecycle_signal = "LENGTH_TOLERANCE_PASS"
-                        return (modified_files, t3_self_report,
-                                lifecycle_signal)
-
-                logger.error(
-                    "T3_EXHAUSTED: lifecycle 2 has %d residual issue(s) "
-                    "that need T3 but T3 is disabled",
-                    len(remaining))
-                lifecycle_signal = "T3_EXHAUSTED"
-                return modified_files, t3_self_report, lifecycle_signal
 
         max_retries = _tier_max(config, tier)
         for attempt in range(max_retries):
@@ -842,7 +595,7 @@ def _run_fixer_with_escalation(
                     break
 
             attempted = list(remaining)
-            fix_kwargs: dict[str, Any] = dict(
+            result = fixer_obj.fix(
                 files=files,
                 issues=attempted,
                 strategy="standard",
@@ -850,39 +603,15 @@ def _run_fixer_with_escalation(
                 attempt_num=attempt,
                 max_attempts=max_retries,
             )
-            if tier == 3 and prior_attempt_context is not None:
-                fix_kwargs["prior_attempt_context"] = prior_attempt_context
-            result = fixer_obj.fix(**fix_kwargs)
 
-            # Capture fixer self-reports per tier
-            if result.source_inherent_candidates:
-                if tier == 2:
-                    t2_self_report.update(result.source_inherent_candidates)
-                elif tier == 3:
-                    t3_self_report.update(result.source_inherent_candidates)
+            # Capture T2 self-reports (source_inherent escape hatch).
+            if result.source_inherent_candidates and tier == 2:
+                t2_self_report.update(result.source_inherent_candidates)
 
             fingerprint_to_file = {i.fingerprint: i.file for i in attempted}
             for fp in result.resolved_fingerprints:
                 f_path = fingerprint_to_file.get(fp)
                 if f_path:
-                    modified_files.add(f_path)
-
-            if tier == 3:
-                # A T3 regen writes the file even when every remaining issue
-                # is self-reported as source_inherent — `resolved_fingerprints`
-                # alone would miss those files. Union with self-report
-                # fingerprints so the lifecycle reset sees them as touched.
-                t3_touched_fps = (
-                    set(result.resolved_fingerprints)
-                    | set(result.source_inherent_candidates.keys())
-                )
-                t3_files: set[str] = set()
-                for fp in t3_touched_fps:
-                    f_path = fingerprint_to_file.get(fp)
-                    if f_path:
-                        t3_files.add(f_path)
-                for f_path in t3_files:
-                    tracker.record_tier_use_on_file(f_path, 3)
                     modified_files.add(f_path)
 
             remaining = [
@@ -904,10 +633,9 @@ def _run_fixer_with_escalation(
                 ))
 
         # ---- coverage_shortage fast path (0 token, post-T2) ----
-        # After T2 has had its one attempt at adding examples, any
-        # remaining coverage_shortage issues are accepted via
-        # program-constructed SourceNote. T3 would burn tokens rewriting
-        # the whole file without adding source material the novel lacks.
+        # After T2's one attempt at adding examples, any remaining
+        # coverage_shortage issues are accepted via a program-constructed
+        # SourceNote — no source material can be invented.
         if (tier == 2 and triager is not None and notes_writer is not None
                 and source_context is not None):
             cs_remaining = [i for i in remaining if is_coverage_shortage(i)]
@@ -927,28 +655,92 @@ def _run_fixer_with_escalation(
                     remaining = [i for i in remaining
                                  if i.fingerprint not in accepted_fps]
 
-        if tier == 3:
-            # T3 fired; lifecycle 1 must end here so the outer loop
-            # can reset the state machine and start lifecycle 2.
-            lifecycle_signal = "T3_TRIGGERED"
-            return modified_files, t3_self_report, lifecycle_signal
-
+        # ---- escalation / per-issue cap ----
         if remaining:
             next_tier = tier + 1
-            at_cap = [i for i in remaining
-                      if _issue_max_tier(i) < next_tier]
-            remaining = [i for i in remaining
-                         if i.fingerprint not in {x.fingerprint for x in at_cap}]
+            at_cap = [i for i in remaining if issue_max_tier(i) < next_tier]
             if at_cap:
-                logger.info(
-                    "Capping %d issue(s) at T%d (max_tier reached)",
-                    len(at_cap), tier)
+                capped_out.extend(at_cap)
+                at_cap_fps = {x.fingerprint for x in at_cap}
+                remaining = [i for i in remaining
+                             if i.fingerprint not in at_cap_fps]
+                logger.info("Capping %d issue(s) at T%d (max_tier reached)",
+                            len(at_cap), tier)
             if remaining:
                 logger.info("Escalating %d issues from T%d to T%d",
                             len(remaining), tier, next_tier)
         tier += 1
 
-    return modified_files, t3_self_report, lifecycle_signal
+    # Anything the capped tiers couldn't fix.
+    residual = capped_out + remaining
+
+    # ---- Residual source_inherent triage (post-cap, before defer) ----
+    # Accept residual L3 semantic issues that are author bugs in the
+    # source novel as SourceNotes so they don't become blocking. Only
+    # semantic issues are eligible; the rest fall through to Phase C
+    # (and the caller's deferred-repair ledger).
+    if (residual and triager is not None and notes_writer is not None
+            and source_context is not None):
+        residual = _run_triage_round(
+            triager=triager,
+            notes_writer=notes_writer,
+            config=config,
+            source_ctx=source_context,
+            issues=residual,
+            triage_round=1,
+            accepted_notes=accepted_notes,
+            notes_per_file=notes_per_file,
+            fixer_candidates=t2_self_report,
+        )
+
+    # ---- Length-bound tolerance gate (decision #48) ----
+    # When every residual issue is a pure minLength / maxLength schema
+    # miss, re-validate the affected files with a relaxed schema (×0.9
+    # floor / ×1.1 ceil); if they pass, accept them and signal a terminal
+    # PASS instead of leaving them to fail Phase C.
+    if residual and _all_length_only(residual):
+        if _length_tolerance_pass(residual, files):
+            logger.info(
+                "Length-bound tolerance gate accepted %d residual "
+                "issue(s) (decision #48).", len(residual))
+            lifecycle_signal = "LENGTH_TOLERANCE_PASS"
+
+    return modified_files, t2_self_report, lifecycle_signal
+
+
+def _all_length_only(issues: list[Issue]) -> bool:
+    """True when every issue is a pure minLength/maxLength schema miss."""
+    return bool(issues) and all(
+        i.category == "schema"
+        and i.rule in ("schema_minLength", "schema_maxLength")
+        for i in issues)
+
+
+def _length_tolerance_pass(issues: list[Issue],
+                           files: list[FileEntry]) -> bool:
+    """Re-validate the files behind ``issues`` against a length-relaxed
+    schema (decision #48). Returns True only when every affected file
+    passes the ×0.9 floor / ×1.1 ceil re-check.
+    """
+    from extraction.validation.shared.schema_tolerance import (
+        validate_with_length_tolerance)
+
+    affected_paths = {i.file for i in issues}
+    files_by_path = {f.path: f for f in files}
+    for fp in affected_paths:
+        fe = files_by_path.get(fp)
+        if fe is None or fe.schema is None:
+            return False
+        content = fe.content if fe.content is not None else fe.load()
+        if content is None:
+            return False
+        # JSONL files validate per-entry (mirrors SchemaChecker).
+        entries = content if isinstance(content, list) else [content]
+        for entry in entries:
+            ok, _ = validate_with_length_tolerance(entry, fe.schema)
+            if not ok:
+                return False
+    return True
 
 
 def _run_triage_round(
@@ -965,7 +757,7 @@ def _run_triage_round(
 ) -> list[Issue]:
     """Run one triage pass; persist accepted notes; return remaining issues.
 
-    ``triage_round`` is 1 for pre-T3 triage and 2 for any post-T3 /
+    ``triage_round`` is 1 for the residual (post-cap) triage and 2 for
     post-gate triage. Enforces the per-file accept cap from config.
     """
     if not issues:
@@ -1129,9 +921,6 @@ def _build_report(
     accepted_notes: list[SourceNote] | None = None,
 ) -> str:
     lines = [f"Repair {'PASSED' if passed else 'FAILED'}"]
-    if terminated_by == "T3_EXHAUSTED":
-        lines.append("Termination: T3_EXHAUSTED "
-                     "(lifecycle 2 needed T3 but T3 is disabled)")
     lines.append(f"Final issues: {len(issues)}")
 
     errors = [i for i in issues if i.severity == "error"]

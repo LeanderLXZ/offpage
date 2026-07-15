@@ -47,6 +47,14 @@ Output ONLY a JSON array of issues found.  Each issue must have:
   "message": "description of the problem"
 }
 
+`json_path` MUST anchor at the most specific offending LEAF field, never
+at a large parent container. E.g. flag
+`$.voice_state.target_voice_map[2].dialogue_examples[0]` or
+`$.relationships[1].relationship_history_summary`, NOT `$.voice_state`
+or `$.relationships`. A downstream repair patches exactly the subtree at
+`json_path`, so a container anchor forces an expensive whole-subtree
+rewrite.
+
 If no issues found, output: []
 
 Do NOT invent issues. Only flag clear factual errors, logical

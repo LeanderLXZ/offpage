@@ -94,8 +94,7 @@ output_missing_max_retry  = 1
 # true：每 lane 产物过 repair lifecycle——T0 程序修 / T1 局部 patch +
 #       schema checker + phase2 引用 checker（character_id 合法性 /
 #       target keys 集合，纯集合运算）；L3 语义 checker / T2
-#       source_patch / triage 不开（source_context=None）；T3 = 重跑
-#       本 lane 自己的 LLM call（lane_regen 回调）。
+#       source_patch / triage 不开（source_context=None）；无 regen。
 # false：跳过 per-lane repair，仅靠终点 validate_baseline gate
 #        （strict → ±10% length tolerance）兜底——旧行为等价。
 repair_enabled            = true
@@ -165,16 +164,11 @@ circuit_breaker_pause_s           = 180
 # [repair] Phase 3 修复框架（checker × fixer 矩阵）
 # ----------------------------------------------------------------
 [repair]
-# 各 tier 的单轮重试次数上限（Phase B 修复循环内）。
-t0_retry = 1     # T0 程序化修复
-t1_retry = 3     # T1 局部 patch（快、便宜）
+# 各 tier 的单轮重试次数上限（Phase B 修复循环内）。每个 tier 另由
+# coordinator 硬封顶 2 次（T-REPAIR-NO-REEXTRACT）。已无 T3 全文重跑。
+t0_retry = 1     # T0 程序化修复（0 token）
+t1_retry = 3     # T1 局部 patch（快、便宜、不载 source）
 t2_retry = 3     # T2 source_patch（带原文上下文）
-t3_retry = 1     # T3 全文件 regen（昂贵）
-
-# 单文件最多走的完整 lifecycle 数（一个 lifecycle = 一次完整 Phase A→B→C）。
-# Lifecycle 1 触发 T3 后状态机重置进入 lifecycle 2；lifecycle 2 禁用 T3，
-# 任何升到 T3 的 issue 立即 T3_EXHAUSTED 退出。
-max_lifecycles_per_file = 2
 
 # Phase B 修复循环最大轮数。一轮 = 一次完整 fix + scoped recheck。
 total_round_limit = 5

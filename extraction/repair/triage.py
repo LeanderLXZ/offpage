@@ -354,7 +354,7 @@ class Triager:
         if self._llm_call is None:
             return []
 
-        # Load all stage chapters (cache-friendly; shared with T2/T3)
+        # Load all stage chapters (cache-friendly; shared with T2)
         chapter_blobs: list[str] = []
         for ch in stage_chapters:
             text = self._retriever.load_chapter_text(source_ctx, ch)

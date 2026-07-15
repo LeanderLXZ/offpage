@@ -53,6 +53,33 @@ class SchemaChecker(BaseChecker):
                             key=lambda e: list(e.absolute_path)):
             path_parts = [str(p) for p in error.absolute_path]
             json_path = (prefix + "." + ".".join(path_parts)) if path_parts else prefix
+
+            # additionalProperties anchors at the offending *container*;
+            # extract_subtree on a container makes a downstream T1 patch
+            # rewrite the whole subtree. Narrow to one issue per unexpected
+            # key so the fixer targets that leaf (and T0 can delete it).
+            if error.validator == "additionalProperties":
+                extra = _unexpected_keys(error)
+                if extra:
+                    for key in extra:
+                        issues.append(Issue(
+                            file=file_path,
+                            json_path=f"{json_path}.{key}",
+                            category="schema",
+                            severity="error",
+                            rule="schema_additionalProperties",
+                            message=(f"Unexpected property '{key}' not "
+                                     f"allowed by schema"),
+                            context={
+                                "validator": "additionalProperties",
+                                "extra_key": key,
+                                "schema_path": list(error.schema_path),
+                            },
+                        ))
+                    continue
+                # Fall through to the generic container-level issue when
+                # the extra keys can't be determined (e.g. patternProperties).
+
             issues.append(Issue(
                 file=file_path,
                 json_path=json_path,
@@ -67,6 +94,22 @@ class SchemaChecker(BaseChecker):
                 },
             ))
         return issues
+
+
+def _unexpected_keys(error) -> list[str]:
+    """Best-effort list of instance keys an additionalProperties error
+    flags. Returns [] when it can't be determined cheaply (e.g. the
+    subschema uses ``patternProperties``), so the caller keeps the
+    generic container-level issue.
+    """
+    instance = error.instance
+    subschema = error.schema
+    if not isinstance(instance, dict) or not isinstance(subschema, dict):
+        return []
+    if subschema.get("patternProperties"):
+        return []
+    allowed = set(subschema.get("properties", {}).keys())
+    return [k for k in instance if k not in allowed]
 
 
 def _safe_value(val):

@@ -124,7 +124,7 @@ class ContextRetriever:
         return result
 
     def retrieve_all_stage(self, source_ctx: SourceContext) -> str:
-        """Load all chapter text for the stage (used by T3 file_regen)."""
+        """Load all chapter text for the stage."""
         stage_chapters = self._get_stage_chapters(source_ctx)
         if not stage_chapters:
             return ""

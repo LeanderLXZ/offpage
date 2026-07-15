@@ -175,14 +175,13 @@ key_figures 是 character_id + 未合并 raw 名混合；schema 不抓 character
 势力集合稳定 / 条目溯源 / 去重三条程序检查。
 
 **per-lane repair（决策 #59 缩水版）**：每 lane 产物落盘后进 file-level
-repair lifecycle——T0 程序修 + T1 局部 patch + schema checker + phase 2
+repair——T0 程序修 + T1 局部 patch + schema checker + phase 2
 引用 checker（`extraction/repair/checkers/phase2_baseline_refs.py`，纯集合
 运算：key_figures 溯源 / fixed_relationships parties warning + id 去重 /
 target_baseline character_id 一致 + target ∈ candidate 集 + 去重 + 自引用）。
-**L3 语义 checker / T2 source_patch / triage 不开**（`source_context=None`；
-phase 2 输入契约是摘要初稿，拿原文修会越过 phase 2/3 分工边界）。T3 经
-`lane_regen` 回调 = 重跑本 lane 自己的 LLM call（repair 框架的
-`extra_checkers` / `lane_regen` 通用 hook，见 `extraction/repair/coordinator.py`）。
+**L3 语义 checker / T2 source_patch / triage / regen 全不开**（`source_context=None`；
+phase 2 输入契约是摘要初稿，拿原文修会越过 phase 2/3 分工边界）。lane 产物
+缺失（生成失败）走 `[phase2].output_missing_max_retry` prior_error 重跑；
 `[phase2].repair_enabled = false` 退回"lane 并行 + 仅终点 gate"。
 
 **`foundation.json` 主体不是 phase 2 产出**（决策 #54——foundation 前移到
@@ -222,9 +221,10 @@ set(baseline.target_character_ids)`，多/少都 cross-file hard fail。三态�
 未登场→继承 prev、从未登场→字段空；**fixed_relationship 例外**——目标若
 绑定 `world/foundation/fixed_relationships.json` 条目，从未登场也可预填
 顶层 relationships 那条目的关系字段（其他结构仍空）。校验在 **phase 3
-单 stage validate 层**（与 schema validate 同层）执行，越界走 file-level
-repair lifecycle（L1 json_repair → L2 repair cross-file checker
-`targets_keys_eq_baseline` → L3 re-extract）；phase 3.5 consistency_checker
+单 stage validate 层**（与 schema validate 同层）执行，越界（cross_file
+rule）走 file-level repair——`targets_keys_eq_baseline` cross-file checker
+判不平后路由 T2 source_patch 修 key 集；封顶 2 次仍未决写 defer 台账
+record-and-continue，不再 re-extract；phase 3.5 consistency_checker
 不再承担此规则。target_baseline 在 phase 3 全程只读不写——若 phase 2
 漏判某 target，通过人工编辑 baseline + 重抽对应 stage 解决，不引入
 escape hatch。
@@ -371,19 +371,10 @@ stage 用的 prev slice + sub-lane / merge 失败时清。**不保留 slice 调�
 prev snapshot 已 committed 在 git history + slice 是 `FIELD_ALLOCATION` 的
 确定性投影，留盘无任何调试收益。
 
-**File-level fingerprint**：merge 成功后写入整文件 hash；lifecycle 2 启动
-前按已 accept fingerprint 过滤（per T-REPAIR-T3-LIFECYCLE-RESET 现状），
-sub-lane 间共享、不各自维护。
-
-**Lifecycle 2 重抽路径**：repair file-level lifecycle 1 末端 T3 触发
-时（per 决策 #25），若 `char_snapshot_sub_lanes=true` 且文件是
-`characters/<cid>/canon/stage_snapshots/<sid>.json` → T3 fixer 走 **4**
-sub-lane 并行重新 extract + merge 路径（每 sub-lane prompt 注入
-`prior_attempt_context` resolved+remaining ≤600 char 摘要 + 错误信息），
-替代默认 `FileRegenFixer` 单 lane 全文 regen。Lifecycle 计数（`max_lifecycles_per_file = 2`）
-保持现状：lifecycle +1 仅在 T3 真正触发并 reset 进入下一轮时计入；
-rate-limit pause 重跑不消耗 lifecycle 槽。Lifecycle 2 默认禁用 T3，再升
-T3 即 `T3_EXHAUSTED`。
+**Repair 作用于合并后的整文件**：char_snapshot 的 4 sub-lane 仅是抽取期的
+并行拆分；merge 成功后写整文件 hash 供 resume 幂等判定。合并成完整快照后，
+repair 以字段级 patch（T0/T1/T2）就地修复，无整文件 / sub-lane 重抽路径，
+无 lifecycle 重置。
 
 **Rate-limit / hard-stop**：sub-lane 走现有 `run_with_retry` 自然继承
 `RateLimitController` pause / resume；hard-stop 时 sub-lane sub-executor
@@ -670,7 +661,7 @@ Phase 2 产出**两个**角色级 baseline 文件：
    / 顶层 `relationships`）的 keys 必须 == `targets[].target_character_id`
    全集（多/少都 fail），三态由"内容是否填充"承载，fixed_relationship
    可预填 relationships 关系字段；校验在 phase 3 单 stage validate 层，
-   越界走 file-level repair lifecycle
+   越界走 file-level repair（cross_file rule 路由 T2，封顶后未决进 defer 台账）
 
 voice / behavior / boundary / failure_modes 的状态由 stage_snapshot
 演变链承载——每个 stage_snapshot 含本阶段全量字段，无独立 baseline
@@ -725,27 +716,24 @@ orchestrator (Python)
     │       ├── 程序化后处理 (digest/catalog, 0 token, idempotent upsert)
     │       ├── repair per-file 并发 (ThreadPoolExecutor, 默认 10):
     │       │       └── 对每个待修文件独立跑 coordinator.run(files=[single]):
-    │       │               ├── Lifecycle 1 (Phase A→B→C, T3 enabled)
-    │       │               │       ├── Phase A: L0–L3 全量检查
-    │       │               │       ├── Phase B: 修复循环 (T0→T1→T2→T3 逐层升级
-    │       │               │       │       + 每轮末 L3 gate
-    │       │               │       │       + 源文件问题 triage: pre-T3 & post-gate)
-    │       │               │       │       T3 一旦触发 → 立即返回 (跳 L3 gate / Phase C)
-    │       │               │       │       → 状态机重置 → lifecycle 2
-    │       │               │       └── Phase C: 最终确认 (T3 未触发时, 复用最后一次 gate)
-    │       │               └── Lifecycle 2 (T3 disabled, 仅在 lifecycle 1 触发 T3 后进入)
-    │       │                       ├── Phase A: 重扫 (滤掉已 accept 的 fingerprint)
-    │       │                       ├── Phase B: 同 lifecycle 1 但禁用 T3, 升 T3 即 T3_EXHAUSTED
-    │       │                       └── Phase C: 同 lifecycle 1
+    │       │               └── 单遍 Phase A→B→C (无 lifecycle 重置 / 无整文件重生成)
+    │       │                       ├── Phase A: L0–L3 全量检查
+    │       │                       ├── Phase B: 修复循环 (按 rule 路由到
+    │       │                       │       (start_tier, max_tier); T0/T1/T2 每 tier 封顶 2 次
+    │       │                       │       + 每轮末 L3 gate + 源文件问题 triage)
+    │       │                       │       封顶仍 blocking 的语义类 → triage → defer 台账
+    │       │                       └── Phase C: 最终确认 (复用最后一次 gate;
+    │       │                               残留按类别 defer / ERROR)
     │       ├── 程序化后处理重跑 (digest/catalog, 0 token, idempotent)
     │       │       └── 在 transition(PASSED) 之前无条件重跑
     │       │           PASSED 语义 = repair 通过 ∧ PP 已同步
     │       │           SIGKILL 中断 → state 留 REVIEWING, --resume
     │       │             重入 Step 4 再跑 repair + PP (幂等)
     │       ├── [全部文件 PASS + PP 重跑成功] → transition(PASSED) → git commit
-    │       ├── [残留 error 只剩 semantic(L3) ∧ defer_unresolved_semantic]
+    │       ├── [残留 error 落在可延后类别 (semantic / schema / structural /
+    │       │     cross_file) ∧ defer_unresolved_semantic]
     │       │       → 写 deferred_repairs/{stage}.jsonl → 当 PASS 处理 → commit
-    │       └── [任一文件 FAIL(含 schema/structural/cross_file 残留或 worker 崩溃)
+    │       └── [任一文件 json_syntax 残留(文件不可解析) 或 repair worker 崩溃
     │             或 PP 重跑失败] → stage ERROR (--resume 重置 → PENDING)
     │
     ├── 跨阶段一致性检查 (Phase 3.5):
@@ -773,50 +761,54 @@ orchestrator (Python)
   `works/{work_id}/analysis/progress/repair_logs/repair_{stage_id}_{slug(file)}.jsonl`。
   `slug(file)` = 路径末两段 + 8 位 md5 摘要，避免中文路径 ASCII 折叠后
   冲突。coordinator 在每个 phase 起止、每条 blocking issue、每轮
-  fix、L3 gate 结果、lifecycle 信号、最终结论处 append 一条 JSON 事件
+  fix、L3 gate 结果、最终结论处 append 一条 JSON 事件
   （含 fingerprint / file / json_path / rule / severity / message /
-  start_tier / cycle 等字段；`cycle` 0/1 区分两个 lifecycle）。文件随
+  start_tier / max_tier 等字段）。文件随
   `progress/` 一并 `.gitignore`；事后可
   用 `jq` 或脚本复盘"S001 里某个文件的第 3 个 issue 是什么 / 在哪个
   tier 被修"。
 - **Repair Agent（统一检测+修复）**：独立模块 `extraction/repair/`，
   各 phase 通过统一接口调用。四层检查器（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
-  与四层修复器（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成）**正交**——
-  任何层的 issue 都可能需要任何 tier 的修复。修复从最低可用 tier 开始逐层升级，
-  每个 tier 有独立重试次数（T0=1, T1=3, T2=3, T3=1）。T3 触发受 `max_lifecycles_per_file=2`
-  约束：lifecycle 1 触发 T3 后状态机重置进入 lifecycle 2，lifecycle 2 禁用 T3，
-  升 T3 即 `T3_EXHAUSTED`。Lifecycle 1 的 T3 prompt 携带 `prior_attempt_context`
-  （已修+未修指纹摘要 ~200 token）。
+  与三层修复器（T0 程序化 → T1 局部 LLM → T2 原文 LLM）**正交**——
+  任何层的 issue 都可能需要任何 tier 的修复。每个 issue 按其**规则（fallback
+  category）**路由到 `(start_tier, max_tier)`：mechanical（json_parse /
+  schema type·minLength·maxLength·additionalProperties·required / id-format /
+  stage_id_alignment）→ start T0 cap T1；judgement-no-source（enum）→ T1 cap T1；
+  semantic / cross_file / needs-original-text → start T2 cap T2；
+  coverage_shortage → T2 + 0-token 程序构造 SourceNote。每个 tier 封顶
+  **2** 次尝试（第 2 次只重打"立即 scoped L0–L2 复检仍失败"的字段），达到
+  max_tier 仍未解决即停止升级、走 defer 台账。**单遍**（一次 Phase A→B→C，
+  无 file-level lifecycle 重置、无整文件重生成）。T1 把该文件所有 issue 批成
+  一次 LLM 调用、写回后立即 scoped L0–L2 复检（issue 不再出现才算解决，杜绝
+  "自报已修"空转）。
   Phase B 每轮在 L0–L2 scoped recheck 后，对"本轮被修改 + Phase A 有过 L3 问题"的
-  文件集合跑一次 **L3 gate**，把语义层的失败回灌进下一轮 issue 队列——关闭
-  "T3 谎报语义已修但 Phase C 才发现" 的窗口。Phase C 优先复用最后一次 gate 的结果。
-  字段级精确修补（json_path 定位），不整文件回滚。
-  安全阀：回归保护（introduced ≥ resolved → 停机）、收敛检测（持续集不变 → 升级）、
-  **L3 gate 反复**（连续两轮 gate 返回相同 blocking 集合 → 语义层不收敛 → 出 Phase C 报错）、
-  Lifecycle 上限（默认 2，lifecycle 2 升 T3 即 T3_EXHAUSTED）、
-  总轮次限制（每 lifecycle 默认 5 轮）。**Length-bound tolerance 兜底**：在 lifecycle
-  2 即将判定 `T3_EXHAUSTED` 之前，如果剩余 issues **全部**是 `category ==
-  schema_validation` 且错误描述命中 `minLength` / `maxLength` 关键词，调
-  `validate_with_length_tolerance`：relaxed schema（×0.9 floor /
-  ×1.1 ceil）通过 → 改判 `PASS`；否则保留 `T3_EXHAUSTED`。仅修改终态判定
-  分支，不动 lifecycle 1/2/T3 cap/fixer 升级；详见 `ai_context/decisions.md`
-  #48
+  文件集合跑一次 **L3 gate**，把语义层的失败回灌进下一轮 issue 队列。
+  Phase C 优先复用最后一次 gate 的结果。字段级精确修补（json_path 定位），
+  不整文件回滚 / 不整文件重写。
+  安全阀：回归保护（introduced ≥ resolved → 停止该 tier、升级）、收敛检测
+  （持续集不变 → 升级）、**L3 gate 反复**（连续两轮 gate 返回相同 blocking
+  集合 → 语义层不收敛 → 进 Phase C 按类别 defer / ERROR）、总轮次限制
+  （默认 5 轮）。**Length-bound tolerance 兜底**：封顶 tier 后若剩余 issues
+  **全部**是 `category == schema_validation` 且错误描述命中 `minLength` /
+  `maxLength` 关键词，调 `validate_with_length_tolerance`：relaxed schema
+  （×0.9 floor / ×1.1 ceil）通过 → 改判 `PASS`；否则按残留类别 defer / ERROR。
+  详见 `ai_context/decisions.md` #48
 - **源文件问题 triage**（`triage_enabled`）：两条 accept_with_notes 通道，
   共用单文件上限 `accept_cap_per_file=5`。
   （A）**L3 `source_inherent`（LLM）**——某些 L3 残留不是提取错误，而是源小说
   本身的 bug（作者逻辑矛盾、typo、角色名/代称混用、世界规则冲突等）。在两个点
-  做一次轻量级 LLM 判定：(1) pre-T3——若残留全是源文件自带问题，跳过 20 分钟
-  的 T3 全文件重生成；(2) post-L3-gate——T3 跑完后的最后一次"接受与否"机会。
+  做一次轻量级 LLM 判定：(1) max_tier 封顶后——若残留全是源文件自带问题，直接
+  接受、不再升级；(2) post-L3-gate——L3 gate 后的最后一次"接受与否"机会。
   反作弊完全程序化：每条接受判定必须引用 `chapter_number + line_range + 逐字
-  quote`，程序用 `chapter_text.find(quote) >= 0` 校验；T2/T3 修复器自带
+  quote`，程序用 `chapter_text.find(quote) >= 0` 校验；T2 修复器自带
   "source_inherent" 自报通道，可直接把证据交给 triager 做 prior。
   （B）**L2 `coverage_shortage`（程序，0 token）**——L2 `min_examples` 规则
   判定字段条数不足 `importance_min_examples`（主角≥5 / 重要配角≥3 / 其他≥1）
   时，issue 降级为 `severity=warning + coverage_shortage=True`，路由
-  `START_TIER=T2, MAX_TIER=T2`（跳过 T0/T1/T3）。T2 单次 source_patch 后仍不足
+  `START_TIER=T2, MAX_TIER=T2`（跳过 T0/T1）。T2 source_patch 后仍不足
   → coordinator 程序构造 `SourceNote`（`discrepancy_type="coverage_shortage"`）
   直接收录，0 LLM 调用。原文素材不够就是不够——T0 无法凭空造例、T1 无原文易
-  胡编、T3 整文件重写也无法让原文变长。quote 由程序选取该阶段首章的一段
+  胡编。quote 由程序选取该阶段首章的一段
   子串，仍走同一 `chapter_text.find(quote) >= 0` 校验。
   两条通道被接受的 issue 都写入 `{entity}/canon/extraction_notes/{stage_id}.jsonl`
   （世界级产物写到 `world/extraction_notes/`），附带 SHA-256 锚定以便将来原
@@ -828,23 +820,16 @@ orchestrator (Python)
   与 triage 不同——triage 处理"源小说自带 bug"，这里处理"提取确有错但自动修
   复追不平"的 L3 残留（跨字段一致性、L3 semantic reviewer 非确定性导致修复
   循环不收敛）。开关开启时，若某 stage 全部文件 repair 收尾后残留的 `error`
-  **只剩 `category=="semantic"`**（判据纯函数 `deferrable_semantic_issues`），
+  落在**可延后类别**（`semantic` / `schema` / `structural` / `cross_file`），
   则不判 ERROR 停机：把未决 issue 写进 durable 台账
   `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`（每行含
   stage_id/file/json_path/category/severity/rule/message；置于 `works/` 下
   非 `progress/`，随 `commit_stage` 的 `git add -A works/{work_id}/` 一并提交），
-  stage 当 PASS 处理继续提交。**只延后 semantic**——残留里含 json_syntax /
-  schema / structural / cross_file（会让下游 stage 读不了）或 repair worker
-  崩溃（无 error issue）仍走硬 ERROR。台账由未来的 Phase 3.5 收尾修复 pass
+  stage 当 PASS 处理继续提交。**只有 `json_syntax`（文件不可解析、下游读不了）
+  或 repair worker 崩溃（无 error issue）才走硬 ERROR。** 台账由未来的 Phase 3.5 收尾修复 pass
   消费，逐条精准修（field-level）而不重跑整个 stage。代码默认 `false`（保留
   停机语义），本项目 `config.toml` 开启。写出装置：
   `extraction/persona_extraction/lifecycle/deferred_repair_log.py`。
-- **Lifecycle 重置**：T3 跑完后**不做即时 corruption 检查**；T3 输出
-  直接作为 lifecycle 2 的输入。Lifecycle 2 的 Phase A 会重扫所有 checker
-  层（L0/L1/L2/L3）——若 T3 真把文件结构破坏了，L0/L1/L2 会在 lifecycle 2
-  Phase A 立即报 error，仍走正常 fixer 链；若新 error 升到 T3 即
-  `T3_EXHAUSTED`（lifecycle 2 禁用 T3）。这相当于 corruption 止损被合并
-  进了 lifecycle 2 Phase A 的全量重扫，不再需要单独的 Post-T3 scoped 检查。
 - 提取在独立 git 分支（`extraction/{work_id}`）进行，每 stage 单独 commit
   （精确回滚）；全部完成后 squash merge 到 `library` 分支（默认目标，可由
   `[git].squash_merge_target` 配置），**不回流 `main`**——`main` 只承载

@@ -33,7 +33,7 @@ from typing import Any, Callable
 from .core.config import get_config
 from ..validation.gates.phase3_5_consistency import run_consistency_check, save_report
 from .lifecycle.deferred_repair_log import (
-    deferrable_semantic_issues,
+    deferrable_issues,
     write_deferred_repairs,
 )
 from .lifecycle.failed_lane_log import write_failed_lane_log
@@ -214,7 +214,6 @@ from ..repair.checkers.phase2_baseline_refs import (
     TargetBaselineKeysChecker,
 )
 from ..repair.checkers.semantic import SemanticReviewLLMUnavailable
-from ..repair.protocol import Issue as RepairIssue
 from ..repair.recorder import RepairRecorder
 
 logger = logging.getLogger(__name__)
@@ -324,18 +323,17 @@ def _guard_phase2_rewrite_against_phase3(
 # when injecting the value during sub-lane merge (decision #55).
 _SNAPSHOT_SCHEMA_VERSION = "1.0"
 
-# Hard cap when concatenating the prior_attempt_context summary into the
-# reviewer-feedback channel for sub-lane prompts (decision #25 /
-# `FileRegenFixer._PRIOR_CONTEXT_CHAR_BUDGET`). Keeps the prompt budget
-# bounded so an over-eager prior-context summary can't crowd out the
-# stage-specific content.
+# Hard cap when concatenating an optional prior-attempt summary into the
+# reviewer-feedback channel for sub-lane prompts (decision #25). Keeps the
+# prompt budget bounded so an over-eager prior-context summary can't crowd
+# out the stage-specific content.
 _SUB_LANE_PRIOR_CONTEXT_BUDGET = 600
 
 
 def _format_prior_attempt_context_block(
     ctx: dict[str, list[str]] | None,
 ) -> str:
-    """Render the lifecycle-2 prior-attempt summary as a markdown block.
+    """Render an optional prior-attempt summary as a markdown block.
 
     Returns an empty string when ``ctx`` is None or empty so callers can
     unconditionally concatenate.
@@ -346,7 +344,7 @@ def _format_prior_attempt_context_block(
     remaining = ctx.get("remaining") or []
     if not resolved and not remaining:
         return ""
-    lines = ["\n\n## 上一轮 lifecycle 摘要（repair framework T3 注入）"]
+    lines = ["\n\n## 上一轮摘要"]
     if resolved:
         lines.append(f"\n上轮已解决（{len(resolved)} 条）：")
         for s in resolved:
@@ -965,10 +963,10 @@ class ExtractionOrchestrator:
         repair framework accept list); on failure returns a negative
         ``LLMResult`` with ``error`` describing which gate tripped.
 
-        ``prior_attempt_context`` is the repair framework lifecycle-2 prior-
-        attempt summary; when set, each sub-lane prompt receives a short
-        formatted block alongside any reviewer feedback (≤600 char
-        budget mirroring ``FileRegenFixer``). ``log_lane_failure`` may
+        ``prior_attempt_context`` is an optional prior-attempt summary;
+        when set, each sub-lane prompt receives a short formatted block
+        alongside any reviewer feedback (≤600 char budget). Production
+        currently always passes ``None``. ``log_lane_failure`` may
         be ``None`` (repair path) or the closure-built
         ``_log_lane_failure`` (extraction path); each sub-lane uses its
         own ``f"char_snapshot:{cid}:{sub_lane}"`` lane name for failure
@@ -1154,97 +1152,6 @@ class ExtractionOrchestrator:
             "char_snapshot sub-lane merge complete: %s/%s fingerprint=%s",
             character_id, stage.stage_id, fingerprint[:16])
         return LLMResult(success=True, text=fingerprint, error="")
-
-    def _build_sub_lane_regen_callback(
-        self,
-        *,
-        pipeline: PipelineProgress,
-        stage: StageEntry,
-        stages: list[StageEntry],
-        work_root: Path,
-    ) -> Callable[
-        [str, str, str, list[RepairIssue], dict[str, list[str]] | None],
-        bool | None,
-    ]:
-        """Build a T3-friendly callback that drives the orchestrator's
-        sub-lane re-extract path on behalf of ``FileRegenFixer``
-        (decision #55).
-
-        The callback's signature matches
-        ``extraction/repair/fixers/file_regen.py::SubLaneRegenCallback``:
-        ``(file_path, character_id, stage_id, issues,
-        prior_attempt_context) -> bool | None``.
-
-        Return contract:
-          * ``True``  — sub-lane regen succeeded; final
-            ``stage_snapshots/{stage_id}.json`` is on disk, ``.partial/``
-            cleaned. The fixer marks every issue resolved.
-          * ``False`` — declined (e.g. stage_id mismatch); the fixer
-            falls back to the default single-LLM regen.
-          * ``None``  — sub-lane regen failed; the fixer skips this file
-            without marking issues resolved (lifecycle surfaces them on
-            the next pass).
-        """
-        def _cb(
-            file_path: str,
-            character_id: str,
-            stage_id: str,
-            _issues: list[RepairIssue],
-            prior_attempt_context: dict[str, list[str]] | None,
-        ) -> bool | None:
-            # Defense-in-depth: reject any path outside the current
-            # work_root. Multi-work repos could otherwise reach a
-            # cross-work canon file if both works happen to share a
-            # character_id and the upstream caller forgets to filter.
-            try:
-                if not Path(file_path).resolve().is_relative_to(
-                        work_root.resolve()):
-                    logger.warning(
-                        "sub-lane regen declined: path %s outside "
-                        "work_root %s", file_path, work_root)
-                    return False
-            except OSError as exc:
-                logger.warning(
-                    "sub-lane regen declined: cannot resolve %s (%s)",
-                    file_path, exc)
-                return False
-            if stage_id != stage.stage_id:
-                logger.warning(
-                    "sub-lane regen declined: stage_id %s on path does "
-                    "not match orchestrator stage %s (path: %s)",
-                    stage_id, stage.stage_id, file_path)
-                return False
-            if character_id not in pipeline.target_characters:
-                logger.warning(
-                    "sub-lane regen declined: character %s on path not "
-                    "in target_characters %s",
-                    character_id, pipeline.target_characters)
-                return False
-            try:
-                result = self._run_char_snapshot_sub_lanes(
-                    pipeline=pipeline,
-                    stage=stage,
-                    stages=stages,
-                    character_id=character_id,
-                    work_root=work_root,
-                    feedback="",
-                    log_lane_failure=None,
-                    prior_attempt_context=prior_attempt_context,
-                )
-            except RateLimitHardStop:
-                raise
-            except Exception:  # noqa: BLE001
-                logger.exception(
-                    "sub-lane regen raised unexpectedly for %s", file_path)
-                return None
-            if not result.success:
-                logger.warning(
-                    "sub-lane regen failed for %s: %s",
-                    file_path, result.error)
-                return None
-            return True
-
-        return _cb
 
     def _clear_snapshot_partials(
         self,
@@ -2137,8 +2044,8 @@ class ExtractionOrchestrator:
         每 lane：独立 prompt（chunk 输入按 lane 投影裁剪，同 phase 1
         projector 模式）→ 输出落盘 → per-file repair 缩水版（决策 #59：
         T0/T1 + schema/程序 checker；L3 语义 checker / T2 source_patch /
-        triage 不开——``source_context=None``；T3 = ``lane_regen`` 回调
-        重跑本 lane 自己的 LLM call）。``[phase2].repair_enabled = false``
+        triage 不开——``source_context=None``；无全文/lane 重跑层，仍不平
+        的残留交终点 gate）。``[phase2].repair_enabled = false``
         时跳过 per-lane repair，仅靠终点 ``validate_baseline`` gate。
 
         foundation.json 主体由 phase 1 foundation lane 直接产出，phase 2
@@ -2252,12 +2159,10 @@ class ExtractionOrchestrator:
                 run_semantic=False,
                 l3_gate_enabled=False,
                 triage_enabled=False,
-                max_lifecycles_per_file=ra_cfg.max_lifecycles_per_file,
                 retry_policy=RetryPolicy(
                     t0_max=ra_cfg.t0_retry,
                     t1_max=ra_cfg.t1_retry,
                     t2_max=0,
-                    t3_max=ra_cfg.t3_retry,
                     max_total_rounds=ra_cfg.total_round_limit,
                 ),
             )
@@ -2445,48 +2350,9 @@ class ExtractionOrchestrator:
                 for p, sp in outputs
             ]
 
-            # T3 = re-run this lane's own LLM call (decision #59). One
-            # rerun per repair run: for a 2-file lane (identity) the
-            # callback may fire once per file — the first rerun already
-            # regenerated both outputs, so later calls return the first
-            # rerun's verdict instead of re-running. Success requires
-            # every output to re-parse as JSON post-regen (mere existence
-            # is vacuous — the pre-repair missing-output loop already
-            # guaranteed existence); the real acceptance check is
-            # lifecycle 2's full Phase A re-validation.
-            regen_state = {"ran": False, "ok": False}
-
-            def _outputs_parse_ok() -> bool:
-                for p, _ in outputs:
-                    try:
-                        json.loads(p.read_text(encoding="utf-8"))
-                    except (OSError, json.JSONDecodeError):
-                        return False
-                return True
-
-            def _lane_regen(file_path: str, issues: list[RepairIssue],
-                            prior_ctx: dict | None) -> bool | None:
-                if regen_state["ran"]:
-                    return True if regen_state["ok"] else None
-                regen_state["ran"] = True
-                lines = [
-                    f"- {i.json_path}: [{i.rule}] {i.message}"
-                    for i in issues[:8]
-                ]
-                regen_prior = (
-                    "上一轮产物经修复仍存在以下问题，请重新生成本 lane "
-                    "全部输出并修正：\n" + "\n".join(lines))
-                regen_prompt = lane["builder"](regen_prior)
-                regen_result = run_with_retry(
-                    self.backend, regen_prompt,
-                    timeout_seconds=cfg.phase3.extraction_timeout_s,
-                    lane_name=f"phase2_{slug}_t3",
-                )
-                if not regen_result.success:
-                    return None
-                regen_state["ok"] = _outputs_parse_ok()
-                return True if regen_state["ok"] else None
-
+            # phase 2 repair is capped-tier only (T0/T1); there is no
+            # full-file / lane regeneration tier. Residual issues surface
+            # via the terminal ``validate_baseline`` gate.
             rec_path = repair_logs_dir / f"repair_phase2_{slug}.jsonl"
             with RepairRecorder(rec_path) as recorder:
                 repair_result = run_repair(
@@ -2495,7 +2361,6 @@ class ExtractionOrchestrator:
                     source_context=None,
                     llm_call=_llm_call,
                     recorder=recorder,
-                    lane_regen=_lane_regen,
                     extra_checkers=lane["checkers"](),
                 )
             if not repair_result.passed:
@@ -3467,32 +3332,16 @@ class ExtractionOrchestrator:
                     run_semantic=True,
                     triage_enabled=ra_cfg.triage_enabled,
                     accept_cap_per_file=ra_cfg.triage_accept_cap_per_file,
-                    max_lifecycles_per_file=ra_cfg.max_lifecycles_per_file,
                     retry_policy=RetryPolicy(
                         t0_max=ra_cfg.t0_retry,
                         t1_max=ra_cfg.t1_retry,
                         t2_max=ra_cfg.t2_retry,
-                        t3_max=ra_cfg.t3_retry,
                         max_total_rounds=ra_cfg.total_round_limit,
                     ),
                 )
 
             repair_logs_dir = progress_dir / "repair_logs"
             repair_logs_dir.mkdir(parents=True, exist_ok=True)
-
-            # Decision #55 — when sub-lane mode is on, route T3 char_
-            # snapshot regen through the 4-sub-lane parallel extract +
-            # merge path. The callback is built once per stage so the
-            # orchestrator's pipeline / stage / work_root context is
-            # captured and reused for every per-file repair worker.
-            sub_lane_regen_cb = None
-            if self.char_snapshot_sub_lanes:
-                sub_lane_regen_cb = self._build_sub_lane_regen_callback(
-                    pipeline=pipeline,
-                    stage=stage,
-                    stages=phase3.stages,
-                    work_root=work_root,
-                )
 
             def _repair_one(f: RepairFileEntry) -> tuple[
                     RepairFileEntry, RepairResult]:
@@ -3507,7 +3356,6 @@ class ExtractionOrchestrator:
                         llm_call=_llm_call,
                         importance_map=importance_map,
                         recorder=recorder,
-                        sub_lane_regen=sub_lane_regen_cb,
                     )
                 return f, result
 
@@ -3553,18 +3401,19 @@ class ExtractionOrchestrator:
 
             tracker.record_step(ProgressTracker.STEP_REVIEW)
 
-            # Record-and-continue gate (decision — deferred semantic
-            # repair). When enabled and the only remaining error issues are
-            # semantic (L3), defer them to a durable ledger and let the
-            # stage commit instead of failing; a later Phase 3.5 fix pass
-            # repairs them precisely without re-extracting. Any remaining
-            # json_syntax / schema / structural / cross_file error (or a
-            # repair worker exception, which yields no error issues) still
-            # forces ERROR — those break downstream reads.
+            # Record-and-continue gate (decision #60, extended by
+            # T-REPAIR-NO-REEXTRACT). When enabled and every remaining
+            # error issue is deferrable (semantic / schema / structural /
+            # cross_file — anything the capped tiers couldn't fix), defer
+            # them to a durable ledger and let the stage commit instead of
+            # failing; a later Phase 3.5 fix pass repairs them precisely
+            # without re-extracting. A json_syntax error (unparseable file)
+            # or a repair worker exception (no error issues) still forces
+            # ERROR — those break downstream reads.
             deferrable: list | None = None
             if (not all_pass
                     and get_config().repair.defer_unresolved_semantic):
-                deferrable = deferrable_semantic_issues(failed_entries)
+                deferrable = deferrable_issues(failed_entries)
 
             if all_pass:
                 tracker.print_step_done(
@@ -3574,7 +3423,7 @@ class ExtractionOrchestrator:
                     work_root, stage.stage_id, deferrable)
                 tracker.print_step_done(
                     4, 5, "Repair agent",
-                    f"DEFER — {len(deferrable)} semantic issue(s) recorded "
+                    f"DEFER — {len(deferrable)} issue(s) recorded "
                     f"to deferred_repairs/{stage.stage_id}.jsonl")
                 for f, r in failed_entries:
                     print(f"    [DEFER] {f.path}")
