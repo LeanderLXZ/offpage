@@ -116,6 +116,15 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
    初始关系推 `relationship_traps` + 从原文已揭示的认知边界推
    `knowledge_leaks`。
 
+   **`stage_delta` 首阶段硬规则（确定性，优先级高于下方 stage_delta
+   字段的通用说明）**：S001 没有前一阶段可对比，"从上一阶段的变化"
+   无从谈起——因此 `stage_delta` **整个字段必须省略**（不写该顶层
+   键、不写任何子字段）。负责它的两个 sub-lane（char_decision 写
+   `status_changes` / `mood_shift` / `personality_changes`；char_social
+   写 `trigger_events` / `relationship_changes` / `voice_shift`）**都
+   不得写入自己那一半**——两边同时留空是唯一合法形态（merge 契约要求
+   该字段"要么两边都写、要么两边都不写"，首阶段必须走"都不写"）。
+
    每个 stage_snapshot 必须**考虑**以下全部维度，即使某些字段相比上一阶段未变化。schema 区分两层：
 
    - **结构性骨架**（schema 顶层 `required`，缺一会被 L1 jsonschema gate 拒绝）：
@@ -124,7 +133,7 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
      / `current_mood` / `knowledge_scope` / `timeline_anchor` / `snapshot_summary`
    - **情境维度**（schema 不强制顶层 required；但 prompt 与 Phase 3.5 一致性审计仍要求逐项考虑）：
      `emotional_baseline` / `current_status` / `misunderstandings` / `concealments` / `stage_delta`。
-     当本阶段原文里**确实没有**对应内容时（如本阶段没有任何新误解 / 没有任何新隐瞒 / 上一阶段已 resolve 全部 misunderstanding），允许字段以空数组 / 空对象 / 省略呈现，**但你必须在 `stage_delta` 中显式说明"对照了哪些维度、原文为什么不带来变化"**——禁止"无明显变化"敷衍。
+     当本阶段原文里**确实没有**对应内容时（如本阶段没有任何新误解 / 没有任何新隐瞒 / 上一阶段已 resolve 全部 misunderstanding），允许字段以空数组 / 空对象 / 省略呈现，**但你必须在 `stage_delta` 中显式说明"对照了哪些维度、原文为什么不带来变化"**——禁止"无明显变化"敷衍。**（S002+ 适用；S001 首阶段例外——`stage_delta` 整个省略，见上方"首阶段硬规则"，无需也不得写对照说明。）**
 
    - `active_aliases`：当前活跃名称、隐藏身份、各角色称呼映射。**所有数组 / 映射上限以 schema 为准**
    - `voice_state`：语气基调、语言习惯、用词偏好、口头禅、禁忌用语、**情绪语气矩阵**（emotional_voice_map，覆盖主要情绪）、**对象语气矩阵**（target_voice_map，见下方详细要求）、典型对话示例（至少 2-3 条）。**所有数组上限以 schema 为准**（schemas/character/stage_snapshot.schema.json）
@@ -136,7 +145,7 @@ target / 情绪矩阵下的子项（`typical_expressions` / `dialogue_examples` 
    - `misunderstandings`（已 resolved 的移除）、`concealments`（已 revealed 的移除）。**数组上限以 schema 为准**
    - `emotional_baseline`（含 **active_goals** 理性目标、**active_obsessions** 执念、active_fears、active_wounds）、`current_personality`、`current_mood`、`current_status`。**所有数组上限以 schema 为准**
    - `stage_events`（**仅本阶段**发生的关键事件清单，每条字数与数组上限**以 schema 为准**；schema 两端硬门控，过短/过长都会直接判失败；不累积历史，历史由 memory_timeline 和 world_event_digest 承载）。**事件归属（强约束）**：① 必写——本角色亲历 / 亲为 / 在场 / 直接影响其处境或认知的事件；② 不写——其他角色之间的私事、与本角色无关的对话 / 设局 / 经济活动 / 内心决定，**哪怕剧情很重要也不属于本角色 stage_events**；③ 世界级公共事件（势力变迁、大 boss 复活、天灾、地震、灵脉断裂、奇观、跨角色公共战役等）由 world `stage_snapshot.stage_events` 承载——**不要直接复制世界层文本**；仅当本角色亲历该世界事件时，必须以**角色视角**重写一条进入此清单（角色看到 / 经历 / 应对的是什么、对其造成的具体影响），不可遗漏也不可机械抄录
-   - `stage_delta`：从上一阶段的变化。**顶层是 6-key 结构化对象**（`trigger_events` / `personality_changes` / `relationship_changes` / `status_changes` / `mood_shift` / `voice_shift`，schema 真值见上方 inline schema），每个 sub-field 的内容是叙述性 text。应能体现 (B) 类关键变化（target / emotion / relationship 等的演变要点）和 (D) 类消除原因（哪条 misunderstanding/concealment/failure_mode 在本阶段被 resolve/reveal/克服 + 为什么）。**不要写"无明显变化"敷衍**——若真的本阶段无变化（C 全态），写明你对照了哪些字段、原文为什么不带来变化
+   - `stage_delta`（**S002+ 适用；S001 首阶段整个省略，见上方"首阶段硬规则"**）：从上一阶段的变化。**顶层是 6-key 结构化对象**（`trigger_events` / `personality_changes` / `relationship_changes` / `status_changes` / `mood_shift` / `voice_shift`，schema 真值见上方 inline schema），每个 sub-field 的内容是叙述性 text。应能体现 (B) 类关键变化（target / emotion / relationship 等的演变要点）和 (D) 类消除原因（哪条 misunderstanding/concealment/failure_mode 在本阶段被 resolve/reveal/克服 + 为什么）。**不要写"无明显变化"敷衍**——若真的本阶段无变化（C 全态），写明你对照了哪些字段、原文为什么不带来变化
    - `character_arc`：角色从阶段 1 到当前阶段的整体弧线概述，**单一字符串**（≤ 200 字），一句到一段话概括核心变化轨迹。第一个阶段可省略或仅写起点状态
    - `timeline_anchor`：阶段时间锚点短描述（≤ 50 字），必填
    - `snapshot_summary`：当前阶段一段式摘要，100–200 字，必填
