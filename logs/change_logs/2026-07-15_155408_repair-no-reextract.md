@@ -118,3 +118,22 @@ fresh-context subagent 完成，主循环独立验证 + 逐段审 coordinator �
 
 - **Status**: DONE
 - **Finished**: 2026-07-15 17:07:50 EDT
+
+<!-- /post-check writes -->
+
+## Review conclusion (full report in conversation)
+
+### Track 1 — requirement fulfillment
+- 结构落地率：计划项 3/3 landed（Step A/B/C 全落）；验证 7/8 smoke PASS（`_smoke_triage` 既有失败）。
+- **但核心目标未达**：H1 令决策 #2（min_examples → 0-token 接受）在默认配置下不生效。
+- Missed updates：2（`extraction/README.md` 整份未更新、decisions #25 未加 #62 supersede）。
+
+### Track 2 — impact spread
+- Findings：High=3（H1 代码核心失效 / H2 敏感名泄漏 / H3 README 漂移）· Medium=5 · Low=3。
+- Open Questions：2（H1 修法确认、L3 minLength padding 是否保留）。
+
+## Review state
+- **Reviewed**: 2026-07-15 17:24:18 EDT
+- **Status**: REVIEWED-FAIL
+  - 触发 FAIL：track 2 含 High（H1 核心机制失效 + H2 敏感内容泄漏 + H3 live 文档大面积漂移）。
+- **Conversation ref**: /post-check output in this session
