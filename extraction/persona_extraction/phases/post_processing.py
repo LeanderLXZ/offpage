@@ -59,6 +59,32 @@ def _atomic_write_jsonl(path: Path, entries: list[dict[str, Any]]) -> None:
         raise
 
 
+def _dedup_by_key(
+    entries: list[dict], key_field: str,
+) -> list[dict]:
+    """Return ``entries`` with duplicate ``key_field`` values collapsed.
+
+    Keeps the first occurrence of each key and preserves order; entries
+    missing the key pass through unchanged. Digests are pure derived
+    projections, so a well-formed accumulated file has one entry per id —
+    this makes each regeneration idempotent and self-healing: if an
+    earlier fault left prior-stage duplicates in the file, the next
+    projection collapses them (repair never touches derived files, so the
+    generator is the only writer that can clean them). See
+    logs/change_logs/2026-07-15_134148_digest-derived-no-repair.md.
+    """
+    seen: set[str] = set()
+    out: list[dict] = []
+    for e in entries:
+        k = e.get(key_field) if isinstance(e, dict) else None
+        if isinstance(k, str):
+            if k in seen:
+                continue
+            seen.add(k)
+        out.append(e)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Stage ID parsing (shared across digest generators)
 # ---------------------------------------------------------------------------
@@ -190,7 +216,9 @@ def generate_memory_digest(
             seen_ids.add(mid)
             deduped_new.append(entry)
 
-    final = kept + deduped_new
+    # Dedup the whole accumulated list by memory_id (not just the current
+    # stage): self-heals prior-stage duplicates a past fault may have left.
+    final = _dedup_by_key(kept + deduped_new, "memory_id")
 
     # --- write ---
     _atomic_write_jsonl(digest_path, final)
@@ -277,6 +305,7 @@ def generate_world_event_digest(
     schema_dir: Path | None = None,
     *,
     character_names: list[str] | None = None,
+    alias_to_canonical: dict[str, str] | None = None,
 ) -> list[str]:
     """Generate world_event_digest entries from a world stage_snapshot.
 
@@ -291,6 +320,12 @@ def generate_world_event_digest(
         character_names: Known character names (canonical + aliases) for
             best-effort ``involved_characters`` extraction via substring
             matching against event text.
+        alias_to_canonical: Optional ``{name_or_alias -> canonical_name}``
+            map. When provided, matched names are normalized to their
+            canonical form and de-duplicated, so one character referenced
+            by several aliases in a summary yields a single canonical
+            entry (not one per alias). Omitted → matched names pass
+            through verbatim (legacy behavior; used by tests).
 
     Returns a list of warning/error messages (empty = success).
     """
@@ -335,7 +370,15 @@ def generate_world_event_digest(
             "time": timeline_anchor,
             "location": location_anchor,
         }
-        involved = [n for n in names if n in summary]
+        involved: list[str] = []
+        seen_canon: set[str] = set()
+        for n in names:
+            if n not in summary:
+                continue
+            canon = alias_to_canonical.get(n, n) if alias_to_canonical else n
+            if canon not in seen_canon:
+                seen_canon.add(canon)
+                involved.append(canon)
         if involved:
             entry["involved_characters"] = involved
         new_entries.append(entry)
@@ -389,7 +432,9 @@ def generate_world_event_digest(
             seen_ids.add(eid)
             deduped_new.append(entry)
 
-    final = kept + deduped_new
+    # Dedup the whole accumulated list by event_id (not just the current
+    # stage): self-heals prior-stage duplicates a past fault may have left.
+    final = _dedup_by_key(kept + deduped_new, "event_id")
 
     # Write
     _atomic_write_jsonl(digest_path, final)
@@ -564,8 +609,12 @@ def run_stage_post_processing(
             warnings.extend(f"[world catalog] {i}" for i in catalog_issues)
 
             # world_event_digest — resolve character names for best-effort
-            # involved_characters extraction
+            # involved_characters extraction. Build both the flat name list
+            # (for substring matching) and an alias->canonical map (so a
+            # character named by several aliases in one summary collapses
+            # to a single canonical entry).
             char_names: list[str] = []
+            alias_to_canonical: dict[str, str] = {}
             for cid in character_ids:
                 id_path = (work_dir / "characters" / cid
                            / "canon" / "identity.json")
@@ -576,10 +625,13 @@ def run_stage_post_processing(
                         cn = id_data.get("canonical_name", "")
                         if cn:
                             char_names.append(cn)
+                            alias_to_canonical[cn] = cn
                         for alias in id_data.get("aliases", []):
                             aname = alias.get("name", "")
                             if aname and aname != cn:
                                 char_names.append(aname)
+                                if cn:
+                                    alias_to_canonical[aname] = cn
                     except (json.JSONDecodeError, OSError):
                         pass
 
@@ -590,6 +642,7 @@ def run_stage_post_processing(
                 stage_id=stage_id,
                 schema_dir=schema_dir,
                 character_names=char_names,
+                alias_to_canonical=alias_to_canonical,
             )
             warnings.extend(
                 f"[world event digest] {i}" for i in wed_issues)

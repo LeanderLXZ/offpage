@@ -282,6 +282,9 @@ N. <决策陈述，一行>。
 60. **未决语义（L3）repair 问题 record-and-continue，不再停机。** `[repair].defer_unresolved_semantic`（代码默认 false，本项目 true）：某 stage repair 收尾后残留 `error` 只剩 `category=="semantic"` 时，写台账 `deferred_repairs/{stage}.jsonl`（随 stage commit）并当 PASS 继续，不判 ERROR；残留含 schema/structural/cross_file 或 worker 崩溃仍硬 ERROR。台账留待未来 Phase 3.5 收尾修复 pass 逐条精准修（不重跑 stage）。
     → docs/decisions.md #60。
 
+61. **primary / derived 二分：派生文件永不进 repair。** repair 只作用于 primary（LLM 产出的 world / character stage_snapshots + memory_timeline）；派生文件 `world_event_digest.jsonl` / `memory_digest.jsonl` 是 primary 的 1:1 代码投影，移出 repair 文件集（`_collect_stage_files`），不经 L0–L3/T0–T3、尤其不被 T3 整文件 LLM 重写。正确性由确定性幂等重投影（生成器按 `event_id`/`memory_id` 全量去重，自愈历史重复）+ 现有 `phase3_5_consistency` §32/§33 门保证；语义错误归属 primary。消除了 repair 改写 digest 与 §32/§33「digest.summary 逐字==源」的自相矛盾（旧路径曾把 S001 事件 LLM 重写重复 13 次）。`involved_characters` 归一到 canonical_name。
+    → docs/decisions.md #61。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

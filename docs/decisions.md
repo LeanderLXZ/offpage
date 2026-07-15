@@ -802,6 +802,46 @@ N. <决策陈述>。
     `defer_unresolved_semantic`）、`docs/architecture/extraction_workflow.md`
     + `extraction/README.md` 同步。
 
+61. **primary / derived 二分：派生文件永不进 repair。**
+    **背景**：Phase 3 首次端到端运行时 S002 收尾进入 repair 后
+    `T3_EXHAUSTED` 硬 error 停机。排查发现 `world_event_digest.jsonl` 的 3 个
+    S001 事件被重复 **13 次**，且 13 份副本的 `involved_characters` 各不相同
+    ——证明是 **LLM 重新生成**（repair T3 `file_regen` 整文件重写），而非代码
+    投影所致。根因：digest 是**派生文件**（`world stage_events` /
+    `memory_timeline.digest_summary` 的 1:1 代码投影，见 #32/#33/#50），却被
+    放进 repair 文件集（`_collect_stage_files` 用 `_jsonl_stage_entry` 构造
+    `is_jsonl_slice` FileEntry），允许 L0–L3 checker + T0–T3 fixer（含 T3
+    整文件 LLM 重写）改写它。这与 `phase3_5_consistency` §32/§33 一致性门
+    **直接矛盾**——后者断言 `digest.summary` 必须逐字等于源；repair 一改，
+    3.5 门必挂。设计文档本就规定 digest = 1:1 派生（`world_extraction.md`
+    §7、`extraction/README.md`），repair 触碰 digest 是对项目自身设计的越界。
+    **决策**：确立 **primary / derived 二分**。repair 只作用于 primary（LLM
+    产出：world / character stage_snapshots + memory_timeline）；派生文件
+    `world_event_digest.jsonl` / `memory_digest.jsonl` 移出 repair 文件集，
+    永不进 L0–L3/T0–T3、尤其不被 T3 整文件 LLM 重写。派生正确性三层保证：
+    (1) 生成器 `generate_*_digest` 确定性重投影且按主键（`event_id` /
+    `memory_id`）**全量幂等去重**（`_dedup_by_key`），使重投影自愈历史遗留的
+    前序重复——repair 不再碰 digest，生成器是唯一能清理它的写者；(2) repair
+    修 primary 源字段后，post-repair 程序化 PP 重跑据此重新投影 digest（§11.3a
+    幂等重跑，机制不变）；(3) `phase3_5_consistency` §32/§33 纯代码门断言
+    `digest.summary` 逐字==源。语义错误（事实冲突等）归属 primary 的 repair，
+    不在 digest 上修症状。附带：`generate_world_event_digest` 的
+    `involved_characters` 归一到 `canonical_name`（新增 alias→canonical 映射，
+    一角色多别名出现在同一 summary 时收敛为单条 canonical）。**目标**：减重
+    （digest 永不进 LLM）+ 消除 repair 与 3.5 门的自相矛盾。**显式不做**：
+    `field_patch` / `protocol` 中随 `_jsonl_stage_entry` 删除后变 dead 的
+    slice-merge 基础设施（`_merge_jsonl_slice` / `current_stage_keys` /
+    `is_jsonl_slice`）本轮不移除——dead 但无害，留作单独有界清理，避免 diff
+    扩散到带测试的 protocol 层。Plumbing →
+    `extraction/persona_extraction/orchestrator.py`（`_collect_stage_files`
+    删两个 `_jsonl_stage_entry` digest 块 + dead 嵌套函数）、
+    `extraction/persona_extraction/phases/post_processing.py`（`_dedup_by_key`
+    + 两生成器全量去重 + `alias_to_canonical` 归一）、`docs/requirements.md`
+    §「派生文件不进 repair」段改写。数据侧收尾（清 S002 已污染 digest + 修
+    某角色 S002.json 的 schema 违规 + `--resume`）为独立后续，在 extraction
+    分支上、待本修复经 `/forward` 合入后进行。
+    → logs/change_logs/2026-07-15_134148_digest-derived-no-repair.md。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

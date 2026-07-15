@@ -1867,13 +1867,17 @@ Lifecycle 2 启动时:
   jsonl 写两条记录
 ```
 
-**累积 JSONL 的切片回写安全约束**：`memory_digest.jsonl` /
-`world_event_digest.jsonl` 按阶段累积；repair 被调度在**当前 stage
-切片**上运行时（FileEntry 通过 `is_jsonl_slice=True` + `jsonl_full_content`
-+ `jsonl_key_field` 标注），`write_file_entry` 必须按主键（`memory_id` /
-`event_id`）把修补后的切片合并回完整列表再写盘，避免用切片子集覆盖
-历史阶段条目导致静默丢数。任何 fixer（T0/T1/T2/T3）完成后的写盘都
-必须经此路径，不得直接对切片内容调用 `write_patched_file`。
+**派生文件不进 repair（primary / derived 二分）**：`memory_digest.jsonl` /
+`world_event_digest.jsonl` 是 primary（`memory_timeline` / world
+`stage_events`）的 1:1 代码投影——**派生文件**。它们**不进入 repair 文件集**
+（`_collect_stage_files` 只收 primary：world / character stage_snapshots +
+memory_timeline），因此不经 L0–L3 checker / T0–T3 fixer，尤其**不被 T3
+整文件 LLM 重写**。派生文件的正确性由三层保证：(1) 生成器
+`generate_*_digest` 确定性重投影且按主键（`memory_id` / `event_id`）幂等
+全量去重（自愈历史遗留的重复条目）；(2) repair 修复的是 primary
+源字段，随后的程序化后处理重跑据此重新投影 digest（见下）；(3)
+`phase3_5_consistency` §32/§33 纯代码门断言 `digest.summary` 逐字等于源。
+让 repair 改写派生文件会腐化它并与该一致性门直接冲突，故禁止。
 
 **repair 完成后的程序化后处理重跑**：每个 stage Phase B 通过、进入
 git commit 之前，编排器无条件再调用一次程序化后处理（§11.3a）。repair

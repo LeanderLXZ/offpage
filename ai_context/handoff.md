@@ -86,6 +86,7 @@ bullet；不再适用的删掉。
 
 - 深度扮演而非表面模仿 / AI 腔调；保留阶段差异 + 知识边界（不全知、不跨 context 泄漏）
 - 正典与推断标注区分，不静默模糊；增量更新，绝不从头重来
+- 追求流程 / 架构**越来越简单**，反对"越加越复杂"；根治优先于打补丁。派生数据只用代码 1:1 投影、不用 LLM 生成或修复；repair 只碰 primary（决策 #61）
 - 内容语言 = 作品语言；不把原文粘贴进 logs / docs / 回答
 - **不出现真实书名 / 角色 / 剧情名称**，用通用占位符（`Character A` / `<work_id>` / `S001`）；适用范围 + 豁免完整列表见 `conventions.md` §Generic Placeholders
 - → `docs/requirements.md` §1 / §5 / §6 / §9.1 + `conventions.md` §Generic Placeholders

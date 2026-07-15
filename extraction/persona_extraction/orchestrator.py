@@ -1406,14 +1406,16 @@ class ExtractionOrchestrator:
     ) -> list[RepairFileEntry]:
         """Build the file list for repair agent validation.
 
-        Digest files (memory_digest.jsonl, world_event_digest.jsonl) are
-        accumulated across all stages. For per-stage repair we load the
-        file and filter entries whose ID segment matches this stage's
-        S{stage_num:03d} marker, then pass the filtered list as pre-loaded
-        content — keeping the repair scope limited to the current stage.
+        Only primary LLM outputs enter repair: world / character
+        stage_snapshots and memory_timeline. Derived files
+        (memory_digest.jsonl, world_event_digest.jsonl) are NOT included —
+        they are 1:1 code projections of the primaries, regenerated
+        deterministically by post-processing and guarded by the
+        phase3_5_consistency §32/§33 gate. Letting repair (esp. T3 full-
+        file LLM rewrite) mutate a derived file corrupts it and directly
+        contradicts that gate. See decisions.md and
+        logs/change_logs/2026-07-15_134148_digest-derived-no-repair.md.
         """
-        import json as _json
-        import re as _re
         from .core.schema_loader import load_schema as _load_schema_inlined
         schema_dir = self.project_root / "schemas"
         files: list[RepairFileEntry] = []
@@ -1433,73 +1435,9 @@ class ExtractionOrchestrator:
             return RepairFileEntry(
                 path=str(path), schema=_load_schema(schema_name))
 
-        stage_pat = _re.compile(rf"-S{stage_num:03d}-")
-
-        def _jsonl_stage_entry(
-            path: Path, schema_name: str, id_fields: tuple[str, ...],
-        ) -> RepairFileEntry | None:
-            """Load accumulated jsonl; keep only entries whose id belongs
-            to the current stage; return FileEntry with the current-stage
-            slice as ``content`` plus the full accumulated list in
-            ``jsonl_full_content``. ``write_file_entry`` merges the
-            patched slice back into the full list at write time, so
-            prior-stage entries are never truncated by a slice write-back.
-            """
-            if not path.exists():
-                return None
-            full: list[dict] = []
-            kept: list[dict] = []
-            try:
-                text = path.read_text(encoding="utf-8")
-            except OSError:
-                return None
-            for line in text.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = _json.loads(line)
-                except _json.JSONDecodeError:
-                    continue
-                if not isinstance(obj, dict):
-                    continue
-                full.append(obj)
-                for f_key in id_fields:
-                    val = obj.get(f_key)
-                    if isinstance(val, str) and stage_pat.search(val):
-                        kept.append(obj)
-                        break
-            if not kept:
-                return None
-            # Collect current-stage keys so write-back can authoritatively
-            # drop them from `full` instead of preserving stale entries
-            # the repair stack intentionally removed (decision #58 / M2).
-            primary_key = id_fields[0]
-            current_stage_keys = frozenset(
-                obj[primary_key] for obj in kept
-                if isinstance(obj.get(primary_key), str)
-            )
-            return RepairFileEntry(
-                path=str(path),
-                schema=_load_schema(schema_name),
-                content=kept,
-                is_jsonl_slice=True,
-                jsonl_full_content=full,
-                jsonl_key_field=primary_key,
-                current_stage_keys=current_stage_keys,
-            )
-
         # World stage snapshot
         world_ss = work_dir / "world" / "stage_snapshots" / f"{stage_id}.json"
         e = _entry(world_ss, "world/world_stage_snapshot.schema.json")
-        if e:
-            files.append(e)
-
-        # World event digest (accumulated; filter to this stage)
-        world_ed = work_dir / "world" / "world_event_digest.jsonl"
-        e = _jsonl_stage_entry(
-            world_ed, "world/world_event_digest_entry.schema.json",
-            id_fields=("event_id",))
         if e:
             files.append(e)
 
@@ -1526,14 +1464,6 @@ class ExtractionOrchestrator:
             e = _entry(
                 char_dir / "memory_timeline" / f"{stage_id}.json",
                 "character/memory_timeline_entry.schema.json")
-            if e:
-                files.append(e)
-
-            # Memory digest (accumulated; filter to this stage)
-            e = _jsonl_stage_entry(
-                char_dir / "memory_digest.jsonl",
-                "character/memory_digest_entry.schema.json",
-                id_fields=("memory_id",))
             if e:
                 files.append(e)
 
