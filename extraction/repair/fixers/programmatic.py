@@ -251,7 +251,13 @@ class ProgrammaticFixer(BaseFixer):
             return None
 
     def _fix_string_length(self, content: Any, issue: Issue) -> Any | None:
-        """Truncate or pad strings to meet length constraints."""
+        """Truncate over-long strings to meet a ``maxLength`` constraint.
+
+        ``minLength`` shortfalls are NOT handled here: padding a too-short
+        value (e.g. with ``"…"``) fabricates content, so we leave it to a
+        higher tier / defer rather than invent text (OQ2). Truncation is
+        not fabrication, so the ``maxLength`` branch stays.
+        """
         try:
             current = extract_subtree(content, issue.json_path)
         except (KeyError, IndexError):
@@ -268,10 +274,6 @@ class ProgrammaticFixer(BaseFixer):
             if len(current) > limit:
                 truncated = current[:limit]
                 return apply_field_patch(content, issue.json_path, truncated)
-        elif validator_type == "minLength" and isinstance(limit, int):
-            if len(current) < limit:
-                padded = current + "…" * (limit - len(current))
-                return apply_field_patch(content, issue.json_path, padded)
 
         return None
 

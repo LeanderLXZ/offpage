@@ -126,13 +126,6 @@ def _tier_max(config: RepairConfig, tier: int) -> int:
 # Lifecycle outcome (one Phase A→B→C pass)
 # ---------------------------------------------------------------------------
 
-# Terminal reasons:
-#   PASS — Phase C confirmed no blocking issues (or the decision #48
-#          length-tolerance gate accepted the residual)
-#   FAIL — Phase C surfaced blocking issues; run done
-_TERMINAL_TYPES = ("PASS", "FAIL")
-
-
 @dataclass
 class _LifecycleOutcome:
     terminated_by: str
@@ -313,7 +306,6 @@ def _run_one_lifecycle(
     current_issues = list(blocking)
     last_gate_issues: list[Issue] | None = None
     gate_ever_ran = False
-    lifecycle_signal = ""  # "" | "LENGTH_TOLERANCE_PASS"
 
     for round_num in range(config.max_rounds):
         logger.info("Fix round %d — %d issues remaining",
@@ -321,6 +313,9 @@ def _run_one_lifecycle(
         _emit("round_start",
               round=round_num + 1, issues_remaining=len(current_issues))
 
+        # Round-local: a length-tolerance terminal from one tier group is
+        # only valid within the round it fired (M1 — must not leak forward).
+        lifecycle_signal = ""  # "" | "LENGTH_TOLERANCE_PASS"
         tier_groups = _group_by_start_tier(current_issues)
 
         modified_files: set[str] = set()
@@ -347,12 +342,21 @@ def _run_one_lifecycle(
             round_fixer_candidates.update(tier_cands)
             if tier_signal:
                 lifecycle_signal = tier_signal
-                break
+                # Do NOT break here: length-only residual arises in the
+                # start_tier=0 group (processed first), but semantic issues
+                # route start_tier=2 into a later group. Breaking would skip
+                # those groups and PASS a file with unprocessed semantic
+                # problems (M1). Let every tier group run; the terminal is
+                # gated below on the residual being the ENTIRE blocking set.
 
-        if lifecycle_signal == "LENGTH_TOLERANCE_PASS":
+        if (lifecycle_signal == "LENGTH_TOLERANCE_PASS"
+                and _all_length_only(current_issues)):
             # The length-bound tolerance gate accepted the residual
-            # schema minLength/maxLength issues (decision #48). Terminate
-            # as PASS without re-running Phase C — Phase C uses the strict
+            # schema minLength/maxLength issues (decision #48). Only a
+            # terminal PASS when the WHOLE round-blocking set was length-only
+            # (M1) — otherwise the non-length issues (e.g. semantic) still
+            # need Phase B recheck / L3 gate / Phase C below. Terminate as
+            # PASS without re-running Phase C — Phase C uses the strict
             # pipeline and would re-flag the same length issues we just
             # intentionally relaxed.
             logger.info(
@@ -585,16 +589,20 @@ def _run_fixer_with_escalation(
             if not remaining:
                 break
 
-            # coverage_shortage issues only get ONE T2 attempt — the
-            # novel either gains more examples on the first source_patch
-            # or it doesn't. Retrying doesn't add source material.
+            # coverage_shortage issues only get ONE T2 fix attempt — the
+            # novel either gains more examples on the first source_patch or
+            # it doesn't; retrying doesn't add source material. On later
+            # attempts drop them from the fix() call but KEEP them in
+            # `remaining` so the post-T2 0-token accept fast path below can
+            # pick them up (removing them from `remaining` here would make
+            # `cs_remaining` empty and silently skip the accept path).
             if attempt > 0 and tier == 2:
-                remaining = [i for i in remaining
+                attempted = [i for i in remaining
                              if not is_coverage_shortage(i)]
-                if not remaining:
-                    break
-
-            attempted = list(remaining)
+            else:
+                attempted = list(remaining)
+            if not attempted:
+                break
             result = fixer_obj.fix(
                 files=files,
                 issues=attempted,
@@ -613,6 +621,17 @@ def _run_fixer_with_escalation(
                 f_path = fingerprint_to_file.get(fp)
                 if f_path:
                     modified_files.add(f_path)
+
+            # M4: a fixer (T1) can write a file to disk yet report the issue
+            # NOT resolved (apply succeeds but the immediate re-verify still
+            # flags it). Its semantic content changed, so the L3 gate must
+            # still re-check it — add every file whose json_path was patched
+            # this round, regardless of resolution.
+            patched_json_paths = set(result.patched_paths)
+            if patched_json_paths:
+                for issue in attempted:
+                    if issue.json_path in patched_json_paths:
+                        modified_files.add(issue.file)
 
             remaining = [
                 i for i in remaining

@@ -213,6 +213,12 @@ N. <决策陈述>。
 24. 抽取 prompt 不读 `memory_digest.jsonl`、`world_event_digest.jsonl`、`stage_catalog.json`。自包含的 snapshot 契约内嵌在 prompt 中；digest / catalog 由 `post_processing.py` 程序化维护（0 token，幂等）。
 
 25. Per-stage 质量门 = `repair`（统一的 check + fix + verify）。Checker L0–L3 × fixer T0–T3，正交；field-level json_path patch。Phase B L3 gate 抓假 "fixed" 声明。每文件最多 `max_lifecycles_per_file=2` 个完整 check→fix→verify lifecycle：lifecycle 1 可调 T3（带 `prior_attempt_context`，概括上一 lifecycle 修了什么、还有什么没过）；T3 一触发 lifecycle 即返回、状态机 reset 进入 lifecycle 2；lifecycle 2 禁用 T3 —— 任何将调 T3 的升级以 `T3_EXHAUSTED` 结束。**repair 接入点 = phase 3 stage loop + phase 2 baseline lanes**（phase 3：`orchestrator.py` stage loop 的 per-file `run_repair(...)`，完整 L0–L3 × T0–T3；phase 2：`run_baseline_production` per-lane 缩水版接入——T0/T1 + schema/程序 checker，L3 / T2 / triage 不开，T3 = lane 重跑，见 #59；phase 0 / 1 / 3.5 / 4 各自走原生 retry 路径，不经 repair）。Phase 3 按文件并行分发（默认并发 10）；跨文档一致性放在 Phase 3.5。**Disambiguation**：本条 L0–L3 × T0–T3 是 phase 3 stage 抽取产物的 per-file repair lifecycle（checker × fixer 二维矩阵 + Phase A→B→C lifecycle）；与 #40 (phase 0 JSON repair L1/L2/L3) 同名不同物——后者是 JSON 格式修复三档阶梯（L1 regex 0 token / L2 LLM 修破碎 JSON / L3 整 prompt full re-run），互不依赖。同字面 "L1/L2/L3" 在两处语义完全不同。 → `extraction/repair/` + `docs/requirements.md` §11.4。
+    > **经 #62 收紧**：fixer 收为 T0–T2；删 T3 `file_regen` 全文重跑、
+    > `max_lifecycles_per_file` 与 `T3_EXHAUSTED`——单轮 Phase A→B→C，不再有
+    > lifecycle 2；phase 2 侧 "T3 = lane 重跑"（`lane_regen`）亦已删（见 #59）。
+    > `route_tiers` 按 issue rule 分配 `(start_tier, max_tier)`，每 tier 封顶 2 次
+    > 尝试；`coverage_shortage` → T2 + 0-token SourceNote 接受；未决残留按
+    > `DEFERRABLE_CATEGORIES` defer（见 #60）。
 25a. 源文差异分诊（`triage_enabled=True`）—— 两条 accept 路径共享每 lifecycle `accept_cap_per_file=5`：(A) L3 `source_inherent`（LLM）凭逐字引用证据（字面子串 + SHA-256 锚定）接受作者笔误残留；(B) L2 `coverage_shortage`（0 token）在一次 T2 尝试后经程序选定的 SourceNote 接受 `min_examples` 不足。两者都以 append-only 持久化到 `{entity}/canon/extraction_notes/{stage_id}.jsonl`（或 `world/extraction_notes/`）。Runtime 不消费（仅审计）。Phase 3.5 把有效 SourceNote 视同满足 `min_examples`。Lifecycle 2 从磁盘读回已接受的指纹，同一问题永不写两次。T3 输出直接流入 lifecycle 2 —— T3 之后不设即时损坏门。→ `extraction/repair/` + `docs/requirements.md` §11.4。
 
 26. 抽取跑在 `extraction/{work_id}` 分支上。每个通过的 stage 都提交。回滚 = `git reset`。**完成后 squash-merge 到 `library`**（永不进 `main`）。三分支模型：`main` = 仅框架，推送远端；`extraction/{work_id}` = 单作品进行中，本地；`library` = 完结作品归档，本地。`library` 通过周期性 `git merge main` 吸收框架更新；没有任何东西回流 main，保持对外分支无产物。Squash 目标由 `[git].squash_merge_target` 控制（默认 `library`）。**squash 成功后 orchestrator 交互式询问（`[y/N]`，默认 N）是否删除源 `extraction/{work_id}` 分支（`git branch -D`）并运行 `git gc --prune=now`**，让累积的 regen commit 变为不可达并被回收。Dispose 永远是交互式的 —— 即使 `[git].auto_squash_merge=true`，dispose prompt 仍会询问，因为删除分支不可逆。用户一旦选择删除，`library` 的 squash 就是唯一保留的记录。这使 `extraction/{work_id}` 成为可丢弃的 scratchpad：失败的 regen 可以随意提交，而不污染 `library` 历史或长期磁盘占用。
@@ -851,7 +857,7 @@ N. <决策陈述>。
 
 62. **repair 去掉全文重跑（T3）+ 按 rule 分层路由 + 每 tier 封顶 + defer 扩展。**
     **背景**：决策 #61 落地后重跑 phase 3，S001 的 repair 在
-    `Character B voice_state.target_voice_map[*].dialogue_examples` 的 `min_examples`
+    `某角色 voice_state.target_voice_map[*].dialogue_examples` 的 `min_examples`
     （coverage_shortage）与 L3 语义 issue 之间**死循环 1.5h**——T2 fixer 凑对白
     满足 min_examples → 凑的内容触发语义矛盾 → 语义 fixer 删掉 → min_examples
     又不足；期间还触发一次 T3 全文重生烧 ~20min。逐调用分析（`logs/runs/`）显示

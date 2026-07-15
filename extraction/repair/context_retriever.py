@@ -123,22 +123,6 @@ class ContextRetriever:
         )
         return result
 
-    def retrieve_all_stage(self, source_ctx: SourceContext) -> str:
-        """Load all chapter text for the stage."""
-        stage_chapters = self._get_stage_chapters(source_ctx)
-        if not stage_chapters:
-            return ""
-        chapters_dir = Path(source_ctx.chapters_dir)
-        texts: list[str] = []
-        for ch_num in stage_chapters:
-            text = self._load_chapter(chapters_dir, ch_num)
-            if text:
-                texts.append(f"=== 第{ch_num}章 ===\n{text}")
-        result = "\n\n".join(texts)
-        logger.info("Retrieved all %d stage chapters (%d chars)",
-                     len(texts), len(result))
-        return result
-
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

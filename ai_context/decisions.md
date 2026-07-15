@@ -181,7 +181,7 @@ N. <决策陈述，一行>。
 24. 抽取 prompt 不读 `memory_digest.jsonl`、`world_event_digest.jsonl`、`stage_catalog.json`。自包含的 snapshot 契约内嵌在 prompt 中；digest / catalog 由 `post_processing.py` 程序化维护（0 token，幂等）。
     → docs/decisions.md #24。
 
-25. Per-stage 质量门 = `repair`（统一的 check + fix + verify）。Checker L0–L3 × fixer T0–T3，正交；field-level json_path patch。（含子条目 25a，细节见归档）
+25. Per-stage 质量门 = `repair`（统一的 check + fix + verify）。Checker L0–L3 × fixer T0–T2，正交；field-level json_path patch。（经 #62 收紧：fixer 收为 T0–T2、删 T3 全文重跑 + `max_lifecycles` + `T3_EXHAUSTED`、单轮 Phase A→B→C；含子条目 25a，细节见归档）
     → docs/decisions.md #25。
 
 26. 抽取跑在 `extraction/{work_id}` 分支上。每个通过的 stage 都提交。回滚 = `git reset`。
@@ -267,7 +267,7 @@ N. <决策陈述，一行>。
 54. **Foundation 前移 phase 1 + phase 2 仅补 `key_figures` + target_baseline 准入门槛收紧（dialogue/action 交互）。**
     → docs/decisions.md #54。
 
-55. **char_snapshot lane 拆 4 sub-lane 并行 + prev snapshot 按 lane 切片喂入 + 程序 merge + lifecycle 2 sub-lane 重抽。**
+55. **char_snapshot lane 拆 4 sub-lane 并行 + prev snapshot 按 lane 切片喂入 + 程序 merge。**（sub-lane 重抽经 #62 删）
     → docs/decisions.md #55。
 
 56. **Pipeline-resume alignment 三处修复 — `pipeline.json` schema_version 启动、phase 2 recovery 阻 phase 3 committed 产物、`--end-stage` daemon 路径"empty = 全跑"语义贯通。**

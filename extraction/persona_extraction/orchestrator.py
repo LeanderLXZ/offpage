@@ -323,42 +323,6 @@ def _guard_phase2_rewrite_against_phase3(
 # when injecting the value during sub-lane merge (decision #55).
 _SNAPSHOT_SCHEMA_VERSION = "1.0"
 
-# Hard cap when concatenating an optional prior-attempt summary into the
-# reviewer-feedback channel for sub-lane prompts (decision #25). Keeps the
-# prompt budget bounded so an over-eager prior-context summary can't crowd
-# out the stage-specific content.
-_SUB_LANE_PRIOR_CONTEXT_BUDGET = 600
-
-
-def _format_prior_attempt_context_block(
-    ctx: dict[str, list[str]] | None,
-) -> str:
-    """Render an optional prior-attempt summary as a markdown block.
-
-    Returns an empty string when ``ctx`` is None or empty so callers can
-    unconditionally concatenate.
-    """
-    if not ctx:
-        return ""
-    resolved = ctx.get("resolved") or []
-    remaining = ctx.get("remaining") or []
-    if not resolved and not remaining:
-        return ""
-    lines = ["\n\n## 上一轮摘要"]
-    if resolved:
-        lines.append(f"\n上轮已解决（{len(resolved)} 条）：")
-        for s in resolved:
-            lines.append(f"- {s}")
-    if remaining:
-        lines.append(f"\n上轮仍未通过（{len(remaining)} 条，本轮需重点关注）：")
-        for s in remaining:
-            lines.append(f"- {s}")
-    text = "\n".join(lines)
-    if len(text) > _SUB_LANE_PRIOR_CONTEXT_BUDGET:
-        text = text[:_SUB_LANE_PRIOR_CONTEXT_BUDGET] + "\n...(truncated)"
-    return text
-
-
 def _find_previous_committed_stage_for_sub_lanes(
     stages: list[StageEntry], current: StageEntry,
 ) -> StageEntry | None:
@@ -948,7 +912,6 @@ class ExtractionOrchestrator:
         log_lane_failure: Callable[[str, str, int],
                                    Callable[[LLMResult, int], None]]
                           | None = None,
-        prior_attempt_context: dict[str, list[str]] | None = None,
     ) -> LLMResult:
         """Run 4 parallel sub-lane LLM calls for one character snapshot +
         merge programmatically (decision #55).
@@ -963,10 +926,7 @@ class ExtractionOrchestrator:
         repair framework accept list); on failure returns a negative
         ``LLMResult`` with ``error`` describing which gate tripped.
 
-        ``prior_attempt_context`` is an optional prior-attempt summary;
-        when set, each sub-lane prompt receives a short formatted block
-        alongside any reviewer feedback (≤600 char budget). Production
-        currently always passes ``None``. ``log_lane_failure`` may
+        ``log_lane_failure`` may
         be ``None`` (repair path) or the closure-built
         ``_log_lane_failure`` (extraction path); each sub-lane uses its
         own ``f"char_snapshot:{cid}:{sub_lane}"`` lane name for failure
@@ -995,9 +955,7 @@ class ExtractionOrchestrator:
             self._write_prev_snapshot_slices(
                 work_root, character_id, prev_stage.stage_id)
 
-        prior_block = _format_prior_attempt_context_block(
-            prior_attempt_context)
-        combined_feedback = (feedback + prior_block) if prior_block else feedback
+        combined_feedback = feedback
 
         sub_lane_results: dict[str, LLMResult] = {}
         sub_lane_errors: dict[str, str] = {}
@@ -3493,8 +3451,9 @@ class ExtractionOrchestrator:
             phase3.save(self.project_root)
 
             # Prev snapshot slice cleanup (decision #55) — repair has
-            # finished consuming the slices via any T3 sub-lane regen,
-            # and the upcoming commit will baseline the new snapshot.
+            # finished consuming the slices via any repair-triggered
+            # sub-lane re-extraction, and the upcoming commit will baseline
+            # the new snapshot.
             # Keeping slices past commit has no debug value (prev snapshot
             # is in git history + slice is a deterministic projection),
             # so wipe them per-char before the commit step.

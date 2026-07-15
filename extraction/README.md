@@ -14,7 +14,7 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 (claude -p)    (digest/catalog     (统一检测+修复)
                0 token)            ┌──────────────┐
                                    │ L0–L3 检查    │
-                                   │ T0–T3 修复    │
+                                   │ T0–T2 修复    │
                                    │ 最终语义验证   │
                                    └──────┬───────┘
                                           ▼
@@ -29,7 +29,7 @@ orchestrator.py    ← 主循环：分析 → 用户确认 → 提取循环
 4. **程序化后处理**：生成 memory_digest + 生成 world_event_digest + 更新 stage_catalog
 5. **Repair Agent**（统一检测+修复，详见 `docs/requirements.md §11.4`）：
    - Phase A：四层检查（L0 JSON 语法 → L1 schema → L2 结构 → L3 语义）
-   - Phase B：修复循环，按 tier 逐层升级（T0 程序化 → T1 局部 LLM → T2 原文 LLM → T3 全文件重生成，单文件至多在 lifecycle 1 触发一次；lifecycle 2 禁用 T3，升 T3 即 `T3_EXHAUSTED`）。每轮末嵌 **L3 gate** 对"本轮改过的语义问题文件"再跑一次 L3，防止谎报
+   - Phase B：单轮修复循环，按 issue 的 `(start_tier, max_tier)` rule 分层路由到三层就地修复器（T0 程序化 → T1 局部 LLM → T2 原文 LLM，无全文件重生成），每个 tier 至多 2 次尝试。每轮末嵌 **L3 gate** 对"本轮改过的语义问题文件"再跑一次 L3，防止谎报
    - Phase C：最终确认——优先复用最后一次 gate 的结果（无新增 LLM 调用）
    - 安全阀：回归保护、收敛检测、总轮次限制
    - 全部通过 → git commit；有 error 级别问题未解决 → stage ERROR
@@ -63,8 +63,8 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
 - `[phase1]` stage_plan 出口验证重试上限
 - `[phase2]` baseline lane fan-out 并发（`lane_concurrency`，默认 5）、
   输出缺失重跑上限（`output_missing_max_retry`）、per-lane repair 开关
-  （`repair_enabled`，决策 #59 缩水版：T0/T1 + 程序 checker，T3 =
-  lane 重跑）
+  （`repair_enabled`，决策 #59 缩水版：T0/T1 + 程序 checker，不含
+  T2/L3/triage）
 - `[phase3]` 提取 / 审校超时、`max_turns`、`concurrency`（默认 **12**，
   覆盖 2 角色场景 sub-lane on 时峰值 `1 + 2×4 + 2 = 11`）、
   `char_snapshot_sub_lanes`（缺省 `true` — 单 char_snapshot lane 内部拆
@@ -75,7 +75,7 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
   `docs/architecture/extraction_workflow.md` §6.2 sub-lane 字段归属表 +
   决策 #55）
 - `[phase4]` 章节并发、短路熔断阈值
-- `[repair]` 各 tier 重试次数、lifecycle 上限、triage 接受上限、总轮数、per-file 并发度（`repair_concurrency`，默认 10）
+- `[repair]` 各 tier 重试次数（每 tier 封顶 2）、triage 接受上限、总轮数、per-file 并发度（`repair_concurrency`，默认 10）
 - `[backoff]` 快速空失败退避序列
 - `[rate_limit]` Token 限额暂停策略（reset 缓冲、DST 感知时区解析、
   解析失败 fallback、周限额上限/动作、probe leader 选举 TTL、probe
@@ -309,11 +309,10 @@ extraction/
     │   ├── structural.py                     ← L2：结构/业务规则
     │   ├── targets_keys_eq_baseline.py       ← L2：keys ⇔ target_baseline 双向断言
     │   └── semantic.py                       ← L3：LLM 语义审查
-    ├── fixers/                               ← 四层修复器（T0–T3）
+    ├── fixers/                               ← 三层修复器（T0–T2）
     │   ├── programmatic.py                   ← T0：程序化修复（0 token）
-    │   ├── local_patch.py                    ← T1：局部 LLM 修复
-    │   ├── source_patch.py                   ← T2：原文辅助 LLM 修复
-    │   └── file_regen.py                     ← T3：全文件 LLM 重生成
+    │   ├── local_patch.py                    ← T1：局部 LLM 修复（不读原文）
+    │   └── source_patch.py                   ← T2：原文辅助 LLM 修复
     └── tests/                                ← _smoke_*.py 集合
 ```
 
@@ -359,38 +358,38 @@ Phase 3 的文件校验和修复由独立的 `repair` 模块负责。
 | L2 | structural | 0 token | 业务规则（ID 格式、样本数、长度、一致性） |
 | L3 | semantic | LLM | 事实准确性、逻辑一致性、跨阶段连续性。**LLM 调用失败 / 空响应 / 不可解析时不再视为 pass**——`SemanticReviewLLMUnavailable` 转成 blocking `semantic_unavailable`/`semantic_unparseable` issue，强制走修复路径而不是放行 |
 
-**四层修复器**（T0–T3，逐层升级）：
+**三层修复器**（T0–T2，按 rule 分层路由）：每个 issue 依类型带
+`(start_tier, max_tier)` 路由信息（见 `protocol.route_tiers`），从
+`start_tier` 起在其区间内逐层升级；每个 tier 至多 2 次尝试（第 2 次只
+重打即时 re-verify 仍标记的字段），无全文件重生成层。
 
 | 层 | 名称 | 成本 | 修复方式 |
 |---|------|------|---------|
-| T0 | programmatic | 0 token | 正则修 JSON、类型转换、ID 格式、缺失字段 |
+| T0 | programmatic | 0 token | 正则修 JSON、类型转换、ID 格式、缺失字段、`maxLength` 截断 |
 | T1 | local_patch | 少量 token | 字段级 LLM 修复（不读原文） |
 | T2 | source_patch | 中等 token | 字段级 LLM 修复（带原文章节） |
-| T3 | file_regen | 大量 token | 全文件 LLM 重生成（最后手段，**单文件至多在 lifecycle 1 触发一次** — 受 `max_lifecycles_per_file=2` 约束，lifecycle 2 禁用 T3，升 T3 即 `T3_EXHAUSTED`） |
 
-**三阶段运行**：Phase A 全量检查 → Phase B 修复循环（内嵌 **L3 gate**）
-→ Phase C 最终确认。Phase B 每轮在 L0–L2 scoped recheck 之后，会对
-"本轮被修改 + Phase A 有语义问题" 的文件集合再跑一次 L3，把语义结果
-回灌进下一轮 issue 队列——避免 T1/T2/T3 谎报语义修复成功。Phase C
-优先复用最后一次 gate 的结果，不再单独调用 L3。语义 LLM 成本 = Phase A
-每文件 1 次 + Phase B 每轮最多 (被改的 L3 文件数) 次 + Phase C 0 次
-（有 gate 复用时）。
+**三阶段运行**（单轮 Phase A→B→C，无 lifecycle 重置）：Phase A 全量检查
+→ Phase B 修复循环（内嵌 **L3 gate**）→ Phase C 最终确认。Phase B 每轮
+在 L0–L2 scoped recheck 之后，会对"本轮被修改 + Phase A 有语义问题"的
+文件集合再跑一次 L3，把语义结果回灌进下一轮 issue 队列——避免 T1/T2
+谎报语义修复成功。Phase C 优先复用最后一次 gate 的结果，不再单独调用
+L3。语义 LLM 成本 = Phase A 每文件 1 次 + Phase B 每轮最多 (被改的 L3
+文件数) 次 + Phase C 0 次（有 gate 复用时）。
 
 **源文件问题 triage**（`triage_enabled=True`，默认开启）：某些 L3 残留其实是
 源小说本身的 bug（作者矛盾、typo、名称/代称混用、世界规则冲突等），或者
 L2 结构层发现字段条数不足且原文确实素材不够。两条 accept_with_notes 通道共用
-单文件每个 lifecycle 上限 `accept_cap_per_file=5`；磁盘 jsonl append-only 跨
-lifecycle 累积，lifecycle 2 启动前从磁盘读已 accept 的 fingerprint 过滤
-Phase A，避免重复写盘。
+单文件接受上限 `accept_cap_per_file=5`；磁盘 jsonl append-only。
 
 **Path A — L3 `source_inherent`（LLM）触发点**：
-- **pre-T3**：若 `_run_fixer_with_escalation` 即将升级到 T3，先做一次 triage；
-  全部接受则跳过 20 分钟的 T3
+- **post-cap（残留）**：capped tiers（T0–T2）跑完后、defer 之前，对残留的
+  semantic issue 先做一次 triage，把源小说 bug 接受为 SourceNote
 - **post-L3-gate**：每轮 L3 gate 出结果后，对 gate_blocking 再过一次 triage
 
 **Path B — L2 `coverage_shortage`（程序，0 token）触发点**：
 L2 `min_examples` 规则把 issue 降级为 `severity=warning + coverage_shortage=True`
-并路由 `START_TIER=T2, MAX_TIER=T2`（跳过 T0/T1/T3）。T2 一次 source_patch
+并路由 `START_TIER=T2, MAX_TIER=T2`（跳过 T0/T1）。T2 一次 source_patch
 不足以补齐 → coordinator 调用 `Triager.build_coverage_shortage_verdict` 以
 程序方式构造 `SourceNote`（`discrepancy_type="coverage_shortage"`），quote
 取自该 stage 首章子串，0 LLM 调用。
@@ -398,28 +397,25 @@ L2 `min_examples` 规则把 issue 降级为 `severity=warning + coverage_shortag
 接受的硬条件（程序校验，非 LLM 自述）：(1) issue 必须是 `semantic`（Path A）
 或 `structural` + `coverage_shortage` flag（Path B）；(2) 引用 `chapter_number
 + line_range + 逐字 quote`，程序用 `chapter_text.find(quote) >= 0` 校验；
-(3) 每文件每个 lifecycle 接受上限 `accept_cap_per_file=5`（两条通道共用）；(4)
+(3) 每文件接受上限 `accept_cap_per_file=5`（两条通道共用）；(4)
 `discrepancy_type` 必须是闭集中之一（author_contradiction / typo /
 name_mixup / pronoun_confusion / title_drift / time_shift / space_conflict
 / duplicated_passage / world_rule_conflict / death_state_conflict / logic_jump
-/ coverage_shortage / other）。T2/T3 fixer prompts 带有 `source_inherent`
+/ coverage_shortage / other）。T2 fixer prompt 带有 `source_inherent`
 自报通道，可直接把证据交给 Path A triager 做 prior。接受的 issue 以
 `SourceNote` 形式原子追加到 `{entity}/canon/extraction_notes/{stage_id}.jsonl`，
 note_id 格式 `SN-S{stage:03d}-{seq:02d}`；stage 保持 COMMITTED，不新增状态。
 **Runtime 不消费 extraction_notes/，仅审计。**
 
-**未决语义延后**（`[repair].defer_unresolved_semantic`，代码默认 false，本项目开）：
-与 triage（源小说 bug）不同，这里处理"提取确有错但自动修复追不平"的 L3 残留。
-某 stage repair 收尾后残留 `error` **只剩 `category=="semantic"`** 时，不判 ERROR
-停机——写台账 `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`（随 stage
-commit 提交），stage 当 PASS 继续。残留含 json_syntax/schema/structural/cross_file
-或 worker 崩溃仍硬 ERROR。台账留待 Phase 3.5 收尾修复 pass 逐条精准修（不重跑
-stage）。判据 + 写出：`persona_extraction/lifecycle/deferred_repair_log.py`。
-
-**Lifecycle 重置**：T3 跑完后**不做即时 corruption 检查** — T3 输出
-直接进入 lifecycle 2 的 Phase A，全量重扫（L0/L1/L2/L3）会自动捕获任何
-机械损坏并按正常 fixer 链处理；新 error 升 T3 即 `T3_EXHAUSTED`（lifecycle 2
-禁用 T3）。这把 corruption 止损合并进了 lifecycle 2 Phase A 的全量重扫。
+**未决修复延后**（`[repair].defer_unresolved_semantic`，代码默认 false，本项目开）：
+与 triage（源小说 bug）不同，这里处理"提取确有错但 capped tiers（T0–T2）
+追不平"的残留。某 stage repair 收尾后残留 `error` **全部落在
+`DEFERRABLE_CATEGORIES = {semantic, schema, structural, cross_file}`** 时，
+不判 ERROR 停机——写台账 `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`
+（随 stage commit 提交），stage 当 PASS 继续。残留含 `json_syntax`（文件不可解析，
+阻断所有下游读取）或 repair worker 崩溃仍硬 ERROR。台账留待 Phase 3.5 收尾修复
+pass 逐条精准修（不重跑 stage）。判据 + 写出：
+`persona_extraction/lifecycle/deferred_repair_log.py`。
 
 代码：`repair/`
 
@@ -459,7 +455,7 @@ retry 通路接住，不引入新模块：
 |---|---|---|
 | Phase 0 | `_chunk_validator()` in `orchestrator._summarize_chunk` ([schemas/analysis/chapter_summary_chunk.schema.json](../schemas/analysis/chapter_summary_chunk.schema.json)) | L3 全 chunk 重跑（max 1 次）；`build_summarization_prompt(prior_error=...)` 的 `{retry_note}` 槽注入 |
 | Phase 1 | `_foundation_validator()` ([schemas/world/foundation.schema.json](../schemas/world/foundation.schema.json)) / `_stage_plan_validator()` / `_candidate_characters_validator()` per-lane in `orchestrator.run_analysis` fan-out ([schemas/analysis/{stage_plan,candidate_characters}.schema.json](../schemas/analysis/)) — foundation schema lives under `schemas/world/` per decision #54 (foundation 前移到 phase 1 + schema 合并入 world domain) | 失败 lane 把首条违规作为 `prior_error` 注入下一次重试 prompt（与 Phase 0 / Phase 4 同形态）；per-lane 独立 `[phase1].exit_validation_max_retry` 预算（不共享池）；用尽走 #48 length-tolerance 兜底 |
-| Phase 2 | per-lane repair lifecycle（schema checker + [repair/checkers/phase2_baseline_refs.py](repair/checkers/phase2_baseline_refs.py) 程序 checker；决策 #59 缩水版——T0/T1，L3/T2/triage 不开）+ 终点 `validate_baseline()`（[validation/gates/phase2_baseline.py](validation/gates/phase2_baseline.py)） | 输出缺失 → `[phase2].output_missing_max_retry` prior_error 重跑；schema / 引用违规 → repair T0/T1，升级 T3 = `lane_regen` 重跑本 lane；终点 gate strict → #48 length-tolerance 兜底 |
+| Phase 2 | per-lane repair（schema checker + [repair/checkers/phase2_baseline_refs.py](repair/checkers/phase2_baseline_refs.py) 程序 checker；决策 #59 缩水版——T0/T1，L3/T2/triage 不开）+ 终点 `validate_baseline()`（[validation/gates/phase2_baseline.py](validation/gates/phase2_baseline.py)） | 输出缺失 → `[phase2].output_missing_max_retry` prior_error 重跑；schema / 引用违规 → repair T0/T1；终点 gate strict → #48 length-tolerance 兜底 |
 | Phase 4 | `_scene_split_validator()` in `scene_archive.validate_scene_split` ([schemas/analysis/scene_split.schema.json](../schemas/analysis/scene_split.schema.json)) | per-chapter 重跑（`[phase4].max_retries_per_chapter`）；`build_scene_split_prompt(prior_error=...)` 注入 |
 
 详细决策依据 → `ai_context/decisions.md` #27b（Bounds-only-in-schema） + #27i（schema-gate-as-retry-trigger pattern）。

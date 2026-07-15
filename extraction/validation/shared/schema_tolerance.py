@@ -4,11 +4,12 @@ Final safety valve invoked AFTER an LLM phase has exhausted its strict
 retry budget (Phase 0 L1+L2+L3 — decision #40 JSON-format repair tiers,
 applies only inside ``orchestrator._summarize_chunk``; Phase 1
 ``exit_validation_max_retry``; Phase 2 baseline retry; Phase 4
-``max_retries_per_chapter``; **Phase 3 only** ``repair`` framework
-``T3_EXHAUSTED`` — decision #25 + #48 disambiguation: ``repair``'s
-checker/fixer matrix is the phase 3 lifecycle, not phase 0's three-tier
-JSON repair ladder; same字面 ``L1/L2/L3`` but different semantics
-across #25 and #40). Relaxes ONLY ``minLength`` / ``maxLength`` by a
+``max_retries_per_chapter``; **Phase 3 only** ``repair`` framework 的
+capped-tier 残留，即 T0–T2 修复器用尽后仍存的纯长度 miss — decision
+#25 + #48 disambiguation: ``repair``'s checker/fixer matrix is the phase
+3 lifecycle, not phase 0's three-tier JSON repair ladder; same字面
+``L1/L2/L3`` but different semantics across #25 and #40). Relaxes ONLY
+``minLength`` / ``maxLength`` by a
 per-call tolerance fraction; all other constraints (``required`` /
 ``type`` / ``enum`` / ``pattern`` / ``minimum`` / ``maximum`` /
 ``minItems`` / ``maxItems``) stay strict. Acceptance is silent — no

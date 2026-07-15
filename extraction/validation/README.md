@@ -1,6 +1,6 @@
 # `extraction/validation/` — 数据正确性框架
 
-`extraction.repair` 是项目内统一的 L0–L3 checker + T0–T3 fixer 框架，
+`extraction.repair` 是项目内统一的 L0–L3 checker + T0–T2 fixer 框架，
 `extraction.validation` 是它的**共享层 + 过渡层**：
 
 - `gates/` — **相位边界 validator**。由 orchestrator 在 phase 完成时调一次，
