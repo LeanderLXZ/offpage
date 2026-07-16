@@ -183,6 +183,18 @@ triage_enabled = true
 # 限制 coverage_shortage 滥用。
 triage_accept_cap_per_file = 5
 
+# L3 语义审校单次 LLM 调用硬超时（秒）。Phase A 全量检查与每轮末的 L3 gate
+# 复检共用（两者都走 `SemanticChecker._review_file`）；T1/T2 修复器与 triage
+# 各自显式传 timeout，不受此值影响。与 `[phase3].review_timeout_s` 解耦
+# （决策 #47 的结构教训）：L3 要在 opus + effort=max 下通读整份 ~50k 字符的
+# stage_snapshot，单次 wall 常达数百秒，需要独立预算。
+# 实测分布（n=104）：p50=152s，p95=519s，未删失最大 598s —— 长尾紧贴旧的
+# 600s 天花板，3/104 条 lane 被它杀掉。1200 = 未删失最大的 2×、p50 的 8×：
+# 跑满 8× 中位数仍未返回的调用是卡死而非仍在算，再等下去只是让卡死的
+# lane 多占并发槽位。注意现有数据在 600s 处右删失，真实尾部未知 —— 1200
+# 兼作测量：若无 lane 撞 1200 即首次取得未删失尾部，之后可有据收紧。
+semantic_timeout_s = 1200
+
 # 单 stage 内每文件独立 repair 的并发 worker 数。每个 worker 跑一次
 # `coordinator.run(files=[single])`（Phase A + Phase B + L3 gate +
 # Phase C 全流程）。Anthropic Opus 订阅下 ~8-10 并发能撑住；频繁看到

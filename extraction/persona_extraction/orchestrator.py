@@ -3283,7 +3283,7 @@ class ExtractionOrchestrator:
             # it into a blocking issue instead of a silent pass. Other
             # call sites (T1/T2/T3 fixers) likewise see a hard error
             # rather than an empty string.
-            default_timeout = get_config().phase3.review_timeout_s
+            default_timeout = get_config().repair.semantic_timeout_s
 
             def _llm_call(prompt: str, timeout: int | None = None) -> str:
                 result = run_with_retry(

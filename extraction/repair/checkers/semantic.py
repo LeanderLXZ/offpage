@@ -70,9 +70,12 @@ class SemanticChecker(BaseChecker):
     def __init__(self, llm_call: Callable[..., str] | None = None):
         """
         Args:
-            llm_call: A callable ``(prompt: str, timeout: int) -> str``
-                that invokes an LLM and returns the raw text response.
-                If None, semantic checking is a no-op.
+            llm_call: A callable ``(prompt: str, timeout: int | None = None)
+                -> str`` that invokes an LLM and returns the raw text
+                response. ``timeout`` MUST have a default: this checker calls
+                it without one so the injector owns the budget (wired to
+                ``[repair].semantic_timeout_s``). If None, semantic checking
+                is a no-op.
         """
         self._llm_call = llm_call
 
@@ -135,7 +138,11 @@ class SemanticChecker(BaseChecker):
         prompt = "\n".join(prompt_parts)
 
         try:
-            response = self._llm_call(prompt, timeout=600)
+            # No explicit timeout: the injected ``llm_call`` owns that budget
+            # (orchestrator wires it to ``[repair].semantic_timeout_s``).
+            # Hardcoding it here would shadow the config — reviewing a whole
+            # ~50k-char snapshot needs a budget the caller can tune per phase.
+            response = self._llm_call(prompt)
         except SemanticReviewLLMUnavailable as exc:
             # Backend reported failure. Treat as blocking so repair
             # coordinator does NOT mark the file PASS. Detail in message

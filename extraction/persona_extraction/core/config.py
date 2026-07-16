@@ -120,6 +120,21 @@ class RepairAgentConfig:
     total_round_limit: int = 5
     triage_enabled: bool = True
     triage_accept_cap_per_file: int = 5
+    # Hard timeout for the L3 semantic review LLM call — both the Phase A
+    # full check and the per-round gate recheck, which share
+    # ``SemanticChecker._review_file``. The T1/T2 fixers and triage pass
+    # their own explicit timeouts and are unaffected. Decoupled from
+    # ``[phase3].review_timeout_s`` (decision #47's structural lesson):
+    # L3 reads a whole ~50k-char stage_snapshot under opus + effort=max
+    # and needs its own budget. Measured distribution
+    # (n=104): p50=152s, p95=519s, largest uncensored=598s — a long tail
+    # pressed against the old 600s ceiling (3/104 lanes were killed by it).
+    # 1200 = 2x the largest uncensored observation, 8x p50: a call still
+    # running at 8x the median is hung, not slow, and waiting longer only
+    # buys stalled concurrency slots. Right-censoring means the true tail is
+    # unknown; 1200 doubles as the measurement (no lane hitting it = first
+    # uncensored tail, then this can tighten).
+    semantic_timeout_s: int = 1200
     # Max concurrent per-file repair workers within a single stage. Each
     # worker runs an independent ``coordinator.run(files=[single])``
     # pipeline. Anthropic Opus subscription tolerates ~8-10 concurrent

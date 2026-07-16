@@ -103,6 +103,24 @@
 <!-- 已落地的任务。仅精简条目。 -->
 <!-- holo:section end -->
 
+### [T-REPAIR-SEMANTIC-TIMEOUT] L3 语义审校超时解耦到 `[repair].semantic_timeout_s` = 1200s · 完成于 2026-07-16 · 完整完成
+
+hot-fix，未上正向 todo 队列，跳过 In Progress 直接归档。runtime 监控发现 phase 3
+重跑时 L3 语义审校撞 600s 硬超时被杀，撞线 lane 经 #60 defer 通道以「未审校」
+状态提交。两层根因：(1) `checkers/semantic.py` 写死 `timeout=600` 覆盖注入方
+默认值，令 config 层完全失效（`orchestrator` 的 `default_timeout` 是死代码）——
+改 `[phase3].review_timeout_s` 不产生任何效果；(2) 600s 是 `d79dc7f` 搬运的历史
+常量，服务对象已从 reviewer 短链变成通读 ~50k 字符 stage_snapshot 的 L3。修法：
+`RepairAgentConfig` 加 `semantic_timeout_s: int = 1200` + `[repair]` 同名键，
+`orchestrator` repair `_llm_call` 的 `default_timeout` 切到它，`semantic.py`
+去掉显式 timeout 把预算交回注入方（`repair/` 保持 config-agnostic）。取值按长尾
+分布定（n=104：p50=152s / p95=519s / 未删失最大 598s / 3 条撞线），1200 = 未删失
+最大的 2×、p50 的 8×；#47 的 3×典型值 逻辑不适用（形态是「p50 快 + 长尾」而非
+「全员偏慢」），故只移植其结构教训。数据在 600s 处右删失，1200 兼作测量。
+T1/T2/triage 维持硬编码 600/600/300（无撞线证据）。决策 #64；smoke
+l3_gate + 4_lane 全过（`_smoke_triage` HEAD 即坏，正交）。
+→ logs/change_logs/2026-07-16_141342_repair-semantic-timeout-decouple.md
+
 ### [T-REPAIR-NO-REEXTRACT] repair 去掉全文重跑（T3）+ 定点修复治本 · 完成于 2026-07-15 · 完整完成
 
 repair 只剩 T0→T1→T2 三层就地修复，删除 T3 `file_regen` 全文重生成（含

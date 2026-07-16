@@ -290,6 +290,8 @@ N. <决策陈述，一行>。
 
 63. **LLM 子进程起在独立进程组，超时杀整棵树。** `Popen(start_new_session=True)` + 超时 `killpg`（而非只 `proc.kill()` 直接子进程）；收尾 `communicate()` 另带有限 timeout 兜底。代价：子进程不再收终端 Ctrl+C（有意取舍，换无人值守不死锁）。**三件配套，缺一即退化**：无 `start_new_session` 时子进程与 orchestrator 同组、killpg 会自杀（helper 有守卫拒绝）；信号 handler 必须经 `terminate_all_children()` 在**放锁前**杀掉在飞子进程，否则停机要空转到子进程超时（≤3600s）而 PID 锁已谎称无人在跑。
     → docs/decisions.md #63。
+64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 1200s），且由注入方持有预算、`repair/` 不再硬编码。** `checkers/semantic.py` 原写死 `timeout=600` 覆盖注入的默认值，使 config 层完全失效（`orchestrator` 的 `default_timeout` 是死代码）—— 值的权威位置必须是 `config.toml`。取值按长尾分布定：实测 n=104，p50=152s / p95=519s / 未删失最大 598s，3 条撞旧 600s 天花板；1200 = 未删失最大的 2×、p50 的 8×（跑满 8× 中位数即卡死而非仍在算）。数据在 600s 处右删失，1200 兼作测量。
+    → docs/decisions.md #64。
 
 ## Repository
 

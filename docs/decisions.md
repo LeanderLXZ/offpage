@@ -469,7 +469,7 @@ N. <决策陈述>。
     > 与代码实际的 ISO-first 相反，本轮按代码实情同步（代码是运行真相）。
     > → logs/change_logs/2026-07-16_112206_preflight-unattended-run.md。
 
-47. Phase 0 摘要子进程超时 = `[phase0].summarize_timeout_s`（默认 1800s），而不是历史上借用的 `[phase3].review_timeout_s`（600s）。原因：一个 Phase 0 chunk 读 `chunk_size` 章（默认 20），并在 opus-4-7 effort=max 下产出 N× per-summary（100–150 字）+ 5 个 chunk 级二级聚合（`chunk_arc_summary` / `chunk_world_rules` / `chunk_power_levels` / `chunk_factions` / `chunk_regions`）；运行时证据表明 wall > 600s 属正常。`phase3.review_timeout_s` 保持 600s，服务它真正对应的 phase 3 reviewer 短链。→ `extraction/config.toml` `[phase0]`、`extraction/persona_extraction/core/config.py::Phase0Config`、`extraction/persona_extraction/orchestrator.py:_summarize_chunk`。
+47. Phase 0 摘要子进程超时 = `[phase0].summarize_timeout_s`（默认 1800s），而不是历史上借用的 `[phase3].review_timeout_s`（600s）。原因：一个 Phase 0 chunk 读 `chunk_size` 章（默认 20），并在 opus-4-7 effort=max 下产出 N× per-summary（100–150 字）+ 5 个 chunk 级二级聚合（`chunk_arc_summary` / `chunk_world_rules` / `chunk_power_levels` / `chunk_factions` / `chunk_regions`）；运行时证据表明 wall > 600s 属正常。`phase3.review_timeout_s` 保持 600s，其唯一真实消费者是 phase 4 scene split（`phases/scene_archive.py` 直接传值），无撞线证据。→ `extraction/config.toml` `[phase0]`、`extraction/persona_extraction/core/config.py::Phase0Config`、`extraction/persona_extraction/orchestrator.py:_summarize_chunk`。本条只解耦 phase 0；repair 的 L3 语义审校继续共用该值直至 #64。
 
 48. **长度 bound 容差门（B 方案）。** 当一个 LLM 驱动的 phase 已耗尽其严格重试预算——各 phase 的耗尽点：Phase 0 `_summarize_chunk` L1+L2+L3 全跑完 / Phase 1 per-lane `exit_validation_max_retry` 耗尽 / Phase 2 per-lane repair 走完后的终点 `validate_baseline` 失败（lane 内的 `LENGTH_TOLERANCE_PASS` 分支同样适用，#59） / Phase 4 scene-split `max_retries_per_chapter` 耗尽 / **Phase 3 repair framework 的 tier 封顶之后**（每 tier ≤2 次，`max_tier` 用尽即触发；#62 删 T3 后由 `T3_EXHAUSTED` 改为封顶触发）（**phase 3 + phase 2 经 repair 路径**，接入形态见 #25 / #59；phase 0 / 1 / 3.5 / 4 不接入 repair）——最后一遍调用 `validate_with_length_tolerance`（helper 在 `extraction/validation/shared/schema_tolerance.py`）：若严格失败列表**只**含 `minLength`/`maxLength` 违规，且放宽后的 schema（每个 `minLength` × 0.9 下限、每个 `maxLength` × 1.1 上限）通过，则把产物接受为 PASS；否则保留原失败。其他所有约束（`required` / `type` / `enum` / `pattern` / `minimum` / `maximum` / `minItems` / `maxItems`）保持严格。**不适用**于 `post_processing.py` 纯程序产出的 digest/catalog——那些没有 LLM 边缘抖动，容差会掩盖代码 bug。容差通过的产物**不打 metadata 标记**（下游消费方不区分 strict-pass 与 tolerance-pass）。与 #27i（schema-gate-as-retry-trigger）配对：严格重试路径先跑到耗尽；容差是最终安全阀，不是重试的替代品。与全局 `[phase3].max_turns = 80`（原为 50）和 `--chunk-size` 默认 `20`（原为 25）配对——两者都降低边界抖动撞上耗尽的频率。Plumbing → `extraction/validation/gates/phase2_baseline.py` (helpers)、`orchestrator.py:_summarize_chunk + run_analysis + run_baseline_production`、`scene_archive.py:_handle_validation_failure`、`extraction/repair/coordinator.py`（`_run_fixer_with_escalation` 的 tier-封顶后分支 → `LENGTH_TOLERANCE_PASS`；phase 2 + phase 3）。
 
@@ -1005,6 +1005,49 @@ N. <决策陈述>。
     两处 `except subprocess.TimeoutExpired` 分支）、`docs/requirements.md`
     §11.8「运行保障 / 自我保护」、`extraction/README.md` §子进程超时。
     → logs/change_logs/2026-07-16_112206_preflight-unattended-run.md。
+64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 1200s），且预算由注入方持有 —— `repair/` 内不得硬编码。**
+    **背景**：phase 3 重跑时 S001 的 repair 收尾出现语义审校撞 600s 硬超时被杀，
+    撞线 lane 的 `semantic_unavailable` 经 #60 的 record-and-continue 通道写入
+    `deferred_repairs/` 并让 stage 照常提交 —— 即 stage 以「L3 从未跑出结论」
+    （而非「已知有瑕疵」）的状态落盘。
+    **两层根因**。其一是**接线**：`checkers/semantic.py` 写死
+    `self._llm_call(prompt, timeout=600)`，显式传参覆盖注入方的默认值，令
+    `orchestrator` 的 `default_timeout = get_config()...` 成为死代码 —— 即
+    `[phase3].review_timeout_s` 从未真正管过语义审校，改 config 不产生任何效果。
+    `repair/` 是靠注入 `llm_call` 的独立框架、刻意不依赖
+    `persona_extraction.core.config`，因此预算必须由注入方（`orchestrator`，
+    config 的所有者）持有，checker 不传 timeout；这是
+    `conventions.md §Single Source of Truth` 的直接推论。其二是**取值**：
+    600s 源自 `d79dc7f`（该值比该 commit 更早，属"常量改读 config"搬运物），
+    当时服务的 reviewer 短链与今日 L3（opus + effort=max 通读 ~50k 字符
+    stage_snapshot）负载形态完全不同。
+    **取值依据（长尾分布，非套用 #47 的 3×）**：实测 n=104 —— p50=152s、
+    p95=519s、未删失最大 598s、3 条撞 600s 天花板。#47 的形态是「全员偏慢」
+    （典型 wall ≥600s → 3× = 1800）；本处是「p50 快 + 长尾」，照搬 3× 得 456s
+    反而更小，故 **#47 可移植的是结构教训（解耦），不是数字**。1200 =
+    未删失最大的 2.0×、p50 的 8×：跑满 8× 中位数仍未返回的调用是卡死而非仍在
+    算，等到 1800 主要买到卡死多占并发槽位（`repair_concurrency=10` 下直接计入
+    每个 stage 的 wall time）。代价不对称也支持取低：取低了有 #60 的 defer →
+    Phase 3.5 兜底，取高了每个受影响 stage 都付钱。
+    **附带**：现有数据在 600s 处右删失，真实尾部未知；1200 兼作测量 —— 重跑后
+    若无 lane 撞 1200，即首次取得未删失尾部，之后可有据收紧。
+    **边界**：只有 L3 语义审校（Phase A 检查 + gate 复检，共用
+    `SemanticChecker._review_file`）改用新值。T1 `local_patch` / T2
+    `source_patch` / `triage` 仍各自显式传 600 / 600 / 300 —— 实测 T1
+    p50=14s / max=411s，无撞线证据，本轮不动（它们的硬编码属同类结构问题，
+    另行处理）。`[phase3].review_timeout_s` 维持 600s；本条落地后它的**唯一
+    真实消费者是 phase 4 scene split**（`scene_archive.py` 直接传值）——
+    phase 2 per-lane repair 的注入点（`orchestrator.py` `repair[phase2]`）
+    持有的 `default_review_timeout` 同属死代码：#59 缩水版关掉
+    `run_semantic` / `l3_gate` / `triage` 且 `t2_max=0`，其唯一可达的 LLM
+    调用是 T1 `local_patch`，而它显式传 `timeout=600`。即一个名为 `[phase3]`
+    的参数实际只服务 phase 4；命名与归属的清理不在本条范围内。
+    Plumbing → `extraction/config.toml` `[repair]`、
+    `extraction/persona_extraction/core/config.py::RepairAgentConfig`、
+    `extraction/persona_extraction/orchestrator.py`（repair `_llm_call` 的
+    `default_timeout`）、`extraction/repair/checkers/semantic.py::_review_file`、
+    `extraction/README.md` §配置分段。
+    → logs/change_logs/2026-07-16_141342_repair-semantic-timeout-decouple.md。
 
 ## Repository
 
