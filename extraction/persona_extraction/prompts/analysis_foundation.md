@@ -104,6 +104,11 @@ JSON 结构：
 
 ## 规则
 
+- **`maxLength` / `maxItems` 是上限不是配额**：schema 给的字段长度 / 条数
+  上限只是硬门控，不是要写到的目标。摘要里能支撑几条 `core_rules` /
+  `major_factions` / `major_regions` / `power_system.levels` 就写几条——
+  **不要为了凑满 maxItems 或 maxLength 而虚构设定、拆分条目、或给描述注水**。
+  原文没素材的字段留空数组即可。
 - 中文作品的 work_id、字段值使用中文
 - 产出文件必须是格式良好的 JSON
 - 你**只**负责 foundation，不要尝试产出 stage_plan / candidate_characters（它们由其他 lane 并行处理）

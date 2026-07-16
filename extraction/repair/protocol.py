@@ -252,12 +252,39 @@ def route_tiers(issue: "Issue") -> tuple[int, int]:
 
     coverage_shortage routes to T2 only (0-token accept downstream);
     otherwise the per-rule table wins, then the per-category fallback.
+
+    **Root-anchored issues never reach an LLM tier.** Handing ``json_path ==
+    "$"`` to T1/T2 means the model rewrites the entire document — exactly the
+    T3 full-file regeneration decision #62 deleted, wearing a different hat
+    (``apply_field_patch`` replaces the root outright). So a root-anchored
+    issue is clamped to T0, and one that would *start* at an LLM tier has no
+    fixer at all → ``NO_FIX_TIER`` → it defers (#60). T0 stays allowed: its
+    useful root-anchored fix patches a *child* path (``$.field``) with a
+    deterministic default, so e.g. a missing top-level required field is still
+    mechanically fixable. (T0 may still hand ``$`` itself to
+    ``apply_field_patch`` — e.g. "root should be an array" — where the root
+    type guard rejects it and the issue defers rather than mangling the file.)
+    Three classes reach NO_FIX in practice:
+
+      * ``targets_baseline_missing`` — a *sibling* file is missing; rewriting
+        this file cannot fix it.
+      * ``semantic_unavailable`` / ``semantic_check_crashed`` /
+        ``semantic_unparseable`` — the L3 *reviewer* failed. An infrastructure
+        fault is not a content defect; rewriting the file is not the answer.
+      * an LLM-reported semantic issue that omitted ``json_path`` (defaults to
+        ``"$"``) — a degraded fallback, not a genuine root-level defect.
     """
     if is_coverage_shortage(issue):
         return (COVERAGE_SHORTAGE_START_TIER, COVERAGE_SHORTAGE_MAX_TIER)
     if issue.rule in RULE_TIERS:
-        return RULE_TIERS[issue.rule]
-    return CATEGORY_TIERS.get(issue.category, (0, 1))
+        base = RULE_TIERS[issue.rule]
+    else:
+        base = CATEGORY_TIERS.get(issue.category, (0, 1))
+    if is_root_anchored(issue):
+        if base[0] >= 1:
+            return (NO_FIX_TIER, NO_FIX_TIER)
+        return (base[0], 0)
+    return base
 
 
 def issue_start_tier(issue: "Issue") -> int:
@@ -288,6 +315,24 @@ def is_coverage_shortage(issue: "Issue") -> bool:
 # accept fast path (no source material can be invented).
 COVERAGE_SHORTAGE_START_TIER = 2
 COVERAGE_SHORTAGE_MAX_TIER = 2
+
+
+# Sentinel start_tier for issues no fixer may touch: the coordinator's
+# ``fixers.get(tier)`` returns None for it, so the issue is left alone and
+# falls through to the residual / defer path (#60).
+NO_FIX_TIER = -1
+
+
+def is_root_anchored(issue: "Issue") -> bool:
+    """True when an issue anchors at the whole document rather than a field.
+
+    ``json_syntax`` is deliberately excluded: T0 repairs it on the raw text
+    (see ``ProgrammaticFixer``), never through ``apply_field_patch``, and it
+    is not deferrable — treating it as root-anchored would hard-ERROR the
+    stage instead of letting T0 fix it.
+    """
+    return (issue.json_path in ("$", "")
+            and issue.category != "json_syntax")
 
 
 # ---------------------------------------------------------------------------

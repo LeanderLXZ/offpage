@@ -122,7 +122,7 @@ class LocalPatchFixer(BaseFixer):
                     patched.append(issue.json_path)
                     applied_fps.add(issue.fingerprint)
                     file_modified = True
-                except (KeyError, IndexError) as exc:
+                except (KeyError, IndexError, TypeError) as exc:
                     logger.warning("T1 patch apply failed: %s", exc)
             if file_modified:
                 write_file_entry(f)

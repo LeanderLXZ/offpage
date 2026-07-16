@@ -112,7 +112,7 @@
 | `structure_mode` | `schemas/{work/{work_manifest,works_manifest,chapter_index},analysis/stage_plan}.schema.json`、`extraction/ingestion/validator.py`、`extraction/persona_extraction/{cli,orchestrator,lifecycle/manifests,lifecycle/progress}.py`、`prompts/ingestion/原始资料规范化.md`、`docs/requirements.md` §8.4/§9.2、`docs/architecture/{schema_reference,extraction_workflow}.md`、`ai_context/{architecture,decisions}.md` |
 | `schemas/analysis/chapter_summary_chunk.schema.json`（chunk schema 字段/边界） | `extraction/persona_extraction/prompts/summarization.md`、`extraction/persona_extraction/prompts/analysis_{foundation,stage_plan,candidate_characters}.md`、`extraction/persona_extraction/prompts/baseline_{fixed_relationships,identity,target_baseline}.md`、`extraction/persona_extraction/prompt_builder.py` 的 `_project_chunk_for_*` 六个投影器（phase 1 三 + phase 2 三，决策 #52/#59）、`docs/architecture/{schema_reference,extraction_workflow}.md`、`ai_context/{architecture,decisions}.md` |
 | `schemas/world/foundation.schema.json`（phase 1 foundation lane 落盘 + phase 2 lane A `key_figures` 替换，决策 #54/#59） | `extraction/persona_extraction/prompts/analysis_foundation.md`、`extraction/persona_extraction/prompts/baseline_key_figures.md`、`extraction/persona_extraction/prompt_builder.py`（`build_foundation_prompt` / `build_key_figures_prompt`）、`extraction/persona_extraction/orchestrator.py`、`extraction/repair/checkers/phase2_baseline_refs.py`、`extraction/validation/gates/phase2_baseline.py`、`schemas/README.md` + `extraction/README.md`、`docs/architecture/{schema_reference,extraction_workflow}.md`、`ai_context/{architecture,decisions}.md` |
-| `schemas/character/stage_snapshot.schema.json` 顶层属性增删 / 重命名（含 `stage_delta` / `failure_modes` / `behavior_state` 子键） | `extraction/persona_extraction/phases/snapshot_merge.py::FIELD_ALLOCATION` + `SHARED_KEY_SUBKEYS`（新增 / 改名属性必须挂到某 sub-lane，否则 merge hard gate 报错）、`extraction/persona_extraction/prompts/character_snapshot_extraction.md` `{lane_scope}` 白名单段、`docs/architecture/extraction_workflow.md` §6.2、`ai_context/decisions.md` #55、`docs/requirements.md` §9.3 |
+| `schemas/character/stage_snapshot.schema.json` 顶层属性增删 / 重命名（含 `stage_delta` / `failure_modes` / `behavior_state` 子键） | `extraction/persona_extraction/phases/snapshot_merge.py::FIELD_ALLOCATION` + `SHARED_KEY_SUBKEYS` + `PROGRAM_INJECTED_FIELDS`（新增 / 改名属性必须挂到某 sub-lane 或程序注入集，否则 `_smoke_4_lane_merge_and_slice` 的 smoke 6 报错——merge gate 本身只比对 partial ⇄ 分配表，不看 schema）、`extraction/persona_extraction/prompts/character_snapshot_extraction.md` `{lane_scope}` 白名单段、`docs/architecture/extraction_workflow.md` §6.2、`ai_context/decisions.md` #55、`docs/requirements.md` §9.3 |
 
 ## Single Source of Truth <!-- holo:heading -->
 
@@ -192,9 +192,13 @@
 项目补充：
 
 - 权威文档范围：`schemas/`、`docs/requirements.md`、`docs/architecture/`、
-  `ai_context/`、`prompts/`、`extraction/persona_extraction/prompts/`。
+  `ai_context/`、`prompts/`、`extraction/persona_extraction/prompts/`，
+  以及 `extraction/` / `simulation/` 下的**代码注释与 docstring**（注释里的
+  lane 名 / 路径 / 字段示例同样用占位符 —— 如 `snapshot:<character_id>`
+  而非真名）。
 - "真实名称"在本项目指真实书名 / 角色 / 地点 / 情节名称；示例占位符
   如 `<character_id>`、`S001`。
+- 残留扫描范围 = 上述全部路径（**含 `.py`**），不只是 `docs/`。
 - Schema `description` 示例保持结构性、非叙事性（或直接省略）。
 - 额外例外：`docs/todo_list_archived.md`、`ai_context/decisions.md`、
   `works/*/` 样例输出、`sources/`（源文本包本身即真实内容，输入层

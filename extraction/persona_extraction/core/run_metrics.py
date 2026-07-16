@@ -83,8 +83,9 @@ class RunMetricsRecorder:
         if not rows:
             return
         # Aggregate by (phase, lane-type). A lane-type collapses the per-id
-        # tail: ``snapshot:Character B`` / ``char_snapshot:Character B:char_social`` →
-        # ``snapshot`` / ``char_snapshot`` so the table stays compact.
+        # tail: ``snapshot:<character_id>`` /
+        # ``char_snapshot:<character_id>:char_social`` → ``snapshot`` /
+        # ``char_snapshot`` so the table stays compact.
         agg: dict[tuple[str, str], dict[str, float]] = {}
         for r in rows:
             key = (r["phase"], _lane_type(r["lane"]))
@@ -123,8 +124,8 @@ class RunMetricsRecorder:
 
 def _lane_type(lane: str) -> str:
     """Collapse a lane name to its type prefix for aggregation."""
-    # ``char_snapshot:Character B:char_social`` → ``char_snapshot``;
-    # ``snapshot:Character B`` → ``snapshot``; ``repair[S001]`` → ``repair``.
+    # ``char_snapshot:<character_id>:char_social`` → ``char_snapshot``;
+    # ``snapshot:<character_id>`` → ``snapshot``; ``repair[S001]`` → ``repair``.
     if "[" in lane:
         return lane.split("[", 1)[0]
     if ":" in lane:

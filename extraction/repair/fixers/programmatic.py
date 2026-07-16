@@ -75,7 +75,15 @@ class ProgrammaticFixer(BaseFixer):
             for issue in file_issues:
                 if issue.fingerprint in resolved:
                     continue
-                fixed = self._try_fix(content, issue, f.schema)
+                try:
+                    fixed = self._try_fix(content, issue, f.schema)
+                except TypeError as exc:
+                    # apply_field_patch refuses a root patch that would change
+                    # the document's top-level type (e.g. "root should be an
+                    # array" on an object). Not fixable at T0 — leave it for
+                    # the defer ledger rather than mangling the whole file.
+                    logger.warning("T0 skip %s: %s", issue.fingerprint, exc)
+                    fixed = None
                 if fixed is not None:
                     content = fixed
                     resolved.add(issue.fingerprint)

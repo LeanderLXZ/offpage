@@ -66,9 +66,14 @@ class SourcePatchFixer(BaseFixer):
     tier = 2
 
     def __init__(self, llm_call: Callable[..., str] | None = None,
-                 retriever: ContextRetriever | None = None):
+                 retriever: ContextRetriever | None = None,
+                 verify_fn: Callable[[list[FileEntry]], set[str]] | None = None):
         self._llm_call = llm_call
         self._retriever = retriever or ContextRetriever()
+        # Scoped L0–L2 re-verify injected by the coordinator, same contract as
+        # ``LocalPatchFixer``. ``None`` falls back to the legacy
+        # "apply == resolved" behaviour (used by tests / standalone).
+        self._verify_fn = verify_fn
 
     def fix(
         self,
@@ -87,7 +92,7 @@ class SourcePatchFixer(BaseFixer):
             return FixResult()
 
         patched: list[str] = []
-        resolved: set[str] = set()
+        applied_fps: set[str] = set()
         candidates: dict[str, TriageVerdict] = {}
 
         for issue in issues:
@@ -133,9 +138,22 @@ class SourcePatchFixer(BaseFixer):
                 f.content = new_content
                 write_file_entry(f)
                 patched.append(issue.json_path)
-                resolved.add(issue.fingerprint)
-            except (KeyError, IndexError) as exc:
+                applied_fps.add(issue.fingerprint)
+            except (KeyError, IndexError, TypeError) as exc:
                 logger.warning("T2 patch apply failed: %s", exc)
+
+        # Immediate scoped re-verify (0 token): a field counts as resolved
+        # only when its fingerprint no longer surfaces at L0–L2.
+        if applied_fps and self._verify_fn is not None:
+            try:
+                remaining_fps = self._verify_fn(files)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("T2 re-verify failed, treating apply as "
+                               "resolved: %s", exc)
+                remaining_fps = set()
+            resolved = {fp for fp in applied_fps if fp not in remaining_fps}
+        else:
+            resolved = set(applied_fps)
 
         return FixResult(
             patched_paths=patched,

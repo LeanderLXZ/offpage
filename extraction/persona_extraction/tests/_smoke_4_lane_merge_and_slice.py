@@ -16,6 +16,9 @@ Covers:
      slice's keys match the lane's allocation (modulo shared-key
      subkey filtering); re-running merge_partials on the slices
      reproduces the merged dict (modulo program-injected fields).
+  6. FIELD_ALLOCATION ∪ PROGRAM_INJECTED_FIELDS covers exactly the
+     stage_snapshot schema's top-level properties — the lockstep
+     conventions.md §Cross-File Alignment promises but nothing enforced.
 
 Exits non-zero on first failed assertion. Plain stdlib only.
 """
@@ -25,12 +28,16 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+import json
+from pathlib import Path
+
 from ..phases.snapshot_merge import (
     FIELD_ALLOCATION,
     LANE_CHAR_DECISION,
     LANE_CHAR_EXPRESSION,
     LANE_CHAR_INTERNAL,
     LANE_CHAR_SOCIAL,
+    PROGRAM_INJECTED_FIELDS,
     SHARED_KEY_SUBKEYS,
     SUB_LANE_NAMES,
     merge_partials,
@@ -315,6 +322,32 @@ def smoke_5_slice_round_trip(merged: dict[str, Any]) -> None:
         f"re - orig = {set(re_content) - set(orig_content)}")
 
 
+def smoke_6_allocation_covers_schema() -> None:
+    # The merge gates only compare a partial against FIELD_ALLOCATION —
+    # nothing ever compares FIELD_ALLOCATION against the schema itself.
+    # conventions.md §Cross-File Alignment promises that a new top-level
+    # stage_snapshot property must be attached to some sub-lane "or the merge
+    # hard gate errors"; without this check that promise rests on memory, and
+    # a new *optional* property would simply never be produced by any lane.
+    schema_path = (Path(__file__).resolve().parents[3] / "schemas"
+                   / "character" / "stage_snapshot.schema.json")
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema_top = set(schema.get("properties", {}).keys())
+
+    allocated: set[str] = set()
+    for fields in FIELD_ALLOCATION.values():
+        allocated.update(fields)
+    covered = allocated | set(PROGRAM_INJECTED_FIELDS)
+
+    unallocated = schema_top - covered   # in schema, no lane produces it
+    phantom = covered - schema_top       # allocated but not in the schema
+    _check(
+        "6) FIELD_ALLOCATION ∪ PROGRAM_INJECTED_FIELDS == schema top-level",
+        not unallocated and not phantom,
+        f"unallocated (no lane writes these): {sorted(unallocated)}; "
+        f"phantom (not in schema): {sorted(phantom)}")
+
+
 def main() -> None:
     print("Smoke: decision #55 4-sub-lane topology + slice round-trip")
     smoke_1_sub_lane_names()
@@ -322,6 +355,7 @@ def main() -> None:
     smoke_3_shared_key_shape()
     merged = smoke_4_merge_happy_path()
     smoke_5_slice_round_trip(merged)
+    smoke_6_allocation_covers_schema()
     print("\nAll smoke checks passed.")
 
 

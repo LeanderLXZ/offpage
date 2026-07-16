@@ -2649,6 +2649,23 @@ class ExtractionOrchestrator:
                     print("[ERROR] Cannot create extraction branch.")
                     sys.exit(1)
 
+            # Reconcile progress against disk — only AFTER the branch switch
+            # above. Stage artifacts are tracked on the extraction branch
+            # alone, while ``phase3_stages.json`` lives under the gitignored
+            # progress dir and therefore survives a checkout. Reconciling
+            # while still on ``main`` sees that combination as "committed
+            # artifacts missing on disk" and reverts every COMMITTED stage to
+            # PENDING (clearing ``committed_sha``), which a clean exit +
+            # ``--resume`` would hit every time.
+            rec = phase3.reconcile_with_disk(
+                self.project_root, pipeline.target_characters)
+            if rec["reverted"] or rec["purged_files"]:
+                print(f"[RECONCILE] Phase 3: reverted {rec['reverted']} "
+                      f"stage(s), purged {rec['purged_files']} stale "
+                      f"artifact(s), {rec['sha_missing']} committed_sha "
+                      f"missing from git")
+                phase3.save(self.project_root)
+
             # Check if baseline production was completed — if not, run it now
             work_dir = self.project_root / "works" / pipeline.work_id
             fixed_rel = (work_dir / "world" / "foundation"
@@ -3792,6 +3809,17 @@ class ExtractionOrchestrator:
             phase3 = Phase3Progress.load(
                 self.project_root, self.work_id)
 
+        # Backfill ``extraction_branch`` on a loaded pipeline BEFORE the resume
+        # branch below returns. An older run may have left the field empty, and
+        # ``run_extraction_loop`` only checks out the branch when it is set —
+        # an empty value there means no checkout, which would put the disk
+        # reconcile back on ``main`` and revert every COMMITTED stage. The
+        # fresh-start path further down fills it for newly created pipelines.
+        if pipeline is not None and not pipeline.extraction_branch:
+            pipeline.extraction_branch = (
+                f"{get_config().git.extraction_branch_prefix}{self.work_id}")
+            pipeline.save(self.project_root)
+
         # Self-heal: if Phase 1.5 is done and stage_plan exists but
         # phase3_stages.json was deleted/corrupted, rebuild from stage_plan
         # rather than falling through to the fresh-start path (which would
@@ -3817,15 +3845,13 @@ class ExtractionOrchestrator:
                 print(f"[REBUILT] phase3_stages.json from stage_plan.json "
                       f"({len(phase3.stages)} stages, all pending).")
 
-        if pipeline is not None and phase3 is not None:
-            rec = phase3.reconcile_with_disk(
-                self.project_root, pipeline.target_characters)
-            if rec["reverted"] or rec["purged_files"]:
-                print(f"[RECONCILE] Phase 3: reverted {rec['reverted']} "
-                      f"stage(s), purged {rec['purged_files']} stale "
-                      f"artifact(s), {rec['sha_missing']} committed_sha "
-                      f"missing from git")
-                phase3.save(self.project_root)
+        # NOTE: disk reconcile deliberately does NOT run here — it runs inside
+        # ``run_extraction_loop`` once the extraction branch is checked out.
+        # Stage artifacts are tracked only on that branch, so reconciling from
+        # ``main`` would see every committed stage's files "missing on disk"
+        # and revert the whole run to PENDING. Both entry paths (resume below
+        # and the fresh-start path further down) funnel through
+        # ``run_extraction_loop``, so that single site covers both.
 
         if pipeline and phase3 and pipeline.is_done("phase_1_5"):
             print(f"Found existing progress for {self.work_id}.")
@@ -3871,12 +3897,8 @@ class ExtractionOrchestrator:
                 work_id=self.work_id,
                 extraction_branch=expected_branch)
             pipeline.save(self.project_root)
-        elif not pipeline.extraction_branch:
-            # Load-from-disk pipeline written by an older run that did not
-            # fill the field — patch in place so the branch switch below
-            # has a target. Idempotent for already-filled values.
-            pipeline.extraction_branch = expected_branch
-            pipeline.save(self.project_root)
+        # A loaded pipeline already had the field backfilled right after the
+        # load above (it must be set before the resume branch returns).
         self.pipeline = pipeline
 
         # Switch to the extraction branch BEFORE the first LLM call so

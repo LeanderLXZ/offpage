@@ -219,7 +219,12 @@ N. <决策陈述>。
     > `route_tiers` 按 issue rule 分配 `(start_tier, max_tier)`，每 tier 封顶 2 次
     > 尝试；`coverage_shortage` → T2 + 0-token SourceNote 接受；未决残留按
     > `DEFERRABLE_CATEGORIES` defer（见 #60）。
-25a. 源文差异分诊（`triage_enabled=True`）—— 两条 accept 路径共享每 lifecycle `accept_cap_per_file=5`：(A) L3 `source_inherent`（LLM）凭逐字引用证据（字面子串 + SHA-256 锚定）接受作者笔误残留；(B) L2 `coverage_shortage`（0 token）在一次 T2 尝试后经程序选定的 SourceNote 接受 `min_examples` 不足。两者都以 append-only 持久化到 `{entity}/canon/extraction_notes/{stage_id}.jsonl`（或 `world/extraction_notes/`）。Runtime 不消费（仅审计）。Phase 3.5 把有效 SourceNote 视同满足 `min_examples`。Lifecycle 2 从磁盘读回已接受的指纹，同一问题永不写两次。T3 输出直接流入 lifecycle 2 —— T3 之后不设即时损坏门。→ `extraction/repair/` + `docs/requirements.md` §11.4。
+25a. 源文差异分诊（`triage_enabled=True`）—— 两条 accept 路径共享每轮 `accept_cap_per_file=5`：(A) L3 `source_inherent`（LLM）凭逐字引用证据（字面子串 + SHA-256 锚定）接受作者笔误残留；(B) L2 `coverage_shortage`（0 token）在一次 T2 尝试后经程序选定的 SourceNote 接受 `min_examples` 不足。两者都以 append-only 持久化到 `{entity}/canon/extraction_notes/{stage_id}.jsonl`（或 `world/extraction_notes/`）。Runtime 不消费（仅审计）。Phase 3.5 把有效 SourceNote 视同满足 `min_examples`。→ `extraction/repair/` + `docs/requirements.md` §11.4。
+    > **经 #62 收紧**：单轮 Phase A→B→C，无 lifecycle 2 —— 原「每 lifecycle
+    > 共享 accept_cap」改为每轮共享；原「Lifecycle 2 从磁盘读回已接受的指纹」
+    > 与「T3 输出直接流入 lifecycle 2、之后不设即时损坏门」两条随 lifecycle 2
+    > 与 T3 一并删除。triage 现在的两个调用点是 tier 封顶后的 residual
+    > （round 1）与 L3 gate 之后（round 2）。
 
 26. 抽取跑在 `extraction/{work_id}` 分支上。每个通过的 stage 都提交。回滚 = `git reset`。**完成后 squash-merge 到 `library`**（永不进 `main`）。三分支模型：`main` = 仅框架，推送远端；`extraction/{work_id}` = 单作品进行中，本地；`library` = 完结作品归档，本地。`library` 通过周期性 `git merge main` 吸收框架更新；没有任何东西回流 main，保持对外分支无产物。Squash 目标由 `[git].squash_merge_target` 控制（默认 `library`）。**squash 成功后 orchestrator 交互式询问（`[y/N]`，默认 N）是否删除源 `extraction/{work_id}` 分支（`git branch -D`）并运行 `git gc --prune=now`**，让累积的 regen commit 变为不可达并被回收。Dispose 永远是交互式的 —— 即使 `[git].auto_squash_merge=true`，dispose prompt 仍会询问，因为删除分支不可逆。用户一旦选择删除，`library` 的 squash 就是唯一保留的记录。这使 `extraction/{work_id}` 成为可丢弃的 scratchpad：失败的 regen 可以随意提交，而不污染 `library` 历史或长期磁盘占用。
 
@@ -452,7 +457,7 @@ N. <决策陈述>。
 
 47. Phase 0 摘要子进程超时 = `[phase0].summarize_timeout_s`（默认 1800s），而不是历史上借用的 `[phase3].review_timeout_s`（600s）。原因：一个 Phase 0 chunk 读 `chunk_size` 章（默认 20），并在 opus-4-7 effort=max 下产出 N× per-summary（100–150 字）+ 5 个 chunk 级二级聚合（`chunk_arc_summary` / `chunk_world_rules` / `chunk_power_levels` / `chunk_factions` / `chunk_regions`）；运行时证据表明 wall > 600s 属正常。`phase3.review_timeout_s` 保持 600s，服务它真正对应的 phase 3 reviewer 短链。→ `extraction/config.toml` `[phase0]`、`extraction/persona_extraction/core/config.py::Phase0Config`、`extraction/persona_extraction/orchestrator.py:_summarize_chunk`。
 
-48. **长度 bound 容差门（B 方案）。** 当一个 LLM 驱动的 phase 已耗尽其严格重试预算——各 phase 的耗尽点：Phase 0 `_summarize_chunk` L1+L2+L3 全跑完 / Phase 1 per-lane `exit_validation_max_retry` 耗尽 / Phase 2 per-lane repair lifecycle 走完后的终点 `validate_baseline` 失败（lane 内 lifecycle 2 的 `LENGTH_TOLERANCE_PASS` 分支同样适用，#59） / Phase 4 scene-split `max_retries_per_chapter` 耗尽 / **Phase 3 repair framework lifecycle 2 即将 `T3_EXHAUSTED`**（**phase 3 + phase 2 经 repair 路径**，接入形态见 #25 / #59；phase 0 / 1 / 3.5 / 4 不接入 repair）——最后一遍调用 `validate_with_length_tolerance`（helper 在 `extraction/validation/shared/schema_tolerance.py`）：若严格失败列表**只**含 `minLength`/`maxLength` 违规，且放宽后的 schema（每个 `minLength` × 0.9 下限、每个 `maxLength` × 1.1 上限）通过，则把产物接受为 PASS；否则保留原失败。其他所有约束（`required` / `type` / `enum` / `pattern` / `minimum` / `maximum` / `minItems` / `maxItems`）保持严格。**不适用**于 `post_processing.py` 纯程序产出的 digest/catalog——那些没有 LLM 边缘抖动，容差会掩盖代码 bug。容差通过的产物**不打 metadata 标记**（下游消费方不区分 strict-pass 与 tolerance-pass）。与 #27i（schema-gate-as-retry-trigger）配对：严格重试路径先跑到耗尽；容差是最终安全阀，不是重试的替代品。与全局 `[phase3].max_turns = 80`（原为 50）和 `--chunk-size` 默认 `20`（原为 25）配对——两者都降低边界抖动撞上耗尽的频率。Plumbing → `extraction/validation/gates/phase2_baseline.py` (helpers)、`orchestrator.py:_summarize_chunk + run_analysis + run_baseline_production`、`scene_archive.py:_handle_validation_failure`、`extraction/repair/coordinator.py`（T3_EXHAUSTED terminal-state branch；phase 2 + phase 3）。
+48. **长度 bound 容差门（B 方案）。** 当一个 LLM 驱动的 phase 已耗尽其严格重试预算——各 phase 的耗尽点：Phase 0 `_summarize_chunk` L1+L2+L3 全跑完 / Phase 1 per-lane `exit_validation_max_retry` 耗尽 / Phase 2 per-lane repair 走完后的终点 `validate_baseline` 失败（lane 内的 `LENGTH_TOLERANCE_PASS` 分支同样适用，#59） / Phase 4 scene-split `max_retries_per_chapter` 耗尽 / **Phase 3 repair framework 的 tier 封顶之后**（每 tier ≤2 次，`max_tier` 用尽即触发；#62 删 T3 后由 `T3_EXHAUSTED` 改为封顶触发）（**phase 3 + phase 2 经 repair 路径**，接入形态见 #25 / #59；phase 0 / 1 / 3.5 / 4 不接入 repair）——最后一遍调用 `validate_with_length_tolerance`（helper 在 `extraction/validation/shared/schema_tolerance.py`）：若严格失败列表**只**含 `minLength`/`maxLength` 违规，且放宽后的 schema（每个 `minLength` × 0.9 下限、每个 `maxLength` × 1.1 上限）通过，则把产物接受为 PASS；否则保留原失败。其他所有约束（`required` / `type` / `enum` / `pattern` / `minimum` / `maximum` / `minItems` / `maxItems`）保持严格。**不适用**于 `post_processing.py` 纯程序产出的 digest/catalog——那些没有 LLM 边缘抖动，容差会掩盖代码 bug。容差通过的产物**不打 metadata 标记**（下游消费方不区分 strict-pass 与 tolerance-pass）。与 #27i（schema-gate-as-retry-trigger）配对：严格重试路径先跑到耗尽；容差是最终安全阀，不是重试的替代品。与全局 `[phase3].max_turns = 80`（原为 50）和 `--chunk-size` 默认 `20`（原为 25）配对——两者都降低边界抖动撞上耗尽的频率。Plumbing → `extraction/validation/gates/phase2_baseline.py` (helpers)、`orchestrator.py:_summarize_chunk + run_analysis + run_baseline_production`、`scene_archive.py:_handle_validation_failure`、`extraction/repair/coordinator.py`（`_run_fixer_with_escalation` 的 tier-封顶后分支 → `LENGTH_TOLERANCE_PASS`；phase 2 + phase 3）。
 
 49. **Phase 0 降档 effort 的恢复扫尾（per-chunk 定向救火）。** opus-4-7 effort=max 在 phase 0 的多字段 chunk 综合（读 `chunk_size` 章 → 写 N× per-summary + 5 个 chunk 级二级聚合）上随机触发超出 1800s 子进程 wall 预算的服务端超长 thinking。实证观察到 `<work_id>` 的 chunk 8 在两个不同章节范围（v2: C0176-C0200、v3: C0141-C0160）均出现——都在 effort=max ×2 重试下超时，都在 effort=high 下 ~14 分钟 wall 完成（schema 合法输出，质量等同）。与其把 phase 0 整体降档到 effort=high（会轻微拉低 95%+ 不触发长 thinking 边缘情况的 chunk 的质量），orchestrator 在 phase 0 主 ThreadPool 结束后跑一次**恢复扫尾**：任何 `state == 'failed'` 且 `error_message` 含 `'timed out'` 或 `'error_max_turns'` 且 `recovery_attempted == False` 的 chunk 用 `effort='high'` 重跑一次（经 `LLMBackend.run` 的 per-call kwarg，不换 backend 实例），复用 `phase0.concurrency`（ThreadPoolExecutor max_workers）。无论结果如何都标记 `recovery_attempted=True`；后续 `--resume` 跳过已尝试过的 chunk（无无限救火 loop）。完整重试管线（L1/L2/L3 JSON repair + jsonschema gate + 长度 bound 容差 #48）按既有契约在 `_summarize_chunk` 内运行——扫尾只改 effort，不改重试语义。Plumbing → `extraction/persona_extraction/core/llm_backend.py::LLMBackend.run`（新增 `effort: str | None = None` kwarg）、`orchestrator.py::_run_recovery_sweep`（新方法，`run_summarization` 主池结束后调用）、`progress.py::ChunkEntry`（新增 `recovery_attempted: bool = False`）、`config.py::Phase0Config.recovery_effort` + `extraction/config.toml [phase0] recovery_effort`。
 
@@ -467,7 +472,13 @@ N. <决策陈述>。
 54. **Foundation 前移 phase 1 + phase 2 仅补 `key_figures` + target_baseline 准入门槛收紧（dialogue/action 交互）。** 2026-05-09 端到端跑完 phase 2 后比对 [analysis/world_overview.json](works/<work_id>/analysis/world_overview.json) vs [world/foundation/foundation.json](works/<work_id>/world/foundation/foundation.json)，发现两份 95% 字段重叠（`work_id` / `genre` / `tone` / `world_structure` / `power_system` / `world_lines` 几乎 1:1 拷贝）；真增量只有 `core_rules` 升 object[] 含 `impact` + `major_factions.key_figures[]` 两项。同步发现 target_baseline 15 条全 `核心 / 重要` tier，含末章才出生且无 dialogue / action 的双胞胎角色——baseline prompt 当前"宁可多列、不可漏列、被点名提及即纳入"导致前 12 stage × 2 角色 × 3 结构 = 72 条纯空 entry 噪声。改造三件合一：(1) **foundation 前移 phase 1**：原 phase 1 `world_overview` lane → 改名 `foundation` lane，输出路径 `works/{work_id}/analysis/world_overview.json` → `works/{work_id}/world/foundation/foundation.json`。`schemas/analysis/world_overview.schema.json` 删除，内容**逐字搬到** `schemas/world/foundation.schema.json` 替换旧 foundation schema（旧 foundation 字段 / bound 形态废弃，新 foundation = 旧 world_overview 形态）；`$id` / `title` / `description` 改写为 foundation 语义，**字段 / bound 一字不改**（含 `core_rules` 保持 `string[] ≤30 条 / 每条 ≤150 字` 形态——user 决策 1 明确不改 core_rules 结构）。`major_factions.items` 新增 `key_figures[]` optional 字段（items: string maxLength 30 / maxItems 10 / 注释说明双阶段语义），**phase 1 lane 写 raw 名**（chunk_factions[].members_present[] 跨 chunk 合并去重直接写入，化名 / 真名 / 称呼任一）。`analysis_world_overview.md` → 改名 `analysis_foundation.md`。(2) **phase 2 缩水到 LLM "替换" 工作**（决策 #54 修订段，2026-05-11 user 反馈 phase 1 不应丢信息——chunk_factions.members_present 已有 raw 名）：删 `baseline_production.md`「产出 1：世界 Foundation」整段（≈100 行）；新增「产出 1：替换 foundation.major_factions[].key_figures 内 raw 名为 character_id」段：单次 LLM call 整合到 build_baseline_prompt（与 fixed_relationships / identity / target_baseline / manifest 同一次调用），输入 phase 1 落盘 foundation（含 raw 名 key_figures）+ `analysis/candidate_characters.json`（含 character_id + aliases） + 已确认目标清单；LLM 对 key_figures 每个 raw 名 lookup candidates[*].aliases，能匹配的换为对应 character_id，**匹配不上保留 raw 名**（不报错、不删除）；schema 不抓 character_id 合法性，key_figures 最终是 character_id + 未合并 raw 名混合。phase 2 保留产出：`fixed_relationships.json` + per-character `identity.json` + `target_baseline.json` + `manifest.json` 四件 + foundation key_figures 替换。失败处理：本条落地时为单次 `run_with_retry` → `validate_baseline` schema gate → length-bound tolerance gate (#48) → fail 则 `sys.exit(1)` 不接入 repair（拆作 todo `T-PHASE2-REPAIR-AGENT`）；该 todo 已由 #59 落地——phase 2 拆 2+2N lane 并行 + per-lane repair 缩水版接入，call 拓扑与兜底形态以 #59 为准。(3) **target_baseline 准入门槛收紧**：删 prompt 中「宁可多列、不可漏列、被点名提及即纳入」原则；改为 **准入门槛 = 本角色与目标角色在 chapter_summaries 摘要描述中被反映为有过 dialogue / action 交互**（如"X 对 Y 说……" / "X 救/打/教 Y" / "X 与 Y 联手……"等动作或对话描述）；血亲不再默认核心 tier——按准入门槛 + 实际剧情驱动力分级。tier 4 档 (核心 / 重要 / 次要 / 普通) 不动，准入门槛与 tier 分级正交。Phase 3 stage_snapshot 三结构双向 set-equal 约束（#13）不动——准入门槛只影响 baseline 收录范围，对 phase 3 keys == baseline 的执行不变。**显式不做**：不动 [target_baseline.schema.json](schemas/character/target_baseline.schema.json) 与 [targets_cap.schema.json](schemas/character/targets_cap.schema.json)（schema 不变，仅 prompt 加严）；不引入 `_validation_tolerance_applied` 类元数据；不本次接入 repair 到 phase 2（拆出来作 `T-PHASE2-REPAIR-AGENT`）；本 /go 不执行 `git reset` 重跑 phase 2 数据迁移——user 自决何时操作。Plumbing → `schemas/world/foundation.schema.json`（重写）+ `schemas/analysis/world_overview.schema.json`（删除）、`extraction/persona_extraction/prompts/analysis_foundation.md`（改名 + 内容更新）+ `extraction/persona_extraction/prompts/baseline_production.md`（删 foundation 段 + 加 key_figures 补齐段 + target_baseline 加严）、`extraction/persona_extraction/prompt_builder.py`（`build_world_overview_prompt` → `build_foundation_prompt`、`_project_chunk_for_world_overview` → `_project_chunk_for_foundation`、phase 2 `key_figures` 替换段整合到 `build_baseline_prompt` 单次 LLM call 内，与 identity + target_baseline + fixed_relationships + manifest 五件合一（决策 #54 修订段 2026-05-11 落地形态）、lane 名常量 `world_overview` → `foundation`）、`extraction/persona_extraction/orchestrator.py`（`run_analysis` foundation lane 输出路径改 + `run_baseline_production` 新增 key_figures 补齐 LLM call）、`schemas/README.md` + `extraction/README.md`（schema 索引 + lane 列表更新）、`ai_context/{architecture,decisions,conventions}.md`（本条 + #25 / #40 disambiguation + #48 措辞修正 + #27m + #52 + #53 同步）、`docs/architecture/{schema_reference,extraction_workflow}.md` + `docs/requirements.md` §9 / §11、`docs/todo_list.md`（新立 `T-PHASE2-REPAIR-AGENT`）。
 
 55. **char_snapshot lane 拆 4 sub-lane 并行 + prev snapshot 按 lane 切片喂入
-    + 程序 merge + lifecycle 2 sub-lane 重抽。** Phase 3 单 stage 的
+    + 程序 merge。**
+    > **经 #62 收紧**：`lifecycle 2 sub-lane 重抽`（`sub_lane_regen`）已随 T3
+    > `file_regen` 一并删除——repair 单轮 Phase A→B→C，不再有 lifecycle 2，
+    > 也没有任何形态的重抽。下方「Repair lifecycle 2 T3 重抽」整段描述的是
+    > 已移除的机制，保留仅为记录当时的设计理据。
+
+    Phase 3 单 stage 的
     `char_snapshot` lane 内部拆 **4** 个并行 sub-lane（`char_expression` /
     `char_decision` / `char_internal` / `char_social`）压 wall-time；每个
     sub-lane 只读 prev snapshot 中自己需要的字段切片，**不读完整 prev**。
@@ -783,6 +794,18 @@ N. <决策陈述>。
     > {semantic, schema, structural, cross_file}；只有 `json_syntax`（文件
     > 不可解析）与 worker 崩溃仍硬 ERROR。判据函数 `deferrable_semantic_issues`
     > → `deferrable_issues`，`DEFERRABLE_CATEGORY` → `DEFERRABLE_CATEGORIES`。
+    >
+    > **再经 T-FIX-FROM-FULLREVIEW 收紧两点**（2026-07-16 `/full-review`
+    > H6/H7）：(1) 判定改为**逐 entry**——原实现把所有失败文件的 issue 摊平
+    > 后统一判，而 worker 崩溃的合成 `RepairResult` 带 `issues=[]`、对摊平集合
+    > 毫无贡献，于是只要同 stage 另有任一可延后 issue，崩溃文件就搭顺风车当
+    > PASS 提交、且不进台账，Phase 3.5 收尾 pass 永远不会知道它（函数自己的
+    > docstring 承诺"崩溃硬停"，该承诺仅在崩溃文件是唯一失败项时成立）。
+    > (2) `coverage_shortage` 残留纳入可 defer——它 `severity=warning` 却仍被
+    > `_filter_blocking` 当阻塞项，而判据只收 `severity == "error"`，导致超
+    > `accept_cap_per_file` 的薄内容返回 `None` → 硬 ERROR 停机，等于 #62 想
+    > 根除的 min_examples 死锁换个入口复活（baseline 常有 ~15 个 target，一个
+    > 快照出现 ≥6 处薄内容很现实）。
     **背景**：Phase 3 首次端到端运行时 S002 的 repair 在快照里查出真实的跨字段
     语义自相矛盾（同一事实既 known 又 uncertain；current_status 与
     relationships 对同一物件来源打架）。这类 L3 问题 field-level 的 T1/T2
@@ -856,6 +879,35 @@ N. <决策陈述>。
     → logs/change_logs/2026-07-15_134148_digest-derived-no-repair.md。
 
 62. **repair 去掉全文重跑（T3）+ 按 rule 分层路由 + 每 tier 封顶 + defer 扩展。**
+    > **经 T-FIX-FROM-FULLREVIEW 收紧三点**（2026-07-16 `/full-review`
+    > H3/H4，OQ1/OQ2 用户拍板）—— 本条删 T3 的**意图**当时未在代码中完整实现：
+    > 1. **`$` 根锚点 issue 永不升到 LLM 层。** 删掉 T3 却留下一条等价路径：
+    >    `json_path == "$"` 的 issue 路由到 T2 后，`apply_field_patch` 的根替换
+    >    分支（`if not tokens: return new_value`）会拿 LLM 返回值**整体替换整个
+    >    文档**——正是全文重写换马甲。实测可把快照写成 `[]` 而 repair 报 PASS
+    >    （`targets_keys_eq_baseline` 对非 dict 内容静默 `continue`，写坏的文件
+    >    顺利过 L2）。修法：根锚点 issue 的 `max_tier` 钳到 T0；本就起步于 LLM
+    >    层的（`start_tier >= 1`）无 fixer 可用 → `NO_FIX_TIER` → 直接 defer。
+    >    **T0 仍允许**——它打的是*子*路径（`$.field`）+ 确定性默认值，从不动根
+    >    本身，所以「缺顶层 required 字段」这类常见问题仍机械可修（一刀切 NO_FIX
+    >    会把它们全部误判为不可修，是本次修复中途自查抓到的回归）。落 NO_FIX 的
+    >    实际是三类：`targets_baseline_missing`（缺的是**兄弟**文件，重写本文件
+    >    治不了）、`semantic_unavailable` / `_check_crashed` / `_unparseable`
+    >    （**复审器**故障，基础设施问题不是内容缺陷）、LLM 漏写 `json_path` 的
+    >    降级兜底。`json_syntax` 豁免（T0 在原始文本上修、不走
+    >    `apply_field_patch`，且不可 defer——归入根锚点会让它硬 ERROR）。
+    >    另加根替换类型守卫：改变文档顶层类型的根替换直接拒（T0 撞上视为不可修，
+    >    留给 defer，而不是把文件搅坏）。
+    > 2. **T2 也做即时 scoped 复验。** 本条只给 T1 装了"复验过了才算 resolved"
+    >    的 spin 守卫，而 `semantic` / `cross_file` 全部路由 `(2,2)`——最需要
+    >    复验的判断类问题恰好完全没有复验，T2 `apply == resolved`。
+    > 3. **L3 gate 覆盖本轮全部被改文件。** 原以"Phase A 报过语义问题"建
+    >    `l3_file_set`，但 checker pipeline 对有 L0–L2 error 的文件跳过 L3
+    >    （有意设计），故"Phase A 没报语义问题"通常意味着 L3 压根没跑；结果
+    >    T0 刚修完 schema 错的文件整轮零语义复审仍报 PASS（实测语义 checker
+    >    调用 0 次）。
+    > → logs/change_logs/2026-07-16_103421_fix-from-fullreview.md。
+
     **背景**：决策 #61 落地后重跑 phase 3，S001 的 repair 在
     `某角色 voice_state.target_voice_map[*].dialogue_examples` 的 `min_examples`
     （coverage_shortage）与 L3 语义 issue 之间**死循环 1.5h**——T2 fixer 凑对白

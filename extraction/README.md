@@ -409,12 +409,17 @@ note_id 格式 `SN-S{stage:03d}-{seq:02d}`；stage 保持 COMMITTED，不新增�
 
 **未决修复延后**（`[repair].defer_unresolved_semantic`，代码默认 false，本项目开）：
 与 triage（源小说 bug）不同，这里处理"提取确有错但 capped tiers（T0–T2）
-追不平"的残留。某 stage repair 收尾后残留 `error` **全部落在
-`DEFERRABLE_CATEGORIES = {semantic, schema, structural, cross_file}`** 时，
-不判 ERROR 停机——写台账 `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`
-（随 stage commit 提交），stage 当 PASS 继续。残留含 `json_syntax`（文件不可解析，
-阻断所有下游读取）或 repair worker 崩溃仍硬 ERROR。台账留待 Phase 3.5 收尾修复
-pass 逐条精准修（不重跑 stage）。判据 + 写出：
+追不平"的残留。某 stage repair 收尾后，若**每个**失败文件残留的问题都可延后
+——`error` 落在 `DEFERRABLE_CATEGORIES = {semantic, schema, structural,
+cross_file}`，或是 `coverage_shortage` 薄内容残留（`severity=warning` 但仍
+阻塞协调器，只看 severity 会让它因薄内容硬停机）——则不判 ERROR 停机：写台账
+`works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`（随 stage commit
+提交），stage 当 PASS 继续。仍硬 ERROR 的两种：残留 `json_syntax`（文件不可
+解析，阻断所有下游读取），以及 repair worker 崩溃。
+判定**逐文件进行**而非把所有 issue 摊平——崩溃产生的合成结果 `issues=[]`
+对摊平集合毫无贡献，按整池判会让崩溃文件搭兄弟文件可延后 issue 的顺风车
+提交、且不进台账，Phase 3.5 收尾 pass 永远不会知道它。
+台账留待 Phase 3.5 收尾修复 pass 逐条精准修（不重跑 stage）。判据 + 写出：
 `persona_extraction/lifecycle/deferred_repair_log.py`。
 
 代码：`repair/`

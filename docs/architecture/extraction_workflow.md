@@ -775,14 +775,31 @@ orchestrator (Python)
   schema type·minLength·maxLength·additionalProperties·required / id-format /
   stage_id_alignment）→ start T0 cap T1；judgement-no-source（enum）→ T1 cap T1；
   semantic / cross_file / needs-original-text → start T2 cap T2；
-  coverage_shortage → T2 + 0-token 程序构造 SourceNote。每个 tier 封顶
-  **2** 次尝试（第 2 次只重打"立即 scoped L0–L2 复检仍失败"的字段），达到
-  max_tier 仍未解决即停止升级、走 defer 台账。**单遍**（一次 Phase A→B→C，
-  无 file-level lifecycle 重置、无整文件重生成）。T1 把该文件所有 issue 批成
-  一次 LLM 调用、写回后立即 scoped L0–L2 复检（issue 不再出现才算解决，杜绝
-  "自报已修"空转）。
-  Phase B 每轮在 L0–L2 scoped recheck 后，对"本轮被修改 + Phase A 有过 L3 问题"的
-  文件集合跑一次 **L3 gate**，把语义层的失败回灌进下一轮 issue 队列。
+  coverage_shortage → T2 + 0-token 程序构造 SourceNote。
+  **根锚点例外**：`json_path == "$"` 的 issue **永不升到 LLM 层**——把根路径
+  交给 T1/T2 就是让模型重写整个文件，正是 #62 删掉的 T3 换个马甲
+  （`apply_field_patch` 的根分支会拿返回值整体替换文档）。故根锚点 issue
+  的 `max_tier` 钳到 T0；若它本来就起步于 LLM 层（`start_tier >= 1`），则无
+  fixer 可用 → `NO_FIX_TIER` → 直接落 defer 台账。**T0 仍允许**：它打的是
+  *子*路径（`$.field`）+ 确定性默认值，从不动根本身，所以「缺顶层 required
+  字段」这类仍是机械可修的。落到 NO_FIX 的实际是三类：
+  `targets_baseline_missing`（缺的是**兄弟**文件，重写本文件治不了）、
+  `semantic_unavailable` / `semantic_check_crashed` / `semantic_unparseable`
+  （**复审器**故障，基础设施问题不是内容缺陷）、LLM 漏写 `json_path` 的降级
+  兜底。`json_syntax` 豁免——它由 T0 在原始文本上修、不走 `apply_field_patch`，
+  且不可 defer。另有类型守卫：根替换若改变文档顶层类型直接拒绝（T0 撞上即
+  视为不可修，留给 defer，而不是把整个文件搅坏）。
+  每个 tier 封顶 **2** 次尝试（第 2 次只重打"立即 scoped L0–L2 复检仍失败"的
+  字段），达到 max_tier 仍未解决即停止升级、走 defer 台账。**单遍**（一次
+  Phase A→B→C，无 file-level lifecycle 重置、无整文件重生成）。T1 / T2 都把
+  该文件的 issue 批成一次 LLM 调用、写回后立即 scoped L0–L2 复检（issue 不再
+  出现才算解决，杜绝"自报已修"空转）。
+  Phase B 每轮在 L0–L2 scoped recheck 后，对**本轮被修改的全部文件**跑一次
+  **L3 gate**，把语义层的失败回灌进下一轮 issue 队列。gate 集合**不能**只取
+  "Phase A 报过 L3 问题"的文件——checker pipeline 对有 L0–L2 error 的文件跳过
+  L3（有意设计：不为 schema 已坏的文件烧 token），所以"Phase A 没报语义问题"
+  通常意味着 L3 压根没跑；据此建集会让 T0 刚修完 schema 错的文件整轮零语义
+  复审还报 PASS。
   Phase C 优先复用最后一次 gate 的结果。字段级精确修补（json_path 定位），
   不整文件回滚 / 不整文件重写。
   安全阀：回归保护（introduced ≥ resolved → 停止该 tier、升级）、收敛检测
@@ -819,14 +836,18 @@ orchestrator (Python)
 - **未决语义延后（record-and-continue，`[repair].defer_unresolved_semantic`）**：
   与 triage 不同——triage 处理"源小说自带 bug"，这里处理"提取确有错但自动修
   复追不平"的 L3 残留（跨字段一致性、L3 semantic reviewer 非确定性导致修复
-  循环不收敛）。开关开启时，若某 stage 全部文件 repair 收尾后残留的 `error`
-  落在**可延后类别**（`semantic` / `schema` / `structural` / `cross_file`），
-  则不判 ERROR 停机：把未决 issue 写进 durable 台账
+  循环不收敛）。开关开启时，若某 stage **每个**失败文件残留的问题都可延后
+  ——`error` 落在**可延后类别**（`semantic` / `schema` / `structural` /
+  `cross_file`），或是 `coverage_shortage` 残留（`severity=warning` 但仍阻塞
+  协调器；只按 severity 判会让薄内容把 stage 硬停机，正是 #62 要消除的
+  min_examples 死锁）——则不判 ERROR 停机：把未决 issue 写进 durable 台账
   `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`（每行含
   stage_id/file/json_path/category/severity/rule/message；置于 `works/` 下
   非 `progress/`，随 `commit_stage` 的 `git add -A works/{work_id}/` 一并提交），
   stage 当 PASS 处理继续提交。**只有 `json_syntax`（文件不可解析、下游读不了）
-  或 repair worker 崩溃（无 error issue）才走硬 ERROR。** 台账由未来的 Phase 3.5 收尾修复 pass
+  或 repair worker 崩溃才走硬 ERROR。** 判定**逐文件**进行而非摊平所有 issue：
+  崩溃产生的合成结果 `issues=[]` 对摊平集合无贡献，按整池判会让崩溃文件搭
+  兄弟文件的顺风车提交且不进台账。台账由未来的 Phase 3.5 收尾修复 pass
   消费，逐条精准修（field-level）而不重跑整个 stage。代码默认 `false`（保留
   停机语义），本项目 `config.toml` 开启。写出装置：
   `extraction/persona_extraction/lifecycle/deferred_repair_log.py`。

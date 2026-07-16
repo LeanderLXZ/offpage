@@ -61,8 +61,13 @@ push 默认值等）。skill 不再跨分支自动合并 —
 - `*.sqlite*`
 - `embeddings/`
 - `caches/`
-- `works/`（extraction 产物）
-- `users/`（真实用户包）
+- `works/`（extraction 产物）—— **限 `main` / 框架提交**。`main` 只跟踪
+  `works/README.md`。在 `extraction/{work_id}` 分支上，
+  `works/*/analysis/` + `works/*/indexes/` 是 canonical 跟踪对象
+  （决策 #42），由 orchestrator 逐 stage 提交；`works/*/retrieval/` 与
+  `works/*/analysis/scene_splits/` 始终不跟踪（决策 #39/#42）。
+  三分支模型见 `ai_context/architecture.md` §Git 分支模型。
+- `users/`（真实用户包）—— `users/_template/` 除外（脚手架模板，已跟踪）
 - `logs/file_snapshots/`（skill 快照备份，仅本地）
 
 ## Source directories <!-- holo:heading -->

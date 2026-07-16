@@ -189,15 +189,16 @@ triage_accept_cap_per_file = 5
 # `rate_limit_pause.json` 时降到 4-5。1 = 单线程（旧行为）。
 repair_concurrency = 10
 
-# 未决语义（L3）问题「记录+继续」开关。开启后，若某 stage 的 repair 收尾
-# 时残留的 error 只剩 category=="semantic"（跨字段一致性等 L3 问题，
-# field-level 自动修复常追不平），则不判 ERROR 停机——把未决 issue 写进
+# 未决 repair 问题「记录+继续」开关。开启后，若某 stage 的 repair 收尾时
+# 残留的问题全部可延后——category ∈ {semantic, schema, structural,
+# cross_file}（封顶的 T0–T2 追不平的那些），或 coverage_shortage 薄内容
+# 残留（severity=warning 但仍阻塞）——则不判 ERROR 停机：把未决 issue 写进
 # `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl`（随 stage
 # commit 一起提交），stage 照常提交继续跑；跑完全部 stage 后由 Phase 3.5
-# 收尾修复 pass 读台账逐条精准修，不重跑整个 stage。任何残留的
-# json_syntax / schema / structural / cross_file error（或 repair worker
-# 崩溃）仍然硬 ERROR——那些会让下游 stage 读不了。代码默认 false（保留
-# 停机语义）；本项目开启。
+# 收尾修复 pass 读台账逐条精准修，不重跑整个 stage。
+# 仍然硬 ERROR 的只有两种：残留 json_syntax error（文件不可解析，下游
+# stage 读不了），以及 repair worker 崩溃（该文件从未被校验，不能靠兄弟
+# 文件的可延后 issue 蒙混过关）。代码默认 false（保留停机语义）；本项目开启。
 defer_unresolved_semantic = true
 
 

@@ -97,8 +97,8 @@ def _build_fixers(
     retriever: ContextRetriever | None = None,
     pipeline: CheckerPipeline | None = None,
 ) -> dict[int, object]:
-    # T1's immediate re-verify: scoped L0–L2 recheck (0 token) returning
-    # the set of issue fingerprints still present after a patch.
+    # Immediate re-verify for the LLM tiers: scoped L0–L2 recheck (0 token)
+    # returning the set of issue fingerprints still present after a patch.
     verify_fn: Callable[[list[FileEntry]], set[str]] | None = None
     if pipeline is not None:
         def verify_fn(files: list[FileEntry]) -> set[str]:
@@ -108,7 +108,8 @@ def _build_fixers(
     return {
         0: ProgrammaticFixer(),
         1: LocalPatchFixer(llm_call=llm_call, verify_fn=verify_fn),
-        2: SourcePatchFixer(llm_call=llm_call, retriever=retriever),
+        2: SourcePatchFixer(llm_call=llm_call, retriever=retriever,
+                            verify_fn=verify_fn),
     }
 
 
@@ -292,10 +293,17 @@ def _run_one_lifecycle(
               severity=i.severity,
               message=i.message,
               start_tier=start_tier)
-    had_semantic = any(i.category == "semantic" for i in all_issues)
-    l3_file_set: set[str] = {
-        i.file for i in all_issues if i.category == "semantic"
-    }
+    # A file only receives an L3 verdict in Phase A when it was already clean
+    # at L0–L2 — ``CheckerPipeline`` skips higher layers for files with a
+    # lower-layer error (by design: don't burn tokens semantically reviewing a
+    # schema-broken file). So "Phase A reported no semantic issue" does NOT
+    # mean "this file passed semantic review"; it usually means L3 never ran.
+    # Keying the gate on Phase A's semantic issues therefore let a file whose
+    # L0–L2 errors T0 had just fixed sail through the whole round with zero
+    # semantic review and still report PASS. Track every file under review and
+    # let the L3 gate below re-check whichever of them this round modified.
+    had_semantic = config.run_semantic
+    l3_file_set: set[str] = {f.path for f in files}
 
     # =================================================================
     # Phase B — Fix loop (with embedded L3 gate + triage hooks)
@@ -394,8 +402,16 @@ def _run_one_lifecycle(
         ]
 
         # ---- L3 gate ----
+        # Gate the files this round actually modified, minus any that still
+        # carry an L0–L2 error: the checker pipeline skips L3 for those on
+        # purpose (don't burn tokens semantically reviewing a schema-broken
+        # file), and the round is going to FAIL on that error anyway — a
+        # semantic verdict here buys no decision.
         gate_blocking: list[Issue] = []
-        gate_targets = l3_file_set & modified_files
+        still_broken = {
+            i.file for i in recheck_blocking if i.severity == "error"
+        }
+        gate_targets = (l3_file_set & modified_files) - still_broken
         if (config.l3_gate_enabled and config.run_semantic
                 and gate_targets):
             logger.info(
@@ -485,11 +501,21 @@ def _run_one_lifecycle(
                   carried=len(last_gate_issues or []))
             final_issues.extend(last_gate_issues or [])
         else:
-            logger.info(
-                "Phase C: fallback semantic verification (gate never ran)")
-            _emit("phase_c", mode="fallback_l3")
-            l3_fallback = pipeline.run_layer(files, layer=3)
-            final_issues.extend(l3_fallback)
+            # Same rule as the gate: only files that are clean at L0–L2 get a
+            # semantic verdict. ``run_layer`` bypasses the pipeline's
+            # prior-error skip, so without this filter a file with an
+            # unfixable schema error would burn an L3 call it cannot act on.
+            still_broken = {
+                i.file for i in final_issues if i.severity == "error"
+            }
+            fallback_files = [f for f in files if f.path not in still_broken]
+            if fallback_files:
+                logger.info(
+                    "Phase C: fallback semantic verification on %d clean "
+                    "file(s) (gate never ran)", len(fallback_files))
+                _emit("phase_c", mode="fallback_l3")
+                l3_fallback = pipeline.run_layer(fallback_files, layer=3)
+                final_issues.extend(l3_fallback)
 
     final_blocking = _filter_blocking(final_issues, config)
     passed = len(final_blocking) == 0

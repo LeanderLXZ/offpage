@@ -104,6 +104,10 @@ JSON 结构（**注意：示例中的 `chapter_count` 故意用非整数倍数�
 
 ## 规则
 
+- **`maxLength` / `maxItems` 是上限不是配额**：schema 给的 `stage_title` /
+  `boundary_reason` 长度上限只是硬门控，不是要写到的目标。短标题能几个字说清
+  就几个字，切分理由有多少依据就写多少——**不要为了撑满 maxLength 而堆砌
+  修饰或复述剧情**。
 - 中文作品的 work_id 使用中文；`stage_id` 使用紧凑英文代号 `S###`（如 `S001`），`stage_title` 使用中文短标题
 - 产出文件必须是格式良好的 JSON
 - 你**只**负责 stage_plan，不要尝试产出 foundation / candidate_characters（它们由其他 lane 并行处理）

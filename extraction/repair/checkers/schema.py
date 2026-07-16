@@ -51,8 +51,7 @@ class SchemaChecker(BaseChecker):
         validator = _jsonschema.Draft202012Validator(schema)
         for error in sorted(validator.iter_errors(data),
                             key=lambda e: list(e.absolute_path)):
-            path_parts = [str(p) for p in error.absolute_path]
-            json_path = (prefix + "." + ".".join(path_parts)) if path_parts else prefix
+            json_path = _build_json_path(prefix, error.absolute_path)
 
             # additionalProperties anchors at the offending *container*;
             # extract_subtree on a container makes a downstream T1 patch
@@ -94,6 +93,25 @@ class SchemaChecker(BaseChecker):
                 },
             ))
         return issues
+
+
+def _build_json_path(prefix: str, absolute_path) -> str:
+    """Render a jsonschema ``absolute_path`` as a ``field_patch`` json_path.
+
+    Array indices arrive as ``int`` and MUST render as ``[i]``, not ``.i``:
+    ``field_patch._parse_path`` reads a dot-token as a string key, so a
+    ``$.relationships.1.attitude`` path makes ``_navigate`` try a str lookup
+    on a list and raise ``KeyError`` — every tier then silently skips the
+    issue. Bracket form matches what the structural / semantic checkers
+    already emit.
+    """
+    path = prefix
+    for part in absolute_path:
+        if isinstance(part, int) and not isinstance(part, bool):
+            path += f"[{part}]"
+        else:
+            path += f".{part}"
+    return path
 
 
 def _unexpected_keys(error) -> list[str]:

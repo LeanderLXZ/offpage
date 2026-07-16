@@ -80,7 +80,12 @@ def preflight_check(project_root: Path,
         # Check if all dirty files match ignore patterns
         ignore = ignore_patterns or []
         scopes = scope_paths or []
-        status_proc = _git(["status", "--porcelain"], project_root)
+        # `-c core.quotePath=false` — see commit_stage: without it git
+        # octal-escapes non-ASCII paths (Chinese work_id) and the
+        # `startswith(scope)` check below silently never matches.
+        status_proc = _git(
+            ["-c", "core.quotePath=false", "status", "--porcelain"],
+            project_root)
         dirty_lines = [l for l in status_proc.stdout.strip().splitlines()
                        if l.strip()]
         significant = []
@@ -158,7 +163,12 @@ def checkout_main(project_root: Path,
     scoped_dirty: list[str] = []
     if not gs.clean:
         scopes = scope_paths or []
-        status_proc = _git(["status", "--porcelain"], project_root)
+        # `-c core.quotePath=false` — see commit_stage: without it git
+        # octal-escapes non-ASCII paths (Chinese work_id), `scoped_dirty`
+        # stays empty, and this guard waves extraction artifacts onto main.
+        status_proc = _git(
+            ["-c", "core.quotePath=false", "status", "--porcelain"],
+            project_root)
         for line in status_proc.stdout.strip().splitlines():
             if not line.strip():
                 continue

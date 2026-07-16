@@ -19,10 +19,18 @@ def apply_field_patch(original: dict | list, json_path: str,
 
     Supports paths like ``$.foo.bar[0].baz`` and ``$.relationships[角色B]``.
     Raises KeyError / IndexError if the path does not exist.
+
+    Root replacement (``json_path == "$"``) requires *new_value* to keep the
+    document's top-level type; a type change would silently swap the whole
+    file for something a dict-shaped checker skips instead of flagging.
     """
     obj = copy.deepcopy(original)
     tokens = _parse_path(json_path)
     if not tokens:
+        if type(new_value) is not type(original):
+            raise TypeError(
+                f"root patch would change the document type from "
+                f"{type(original).__name__} to {type(new_value).__name__}")
         return new_value  # root replacement
 
     parent = obj

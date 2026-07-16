@@ -1760,7 +1760,7 @@ extraction prompt 中注入 importance 和对应最低 examples 数，使 LLM �
 |------|------|------|---------|
 | T0 programmatic | JSON 语法修复（转义、尾逗号、截断闭合）+ schema 违规修复（截断/填充/类型转换/enum 模糊匹配/补空字段）+ ID 格式正则替换 | 0 token | 2 |
 | T1 local_patch | 字段级微修补——不需要原文。把该文件所有 issue **批成一次 LLM 调用**，据 issue 描述 + 当前字段值 + 同文件上下文生成 patch，写回后立即做 **scoped L0–L2 复检**——某字段的 issue 不再出现才算解决（杜绝"自报已修"空转）。适用于：补写示例、调整数值、补充缺失子字段 | 少量 token | 2 |
-| T2 source_patch | 字段级原文修补——需要回到原始章节。两步定位：(1) 在 chapter_summaries 中按关键词搜索定位相关章节号（0 token）；(2) 加载原始章节文本作为 LLM 上下文。适用于：事实性错误修正、遗漏事件补充、关系偏差修正、跨文件 / 语义类 issue | 中等 token | 2 |
+| T2 source_patch | 字段级原文修补——需要回到原始章节。两步定位：(1) 在 chapter_summaries 中按关键词搜索定位相关章节号（0 token）；(2) 加载原始章节文本作为 LLM 上下文。与 T1 同样：写回后立即做 **scoped L0–L2 复检**——issue 不再出现才算解决（语义 / cross_file 全部起步 T2，若只给 T1 装复验，最需要它的判断类问题反而完全没有）。适用于：事实性错误修正、遗漏事件补充、关系偏差修正、跨文件 / 语义类 issue | 中等 token | 2 |
 
 **同 tier 第 2 次尝试的差异化**（避免盲目重跑；第 2 次只打 scoped 复检仍失败的字段）：
 
@@ -1816,7 +1816,9 @@ repair 是**单遍**（一次 Phase A→B→C），无 file-level lifecycle 重�
 ```
 阶段 A: 首次全量检查 (每文件 1 次 LLM 调用 L3)
   L0 → L1 → L2 → L3(semantic)
-  产出完整 issue list; 记录"Phase A 有 L3 问题"的文件集合 L3_files
+  产出完整 issue list
+  注意: 有 L0–L2 error 的文件在 A 阶段被跳过 L3 (有意设计), 所以
+  "A 阶段没报语义问题" ≠ "该文件语义干净" —— 不得据此建集
 
 阶段 B: 修复循环 (多轮, 单遍)
   每一轮:
@@ -1825,6 +1827,11 @@ repair 是**单遍**（一次 Phase A→B→C），无 file-level lifecycle 重�
        coverage_shortage 走 START_TIER=T2 / MAX_TIER=T2, T2 scoped
        recheck 后仍不足 → coverage_shortage triage (0 token, 程序构造
        SourceNote), 通过则从队列剔除
+       根锚点例外: json_path 为 "$" 的 issue 永不升 LLM 层 (交给 T1/T2 =
+       让模型重写整个文件 = 已删的 T3) —— MAX_TIER 钳到 T0; 本就起步
+       LLM 层的 (targets_baseline_missing / semantic_unavailable 等)
+       无 fixer 可用, 直接进 defer 台账。json_syntax 豁免 (T0 在原始
+       文本上修, 且不可 defer)
     2. 每个 issue 在其 (start_tier, max_tier) 区间内逐 tier 尝试, 每
        tier 封顶 2 次; 达到 max_tier 仍 blocking 的语义类 issue 先跑
        source_discrepancy triage:
@@ -1834,25 +1841,33 @@ repair 是**单遍**（一次 Phase A→B→C），无 file-level lifecycle 重�
        → 通过校验的记入 accept_with_notes (受 accept_cap_per_file 约束)
        → 剩余未接受的 issue 进入 defer 台账 (见 §11.4.7)
     3. 每次 fix 后 scoped recheck: 只 L0+L1+L2, 检查被 patch 的子树
-    4. 本轮结束后, 若 L3_files 中的任一文件本轮被 patch 过:
-       → L3 gate: 对被 patch 的 L3_files 子集重跑 L3
+    4. 本轮结束后, 对"本轮被 patch 过 且 已无 L0–L2 error"的文件:
+       → L3 gate: 重跑 L3
+         (仍有 L0–L2 error 的不进 gate —— 本轮注定 FAIL 在那个 error 上,
+          语义结论买不到任何决策; 与 A 阶段的跳过规则一致)
        → 若 gate 仍有 blocking → triage (与上同机制):
           通过校验 & 未超 cap 的记入 accept_with_notes、从队列剔除
           剩余的并入下轮 issue 队列, 逐 tier 升到各自 max_tier 封顶
     5. tracker 记录 gate 指纹集合, 供"L3 gate 反复"安全阀检测
-  semantic checker 在 B 中按需调用, 但只针对本轮被 patch 过的 L3_files
+  semantic checker 在 B 中按需调用, 只针对本轮被 patch 且已无 L0–L2 error
+  的文件
   Triage 调用的文本加载走 chapter LRU 缓存 (与 T2 共享)
 
 阶段 C: 最终语义确认 (0 次新增 LLM 调用)
   复用 Phase B 最后一轮 gate 的结果 (已经 triage 过):
     → 若 gate 返回空 → 通过
-    → 若 gate 仍返回 blocking issue:
-        · 剩余全为可延后类别 (semantic / schema / structural / cross_file)
+    → 若 gate 仍返回 blocking issue (判定逐文件进行, 不摊平 issue 池):
+        · 每个失败文件的残留都可延后 —— error 属可延后类别
+          (semantic / schema / structural / cross_file), 或是
+          coverage_shortage 残留 (severity=warning 但仍阻塞协调器)
           → 写 defer 台账, record-and-continue (当 PASS 提交)
         · 长度类残留 (schema_validation 命中 minLength/maxLength) 先调
           validate_with_length_tolerance (relaxed ×0.9 floor / ×1.1 ceil),
           pass 即改判 PASS (决策 #48)
-        · 仅 json_syntax (文件不可解析) 或 repair worker 崩溃 → ERROR 停机
+        · 任一文件残留 json_syntax (文件不可解析) 或 repair worker 崩溃
+          → ERROR 停机。崩溃必须逐文件判 —— 崩溃的合成结果 issues=[] 对
+          摊平集合无贡献, 按整池判会让崩溃文件搭兄弟文件可延后 issue 的
+          顺风车提交且不进台账
   Phase C 不再独立触发 L3 checker
 ```
 
@@ -1884,20 +1899,23 @@ commit）就**永远不会看到半同步状态**。重跑失败按首次失败�
 stage 进入 ERROR（`error_message` 前缀 `post-repair PP:` 以区分
 首次 PP 失败），`--resume` 重试。
 
-**L3 gate 触发条件**：一个文件进入 gate 当且仅当以下两点同时满足——
-(1) 它在 Phase A 就有过 L3 issue（即属于 L3_files 集合）；
-(2) 本轮 Phase B 的修复操作改动过该文件。
-没被改动的文件 gate 不会重复跑（节省 LLM 调用）。
+**L3 gate 触发条件**：一个文件进入 gate 当且仅当**本轮 Phase B 的修复操作
+改动过它**。没被改动的文件 gate 不会重复跑（节省 LLM 调用）。
+**不得**再加「且它在 Phase A 有过 L3 issue」这一条：checker pipeline 对
+有 L0–L2 error 的文件会跳过 L3（有意设计，不为 schema 已坏的文件烧 token），
+所以「Phase A 没报语义问题」通常意味着 L3 压根没跑，而非该文件语义干净；
+据此建集会让 T0 刚修完 schema 错的文件整轮零语义复审仍报 PASS。
 
 **L3 gate 失败后的升级链**：gate 返回的 issue 其 `category` 为
 `semantic`，按 rule 路由 `START_TIER=T2`（语义类需原文），T2 封顶 2 次
 仍 blocking 即走 source_discrepancy triage，未被接受的进 defer 台账——
 不再整文件重写、不停机。
 
-**LLM 预算（给定 N 个文件、其中 M 个有 Phase A 语义问题、最多 R 轮）**：
+**LLM 预算（给定 N 个文件、最多 R 轮）**：
 - Phase A: N 次（每文件一次）
-- Phase B: 最多 M × R 次 L3 gate 调用（只复核被改动过的 L3_files）
-  + 最多 M × R 次 triage 调用（每文件残留语义问题批量一次，上限；
+- Phase B: 最多 N × R 次 L3 gate 调用（只复核本轮被改动过的文件——实际每轮
+  被改动的通常远少于 N）
+  + 最多 N × R 次 triage 调用（每文件残留语义问题批量一次，上限；
     实际大多数文件只触发 1 次甚至 0 次）
 - Phase C: 0 次新增
 

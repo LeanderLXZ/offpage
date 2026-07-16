@@ -142,7 +142,7 @@
     "triage_round": {
       "type": "integer",
       "enum": [1, 2],
-      "description": "1 = 在 T3 触发之前被 triage 接受；2 = T3 跑完且 L3 gate 仍有残留时被 triage 接受。"
+      "description": "1 = max_tier 封顶后、defer 之前被 triage 接受；2 = L3 gate 之后仍有残留时被 triage 接受。"
     }
   }
 }
