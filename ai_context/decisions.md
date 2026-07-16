@@ -240,7 +240,7 @@ N. <决策陈述，一行>。
 45. 单源 TOML 配置在 `extraction/config.toml`（loader `extraction/persona_extraction/core/config.py`）。
     → docs/decisions.md #45。
 
-46. Token 限额自动暂停（订阅模型，§11.13）—— `RateLimitController` 解析 DST 感知的 reset，写 flock 合并的 `rate_limit_pause.json`，在预启动 + 每次 `run_with_retry` 处阻塞，reset 后重跑失败的 prompt 且不消耗重试槽。
+46. Token 限额自动暂停（订阅模型，§11.13）—— `RateLimitController` 解析 DST 感知的 reset，写 flock 合并的 `rate_limit_pause.json`，在预启动 + 每次 `run_with_retry` 处阻塞，reset 后重跑失败的 prompt 且不消耗重试槽。ISO 分支必须校验解析结果在未来才采信（它不以 `reset` 关键字锚定，会命中日志前缀 / 请求时间戳；`resume_at` 落在过去 → `wait_s<=0` → `attempt -= 1` 重发 → 零间隔热循环无退避）。
     → docs/decisions.md #46。
 
 47. Phase 0 摘要子进程超时 = `[phase0].summarize_timeout_s`（默认 1800s），而不是历史上借用的 `[phase3].review_timeout_s`（600s）。
@@ -287,6 +287,9 @@ N. <决策陈述，一行>。
 
 62. **repair 去掉全文重跑（T3）+ 按 rule 分层路由 + 每 tier 封顶 + defer 扩展。** repair 只剩 3 层就地修复：T0（程序，0 token）→ T1（`local_patch`，LLM，**不载 source**）→ T2（`source_patch`，LLM，载章节原文）。**删除 T3 `file_regen` 全文重生成**（含 `sub_lane_regen` / `lane_regen`，全 phase），删 `file_regen.py`；**单轮** Phase A→B→C（去掉 lifecycle 2 / `max_lifecycles_per_file` / `T3_TRIGGERED` / `T3_EXHAUSTED`）。issue 按 **rule（回退 category）** 路由到 `(start_tier, max_tier)`：机械类（json_parse / schema type·min-maxLength·additionalProperties·required / id-format / stage_id_alignment）起 T0 封顶 T1；判断类无源（enum）起 T1 封顶 T1；语义 / cross_file / 需原文 起 T2 封顶 T2；`coverage_shortage`（min_examples 薄内容）→ T2 + 0-token SourceNote 接受（不进 padding，砍打地鼠）。**`$` 根锚点 issue 永不升 LLM 层**（`max_tier` 钳到 T0；本就起步 LLM 层的 → `NO_FIX_TIER` 直接 defer）——把根路径交给 T1/T2 就是让模型重写整个文件，即被删的 T3 换马甲；T0 仍允许（它打 `$.field` 子路径 + 确定性默认值，不动根本身，故「缺顶层 required」仍机械可修）。落 NO_FIX 的实际是 `targets_baseline_missing` / `semantic_unavailable`·`_crashed`·`_unparseable` / LLM 漏写 json_path 的兜底；`json_syntax` 豁免（T0 在原始文本上修、且不可 defer）。另有根替换类型守卫。每 tier ≤2 次，第 2 次只针对即时复验仍未过的字段。**T1 与 T2** apply patch 后都立即 scoped L0–L2 复验，过了才算 resolved（止 self-report-resolved spin）+ 同文件多 issue 批量单次 call。**L3 gate 覆盖本轮全部被改文件**——不能只取"Phase A 报过语义问题"的文件：checker 对有 L0–L2 error 的文件跳过 L3，据此建集会让 T0 刚修完 schema 错的文件整轮零语义复审仍报 PASS。修不平的残留按 #60 defer，不再靠 T3 硬扛。decision #48 长度容差门保留，改在封顶后触发。
     → docs/decisions.md #62。
+
+63. **LLM 子进程起在独立进程组，超时杀整棵树。** `Popen(start_new_session=True)` + 超时 `killpg`（而非只 `proc.kill()` 直接子进程）；收尾 `communicate()` 另带有限 timeout 兜底。代价：子进程不再收终端 Ctrl+C（有意取舍，换无人值守不死锁）。**三件配套，缺一即退化**：无 `start_new_session` 时子进程与 orchestrator 同组、killpg 会自杀（helper 有守卫拒绝）；信号 handler 必须经 `terminate_all_children()` 在**放锁前**杀掉在飞子进程，否则停机要空转到子进程超时（≤3600s）而 PID 锁已谎称无人在跑。
+    → docs/decisions.md #63。
 
 ## Repository
 

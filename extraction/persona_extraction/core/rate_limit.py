@@ -187,7 +187,21 @@ def parse_reset_time(
             dt = datetime.fromisoformat(iso)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            return dt
+            if dt > now:
+                return dt
+            # A reset time in the past is not a reset time. Unlike branches 2
+            # and 3, this pattern is NOT anchored on a "reset" keyword — it
+            # matches any ISO timestamp anywhere in stderr, so a log prefix or
+            # a request timestamp lands here too. Trusting one would put
+            # ``resume_at`` in the past → ``wait_if_paused`` computes
+            # ``wait_s <= 0`` → clears the pause and returns immediately →
+            # ``run_with_retry`` re-sends the same prompt with ``attempt -= 1``
+            # (a pause must not consume a retry slot) → a zero-interval hot
+            # loop with no backoff and no attempt ceiling. Fall through to the
+            # anchored patterns instead.
+            logger.warning(
+                "rate_limit: ignoring ISO timestamp %s — not in the future "
+                "(now=%s); it is probably not a reset time", dt, now)
         except ValueError:
             pass
 

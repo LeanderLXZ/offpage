@@ -73,7 +73,9 @@ from .lifecycle.manifests import (
     write_works_manifest,
     write_world_manifest,
 )
-from .core.llm_backend import LLMBackend, LLMResult, run_with_retry
+from .core.llm_backend import (
+    LLMBackend, LLMResult, run_with_retry, terminate_all_children,
+)
 from .phases.post_processing import run_stage_post_processing
 from .core.process_guard import PidLock, fmt_memory, get_rss_mb
 from .lifecycle.progress import (
@@ -561,6 +563,15 @@ class ExtractionOrchestrator:
             self.phase3.save(self.project_root)
         if self.pipeline:
             self.pipeline.save(self.project_root)
+        # Kill in-flight LLM children BEFORE dropping the lock. Lane threads are
+        # non-daemon and block in communicate(), and since #63 the children have
+        # their own session and no longer die with the terminal — so sys.exit
+        # below would hang in the executor join until each child hits its own
+        # timeout (up to [phase3].extraction_timeout_s). Releasing the lock
+        # first would advertise "nobody is running" for that entire window while
+        # lanes keep writing, letting a second --resume start concurrently on
+        # the same work tree.
+        terminate_all_children()
         self._lock.release()
         sys.exit(130)
 

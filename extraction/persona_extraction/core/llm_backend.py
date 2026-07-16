@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -58,6 +59,97 @@ def _classify_rate_limit(text: str) -> bool:
 
 
 _HB_RING_MAXLEN = 20
+
+# How long to wait for the pipes to drain after killing a timed-out child.
+# Bounded on purpose: the kill below should make EOF immediate, so this only
+# ever fires if something escaped the process group. Never wait forever here —
+# an unattended run would deadlock the lane thread until someone notices.
+_REAP_TIMEOUT_S = 30
+
+
+# Live LLM children, so a signal handler can take them down before the
+# orchestrator lets go of its PID lock. Without this the handler releases the
+# lock and calls sys.exit, but the lane threads are non-daemon and still blocked
+# in communicate() — the interpreter waits for them, the children (now immune to
+# the terminal's SIGINT) run to their full timeout, and for that whole window the
+# lock file says "nobody is running" while lanes are still writing. See #63.
+_live_children: set[subprocess.Popen] = set()
+_live_children_lock = threading.Lock()
+
+
+def _register_child(proc: subprocess.Popen) -> None:
+    with _live_children_lock:
+        _live_children.add(proc)
+
+
+def _unregister_child(proc: subprocess.Popen) -> None:
+    with _live_children_lock:
+        _live_children.discard(proc)
+
+
+def terminate_all_children() -> int:
+    """Kill every in-flight LLM child tree. Returns how many were signalled.
+
+    Called from the orchestrator's SIGINT / SIGTERM handler BEFORE it releases
+    the PID lock, so the blocked lane threads unblock promptly and the shutdown
+    window stays short instead of stretching to the child timeout (up to
+    ``[phase3].extraction_timeout_s``).
+    """
+    with _live_children_lock:
+        procs = list(_live_children)
+    for proc in procs:
+        try:
+            _terminate_process_tree(proc)
+        except Exception as exc:  # noqa: BLE001 — best effort during shutdown
+            logger.warning("failed to terminate child %s: %s", proc.pid, exc)
+    if procs:
+        logger.warning("Terminated %d in-flight LLM child process tree(s).",
+                       len(procs))
+    return len(procs)
+
+
+def _terminate_process_tree(proc: subprocess.Popen) -> None:
+    """SIGKILL a timed-out child *and everything it spawned*.
+
+    The CLI backends spawn grandchildren (their own Bash tool) which inherit our
+    stdout/stderr pipes. Killing only the direct child leaves those grandchildren
+    holding the write end, so a subsequent ``communicate()`` waits for an EOF that
+    never arrives and the lane thread deadlocks — and ``--max-runtime`` is not
+    preemptive, so nothing breaks the deadlock. Since the child is started with
+    ``start_new_session=True`` it leads its own process group, and one ``killpg``
+    takes the whole tree down.
+
+    That pairing is load-bearing: without ``start_new_session=True`` the child
+    stays in the orchestrator's OWN process group, and ``killpg`` would SIGKILL
+    the orchestrator along with it. The guard below refuses that case rather
+    than trusting every future ``Popen`` site to remember the flag.
+    """
+    try:
+        pgid = os.getpgid(proc.pid)
+    except OSError as exc:  # already reaped — nothing to kill
+        logger.warning("getpgid failed for PID %s (%s) — child already gone?",
+                       proc.pid, exc)
+        return
+    if pgid != os.getpgid(0):
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+            return
+        except OSError as exc:
+            logger.warning("killpg failed for PID %s (%s) — killing child only",
+                           proc.pid, exc)
+    else:
+        # Same group as us: the Popen that made this child forgot
+        # start_new_session=True. Killing the group would take the whole
+        # orchestrator down, so degrade to the (deadlock-prone) child-only kill
+        # and make the misconfiguration loud.
+        logger.error(
+            "PID %s shares the orchestrator's process group (%s) — refusing "
+            "killpg. Its Popen is missing start_new_session=True; grandchildren "
+            "may survive and block the pipes.", proc.pid, pgid)
+    try:
+        proc.kill()
+    except OSError:
+        pass
 
 
 def _heartbeat_visible() -> bool:
@@ -302,7 +394,13 @@ class ClaudeBackend(LLMBackend):
                     cmd, cwd=self.project_root,
                     stdin=prompt_fh,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                    # Own process group so a timeout can kill the whole tree
+                    # (see _terminate_process_tree). Side effect: the child no
+                    # longer receives the terminal's Ctrl+C — the orchestrator's
+                    # own KeyboardInterrupt handling is what stops a run.
+                    start_new_session=True,
                 )
+            _register_child(proc)
 
             print(f"    PID {proc.pid} started {lane_tag}")
 
@@ -337,13 +435,15 @@ class ClaudeBackend(LLMBackend):
             try:
                 stdout, stderr = proc.communicate(timeout=timeout_seconds)
             except subprocess.TimeoutExpired:
-                proc.kill()
+                _terminate_process_tree(proc)
                 try:
-                    stdout, stderr = proc.communicate()
+                    stdout, stderr = proc.communicate(
+                        timeout=_REAP_TIMEOUT_S)
                 except Exception:  # noqa: BLE001
                     stdout, stderr = stdout or "", stderr or ""
                 timed_out = True
             finally:
+                _unregister_child(proc)
                 stop_event.set()
                 hb.join(timeout=2)
 
@@ -469,7 +569,10 @@ class CodexBackend(LLMBackend):
         proc = subprocess.Popen(
             cmd, cwd=self.project_root,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            # Own process group — see the Claude backend above.
+            start_new_session=True,
         )
+        _register_child(proc)
 
         print(f"    PID {proc.pid} started {lane_tag}")
 
@@ -500,13 +603,14 @@ class CodexBackend(LLMBackend):
         try:
             stdout, stderr = proc.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
-            proc.kill()
+            _terminate_process_tree(proc)
             try:
-                stdout, stderr = proc.communicate()
+                stdout, stderr = proc.communicate(timeout=_REAP_TIMEOUT_S)
             except Exception:  # noqa: BLE001
                 stdout, stderr = stdout or "", stderr or ""
             timed_out = True
         finally:
+            _unregister_child(proc)
             stop_event.set()
             hb.join(timeout=2)
 

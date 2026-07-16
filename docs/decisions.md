@@ -454,6 +454,20 @@ N. <决策陈述>。
     / backoff / rate_limit / runtime / logging / git`。
 
 46. Token 限额自动暂停（订阅模型，§11.13）—— `RateLimitController` 解析 DST 感知的 reset，写 flock 合并的 `rate_limit_pause.json`，在预启动 + 每次 `run_with_retry` 处阻塞，reset 后重跑失败的 prompt 且不消耗重试槽。无法解析的 reset → probe 循环（单一选举 leader）。硬停（weekly ≥ `weekly_max_wait_h` 默认 12h；probe ≥ `probe_max_wait_h` 默认 6h）→ exit 2 + `rate_limit_exit.log`。暂停不计入 `--max-runtime`（按 `resume_at` 去重）。→ `docs/requirements.md` §11.13 + `extraction/persona_extraction/core/rate_limit.py`。
+    > **经 T-PREFLIGHT-UNATTENDED-RUN 收紧**（2026-07-16 `/full-review` H8，
+    > 挂机长跑前置）：**ISO 分支必须校验解析结果 `> now` 才采信**，否则不返回该值、
+    > 继续尝试后面两个分支。理由：三个分支里只有 ISO 那条**不以 `[Rr]esets?`
+    > 关键字锚定**（匹配 stderr 中任意位置的时间戳），而它又是**第一个**被尝试的
+    > —— 日志前缀、请求时间戳都会命中。一旦采信一个过去时刻：
+    > `record_pause` 写 `resume_at = 过去 + buffer` → `wait_if_paused` 算出
+    > `wait_s <= 0` → 立即 `_clear()` 返回 → `run_with_retry` 以 `attempt -= 1`
+    > （暂停不消耗重试槽，见上）重发同一 prompt → **零间隔热循环，无退避、无
+    > attempt 上限**，直到窗口耗尽（`weekly` 硬停也走不到，因为 `wait_s` 每次都
+    > ≤ 0）。无人值守时无人喊停，等发现额度已尽。校验失败落到 `None` 是安全的 ——
+    > 走 `parse_fallback_sleep_s` 默认暂停 + probe（§11.13.5）。
+    > 另：`docs/requirements.md` §11.13.4 原把优先级写成「1 绝对 → 2 相对 → 3 ISO」，
+    > 与代码实际的 ISO-first 相反，本轮按代码实情同步（代码是运行真相）。
+    > → logs/change_logs/2026-07-16_112206_preflight-unattended-run.md。
 
 47. Phase 0 摘要子进程超时 = `[phase0].summarize_timeout_s`（默认 1800s），而不是历史上借用的 `[phase3].review_timeout_s`（600s）。原因：一个 Phase 0 chunk 读 `chunk_size` 章（默认 20），并在 opus-4-7 effort=max 下产出 N× per-summary（100–150 字）+ 5 个 chunk 级二级聚合（`chunk_arc_summary` / `chunk_world_rules` / `chunk_power_levels` / `chunk_factions` / `chunk_regions`）；运行时证据表明 wall > 600s 属正常。`phase3.review_timeout_s` 保持 600s，服务它真正对应的 phase 3 reviewer 短链。→ `extraction/config.toml` `[phase0]`、`extraction/persona_extraction/core/config.py::Phase0Config`、`extraction/persona_extraction/orchestrator.py:_summarize_chunk`。
 
@@ -939,6 +953,58 @@ N. <决策陈述>。
     `lifecycle/deferred_repair_log.py`（`DEFERRABLE_CATEGORIES`）、`config.toml` +
     `core/config.py`（去 `max_lifecycles_per_file` / `t3_retry`）。
     → logs/change_logs/2026-07-15_155408_repair-no-reextract.md。
+
+63. **LLM 子进程起在独立进程组，超时杀整棵进程树（用 Ctrl+C 换不死锁）。**
+    **背景**：用户决定挂机长跑首个作品的端到端提取，跑前重筛 `/full-review`
+    留 todo 的项。原实现两个 backend（`ClaudeBackend` / `CodexBackend`）同构：
+    `Popen(...)` 不设进程组 → 超时 `proc.kill()` 只杀直接子进程 → 紧接着
+    `proc.communicate()` **不带 timeout**，等 stdout/stderr 管道 EOF。而
+    `claude -p` 带 `Bash` 工具（`CLAUDE_DEFAULT_TOOLS`）会派生**继承同一对管道**
+    的孙进程；父进程被 SIGKILL（不可捕获，故它也无从清理自己的子进程）后，
+    孙进程仍攥着写端 → EOF 永不到来 → **lane 线程永久阻塞**。
+    `--max-runtime` 非抢占式，救不了；决策 #49 又明确 phase 0 **经常**撞
+    1800s wall，即这条超时路径必被走到。挂机场景下的表现是"卡整夜、日志停在
+    昨晚、且不报错"。A/B 实测复现：旧路径 `communicate` 阻塞 >8s 且孙进程存活；
+    新路径 0.00s 返回且孙进程被杀。
+    **决策**：两个 backend 的 `Popen` 加 `start_new_session=True`（子进程成为
+    自己进程组的 leader），超时路径改走 `_terminate_process_tree(proc)` ——
+    `os.killpg(os.getpgid(proc.pid), SIGKILL)` 一次带走整棵树。三条分支：
+    (a) `getpgid` 抛 `OSError`（子进程已被回收）→ WARN 后直接返回，无事可杀；
+    (b) 子进程 pgid **等于 orchestrator 自身 pgid** → **拒绝 killpg**、降级为
+    `proc.kill()` 并打 **ERROR** 点名"该 Popen 少了 `start_new_session=True`"；
+    (c) 正常 → killpg，失败则 WARN + 回退 `proc.kill()`。
+    **(b) 是本条最要紧的守卫，也是"能不能删 `start_new_session`"的答案**：实测
+    不带该参数时子进程与 orchestrator **同组**，此时 killpg 会把 orchestrator
+    自己一起 SIGKILL。即 `start_new_session` 与 `killpg` 是**成对的**，删前者必须
+    连后者一起删，否则挂机跑会在第一次超时时自杀。守卫让这个误配置变成响亮的
+    ERROR + 安全降级，而不是静默灾难。
+    收尾的 `communicate()` 另加 `_REAP_TIMEOUT_S = 30` 作**第二道保险**：万一有
+    东西逃出进程组，宁可丢掉输出也绝不永久阻塞。（killpg 后子进程先进僵尸态，
+    由该 `communicate()` 回收，无进程泄漏。）
+    **代价（有意接受）**：新 session 的子进程**不再接收终端的 Ctrl+C**。挂机跑
+    本来就不靠 Ctrl+C；同仓 `core/process_guard.py::launch_background` 早已用同一
+    参数让 daemon 扛住 SSH 断连，不是新概念。
+    **连带后果与其修正（本条的另一半，别只删一半）**：lane 跑在非 daemon 的
+    ThreadPoolExecutor 线程里、阻塞在 `communicate(timeout=extraction_timeout_s)`。
+    子进程不再随终端信号而死之后，`_handle_interrupt` 的 `sys.exit(130)` 会卡在
+    executor join 上直到子进程自然超时（**最长 3600s**），而该 handler 在此之前
+    就已 `self._lock.release()` —— **PID 锁会在长达一小时里谎称"无人在跑"**，
+    第二个 `--resume` 可并发写同一 work tree。（该 race 本就存在于 `kill <PID>`
+    路径——SIGTERM 走同一 handler、子进程从来收不到它——只是窗口原为 ~1.6s。）
+    故本条同时引入**在飞子进程注册表**：`llm_backend._live_children` +
+    `_register_child` / `_unregister_child`（两个 backend 的 `Popen` 后注册、
+    `finally` 注销）+ `terminate_all_children()`，由 `_handle_interrupt` 在
+    **释放锁之前**调用。实测（子进程超时 scaled 到 25s）：修正前停机等待 23.52s、
+    修正后 0.00s。**结论：`start_new_session` / `killpg` / 停机时先杀子进程
+    三者是一套，缺任一都会退化成挂起或自杀。**
+    **曾考虑的保守版**（只给 kill 后的 `communicate()` 加 timeout，不动进程组）：
+    改动更小、Ctrl+C 语义不变，但孙进程变孤儿继续跑——泄漏进程且可能继续吃
+    token。用户在 `/go` Step 0 明确选彻底版。
+    Plumbing → `extraction/persona_extraction/core/llm_backend.py`
+    （`_terminate_process_tree` + `_REAP_TIMEOUT_S` + 两处 `Popen` +
+    两处 `except subprocess.TimeoutExpired` 分支）、`docs/requirements.md`
+    §11.8「运行保障 / 自我保护」、`extraction/README.md` §子进程超时。
+    → logs/change_logs/2026-07-16_112206_preflight-unattended-run.md。
 
 ## Repository
 

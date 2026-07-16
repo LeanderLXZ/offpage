@@ -2286,6 +2286,14 @@ Backend `run()` 接受可选 `lane_name` 参数，用于在 PID 打印和 heartb
 
 - 每个 LLM 子进程有硬超时（Phase 0 summarize 1800s、Phase 3 提取
   3600s、repair agent 内 LLM 调用 600s）
+- **超时必须杀整棵进程树，不能只杀直接子进程**：CLI backend 会派生孙进程
+  （它自己的 Bash 工具），孙进程继承 orchestrator 的 stdout / stderr 管道。
+  只 `kill` 直接子进程会留下孙进程攥着管道写端，随后的 `communicate()` 等一个
+  永不到来的 EOF → lane 线程死锁，而"总运行时间上限"不是抢占式的、救不了。
+  故子进程以 `start_new_session=True` 起在独立进程组，超时时 `killpg` 整组；
+  收尾的 `communicate()` 另带有限 timeout 作第二道保险（万一有东西逃出进程组，
+  宁可漏掉输出也绝不永久阻塞）。无人值守长跑下这是"卡整夜且不报错"与"超时正常
+  记账继续"的分界。
 - repair agent 每个 tier 有独立尝试上限（每 tier 封顶 2 次），
   Phase 4 chapter 级别有独立重试（`max_retries`=2）
 - 可选的总运行时间上限
@@ -2675,12 +2683,22 @@ stderr 关键词匹配（大小写不敏感）：
 | `weekly` | `weekly limit`, `weekly usage` |
 | 通用 retry | `rate limit`, `rate_limit`, `too many requests`, `429` |
 
-reset 时间正则（按优先级匹配）：
+reset 时间正则（按尝试顺序）：
 
-1. `[Rr]esets? (?:at|in) (\d{1,2}:\d{2})\s*(am|pm)?\s*([A-Z]{2,3})?` —
-   绝对时刻（如 `Resets at 3:00 PM PT`）
-2. `[Rr]esets? in (\d+)h(\d+)?m?` — 相对时长（如 `Resets in 2h30m`）
-3. ISO 8601 时间戳（如 `2026-04-19T20:00:00-07:00`）
+1. ISO 8601 时间戳（如 `2026-04-19T20:00:00-07:00`）
+2. `[Rr]esets? (?:at|by) (\d{1,2}:\d{2})\s*(am|pm)?\s*([A-Z]{2,4})?` —
+   绝对时刻（如 `Resets at 3:00 PM PT`）；解析结果若在过去则向前滚一天
+3. `[Rr]esets? in (\d+)h(\d+)?m?` — 相对时长（如 `Resets in 2h30m`）
+
+**未来性硬规则（1 号分支必须校验）**：ISO 分支与 2 / 3 不同——它**不以
+`reset` 关键字锚定**，匹配 stderr 中任意位置的时间戳，因此日志前缀、请求
+时间戳都会命中它。故解析结果必须 `> now` 才采信；否则**不返回**该值、继续
+往下尝试 2 / 3（同一条 stderr 里往往另有带锚定词的真 reset 信息），全部落空
+再走 fallback。
+缺这条校验的后果：`resume_at` 落在过去 → `wait_if_paused` 算出 `wait_s <= 0`
+→ 立即清除暂停并返回 → `run_with_retry` 以 `attempt -= 1`（暂停不消耗重试槽）
+重发同一 prompt → **零间隔热循环，无退避、无 attempt 上限**，无人值守时会
+把额度烧穿。
 
 时区缩写解析：PT / MT / CT / ET 等可能跨 DST 的缩写通过 `zoneinfo.ZoneInfo`
 （`America/Los_Angeles` 等）解析，让 reset 时刻在夏令时和冬令时窗口都对齐

@@ -192,6 +192,15 @@ works/{work_id}/analysis/.extraction.lock
 - 提取 agent：3600 秒（60 分钟）超时后自动 kill
 - Repair agent LLM 调用：600 秒（10 分钟）超时
 - 修复循环总轮次限制（默认 5 轮），未解决 → stage ERROR
+- **kill 的是整棵进程树**：子进程以 `start_new_session=True` 起在独立进程组，
+  超时走 `killpg`。CLI backend 的 Bash 工具会派生继承管道的孙进程——只杀直接
+  子进程会让它们攥着管道写端，收尾的 `communicate()` 就永远等不到 EOF，lane
+  线程死锁（`--max-runtime` 非抢占式，救不了）。副作用：子进程不再接收终端
+  Ctrl+C，停止运行请用 `kill <PID>`（见上方 §后台运行）。
+- **停机（SIGINT / SIGTERM）会先杀在飞的子进程再放锁**：`terminate_all_children()`
+  在 `_handle_interrupt` 里于 `lock.release()` **之前**跑。否则 lane 线程还阻塞在
+  `communicate()` 上，进程要空转到子进程超时（≤ 3600s）才真正退出，而 PID 锁早已
+  被删——那段时间里第二个 `--resume` 能启动并与之并发写同一 work tree。
 
 ### 进度监控
 
