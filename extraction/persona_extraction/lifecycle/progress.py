@@ -351,7 +351,7 @@ class Phase0Progress:
         # Lazy import to avoid pulling jsonschema validators at module
         # load time (and to avoid a circular import — orchestrator.py
         # imports from this module).
-        from .orchestrator import ExtractionOrchestrator
+        from ..orchestrator import ExtractionOrchestrator
 
         summaries_dir = (project_root / "works" / self.work_id
                          / "analysis" / "chapter_summaries")
