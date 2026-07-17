@@ -221,3 +221,24 @@ schema 是否仍合法、defer 债是否未增加。**这是「xhigh 有没有�
 
 - **Status**: DONE
 - **Finished**: 2026-07-17 07:36:19 EDT
+
+<!-- /post-check writes -->
+
+## Review conclusion (full report in conversation)
+
+### Track 1 — requirement fulfillment
+- Fulfillment rate: 17/17 计划项 + 9/9 验证项（提速实测按 PRE 声明延后到挂机跑）
+- Missed updates: 2 项（见会话）
+
+### Track 2 — impact spread
+- Findings: High=0 / Medium=7 / Low=5
+- Open Questions: 2 项（见会话）
+
+**贯穿性观察**：PRE 的验收判据按**字面量**设计（grep `1200` / `claude-opus-4-7`），
+对**语义等价物**结构性失明 —— M1 的旧值以中文口径「20 分钟」存在（= 1200s），
+M5 的失效条件以概念而非字面量存在。字面量 grep 判据漏掉了它们。
+
+## Review state
+- **Reviewed**: 2026-07-17 08:13:13 EDT
+- **Status**: REVIEWED-PARTIAL
+- **Conversation ref**: /post-check output in this session
