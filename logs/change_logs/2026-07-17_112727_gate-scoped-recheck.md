@@ -119,3 +119,24 @@ extraction_workflow + ai_context 同步。Phase C fallback L3 保持全文（兜
 
 - **Status**: DONE
 - **Finished**: 2026-07-17 11:55:28 EDT
+
+<!-- /post-check writes -->
+
+## Review conclusion (full report in conversation)
+
+### Track 1 — requirement fulfillment
+- Fulfillment rate: 8/8 plan items landed + 4/4 validations pass（import / smoke A–F / gate split / check_scoped 过滤）
+- Missed updates: 0（Cross-File Alignment「提取工作流」镜像齐备）
+
+### Track 2 — impact spread
+- Findings: High=1 / Medium=1 / Low=1
+  - H1（pre-existing，非本 commit 引入）：未被本轮触碰的文件上、unfixed 语义 issue 走 Phase C gate_reuse 路径仍漏成假 PASS（gate_targets 的 `& modified_files` 门控 + Phase C reuse 均不在本 diff）
+  - M1（本轮 drift）：6 处落盘文档把 gate scope 写成 touched-only，漏「∪ 携带的未修语义 path」；代码实为 touched∪carried
+  - L1（pre-existing，方向保守=假 FAIL）：gate_blocking 不过滤 accepted_fps
+- Open Questions: 0
+
+## Review state
+- **Reviewed**: 2026-07-17 12:06:16 EDT
+- **Status**: REVIEWED-PARTIAL
+  - 理由：Track 1 全落地；唯一 High（H1）为 pre-existing、非本 commit 回归（本 commit 自身作用域已验证正确、same-file 假 PASS 已闭合并有回归测试）；本轮实际待办为 M1（文档欠准，需 6 处同步补正）。H1 + L1 建议登 todo 单独处理。
+- **Conversation ref**: /post-check output in this session
