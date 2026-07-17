@@ -70,16 +70,26 @@ class SemanticChecker(BaseChecker):
     def __init__(self, llm_call: Callable[..., str] | None = None):
         """
         Args:
-            llm_call: A callable ``(prompt: str, timeout: int | None = None)
-                -> str`` that invokes an LLM and returns the raw text
-                response. ``timeout`` MUST have a default: this checker calls
-                it without one so the injector owns the budget (wired to
-                ``[repair].semantic_timeout_s``). If None, semantic checking
-                is a no-op.
+            llm_call: A callable ``(prompt: str, timeout: int | None = None,
+                effort: str | None = None) -> str`` that invokes an LLM and
+                returns the raw text response. Both kwargs MUST have defaults:
+                this checker calls it without a ``timeout`` so the injector
+                owns the budget (wired to ``[repair].semantic_timeout_s``), and
+                omits ``effort`` on the Phase A full pass so it inherits the
+                backend default. If None, semantic checking is a no-op.
         """
         self._llm_call = llm_call
 
-    def check(self, files: list[FileEntry], **kwargs) -> list[Issue]:
+    def check(self, files: list[FileEntry], effort: str | None = None,
+              **kwargs) -> list[Issue]:
+        """Full-file semantic review.
+
+        ``effort`` is a per-call override the caller passes down; the Phase A
+        full pass omits it and inherits the backend default, while the Phase B
+        L3 gate passes ``medium`` (decision #65) — the gate re-reads a file
+        whose issues are already known, so it needs less reasoning depth than
+        the cold first pass.
+        """
         if self._llm_call is None:
             logger.info("Semantic checker: no LLM backend configured, skipping")
             return []
@@ -89,12 +99,12 @@ class SemanticChecker(BaseChecker):
             content = f.content if f.content is not None else f.load()
             if content is None:
                 continue
-            file_issues = self._review_file(f.path, content)
+            file_issues = self._review_file(f.path, content, effort=effort)
             issues.extend(file_issues)
         return issues
 
-    def check_scoped(self, files: list[FileEntry],
-                     paths: list[str]) -> list[Issue]:
+    def check_scoped(self, files: list[FileEntry], paths: list[str],
+                     effort: str | None = None) -> list[Issue]:
         """Re-check only specific json_paths (for final verification)."""
         if self._llm_call is None:
             return []
@@ -105,12 +115,13 @@ class SemanticChecker(BaseChecker):
             if content is None:
                 continue
             file_issues = self._review_file(
-                f.path, content, focus_paths=paths)
+                f.path, content, focus_paths=paths, effort=effort)
             issues.extend(file_issues)
         return issues
 
     def _review_file(self, file_path: str, content: Any,
-                     focus_paths: list[str] | None = None) -> list[Issue]:
+                     focus_paths: list[str] | None = None,
+                     effort: str | None = None) -> list[Issue]:
         # Callers (`check` / `check_scoped`) guard with `_llm_call is None`
         # before invoking this method; assert reflects that contract for
         # the type checker, since narrowing doesn't cross method boundaries.
@@ -142,7 +153,9 @@ class SemanticChecker(BaseChecker):
             # (orchestrator wires it to ``[repair].semantic_timeout_s``).
             # Hardcoding it here would shadow the config — reviewing a whole
             # ~50k-char snapshot needs a budget the caller can tune per phase.
-            response = self._llm_call(prompt)
+            # ``effort=None`` inherits the backend default (Phase A); the L3
+            # gate passes it down explicitly.
+            response = self._llm_call(prompt, effort=effort)
         except SemanticReviewLLMUnavailable as exc:
             # Backend reported failure. Treat as blocking so repair
             # coordinator does NOT mark the file PASS. Detail in message

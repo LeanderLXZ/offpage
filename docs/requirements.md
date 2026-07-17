@@ -2285,7 +2285,7 @@ Backend `run()` 接受可选 `lane_name` 参数，用于在 PID 打印和 heartb
 **自我保护**：防止进程因异常而无限运行占用资源：
 
 - 每个 LLM 子进程有硬超时（Phase 0 summarize 1800s、Phase 3 提取
-  3600s、repair 的 L3 语义审校 1200s、repair 内 T1/T2/triage
+  3600s、repair 的 L3 语义审校 900s、repair 内 T1/T2/triage
   600s/600s/300s）
 - **超时必须杀整棵进程树，不能只杀直接子进程**：CLI backend 会派生孙进程
   （它自己的 Bash 工具），孙进程继承 orchestrator 的 stdout / stderr 管道。
@@ -2591,7 +2591,7 @@ TOML 中的同名键；TOML 缺失键时回落到代码内部 dataclass 默认�
 | `[phase1]` | 出口验证重试 |
 | `[phase3]` | 提取/审校超时、`--max-turns` |
 | `[phase4]` | 场景切分并发、circuit breaker |
-| `[repair]` | 各 tier 重试、lifecycle 上限、triage 接受上限、总轮数、per-file 并发、L3 语义审校超时（`semantic_timeout_s`，1200s）|
+| `[repair]` | 各 tier 重试、lifecycle 上限、triage 接受上限、总轮数、per-file 并发、L3 语义审校超时（`semantic_timeout_s`，900s）|
 | `[backoff]` | 快速空失败的退避序列 |
 | `[rate_limit]` | reset buffer、解析失败 fallback、周限额阈值与动作 |
 | `[runtime]` | 默认 `--max-runtime`、心跳间隔、默认 backend |

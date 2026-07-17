@@ -76,7 +76,7 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
   决策 #55）
 - `[phase4]` 章节并发、短路熔断阈值
 - `[repair]` 各 tier 重试次数（每 tier 封顶 2）、triage 接受上限、总轮数、
-  L3 语义审校超时（`semantic_timeout_s`，默认 **1200** —— Phase A 检查与
+  L3 语义审校超时（`semantic_timeout_s`，默认 **900** —— Phase A 检查与
   L3 gate 复检共用；T1/T2 修复器与 triage 各自显式传值不受影响；与
   `[phase3].review_timeout_s` 解耦，因 L3 需通读整份 stage_snapshot，
   单次 wall 常达数百秒）、per-file 并发度（`repair_concurrency`，默认 10）
@@ -194,7 +194,7 @@ works/{work_id}/analysis/.extraction.lock
 ### 子进程超时
 
 - 提取 agent：3600 秒（60 分钟）超时后自动 kill
-- Repair 的 L3 语义审校：1200 秒（20 分钟）超时（`[repair].semantic_timeout_s`）
+- Repair 的 L3 语义审校：900 秒（15 分钟）超时（`[repair].semantic_timeout_s`）
 - Repair 的 T1 / T2 / triage LLM 调用：600 / 600 / 300 秒超时
 - 修复循环总轮次限制（默认 5 轮），未解决 → stage ERROR
 - **kill 的是整棵进程树**：子进程以 `start_new_session=True` 起在独立进程组，

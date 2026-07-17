@@ -94,14 +94,17 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--model", "-m",
-        default="claude-opus-4-7",
-        help="Model for extraction (default: claude-opus-4-7)",
+        default="claude-opus-4-8",
+        help="Model for extraction (default: claude-opus-4-8)",
     )
     parser.add_argument(
         "--effort",
-        choices=["low", "medium", "high", "max"],
-        default="max",
-        help="Effort level for LLM reasoning (default: max)",
+        choices=["low", "medium", "high", "xhigh", "max"],
+        default="xhigh",
+        help="Effort level for LLM reasoning (default: xhigh — the vendor's "
+             "recommended setting for coding / agentic work; `max` is prone "
+             "to randomly triggering runaway server-side thinking, see "
+             "decision #65)",
     )
     parser.add_argument(
         "--max-turns",

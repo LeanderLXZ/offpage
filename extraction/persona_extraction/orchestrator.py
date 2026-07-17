@@ -2107,12 +2107,14 @@ class ExtractionOrchestrator:
 
         default_review_timeout = cfg.phase3.review_timeout_s
 
-        def _llm_call(prompt: str, timeout: int | None = None) -> str:
+        def _llm_call(prompt: str, timeout: int | None = None,
+                      effort: str | None = None) -> str:
             result = run_with_retry(
                 self.reviewer_backend or self.backend,
                 prompt,
                 timeout_seconds=timeout or default_review_timeout,
                 lane_name="repair[phase2]",
+                effort=effort,
             )
             if not result.success:
                 raise SemanticReviewLLMUnavailable(
@@ -3285,12 +3287,14 @@ class ExtractionOrchestrator:
             # rather than an empty string.
             default_timeout = get_config().repair.semantic_timeout_s
 
-            def _llm_call(prompt: str, timeout: int | None = None) -> str:
+            def _llm_call(prompt: str, timeout: int | None = None,
+                          effort: str | None = None) -> str:
                 result = run_with_retry(
                     self.reviewer_backend or self.backend,
                     prompt,
                     timeout_seconds=timeout or default_timeout,
                     lane_name=f"repair[{stage.stage_id}]",
+                    effort=effort,
                 )
                 if not result.success:
                     raise SemanticReviewLLMUnavailable(

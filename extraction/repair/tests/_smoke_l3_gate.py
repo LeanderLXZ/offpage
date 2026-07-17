@@ -48,7 +48,8 @@ def _scenario_a() -> None:
                                  max_total_rounds=3),
     )
 
-    def stub(prompt: str, timeout: int = 600) -> str:
+    def stub(prompt: str, timeout: int = 600,
+             effort: str | None = None) -> str:
         if "quality reviewer" in prompt:
             state["semantic_calls"] += 1
             return json.dumps([])
@@ -68,7 +69,8 @@ def _scenario_b() -> None:
     target = _new_target({"summary": "original broken content"})
     state = {"semantic_calls": 0, "patch_calls": 0}
 
-    def stub(prompt: str, timeout: int = 600) -> str:
+    def stub(prompt: str, timeout: int = 600,
+             effort: str | None = None) -> str:
         if "quality reviewer" in prompt:
             state["semantic_calls"] += 1
             return json.dumps([{
@@ -118,7 +120,8 @@ def _scenario_c() -> None:
         "additionalProperties": False,
     }
 
-    def stub(prompt: str, timeout: int = 600) -> str:
+    def stub(prompt: str, timeout: int = 600,
+             effort: str | None = None) -> str:
         if "quality reviewer" in prompt:
             state["semantic_calls"] += 1
             return json.dumps([])  # no semantic issues

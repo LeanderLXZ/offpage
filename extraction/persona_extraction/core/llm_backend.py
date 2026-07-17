@@ -318,10 +318,11 @@ class LLMBackend(ABC):
             lane_name: str | None = None,
             effort: str | None = None) -> LLMResult:
         """Run one LLM call. ``effort`` is a per-call override of the
-        backend instance's default effort (low/medium/high/max); ``None``
-        falls back to the instance default. Used by Phase 0 recovery
-        sweep to downgrade max → high without a separate backend
-        instance. See decision #49."""
+        backend instance's default effort (low/medium/high/xhigh/max);
+        ``None`` falls back to the instance default. Used by the Phase 0
+        recovery sweep to downgrade to ``high`` without a separate backend
+        instance (#49), and by repair to run its gate / fixer / triage calls
+        at ``medium`` while the main lanes keep the CLI default (#65)."""
         ...
 
     @abstractmethod
@@ -345,7 +346,7 @@ class ClaudeBackend(LLMBackend):
                  model: str | None = None, effort: str | None = None):
         super().__init__(project_root, max_turns)
         self.model = model  # e.g. "opus", "sonnet"
-        self.effort = effort  # e.g. "low", "medium", "high", "max"
+        self.effort = effort  # "low" | "medium" | "high" | "xhigh" | "max"
         self._claude_bin = _find_claude_binary()
 
     def name(self) -> str:

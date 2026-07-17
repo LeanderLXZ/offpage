@@ -103,6 +103,22 @@
 <!-- 已落地的任务。仅精简条目。 -->
 <!-- holo:section end -->
 
+### [T-EFFORT-TIER-TUNING] effort 分档 + 模型切 4.8 + 语义审校超时收到 900s · 完成于 2026-07-17 · 代码完整落地，提速实测待挂机
+
+`effort=max` 的双峰思考被归因为速度头号成因（与 #49 在 phase 0 上的诊断同构）：
+全 lane 速度恒定 44–68 tok/s，飘的是输出量；输出 ~96% 是思考不是产物；爆掉样本
+挤在 ~2100s 且中招 lane 随机。四件一起落：`--effort` 补 `xhigh` 档并改默认
+（`max` → `xhigh`）、`--model` 默认切 `claude-opus-4-8`、repair 的 `_llm_call`
+增 `effort` 参数透传 `run_with_retry`（**方案 A**：由各调用点自己传，L3 gate /
+T1 / T2 / triage 传 `medium`，Phase A 全量检查不传吃默认）、`semantic_timeout_s`
+1200 → 900（实测未删失尾部 743s 的 1.2×，#64 就地修订）。计划外连带修两处：
+orchestrator 的**两个** `_llm_call` 闭包都要接 `effort`（phase 2 缩水版 repair
+同样走 T1，只改 phase 3 会 `TypeError`）、repair smoke stub 签名同理。
+**未完**：提速幅度需挂机跑 ≥1 个完整 stage 对比基线（S001 36min / S002 25min /
+S003 35min）——是否仍出现 ~2100s 爆掉样本、schema 是否仍合法、defer 债是否未增加。
+决策 #65（+ #64 就地修订）。
+→ logs/change_logs/2026-07-17_072038_effort-tier-tuning.md。
+
 ### [T-REPAIR-SEMANTIC-TIMEOUT] L3 语义审校超时解耦到 `[repair].semantic_timeout_s` = 1200s · 完成于 2026-07-16 · 完整完成
 
 hot-fix，未上正向 todo 队列，跳过 In Progress 直接归档。runtime 监控发现 phase 3

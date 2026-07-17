@@ -1005,7 +1005,7 @@ N. <决策陈述>。
     两处 `except subprocess.TimeoutExpired` 分支）、`docs/requirements.md`
     §11.8「运行保障 / 自我保护」、`extraction/README.md` §子进程超时。
     → logs/change_logs/2026-07-16_112206_preflight-unattended-run.md。
-64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 1200s），且预算由注入方持有 —— `repair/` 内不得硬编码。**
+64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 900s），且预算由注入方持有 —— `repair/` 内不得硬编码。**
     **背景**：phase 3 重跑时 S001 的 repair 收尾出现语义审校撞 600s 硬超时被杀，
     撞线 lane 的 `semantic_unavailable` 经 #60 的 record-and-continue 通道写入
     `deferred_repairs/` 并让 stage 照常提交 —— 即 stage 以「L3 从未跑出结论」
@@ -1019,18 +1019,20 @@ N. <决策陈述>。
     config 的所有者）持有，checker 不传 timeout；这是
     `conventions.md §Single Source of Truth` 的直接推论。其二是**取值**：
     600s 源自 `d79dc7f`（该值比该 commit 更早，属"常量改读 config"搬运物），
-    当时服务的 reviewer 短链与今日 L3（opus + effort=max 通读 ~50k 字符
-    stage_snapshot）负载形态完全不同。
-    **取值依据（长尾分布，非套用 #47 的 3×）**：实测 n=104 —— p50=152s、
-    p95=519s、未删失最大 598s、3 条撞 600s 天花板。#47 的形态是「全员偏慢」
-    （典型 wall ≥600s → 3× = 1800）；本处是「p50 快 + 长尾」，照搬 3× 得 456s
-    反而更小，故 **#47 可移植的是结构教训（解耦），不是数字**。1200 =
-    未删失最大的 2.0×、p50 的 8×：跑满 8× 中位数仍未返回的调用是卡死而非仍在
-    算，等到 1800 主要买到卡死多占并发槽位（`repair_concurrency=10` 下直接计入
-    每个 stage 的 wall time）。代价不对称也支持取低：取低了有 #60 的 defer →
-    Phase 3.5 兜底，取高了每个受影响 stage 都付钱。
-    **附带**：现有数据在 600s 处右删失，真实尾部未知；1200 兼作测量 —— 重跑后
-    若无 lane 撞 1200，即首次取得未删失尾部，之后可有据收紧。
+    当时服务的 reviewer 短链与今日 L3（通读 ~50k 字符 stage_snapshot）
+    负载形态完全不同。
+    **取值依据（长尾分布，非套用 #47 的 3×）= 实测未删失尾部 743s 的 1.2×**。
+    #47 的形态是「全员偏慢」（典型 wall ≥600s → 3× = 1800）；本处是「p50 快 +
+    长尾」，照搬 3× 得 456s 反而更小，故 **#47 可移植的是结构教训（解耦），
+    不是数字**。900 既容跑次间波动，又足够紧：卡死的调用及时释放并发槽位，而
+    不是白占 20 分钟 —— `repair_concurrency=10` 下这直接计入每个 stage 的 wall
+    time。代价不对称也支持取低：取低了有 #60 的 defer → Phase 3.5 兜底，取高了
+    每个受影响 stage 都付钱。
+    **743s 从何而来**：本条初版取 1200 —— 当时全部数据在旧 600s 天花板处右删失
+    （n=104：p50=152s、p95=519s、未删失最大 598s、3 条撞线），真实尾部未知，
+    故 1200 取「未删失最大的 2×、p50 的 8×」并**兼作测量**。重跑后无 lane 撞
+    1200，首次取得未删失尾部 743s，据此收紧至 900。1200 是基于删失数据的推理
+    值，900 是基于实测尾部的有据值。
     **边界**：只有 L3 语义审校（Phase A 检查 + gate 复检，共用
     `SemanticChecker._review_file`）改用新值。T1 `local_patch` / T2
     `source_patch` / `triage` 仍各自显式传 600 / 600 / 300 —— 实测 T1
@@ -1048,6 +1050,51 @@ N. <决策陈述>。
     `default_timeout`）、`extraction/repair/checkers/semantic.py::_review_file`、
     `extraction/README.md` §配置分段。
     → logs/change_logs/2026-07-16_141342_repair-semantic-timeout-decouple.md。
+
+65. **effort 分档 + 默认模型 opus-4-8 + effort 由调用点传（方案 A）。**
+    **背景**：phase 3 挂机跑（S001–S003）后的耗时归因显示，`effort=max` 的
+    双峰思考是速度的头号成因，且与任何代码改动无关。全 lane 生成速度恒定
+    44–68 tok/s（`logs/runs/*.jsonl` 的 `duration_s` ÷ `output_tokens`）——
+    耗时 ≈ 输出 token ÷ 56，飘的是输出量不是速度；而输出的 ~96% 是思考不是
+    产物（某 `char_support` lane 烧 124,159 out_tok / 18 turns 只产出 14KB
+    文件，同 stage 另一角色同 lane 用 50,357 tok 反而产出更大的 20KB 文件）。
+    爆掉的样本挤得异常紧 —— 2127s / 2192s / 2115s，是**双峰**（正常
+    ~850–1200s vs 爆掉 ~2100s）而非长尾；中招的 lane 随机（S001 是 Character
+    A 爆，S003 换成 Character B 爆而 A 只跑 991s；`world` lane 也出现过 1523s
+    vs 自身 p50 439s）。这与 **#49 在 phase 0 上的诊断完全同构**（「effort=max
+    …随机触发服务端超长 thinking」），且 #49 已实证降档后完工、schema 合法、
+    质量等同。
+    **决策**：(a) `--effort` 的 choices 补 `xhigh` 并将 default 由 `max` 改为
+    `xhigh` —— `xhigh` 位于 `high` 与 `max` 之间，官方明确它是「most coding
+    and agentic use cases 的最佳设置」（也是 Claude Code 自身默认值），对
+    `max` 的评价则是「可能过度思考、收益递减」；此前本项目连传都传不进去。
+    (b) `--model` default 由 `claude-opus-4-7` 改为 `claude-opus-4-8`（纯
+    model-ID 切换，无 breaking change）。(c) repair 的 `_llm_call` 增
+    `effort` 参数并透传 `run_with_retry`（该 kwarg 由 #49 引入，
+    `LLMBackend.run` / `run_with_retry` 早已支持，只是 repair 的闭包没接）。
+    **形态选型（方案 A）**：effort **由各调用点自己传**，而不是闭包捕获一个
+    单值 —— 与现存 `timeout` 的形态完全一致，同一注入点因而能按调用性质分档。
+    L3 gate 复检 / T1 / T2 / triage 传 `medium`；**Phase A 全量语义检查不传**，
+    吃 backend 默认 —— 冷启动通读整份文件需要完整推理深度，而 gate 复检面对的
+    是 Phase A 已定位过的问题，深度需求更低。
+    **两处连带（缺一即崩）**：`orchestrator.py` 有**两个** `_llm_call` 闭包
+    （phase 2 / phase 3），phase 2 的缩水版 repair（#59）同样走 T1
+    `local_patch`，只改 phase 3 那个会让 phase 2 一调 T1 就 `TypeError`；
+    `extraction/repair/tests/` 的 llm_call stub 签名同理需接受 `effort`。
+    **边界**：`[phase0].recovery_effort = "high"` 不变 —— 它是 #49 的降档扫尾，
+    相对新默认 `xhigh` 仍是降档，语义成立。不动 target 数量（实测 per-target
+    字段仅占 stage_snapshot 的 26%，20→10 只省 ~13%，且头号瓶颈
+    `char_support` 产出的 `memory_timeline` 是事件数组、根本没有 per-target
+    字段）；不拆 `char_support`（瓶颈是双峰不是内容量，拆 4 路每路照样会爆）；
+    不用 fast mode（需要 API）。与 T-GATE-SCOPED-RECHECK 必须分两次落地 ——
+    那条改审校语义，混在一起就分不清耗时变化的归因（单变量）。
+    Plumbing → `extraction/persona_extraction/cli.py`（`--effort` / `--model`）、
+    `extraction/persona_extraction/orchestrator.py`（两个 repair `_llm_call`）、
+    `extraction/repair/checkers/semantic.py`（`check` / `check_scoped` /
+    `_review_file` 透传）、`extraction/repair/coordinator.py`（L3 gate 调用点）、
+    `extraction/repair/fixers/{local_patch,source_patch}.py`、
+    `extraction/repair/triage.py`。
+    → logs/change_logs/2026-07-17_072038_effort-tier-tuning.md。
 
 ## Repository
 

@@ -119,7 +119,8 @@ class SourcePatchFixer(BaseFixer):
             prompt = self._build_prompt(issue, current_value, chapter_text)
 
             try:
-                response = self._llm_call(prompt, timeout=600)
+                response = self._llm_call(
+                    prompt, timeout=600, effort="medium")
                 parsed = json.loads(response.strip())
             except (json.JSONDecodeError, Exception) as exc:
                 logger.warning("T2 fix failed for %s: %s",

@@ -18,11 +18,10 @@
 
 _(none)_
 
-### 🟡 Next (5)
+### 🟡 Next (4)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
-| `T-EFFORT-TIER-TUNING` | 跑挂机实测发现慢是因为模型在最高推理档下会随机进入超长思考模式——同样的活有时 14 分钟、有时 36 分钟，且中招的是哪条线随机。换成官方推荐的次高档 + 新版模型，并给检查类任务分配更低档位。 | 🔴 High | ✅ Ready | 🔴 Large·Arch | 2026-07-17 EDT | 无（可立即启动） |
 | `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。 | 🔴 High | ⏸ Blocked | 🔴 Large·Arch | 2026-07-17 EDT | 必须在 T-EFFORT-TIER-TUNING 之后单独做（单变量） |
 | `T-REPAIR-TIMEOUT-CONFIG` | 修复环节还有三处超时值硬写在代码里、不读配置。上次就是这种硬编码让整个配置层静默失效、改了没反应。顺带清理一个名字叫 phase3 但实际只服务 phase4 的参数。 | 🟢 Med-Low | 💬 Discuss first | 🔴 Large·Arch | 2026-07-17 EDT | 建议在 T-EFFORT-TIER-TUNING 之后（同改一处代码） |
 | `T-SMOKE-TRIAGE-BROKEN` | 一个自动化测试在主干上一直是坏的（至少从包重构那次起）。要先弄清是测试过期了还是它测的功能真坏了——如果是后者，生产里可能一直在静默出错。 | 🟢 Med-Low | ✅ Ready | 🟡 Medium | 2026-07-17 EDT | 无 |
@@ -41,7 +40,7 @@ _(none)_
 | `T-RETRY` | LLM 调用失败时的重试策略能更聪明些。现在不到 5 秒就失败的会重试，但人物抽取正常要跑 10-20 分钟，5 秒太短了——那种短时失败几乎都是启动错、不是真活干完才挂。打算扩到 60 秒，再按失败类型分流要不要重试。改动小，两个数值要拍板。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 
-**Total**: 13 — 🟢 In Progress 0 ｜ 🟡 Next 5 ｜ ⚪ Discussing 8
+**Total**: 12 — 🟢 In Progress 0 ｜ 🟡 Next 4 ｜ ⚪ Discussing 8
 
 <!-- holo:section start -->
 ---
@@ -305,112 +304,6 @@ decision #27n 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
 **暂不做的事**
 
 - 决策 #56 复审 OQ3 用户拍板"留 todo"——本轮不动 schema
-
----
-
-### [T-EFFORT-TIER-TUNING] effort 分档 + 模型切 4.8 + 语义审校超时收到 900s
-
-**上下文**
-
-2026-07-16 挂机跑 phase 3（S001–S003 committed）后做的耗时归因，结论是
-**`effort=max` 的双峰思考是速度的头号成因，且与任何代码改动无关**：
-
-- 所有 lane 的生成速度恒定在 **44–68 tok/s**（`logs/runs/*.jsonl` 的
-  `duration_s` ÷ `output_tokens`）。**耗时 ≈ 输出 token ÷ 56**——LLM 没变慢，
-  是输出量在飘。
-- 输出的 **~96% 是思考，不是产物**：某条 `char_support` lane 烧 124,159
-  out_tok（18 turns）产出一个 14KB 的 `memory_timeline/S00N.json`（≈4k
-  token）；同 stage 另一角色同 lane 只用 50,357 tok 却产出更大的 20KB 文件。
-- 爆掉的样本挤得异常紧：**2127s / 2192s / 2115s**——这是**双峰**（正常
-  ~850–1200s vs 爆掉 ~2100s），不是长尾。
-- **中招的 lane 随机**：S001 是 Character A 的 char_support 爆（2192s），
-  S003 换成 Character B 爆（2115s）而 A 只跑 991s。`world` lane 也出现过
-  1523s vs 自身 p50 439s（3.5×），说明**任何 lane 都会中招**。
-
-这与**决策 #49 在 phase 0 上的诊断完全同构**（原文：「opus-4-7 effort=max
-…**随机触发**服务端超长 thinking」），且 #49 已实证 **effort=high 下 ~14
-分钟完工、schema 合法、质量等同**。
-
-两个附带发现：
-
-1. **`cli.py` 的 `choices` 里没有 `xhigh`**——那是 Opus 4.7 新增、位于
-   `high` 与 `max` 之间的档位，官方明确说它是「most coding and agentic use
-   cases 的最佳设置」（也是 Claude Code 自身默认值）；官方对 `max` 的评价是
-   「可能过度思考、收益递减」。**即使底层 `claude` CLI 支持，本项目也传不进去**。
-2. 默认模型是 `claude-opus-4-7`；**Opus 4.8 是当前 Opus 旗舰，4.7 → 4.8
-   无任何 breaking change**（纯 model-ID 切换）。官方迁移指南对 4.8 的建议是
-   「**从 `high` 起步并迭代，而不是反射性地上 `xhigh`**」——4.8 智能上限更高，
-   可能用更低 effort 就达到 4.7 的质量。
-
-超时侧：决策 #64 把 L3 语义审校超时解耦到 `[repair].semantic_timeout_s = 1200`
-之后，本轮**首次取得未删失的真实尾部 = 743s**（此前数据在 600s 处被砍、真实值
-未知）。1200 给了 1.6× 余量，可以有据地收紧。
-
-**要做什么**
-
-四件一起落（都是参数/接线，不改任何语义），目的是**用一个 stage 量出 xhigh
-到底有没有杀掉双峰**——那是全部提速估计的依据。
-
-**改动清单**
-
-- file: `extraction/persona_extraction/cli.py:101` → `--effort` 的
-  `choices` 加 `"xhigh"`（现为 `["low","medium","high","max"]`）；
-  `default` 由 `"max"` 改为 `"xhigh"`
-- file: `extraction/persona_extraction/cli.py:97` → `--model` 的 `default`
-  由 `"claude-opus-4-7"` 改为 `"claude-opus-4-8"`；help 文案同步
-- file: `extraction/persona_extraction/orchestrator.py`（repair 的
-  `_llm_call` 闭包，决策 #64 改过的那处）→ 给 `_llm_call` 增加
-  `effort: str | None = None` 参数，透传给 `run_with_retry(..., effort=...)`
-  （该 kwarg 由决策 #49 引入，`LLMBackend.run` / `run_with_retry` 已支持，
-  只是 repair 的 `_llm_call` 没接）。**方案 A（用户 2026-07-17 拍板）**：
-  effort 由各调用点自己传，与现存 `timeout` 的形态完全一致
-- file: `extraction/repair/checkers/semantic.py:~142` → L3 gate 复检调用传
-  `effort="medium"`（Phase A 全量检查**不传**，吃 backend 默认）
-- file: `extraction/repair/fixers/local_patch.py:106` → T1 传 `effort="medium"`
-- file: `extraction/repair/fixers/source_patch.py:122` → T2 传 `effort="medium"`
-- file: `extraction/repair/triage.py:370` → triage 传 `effort="medium"`
-- file: `extraction/config.toml` `[repair]` → `semantic_timeout_s` 1200 → 900
-- file: `extraction/persona_extraction/core/config.py::RepairAgentConfig` →
-  `semantic_timeout_s` 默认值 1200 → 900；注释内的取值依据改写为「实测未删失
-  尾部 743s，900 给 1.2× 余量」
-- file: `ai_context/decisions.md` + `docs/decisions.md` → #64 就地修订
-  `semantic_timeout_s` 取值（1200 是基于删失数据的推理值，900 是基于实测尾部
-  的有据值）；新增一条 effort 分档决策
-- file: `extraction/README.md` §配置分段 + §子进程超时 → 数字同步
-- file: `docs/requirements.md` §11.8 自我保护 + 配置分节表 → 数字同步
-- file: `docs/architecture/extraction_workflow.md` §子进程硬超时 → 数字同步
-
-**完成标准**
-
-- `--effort xhigh` 能被 argparse 接受，且 `claude -p` 命令行里确实出现
-  `--effort xhigh`（`logs/runs/*.jsonl` 或 extraction.log 可验证）
-- `load_config().repair.semantic_timeout_s == 900`
-- repair 的四类调用（L3 gate / T1 / T2 / triage）在日志里可观测到 medium
-  effort 生效
-- **跑至少 1 个完整 stage，与本轮基线对比**：提取墙钟（基线 S001 36min /
-  S002 25min / S003 35min）、是否仍出现 ~2100s 的爆掉样本、产物 schema 是否
-  仍合法、defer 债是否未增加
-- smoke: `_smoke_l3_gate` + `_smoke_4_lane_merge_and_slice` 全过
-  （`_smoke_triage` HEAD 即坏，见 T-SMOKE-TRIAGE-BROKEN，正交）
-
-**依赖**
-
-- 无（可立即启动）
-- **与 T-GATE-SCOPED-RECHECK 必须分两次 `/go`**——那条改审校语义，混在一起
-  就分不清耗时变化是 effort 降档还是复检变窄造成的
-
-**暂不做的事**
-
-- 不动 target 数量（用户 2026-07-17 拍板）。实测 per-target 字段只占
-  stage_snapshot 的 26%（relationships 5KB + target_voice_map 3KB +
-  target_behavior_map 3KB + knowledge_leaks 3KB / 共 59KB），20→10 只省 ~13%；
-  且**头号瓶颈 `char_support` 产出的 `memory_timeline` 根本没有 per-target
-  字段**（它是事件数组），砍 target 对它零影响
-- 不拆 `char_support`（现为 2 条 lane，每角色一条，未再拆 sub-lane）。瓶颈是
-  双峰不是内容量，拆成 4 路每路照样可能爆到 2100s
-- 不用 fast mode（用户 2026-07-17 拍板：需要 API，不采用）
-
-**更新时间**：2026-07-17 06:51 EDT
 
 ---
 
@@ -1016,7 +909,7 @@ review for .../canon/stage_snapshots/S00N.json
 出现率 ~33%。
 
 **这与超时是不同的故障**：审校 LLM 跑完了、返回了内容，但内容不是合法 JSON。
-决策 #64 把超时从 600s 提到 1200s **救不了它**——那是输出格式问题，不是时间问题。
+决策 #64 放宽超时**救不了它**——那是输出格式问题，不是时间问题。
 
 **性质要分清**：它经决策 #60 的 defer 通道写进账本、stage 照常提交，但它记录的
 是「**审校从未跑出结论**」，而不是「已知有瑕疵」。同一个 defer 桶里混着两种

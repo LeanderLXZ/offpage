@@ -418,7 +418,12 @@ def _run_one_lifecycle(
                 "L3 gate: re-checking %d file(s) modified this round",
                 len(gate_targets))
             gate_file_entries = [f for f in files if f.path in gate_targets]
-            gate_issues = pipeline.run_layer(gate_file_entries, layer=3)
+            # effort=medium (decision #65): the gate re-reads files whose
+            # issues Phase A already surfaced, so it needs less reasoning
+            # depth than the cold full pass — which omits effort entirely and
+            # inherits the backend default.
+            gate_issues = pipeline.run_layer(
+                gate_file_entries, layer=3, effort="medium")
             gate_blocking = _filter_blocking(gate_issues, config)
             tracker.record_l3_gate(
                 {i.fingerprint for i in gate_blocking})

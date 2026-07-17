@@ -69,10 +69,11 @@
   的 chunk；用 `LLMBackend.run(effort='high')` per-call kwarg 重跑一次
   完整 `_summarize_chunk`（含 L1/L2/L3+tolerance），并发复用
   `phase0.concurrency`。结果不论成败都置 `recovery_attempted=True`，
-  `--resume` 时跳过（避免无限救火）。背景：opus-4-7 effort=max 在多
-  字段 chunk synthesis 偶发服务器端长思考超 1800s wall（runtime 实测
-  effort=high 14 min 完工 schema valid，效果与 max 等价），故"主流程
-  默认 max 保留质量 + sweep 用 high 救撞墙"是精准兜底而非全局降级
+  `--resume` 时跳过（避免无限救火）。背景：高 effort 档在多字段 chunk
+  synthesis 上偶发服务器端长思考超 1800s wall（实测 effort=high 14 min
+  完工、schema valid、质量等价），故"主流程按 `--effort` 默认档跑 +
+  sweep 降到 `high` 救撞墙"是精准兜底而非全局降级；相对主流程默认的
+  `xhigh`（决策 #65）仍是降档，语义成立
 - 输出：`works/{work_id}/analysis/chapter_summaries/`
 
 ### 3. 全书分析（Phase 1）
@@ -902,7 +903,7 @@ orchestrator (Python)
   阻断提取。区别于 §6.4 的 `failed_lane_log`（仅失败时、单 lane 全量 dump）。
 - `--max-runtime` 总时间限制，到期后在 stage 间优雅停止
 - 子进程硬超时（Phase 0 summarize 1800s、Phase 3 提取 3600s、repair 的
-  L3 语义审校 1200s、repair 内 T1/T2/triage 600s/600s/300s；阈值分别由
+  L3 语义审校 900s、repair 内 T1/T2/triage 600s/600s/300s；阈值分别由
   `extraction/config.toml` 的 `[phase0]` / `[phase3]` / `[repair]` 段控制，
   T1/T2/triage 目前仍硬编码在 `extraction/repair/` 内）
 - Token/context limit 与 rate limit 区分：前者不重试（相同 prompt 必定再超限），

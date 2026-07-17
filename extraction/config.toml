@@ -38,21 +38,21 @@ concurrency              = 12
 # Phase 0 单 chunk summarize 子进程超时（秒）。每 chunk 读 20 章 + 写
 # 20× per-summary（150–200 字）+ 5 个 chunk-level 二级聚合字段
 # （chunk_arc_summary / chunk_world_rules / chunk_power_levels /
-# chunk_factions / chunk_regions），opus-4-7 effort=max 单 chunk wall
-# 经验值常 ≥ 600s，给到 1800s 留余量（按 20 章基数）。
+# chunk_factions / chunk_regions），高 effort 档下单 chunk wall 经验值
+# 常 ≥ 600s，给到 1800s 留余量（按 20 章基数）。
 summarize_timeout_s      = 1800
 
 # Phase 0 内 L2 JSON 修复的 LLM 调用超时（秒）。L2 是"喂坏 JSON 给
 # LLM 修一次"，比正常归纳短得多。
 json_repair_l2_timeout_s = 600
 
-# Phase 0 recovery sweep 用的 effort 等级（low/medium/high/max）。主
-# 循环结束后，失败 chunk（error 含 'timed out' / 'error_max_turns'
-# 且 recovery_attempted=False）会用此 effort 单次 sweep 救火。背景：
-# opus-4-7 effort=max 在多字段 chunk synthesis 偶发服务器端长思考
-# 超 1800s wall（runtime 实测 effort=high 14 min 完工 schema 同样
-# valid，质量等价），故"主流程默认 max 保留质量 + sweep 用 high
-# 救撞墙"。详见 ai_context/decisions.md #49。
+# Phase 0 recovery sweep 用的 effort 等级（low/medium/high/xhigh/max）。
+# 主循环结束后，失败 chunk（error 含 'timed out' / 'error_max_turns'
+# 且 recovery_attempted=False）会用此 effort 单次 sweep 救火。背景：高
+# effort 档在多字段 chunk synthesis 上偶发服务器端长思考超 1800s wall
+# （实测 effort=high 14 min 完工、schema 同样 valid、质量等价），故
+# "主流程按 --effort 默认档跑 + sweep 降到 high 救撞墙"。相对主流程默认
+# 的 xhigh（决策 #65）仍是降档，语义成立。详见 decisions.md #49 / #65。
 recovery_effort          = "high"
 
 
@@ -186,14 +186,13 @@ triage_accept_cap_per_file = 5
 # L3 语义审校单次 LLM 调用硬超时（秒）。Phase A 全量检查与每轮末的 L3 gate
 # 复检共用（两者都走 `SemanticChecker._review_file`）；T1/T2 修复器与 triage
 # 各自显式传 timeout，不受此值影响。与 `[phase3].review_timeout_s` 解耦
-# （决策 #47 的结构教训）：L3 要在 opus + effort=max 下通读整份 ~50k 字符的
-# stage_snapshot，单次 wall 常达数百秒，需要独立预算。
-# 实测分布（n=104）：p50=152s，p95=519s，未删失最大 598s —— 长尾紧贴旧的
-# 600s 天花板，3/104 条 lane 被它杀掉。1200 = 未删失最大的 2×、p50 的 8×：
-# 跑满 8× 中位数仍未返回的调用是卡死而非仍在算，再等下去只是让卡死的
-# lane 多占并发槽位。注意现有数据在 600s 处右删失，真实尾部未知 —— 1200
-# 兼作测量：若无 lane 撞 1200 即首次取得未删失尾部，之后可有据收紧。
-semantic_timeout_s = 1200
+# （决策 #47 的结构教训）：L3 要通读整份 ~50k 字符的 stage_snapshot，单次
+# wall 常达数百秒，需要独立预算。
+# 取值依据 = 实测未删失尾部 743s（决策 #64 的 1200 是基于在旧 600s 天花板处
+# 右删失的数据推出来的，兼作测量，并已换来这个越过天花板的真实观测值）。
+# 900 = 该尾部的 1.2×：既给跑次间波动留余量，又足够紧 —— 卡死的调用能及时
+# 释放并发槽位，而不是白占 20 分钟。
+semantic_timeout_s = 900
 
 # 单 stage 内每文件独立 repair 的并发 worker 数。每个 worker 跑一次
 # `coordinator.run(files=[single])`（Phase A + Phase B + L3 gate +
