@@ -519,7 +519,11 @@ def _run_one_lifecycle(
                     "Phase C: fallback semantic verification on %d clean "
                     "file(s) (gate never ran)", len(fallback_files))
                 _emit("phase_c", mode="fallback_l3")
-                l3_fallback = pipeline.run_layer(fallback_files, layer=3)
+                # effort=medium, same reasoning as the gate (decision #65):
+                # Phase A is the cold read; this re-reads files it already
+                # reviewed, so it needs less reasoning depth.
+                l3_fallback = pipeline.run_layer(
+                    fallback_files, layer=3, effort="medium")
                 final_issues.extend(l3_fallback)
 
     final_blocking = _filter_blocking(final_issues, config)

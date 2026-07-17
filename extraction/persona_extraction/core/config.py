@@ -126,12 +126,11 @@ class RepairAgentConfig:
     # their own explicit timeouts and are unaffected. Decoupled from
     # ``[phase3].review_timeout_s`` (decision #47's structural lesson):
     # L3 reads a whole ~50k-char stage_snapshot and needs its own budget.
-    # Value is set from the measured uncensored tail: 743s (decision #64's
-    # 1200 was inferred from data right-censored at the old 600s ceiling and
-    # doubled as the measurement; it bought the first observation past that
-    # ceiling). 900 = 1.2x that tail — enough headroom for run-to-run
-    # variance, tight enough that a hung call frees its concurrency slot
-    # instead of stalling one for 20 minutes.
+    # 900 = 1.2x the measured uncensored tail (743s) — enough headroom for
+    # run-to-run variance, tight enough that a hung call frees its
+    # concurrency slot instead of holding one for the full budget (under
+    # ``repair_concurrency=10`` that lands directly in the stage's wall
+    # time). Full derivation: docs/decisions.md #64.
     semantic_timeout_s: int = 900
     # Max concurrent per-file repair workers within a single stage. Each
     # worker runs an independent ``coordinator.run(files=[single])``

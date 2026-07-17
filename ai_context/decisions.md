@@ -249,7 +249,7 @@ N. <决策陈述，一行>。
 48. **长度 bound 容差门（B 方案）。**
     → docs/decisions.md #48。
 
-49. **Phase 0 降档 effort 的恢复扫尾（per-chunk 定向救火）。** opus-4-7 effort=max 在 phase 0 的多字段 chunk 综合（读 `chunk_size` 章 → 写 N× per-summary + 5 个 chunk 级二级聚合）上随机触发超出 1800s 子进程 wall 预算的服务端超长 thinking。
+49. **Phase 0 降档 effort 的恢复扫尾（per-chunk 定向救火）。** 高 effort 档在 phase 0 的多字段 chunk 综合（读 `chunk_size` 章 → 写 N× per-summary + 5 个 chunk 级二级聚合）上随机触发超出 1800s 子进程 wall 预算的服务端超长 thinking；与其整体降档，不如让失败 chunk 用 `[phase0].recovery_effort`（默认 `high`）单次 sweep 救火。
     → docs/decisions.md #49。
 
 50. **Post-processing 对 derived digests 永远走 replace-slice 语义。**
@@ -290,10 +290,10 @@ N. <决策陈述，一行>。
 
 63. **LLM 子进程起在独立进程组，超时杀整棵树。** `Popen(start_new_session=True)` + 超时 `killpg`（而非只 `proc.kill()` 直接子进程）；收尾 `communicate()` 另带有限 timeout 兜底。代价：子进程不再收终端 Ctrl+C（有意取舍，换无人值守不死锁）。**三件配套，缺一即退化**：无 `start_new_session` 时子进程与 orchestrator 同组、killpg 会自杀（helper 有守卫拒绝）；信号 handler 必须经 `terminate_all_children()` 在**放锁前**杀掉在飞子进程，否则停机要空转到子进程超时（≤3600s）而 PID 锁已谎称无人在跑。
     → docs/decisions.md #63。
-64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 900s），且由注入方持有预算、`repair/` 不再硬编码。** `checkers/semantic.py` 原写死 `timeout=600` 覆盖注入的默认值，使 config 层完全失效（`orchestrator` 的 `default_timeout` 是死代码）—— 值的权威位置必须是 `config.toml`。取值依据实测未删失尾部 743s：900 = 该尾部的 1.2×，既容跑次间波动，又足够紧让卡死调用及时释放并发槽位而非白占 20 分钟。
+64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 900s），且由注入方持有预算、`repair/` 不再硬编码。** `checkers/semantic.py` 原写死 `timeout=600` 覆盖注入的默认值，使 config 层完全失效（`orchestrator` 的 `default_timeout` 是死代码）—— 值的权威位置必须是 `config.toml`。900 = 实测未删失尾部 743s 的 1.2×，既容跑次间波动，又足够紧让卡死调用及时释放并发槽位。
     → docs/decisions.md #64。
 
-65. **effort 分档 + 默认模型 opus-4-8 + effort 由调用点传（方案 A）。** 默认 `--effort` = `xhigh`（`max` 会随机触发服务端超长 thinking 的双峰，与 #49 在 phase 0 上的诊断同构；官方亦称 `xhigh` 是 coding/agentic 最佳档、`max` 收益递减）；默认 `--model` = `claude-opus-4-8`。repair 的 `_llm_call` 增 `effort` 参数透传 `run_with_retry`，**由各调用点自己传**（与现存 `timeout` 形态一致，非闭包捕获单值）：L3 gate 复检 / T1 / T2 / triage 传 `medium`，Phase A 全量语义检查不传、吃 backend 默认。
+65. **effort 分档 + 默认模型 opus-4-8 + effort 由调用点传（方案 A）。** 默认 `--effort` = `xhigh`（`max` 会随机触发服务端超长 thinking 的双峰，与 #49 在 phase 0 上的诊断同构；官方亦称 `xhigh` 是 coding/agentic 最佳档、`max` 收益递减）；默认 `--model` = `claude-opus-4-8`。repair 的 `_llm_call` 增 `effort` 参数透传 `run_with_retry`，**由各调用点自己传**（与现存 `timeout` 形态一致，非闭包捕获单值）。按「冷读 vs 复读」分档：**冷读**（Phase A 全量语义检查）不传、吃 backend 默认；**复读**（L3 gate 复检、Phase C fallback L3）+ T1 / T2 / triage 传 `medium`。
     → docs/decisions.md #65。
 
 ## Repository

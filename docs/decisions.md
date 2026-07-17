@@ -1074,9 +1074,16 @@ N. <决策陈述>。
     `LLMBackend.run` / `run_with_retry` 早已支持，只是 repair 的闭包没接）。
     **形态选型（方案 A）**：effort **由各调用点自己传**，而不是闭包捕获一个
     单值 —— 与现存 `timeout` 的形态完全一致，同一注入点因而能按调用性质分档。
-    L3 gate 复检 / T1 / T2 / triage 传 `medium`；**Phase A 全量语义检查不传**，
-    吃 backend 默认 —— 冷启动通读整份文件需要完整推理深度，而 gate 复检面对的
-    是 Phase A 已定位过的问题，深度需求更低。
+    **分档判据 = 冷读 vs 复读**（不是「Phase A vs 其余」）：**冷读**只有
+    Phase A 全量语义检查一处 —— 不传 effort、吃 backend 默认，因为冷启动通读
+    整份文件需要完整推理深度；**复读**面对的是 Phase A 已定位过的问题，深度
+    需求更低 —— L3 有**三个**入口，除 Phase A 外的两个（每轮末的 L3 gate 复检
+    `coordinator.py` Phase B、`gate_ever_ran == False` 时的 Phase C fallback
+    L3）都传 `medium`；T1 / T2 / triage 同传 `medium`。
+    Phase C fallback 这一路容易漏：它不在「gate」这个名字底下，但触发条件
+    （`had_semantic and run_semantic and not gate_ever_ran` —— Phase A 报了
+    语义问题却全轮零 patch）决定了它读的必然是 Phase A 已审过的文件，判据上
+    与 gate 同类。
     **两处连带（缺一即崩）**：`orchestrator.py` 有**两个** `_llm_call` 闭包
     （phase 2 / phase 3），phase 2 的缩水版 repair（#59）同样走 T1
     `local_patch`，只改 phase 3 那个会让 phase 2 一调 T1 就 `TypeError`；

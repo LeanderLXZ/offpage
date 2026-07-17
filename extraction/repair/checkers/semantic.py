@@ -72,11 +72,13 @@ class SemanticChecker(BaseChecker):
         Args:
             llm_call: A callable ``(prompt: str, timeout: int | None = None,
                 effort: str | None = None) -> str`` that invokes an LLM and
-                returns the raw text response. Both kwargs MUST have defaults:
-                this checker calls it without a ``timeout`` so the injector
-                owns the budget (wired to ``[repair].semantic_timeout_s``), and
-                omits ``effort`` on the Phase A full pass so it inherits the
-                backend default. If None, semantic checking is a no-op.
+                returns the raw text response. It MUST accept ``effort`` as a
+                keyword on every path — this checker always passes it, sending
+                ``effort=None`` on the Phase A full pass so that pass inherits
+                the backend default. ``timeout`` MUST have a default: this
+                checker never passes it, so the injector owns the budget
+                (wired to ``[repair].semantic_timeout_s``). If None, semantic
+                checking is a no-op.
         """
         self._llm_call = llm_call
 

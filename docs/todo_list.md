@@ -22,8 +22,8 @@ _(none)_
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
-| `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。 | 🔴 High | ⏸ Blocked | 🔴 Large·Arch | 2026-07-17 EDT | 必须在 T-EFFORT-TIER-TUNING 之后单独做（单变量） |
-| `T-REPAIR-TIMEOUT-CONFIG` | 修复环节还有三处超时值硬写在代码里、不读配置。上次就是这种硬编码让整个配置层静默失效、改了没反应。顺带清理一个名字叫 phase3 但实际只服务 phase4 的参数。 | 🟢 Med-Low | 💬 Discuss first | 🔴 Large·Arch | 2026-07-17 EDT | 建议在 T-EFFORT-TIER-TUNING 之后（同改一处代码） |
+| `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。 | 🔴 High | ⏸ Blocked | 🔴 Large·Arch | 2026-07-17 EDT | 等 effort 分档（#65）的基线对比 stage 跑完（单变量） |
+| `T-REPAIR-TIMEOUT-CONFIG` | 修复环节还有三处超时值硬写在代码里、不读配置。上次就是这种硬编码让整个配置层静默失效、改了没反应。顺带清理一个名字叫 phase3 但实际只服务 phase4 的参数。 | 🟢 Med-Low | 💬 Discuss first | 🔴 Large·Arch | 2026-07-17 EDT | 无 |
 | `T-SMOKE-TRIAGE-BROKEN` | 一个自动化测试在主干上一直是坏的（至少从包重构那次起）。要先弄清是测试过期了还是它测的功能真坏了——如果是后者，生产里可能一直在静默出错。 | 🟢 Med-Low | ✅ Ready | 🟡 Medium | 2026-07-17 EDT | 无 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。 | 🟢 Med-Low | ⏸ Blocked | 🔴 Large·Arch | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
@@ -413,7 +413,8 @@ issues.extend(file_issues)   # ← 不过滤返回值
 
 **依赖**
 
-- **必须在 T-EFFORT-TIER-TUNING 之后单独 `/go`**（单变量，否则耗时变化归因不清）
+- **必须等 effort 分档（决策 #65）的基线对比 stage 跑完再单独 `/go`**——单变量：
+  effort 降档的提速幅度尚未实测，两条混在一起就分不清耗时变化的归因
 - 与 T-SEMANTIC-FULLFILE-COST 相关但正交：本条改的是**每轮 gate 复检**；那条
   讨论的是 **Phase A 全量检查**读全文 + 50k 截断的问题。Phase A 保持全文是本条
   的前提（用户要的是「全文审查一次」）
@@ -469,9 +470,9 @@ config 完全不产生效果，直到 runtime 验证才发现。这三处是同�
   `fixers/source_patch.py:122` / `triage.py:370` → 去掉显式硬编码，改由注入方
   持有预算（与 #64 对 `semantic.py` 的处理形态一致：`repair/` 保持
   config-agnostic，`orchestrator` 的 `_llm_call` 按调用类型给默认值）。
-  **注意**：这与 T-EFFORT-TIER-TUNING 的方案 A（effort 由调用点自己传）方向
-  相反——落地前需先想清楚 timeout 和 effort 是否该用同一种归属模型，避免同一
-  函数上两个参数两套哲学
+  **注意**：这与已定的方案 A（effort 由调用点自己传，决策 #65）方向相反——
+  落地前需先想清楚 timeout 和 effort 是否该用同一种归属模型，避免同一函数上
+  两个参数两套哲学
 - file: `extraction/persona_extraction/core/config.py::Phase3Config` +
   `extraction/config.toml [phase3]` → `review_timeout_s` 重命名 / 移段
   （候选：移到 `[phase4]` 作 `scene_split_timeout_s`，因为唯一消费者是
@@ -495,13 +496,13 @@ config 完全不产生效果，直到 runtime 验证才发现。这三处是同�
 
 **依赖**
 
-- 建议在 T-EFFORT-TIER-TUNING 之后做——两者都动 `_llm_call` 与 repair 的
-  调用点，同时改会撞车；且 effort 的归属模型（方案 A）会影响 timeout 该怎么归属
+- 无前置。effort 的归属模型已定为方案 A（决策 #65），本条要么沿用同一模型、
+  要么明确论证 timeout 为何该不同——见上方 change list 的「注意」
 - 纯 refactor，无行为变化，可随时插队
 
 **暂不做的事**
 
-- 不动数值本身（`semantic_timeout_s` 的 900 由 T-EFFORT-TIER-TUNING 负责）
+- 不动数值本身（`semantic_timeout_s` = 900 已由决策 #64 定案）
 - 不给 phase 2 repair 接 L3（#59 缩水版是有意设计）
 
 **更新时间**：2026-07-17 06:51 EDT
