@@ -18,23 +18,30 @@
 
 _(none)_
 
-### 🟡 Next (0)
+### 🟡 Next (5)
 
-_(none)_
+| ID | Brief | Importance | Ready | Scope | Updated | Deps |
+|---|---|---|---|---|---|---|
+| `T-EFFORT-TIER-TUNING` | 跑挂机实测发现慢是因为模型在最高推理档下会随机进入超长思考模式——同样的活有时 14 分钟、有时 36 分钟，且中招的是哪条线随机。换成官方推荐的次高档 + 新版模型，并给检查类任务分配更低档位。 | 🔴 High | ✅ Ready | 🔴 Large·Arch | 2026-07-17 EDT | 无（可立即启动） |
+| `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。 | 🔴 High | ⏸ Blocked | 🔴 Large·Arch | 2026-07-17 EDT | 必须在 T-EFFORT-TIER-TUNING 之后单独做（单变量） |
+| `T-REPAIR-TIMEOUT-CONFIG` | 修复环节还有三处超时值硬写在代码里、不读配置。上次就是这种硬编码让整个配置层静默失效、改了没反应。顺带清理一个名字叫 phase3 但实际只服务 phase4 的参数。 | 🟢 Med-Low | 💬 Discuss first | 🔴 Large·Arch | 2026-07-17 EDT | 建议在 T-EFFORT-TIER-TUNING 之后（同改一处代码） |
+| `T-SMOKE-TRIAGE-BROKEN` | 一个自动化测试在主干上一直是坏的（至少从包重构那次起）。要先弄清是测试过期了还是它测的功能真坏了——如果是后者，生产里可能一直在静默出错。 | 🟢 Med-Low | ✅ Ready | 🟡 Medium | 2026-07-17 EDT | 无 |
+| `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。 | 🟢 Med-Low | ⏸ Blocked | 🔴 Large·Arch | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
-### ⚪ Discussing (7)
+### ⚪ Discussing (8)
 
 | ID | Brief | Open decisions | Updated | Blocked by |
 |---|---|---|---|---|
 | `T-PHASE35-DEFERRED-FIX` | 决策 #60 落地了"记录不停机"——repair 修不平的 L3 语义残留写进 deferred_repairs 台账、stage 照常继续。本 todo 是那个"跑完全部 stage 后读台账逐条 field-level 精准修 + 复验"的收尾 pass（Part B），不重跑整个 stage。等真实台账数据积累后据此设计 fixer 形态。 | 4 | 2026-07-15 EDT | deferred_repairs 台账在真实运行中积累出样本 |
+| `T-SEMANTIC-FULLFILE-COST` | 语义审校每次把整个文件读一遍，超过 5 万字符的部分直接丢掉不审——大文件的尾部从来没被检查过，而且这不是理论风险，每个 stage 都在发生。检查还吃掉了修复环节 92% 的开销：改一个字段却要通读全书。 | 4 | 2026-07-17 EDT | T-EFFORT-TIER-TUNING + T-GATE-SCOPED-RECHECK 的实测数据 |
+| `T-SEMANTIC-UNPARSEABLE` | 审校跑完了但返回的内容不是合法格式，3 个 stage 里出现 2 次。这跟超时是两回事，加时间救不了。它还和真实内容问题混在同一个待修账本里，下游没法区分处理。 | 4 | 2026-07-17 EDT | 无（诊断可立即启动） |
 | `T-REPAIR-EVENT-DRIVEN` | Phase 3 一抽完一个文件就立刻去修复、跟下一文件的抽取并行——理论最快。但实测算过只比当前方案省 4 分钟/stage，要为这点收益引入双线程池 + 撞限额风险，性价比太低。先做简单版（E1），等真实跑数据出来再决定要不要做这个。 | 0 | — | T-REPAIR-PARALLEL 先落地 |
 | `T-PROMPT-SCHEMA-INJECT` | 项目约定"长度上限这种数字只在 schema 写一份"，但少数 prompt 和 doc 里仍有手写的数字（"150-200 字"之类）。万一 schema 改了，这些地方就会偷偷不一致。要么写代码让 prompt 自动从 schema 读，要么修约定明说"prompt 允许例外"。 | 3 | — | 无（路径决策即可启动） |
 | `T-PHASE5-RETRIEVAL` | 好几份架构文档都在说"每部作品下应该有个 indexes/ 目录"，但实际没有任何阶段在生成它——目录在磁盘上压根不存在。打算加一个 Phase 5 专门做检索类产物（词典、关键词、向量索引、RAG 数据等）。等 phase 3 跑完 + 检索层设计定稿再启动。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | LLM 调用失败时的重试策略能更聪明些。现在不到 5 秒就失败的会重试，但人物抽取正常要跑 10-20 分钟，5 秒太短了——那种短时失败几乎都是启动错、不是真活干完才挂。打算扩到 60 秒，再按失败类型分流要不要重试。改动小，两个数值要拍板。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
-| `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。等真有外部消费方校验这个文件再改 schema。 | 1 | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
-**Total**: 7 — 🟢 In Progress 0 ｜ 🟡 Next 0 ｜ ⚪ Discussing 7
+**Total**: 13 — 🟢 In Progress 0 ｜ 🟡 Next 5 ｜ ⚪ Discussing 8
 
 <!-- holo:section start -->
 ---
@@ -301,6 +308,368 @@ decision #27n 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
 
 ---
 
+### [T-EFFORT-TIER-TUNING] effort 分档 + 模型切 4.8 + 语义审校超时收到 900s
+
+**上下文**
+
+2026-07-16 挂机跑 phase 3（S001–S003 committed）后做的耗时归因，结论是
+**`effort=max` 的双峰思考是速度的头号成因，且与任何代码改动无关**：
+
+- 所有 lane 的生成速度恒定在 **44–68 tok/s**（`logs/runs/*.jsonl` 的
+  `duration_s` ÷ `output_tokens`）。**耗时 ≈ 输出 token ÷ 56**——LLM 没变慢，
+  是输出量在飘。
+- 输出的 **~96% 是思考，不是产物**：某条 `char_support` lane 烧 124,159
+  out_tok（18 turns）产出一个 14KB 的 `memory_timeline/S00N.json`（≈4k
+  token）；同 stage 另一角色同 lane 只用 50,357 tok 却产出更大的 20KB 文件。
+- 爆掉的样本挤得异常紧：**2127s / 2192s / 2115s**——这是**双峰**（正常
+  ~850–1200s vs 爆掉 ~2100s），不是长尾。
+- **中招的 lane 随机**：S001 是 Character A 的 char_support 爆（2192s），
+  S003 换成 Character B 爆（2115s）而 A 只跑 991s。`world` lane 也出现过
+  1523s vs 自身 p50 439s（3.5×），说明**任何 lane 都会中招**。
+
+这与**决策 #49 在 phase 0 上的诊断完全同构**（原文：「opus-4-7 effort=max
+…**随机触发**服务端超长 thinking」），且 #49 已实证 **effort=high 下 ~14
+分钟完工、schema 合法、质量等同**。
+
+两个附带发现：
+
+1. **`cli.py` 的 `choices` 里没有 `xhigh`**——那是 Opus 4.7 新增、位于
+   `high` 与 `max` 之间的档位，官方明确说它是「most coding and agentic use
+   cases 的最佳设置」（也是 Claude Code 自身默认值）；官方对 `max` 的评价是
+   「可能过度思考、收益递减」。**即使底层 `claude` CLI 支持，本项目也传不进去**。
+2. 默认模型是 `claude-opus-4-7`；**Opus 4.8 是当前 Opus 旗舰，4.7 → 4.8
+   无任何 breaking change**（纯 model-ID 切换）。官方迁移指南对 4.8 的建议是
+   「**从 `high` 起步并迭代，而不是反射性地上 `xhigh`**」——4.8 智能上限更高，
+   可能用更低 effort 就达到 4.7 的质量。
+
+超时侧：决策 #64 把 L3 语义审校超时解耦到 `[repair].semantic_timeout_s = 1200`
+之后，本轮**首次取得未删失的真实尾部 = 743s**（此前数据在 600s 处被砍、真实值
+未知）。1200 给了 1.6× 余量，可以有据地收紧。
+
+**要做什么**
+
+四件一起落（都是参数/接线，不改任何语义），目的是**用一个 stage 量出 xhigh
+到底有没有杀掉双峰**——那是全部提速估计的依据。
+
+**改动清单**
+
+- file: `extraction/persona_extraction/cli.py:101` → `--effort` 的
+  `choices` 加 `"xhigh"`（现为 `["low","medium","high","max"]`）；
+  `default` 由 `"max"` 改为 `"xhigh"`
+- file: `extraction/persona_extraction/cli.py:97` → `--model` 的 `default`
+  由 `"claude-opus-4-7"` 改为 `"claude-opus-4-8"`；help 文案同步
+- file: `extraction/persona_extraction/orchestrator.py`（repair 的
+  `_llm_call` 闭包，决策 #64 改过的那处）→ 给 `_llm_call` 增加
+  `effort: str | None = None` 参数，透传给 `run_with_retry(..., effort=...)`
+  （该 kwarg 由决策 #49 引入，`LLMBackend.run` / `run_with_retry` 已支持，
+  只是 repair 的 `_llm_call` 没接）。**方案 A（用户 2026-07-17 拍板）**：
+  effort 由各调用点自己传，与现存 `timeout` 的形态完全一致
+- file: `extraction/repair/checkers/semantic.py:~142` → L3 gate 复检调用传
+  `effort="medium"`（Phase A 全量检查**不传**，吃 backend 默认）
+- file: `extraction/repair/fixers/local_patch.py:106` → T1 传 `effort="medium"`
+- file: `extraction/repair/fixers/source_patch.py:122` → T2 传 `effort="medium"`
+- file: `extraction/repair/triage.py:370` → triage 传 `effort="medium"`
+- file: `extraction/config.toml` `[repair]` → `semantic_timeout_s` 1200 → 900
+- file: `extraction/persona_extraction/core/config.py::RepairAgentConfig` →
+  `semantic_timeout_s` 默认值 1200 → 900；注释内的取值依据改写为「实测未删失
+  尾部 743s，900 给 1.2× 余量」
+- file: `ai_context/decisions.md` + `docs/decisions.md` → #64 就地修订
+  `semantic_timeout_s` 取值（1200 是基于删失数据的推理值，900 是基于实测尾部
+  的有据值）；新增一条 effort 分档决策
+- file: `extraction/README.md` §配置分段 + §子进程超时 → 数字同步
+- file: `docs/requirements.md` §11.8 自我保护 + 配置分节表 → 数字同步
+- file: `docs/architecture/extraction_workflow.md` §子进程硬超时 → 数字同步
+
+**完成标准**
+
+- `--effort xhigh` 能被 argparse 接受，且 `claude -p` 命令行里确实出现
+  `--effort xhigh`（`logs/runs/*.jsonl` 或 extraction.log 可验证）
+- `load_config().repair.semantic_timeout_s == 900`
+- repair 的四类调用（L3 gate / T1 / T2 / triage）在日志里可观测到 medium
+  effort 生效
+- **跑至少 1 个完整 stage，与本轮基线对比**：提取墙钟（基线 S001 36min /
+  S002 25min / S003 35min）、是否仍出现 ~2100s 的爆掉样本、产物 schema 是否
+  仍合法、defer 债是否未增加
+- smoke: `_smoke_l3_gate` + `_smoke_4_lane_merge_and_slice` 全过
+  （`_smoke_triage` HEAD 即坏，见 T-SMOKE-TRIAGE-BROKEN，正交）
+
+**依赖**
+
+- 无（可立即启动）
+- **与 T-GATE-SCOPED-RECHECK 必须分两次 `/go`**——那条改审校语义，混在一起
+  就分不清耗时变化是 effort 降档还是复检变窄造成的
+
+**暂不做的事**
+
+- 不动 target 数量（用户 2026-07-17 拍板）。实测 per-target 字段只占
+  stage_snapshot 的 26%（relationships 5KB + target_voice_map 3KB +
+  target_behavior_map 3KB + knowledge_leaks 3KB / 共 59KB），20→10 只省 ~13%；
+  且**头号瓶颈 `char_support` 产出的 `memory_timeline` 根本没有 per-target
+  字段**（它是事件数组），砍 target 对它零影响
+- 不拆 `char_support`（现为 2 条 lane，每角色一条，未再拆 sub-lane）。瓶颈是
+  双峰不是内容量，拆成 4 路每路照样可能爆到 2100s
+- 不用 fast mode（用户 2026-07-17 拍板：需要 API，不采用）
+
+**更新时间**：2026-07-17 06:51 EDT
+
+---
+
+### [T-GATE-SCOPED-RECHECK] L3 gate 复检改定点：全文审校一次，之后只复检改过的地方
+
+**上下文**
+
+2026-07-16 挂机跑 S003 时逐行拆 repair 循环，发现一个**正确性缺陷**（不只是
+慢）：**每轮末的 L3 gate 把整份 50k 字符文件重读一遍复检，导致打地鼠循环**。
+
+单个 round 的实测拆分（`Character A/canon/stage_snapshots/S003.json`）：
+
+```
+Fix round 1 — 2 issues
+  T2 定点修复 #1  →  18s
+  T2 定点修复 #2  →  16s
+  L3 gate 全文复检 → 4m36s          ← 8 倍不对称
+Round 1 result: resolved=2, persisting=0, introduced=1
+```
+
+而 `introduced` 的定义是**指纹集合差**（`repair/tracker.py:30`）：
+
+```python
+introduced = [curr_fps[fp] for fp in curr_fps if fp not in prev_fps]
+```
+
+**任何"上轮没有、这轮有"的 issue 都算 introduced，不管是不是修复造成的。**
+全文复检每轮重读整份文件，LLM 审校本身不确定，每次挑出的毛病天然不同 →
+新指纹 → 算 introduced → 循环继续。实测某文件连续四轮：
+
+```
+Round 1: resolved=2, persisting=0, introduced=1
+Round 2: resolved=1, persisting=0, introduced=1
+Round 3: resolved=1, persisting=0, introduced=1
+Round 4: resolved=1, persisting=0, introduced=1
+Fix round 5 — No patches applied — stopping   → FAIL
+```
+
+**修复根本没搞坏任何东西——是复检自己每轮换了个目标。**
+
+**更糟：两个安全阀对这个模式全盲。**
+
+- `is_regression()` = `len(introduced) > len(resolved)` → `1 > 1` = False
+- `is_stalled()` = persisting 两轮相同 **且** `len(curr_fps) > 0` →
+  persisting 恒为 0 → False
+
+`resolved=1 / introduced=1 / persisting=0` 恰好从两阀中间穿过，**每次跑满
+`total_round_limit=5` 然后判 FAIL**，攒出本不该有的 defer 债（S003 的 4 条
+defer 里 `inconsistent_relationship_type` / `realm_label_contradiction` /
+`missing_true_state_change` 高度疑似由此而来）。
+
+**用户 2026-07-17 的判断**：「全文审查一次就够了，之后应该是修啥复审啥」。
+
+**关键陷阱**：`repair/checkers/semantic.py:96` 已有 `check_scoped(files, paths)`
+方法，docstring 明写 `"""Re-check only specific json_paths (for final
+verification)."""`——**但全仓零调用方，是死代码**（gate 走的是 `check`，全文）。
+而且**它现成的实现并不能解决问题**：
+
+```python
+file_issues = self._review_file(f.path, content, focus_paths=paths)
+#                                        ^^^^^^^ 仍传全量 content
+issues.extend(file_issues)   # ← 不过滤返回值
+```
+
+它只在 prompt 末尾加一句 `Focus review on these paths: ...`——**是软提示、不是
+硬约束，且返回值不过滤**。LLM 完全可能照样报 focus 之外的问题，打地鼠继续。
+**真正的根治必须在代码层过滤 gate 结果到本轮实际改过的 json_path。**
+
+**要做什么**
+
+让 gate 的职责回归「我这一刀改对了吗」，而不是「再审一遍全书」——Phase A
+已经做过全文审计了。
+
+**改动清单**
+
+- file: `extraction/repair/coordinator.py:~415`（`if config.l3_gate_enabled
+  and config.run_semantic and gate_targets` 那处）→ gate 改调
+  `check_scoped(files, paths=<本轮改过的 json_path 集合>)`，不再走
+  `run_layer → check`
+- file: `extraction/repair/coordinator.py` → 收集"本轮实际改过的 json_path"
+  （T0/T1/T2 各 fixer 的 `FixResult` 已带 patch 信息，需确认是否已暴露改过的
+  path；若无则补）
+- file: `extraction/repair/checkers/semantic.py:96 check_scoped` →
+  **返回值按 `paths` 过滤**（程序保证，不指望 LLM 听 focus 提示）；同时
+  评估 prompt 里 focus 段是否需要加严成硬约束
+- file: `extraction/repair/tracker.py:47-58` → **scoped 之后 `introduced` /
+  `is_regression` 的语义必须重想**。scoped gate 只看改过的 path，`introduced`
+  的含义从"文件里冒出个新问题"变成"我这一刀改出了新问题"——那才是回归的真定义。
+  `is_stalled` 的 `len(curr_fps) > 0` 守卫也要复核（persisting 恒 0 的场景）
+- file: `extraction/repair/tests/_smoke_l3_gate.py` → 补 scoped gate 的场景：
+  (a) 修复成功 → scoped 复检 0 issue → 早退不再跑满 5 轮；
+  (b) 修复真的引入了新问题（改过的 path 上）→ 仍被 `introduced` 抓到
+- file: `ai_context/decisions.md` + `docs/decisions.md` → 新增决策条目（gate
+  职责边界 = 验证本刀，不是重新审计；放弃"修 A 是否搞坏 B"的跨 path 检测能力
+  是有意取舍——Phase A 已覆盖，且现状那个能力实际报的是审校抖动不是真回归）
+- file: `docs/requirements.md` §11.4 repair 三阶段描述 → gate 语义同步
+- file: `docs/architecture/extraction_workflow.md` → 同步
+
+**完成标准**
+
+- 跑至少 1 个完整 stage，与基线对比 **round 数**（基线：S003 单文件最多 5 轮
+  且撞 `total_round_limit`；期望降到 1–2 轮）
+- 不再出现 `resolved=N, persisting=0, introduced=N` 的连续打平模式
+- repair 墙钟下降（基线 S001 27min / S002 31min / S003 38min）
+- **defer 债不增加**，且 defer 的 rule 分布里不再出现「每轮换一个目标」的痕迹
+- `_smoke_l3_gate` 新增场景全过
+
+**依赖**
+
+- **必须在 T-EFFORT-TIER-TUNING 之后单独 `/go`**（单变量，否则耗时变化归因不清）
+- 与 T-SEMANTIC-FULLFILE-COST 相关但正交：本条改的是**每轮 gate 复检**；那条
+  讨论的是 **Phase A 全量检查**读全文 + 50k 截断的问题。Phase A 保持全文是本条
+  的前提（用户要的是「全文审查一次」）
+
+**更新时间**：2026-07-17 06:51 EDT
+
+---
+
+### [T-REPAIR-TIMEOUT-CONFIG] repair 的超时值统一进 config + `review_timeout_s` 命名归属清理
+
+**上下文**
+
+决策 #64（2026-07-16）把 L3 语义审校的超时解耦到
+`[repair].semantic_timeout_s` 并去掉 `checkers/semantic.py` 里 shadow 掉
+config 的硬编码。但**同类问题在另外三处仍然存在**——`repair/` 内其余调用点
+都还在传硬编码 timeout，全都不读 config：
+
+| 调用点 | 硬编码值 | 用途 |
+|---|---|---|
+| `fixers/local_patch.py:106` | 600 | T1 定点修复 |
+| `fixers/source_patch.py:122` | 600 | T2 原文修复 |
+| `triage.py:370` | 300 | triage |
+
+这违反 `ai_context/conventions.md §Single Source of Truth`（运行时常量的权威
+位置是 config 文件）。#64 的教训是：**硬编码会 shadow 掉 config，让整个配置
+层静默失效**——那次 `orchestrator` 的 `default_timeout` 因此成了死代码，改
+config 完全不产生效果，直到 runtime 验证才发现。这三处是同一个雷。
+
+**附带的命名问题**：#64 落地后 `[phase3].review_timeout_s = 600` 只剩 2 个
+引用点，且**都不属于 phase 3**：
+
+- `phases/scene_archive.py:429` → **phase 4** scene split：**唯一真实消费者**
+  （`timeout_seconds=cfg.phase3.review_timeout_s` 直接传值）
+- `orchestrator.py:2108` → **phase 2** per-lane repair 的
+  `default_review_timeout`：**同属死代码**——#59 缩水版关掉 `run_semantic` /
+  `l3_gate` / `triage` 且 `t2_max=0`，phase 2 唯一可达的 LLM 调用是 T1
+  `local_patch`，而它显式传 `timeout=600` ⇒ 该 default 从不被消费
+
+即**一个名为 `[phase3]` 的参数实际只服务 phase 4**。#47 已经就地修正过一次
+它的错误描述（原称"服务 phase 3 reviewer 短链"——该短链不存在）。
+
+**要做什么**
+
+把三处硬编码超时收进 config；顺带清理 `review_timeout_s` 的命名与归属。
+
+**改动清单**
+
+- file: `extraction/persona_extraction/core/config.py::RepairAgentConfig` →
+  新增 `t1_timeout_s: int = 600` / `t2_timeout_s: int = 600` /
+  `triage_timeout_s: int = 300`（与 `semantic_timeout_s` 并列）
+- file: `extraction/config.toml` `[repair]` → 三个同名键 + 中文注释
+- file: `extraction/repair/fixers/local_patch.py:106` /
+  `fixers/source_patch.py:122` / `triage.py:370` → 去掉显式硬编码，改由注入方
+  持有预算（与 #64 对 `semantic.py` 的处理形态一致：`repair/` 保持
+  config-agnostic，`orchestrator` 的 `_llm_call` 按调用类型给默认值）。
+  **注意**：这与 T-EFFORT-TIER-TUNING 的方案 A（effort 由调用点自己传）方向
+  相反——落地前需先想清楚 timeout 和 effort 是否该用同一种归属模型，避免同一
+  函数上两个参数两套哲学
+- file: `extraction/persona_extraction/core/config.py::Phase3Config` +
+  `extraction/config.toml [phase3]` → `review_timeout_s` 重命名 / 移段
+  （候选：移到 `[phase4]` 作 `scene_split_timeout_s`，因为唯一消费者是
+  phase 4 scene split）
+- file: `extraction/persona_extraction/orchestrator.py:2108` → 删除死代码
+  `default_review_timeout`（或在 phase 2 repair 接入 config 化的 timeout 后
+  让它真正生效——二选一，需拍板）
+- file: `extraction/persona_extraction/phases/scene_archive.py:429` → 跟随
+  重命名
+- file: `ai_context/decisions.md` + `docs/decisions.md` → #47 / #64 的边界
+  描述同步（#64 现在写着「唯一真实消费者是 phase 4 scene split」，重命名后要改）
+- file: `extraction/README.md` + `docs/requirements.md` +
+  `docs/architecture/extraction_workflow.md` → 配置分节表同步
+
+**完成标准**
+
+- `grep -rE "timeout=[0-9]+" extraction/repair/` 命中 0（全部走 config 或注入方）
+- `grep -rn "phase3.review_timeout_s" extraction/` 命中 0
+- `load_config()` 能读到全部新键；`config.local.toml` 覆盖链对新键生效
+- smoke 全过；**行为不变**（同样的值，只是来源从硬编码变成 config）
+
+**依赖**
+
+- 建议在 T-EFFORT-TIER-TUNING 之后做——两者都动 `_llm_call` 与 repair 的
+  调用点，同时改会撞车；且 effort 的归属模型（方案 A）会影响 timeout 该怎么归属
+- 纯 refactor，无行为变化，可随时插队
+
+**暂不做的事**
+
+- 不动数值本身（`semantic_timeout_s` 的 900 由 T-EFFORT-TIER-TUNING 负责）
+- 不给 phase 2 repair 接 L3（#59 缩水版是有意设计）
+
+**更新时间**：2026-07-17 06:51 EDT
+
+---
+
+### [T-SMOKE-TRIAGE-BROKEN] `_smoke_triage` 在 HEAD 上即坏（既有破损）
+
+**上下文**
+
+`python -m extraction.repair.tests._smoke_triage` 在 HEAD 上失败：
+
+```
+File "extraction/repair/tests/_smoke_triage.py", line 157, in scenario_a_pre_t3_accept
+  assert result.accepted_notes, "expected at least one accepted note"
+AssertionError: expected at least one accepted note
+[A] passed=False  notes=0  T3 regen calls=0  triage calls=0
+```
+
+**已用 `git stash` 对照证实与近期改动无关**——把 #64 的改动 stash 掉后，HEAD
+上以**完全相同的断言**失败。commit `5d9ef6f`（extraction 包重构）的 message
+里也记录过「smoke 6/7 全过（`_smoke_triage` HEAD 即坏，正交）」，说明它至少
+从那时起就是坏的。
+
+场景名 `scenario_a_pre_t3_accept` 里的 `pre_t3` 暗示它写于 T3 全文重跑还存在
+的年代；决策 #62（`010fb03`，2026-07-15）已删除 T3 与 `file_regen.py`。输出里
+`T3 regen calls=0` 也印证了——**这个测试很可能是在测一个已经不存在的路径**。
+
+**要做什么**
+
+先诊断是"测试过期"还是"triage 真坏了"，再决定修测试还是修代码。这个判断很
+重要：如果是后者，那 triage 的 `source_inherent` 接受路径在生产里一直是坏的
+而没人知道（`triage_enabled = true` 是本项目的现行配置）。
+
+**改动清单**
+
+- file: `extraction/repair/tests/_smoke_triage.py:157`（`scenario_a_pre_t3_accept`）
+  → 起点：为什么 `accepted_notes` 是空的
+- file: `extraction/repair/triage.py` → 被测对象，确认 `source_inherent`
+  接受路径是否仍按契约工作（`triage_accept_cap_per_file = 5`）
+- file: `extraction/repair/coordinator.py` → triage 的调用点与结果消费
+- 判定后二选一：
+  - **测试过期** → 重写场景对齐 #62 后的三层就地修复形态（删 T3 相关断言）
+  - **代码坏了** → 修 `triage.py`，并复核生产里是否已经有被静默吞掉的
+    `source_inherent` 接受（查 `works/*/characters/*/canon/extraction_notes/`
+    有没有 SourceNote 落盘）
+
+**完成标准**
+
+- `python -m extraction.repair.tests._smoke_triage` 全过
+- 如判定为"代码坏了"：给出生产影响面评估（有多少 stage 的 triage 接受被静默
+  吞掉），并在 `ai_context/decisions.md` 记录
+
+**依赖**
+
+- 无（独立，可随时做）
+
+**更新时间**：2026-07-17 06:51 EDT
+
+---
+
 ## Discussing (Undecided) <!-- holo:heading -->
 
 <!-- holo:section start -->
@@ -560,4 +929,120 @@ T-LOG 已落地：[llm_backend.py:565-680](../extraction/persona_extraction/core
 - 不提前补 schema，避免与后续 loader 字段收敛方案冲突
 
 **依赖**：simulation runtime loader 选型 / 设计定稿
+
+---
+
+### [T-SEMANTIC-FULLFILE-COST] Phase A 全文语义审校：50k 截断 + 读全文的成本
+
+**上下文**
+
+L3 语义审校（`repair/checkers/semantic.py::_review_file`）把**整份文件**塞给
+LLM 通读。两个后果，一个是质量缺口、一个是成本，**同源**：
+
+**① 尾部从未被审校。** `semantic.py:121` 有个硬编码截断：
+
+```python
+_SEMANTIC_MAX_CHARS = 50000
+if len(content_str) > _SEMANTIC_MAX_CHARS:
+    logger.warning("Semantic review truncated %s: %d chars → %d chars "
+                   "(tail dropped from review)", ...)
+```
+
+实测**正在持续触发**——2026-07-16 那轮 S003 的日志里
+`Semantic review truncated .../canon/stage_snapshots/S00N.json` 反复出现
+（`stage_snapshot` 实测 59KB）。即**大文件超出 50k 的部分从来没被审校过**，
+而这不是理论风险，是每个 stage 都在发生。
+
+**② 检查吃掉 repair 的绝大部分开销。** 2026-07-16 单 stage 的 repair 内部
+按调用类型拆分（`logs/runs/*.jsonl`）：
+
+| 类型 | n | p50 | 累计 out_tok | 成本 |
+|---|---|---|---|---|
+| T1 local_patch 修复 | 34 | **14s** | ~14k | ~$2.61 |
+| T2 source_patch 修复 | 2 | **28s** | | |
+| L3 语义检查 (Phase A) | 38 | 152s | ~172k | ~$6.24 |
+| L3 gate 复检 | 24 | 185s | | |
+
+**检查吃掉 repair 的 92% token，修复只占 8%。** 决策 #62 的定点修复完全生效
+（改一个 `json_path` 只要 14 秒），但**检查的粒度和修复的粒度差了三个数量级**：
+修复只碰一个字段，检查读整份 50k 字符。
+
+全轮成本参照：3 个 stage = $157.86；按 $52.6/stage 外推 53 个 stage ≈ **$2,800**，
+其中 repair 约 21%（$470），而 repair 的 92% 是检查（≈$430 花在"找问题"上）。
+
+**注意边界**：本条讨论的是 **Phase A 全量检查**。**每轮 gate 复检**改定点是
+另一条（T-GATE-SCOPED-RECHECK，用户已拍板方向：「全文审查一次就够了，之后修啥
+复审啥」）——那条的前提正是 Phase A **保持全文**。所以本条不是"要不要全文"，
+而是"全文这一次该怎么做得更好"。
+
+**待决策项**
+
+1. **截断怎么办**：`stage_snapshot` 实测 59KB > 50k，尾部恒定被丢。选项：
+   (a) 调大 `_SEMANTIC_MAX_CHARS`（多少？context window 是 1M，50k 这个值的
+   来历需要考古）；(b) 分块审校后合并 issue；(c) 按字段分组审校（与 #55 的
+   sub-lane 字段归属表对齐）；(d) 接受现状但至少把它变成 config 而非硬编码
+2. **Phase A 要不要也降 effort**：T-EFFORT-TIER-TUNING 只给 gate/T1/T2/triage
+   降到 medium，Phase A 保持 backend 默认。它是"找问题"不是"创作"——medium
+   够不够？需要先有 xhigh 的基线数据才好判断
+3. **要不要按 importance 分级审校**：`validation/shared/importance.py` 已有
+   `importance_for_target`——低 importance 的 target 相关字段是否可以跳过 L3？
+4. **值不值得**：$430 找问题，最后 defer 了几条。这个投入产出比是否可接受，
+   本质是用户对"审校覆盖率 vs 成本"的取舍——需要用户拍板，不是技术问题
+
+**未落地原因**
+
+- 需要 T-EFFORT-TIER-TUNING + T-GATE-SCOPED-RECHECK 的数据才好评估：如果那两条
+  把 repair 从 32min 压到 15min，本条的紧迫性就下降；如果压不动，Phase A 就是
+  下一个靶子
+- 决策 1 的选项 (b)/(c) 是架构改动，成本远高于前两条 todo
+
+**依赖**：T-EFFORT-TIER-TUNING + T-GATE-SCOPED-RECHECK 的实测数据
+
+---
+
+### [T-SEMANTIC-UNPARSEABLE] L3 审校返回非法 JSON（实测 3 个 stage 中 2 次）
+
+**上下文**
+
+`repair/checkers/semantic.py` 的审校返回值解析失败，日志：
+
+```
+[WARNING] extraction.repair.checkers.semantic: Invalid JSON in semantic
+review for .../canon/stage_snapshots/S00N.json
+```
+
+2026-07-16 那轮 3 个 committed stage 里**出现 2 次**（S001 / S003 的
+`deferred_repairs/*.jsonl` 各含 1 条 `rule: semantic_unparseable`），
+出现率 ~33%。
+
+**这与超时是不同的故障**：审校 LLM 跑完了、返回了内容，但内容不是合法 JSON。
+决策 #64 把超时从 600s 提到 1200s **救不了它**——那是输出格式问题，不是时间问题。
+
+**性质要分清**：它经决策 #60 的 defer 通道写进账本、stage 照常提交，但它记录的
+是「**审校从未跑出结论**」，而不是「已知有瑕疵」。同一个 defer 桶里混着两种
+东西——S001 的 4 条里 1 条是 `semantic_unparseable`（审校故障）、3 条是
+`cross_field_consistency` / `voice_ownership`（真实内容问题）。下游 Phase 3.5
+（T-PHASE35-DEFERRED-FIX）消费账本时，这两类需要不同处理：前者应该**重跑审校**，
+后者才是**逐条精准修**。
+
+**待决策项**
+
+1. **根因是什么**：prompt 让 LLM 输出 JSON 的方式不够硬？还是解析太严
+   （比如 LLM 包了 markdown ```json 围栏、或前后加了说明文字）？需要抓一次
+   原始返回值看。`_parse_response` 在 `semantic.py`，先读它怎么解析的
+2. **要不要用结构化输出**：`claude` CLI 有 `--json-schema <schema>` flag
+   （`claude --help` 可见）——能否用它硬约束审校返回值的形状？这可能是根治
+3. **要不要重试**：现在是一次非法就 defer。重试一次的成本 vs 收益？
+   （L3 检查 p50 152s，不便宜）
+4. **defer 桶要不要分流**：`semantic_unparseable` 和真实内容问题混在一起，
+   Phase 3.5 需要区分处理——是在写账本时就分开，还是让 3.5 按 `rule` 分流？
+   （与 T-PHASE35-DEFERRED-FIX 的待决项 4 有关联）
+
+**未落地原因**
+
+- 根因未知，需要先抓一次原始返回值（决策 1）才能选方案
+- 33% 是 3 个 stage 的样本，n 太小——可能是巧合，也可能更高。跑更多 stage 会
+  自然攒出样本
+
+**依赖**：无（诊断可立即启动）；但方案选择依赖决策 1 的结果
 
