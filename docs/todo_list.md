@@ -22,7 +22,7 @@ _(none)_
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
-| `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。 | 🔴 High | ⏸ Blocked | 🔴 Large·Arch | 2026-07-17 EDT | 等 effort 分档（#65）的基线对比 stage 跑完（单变量） |
+| `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。**代码已落地（log 112727，决策 #66）；剩：跑 1 stage 与基线对比 round 数/墙钟。** | 🔴 High | ✅ Ready | 🔴 Large·Arch | 2026-07-17 EDT | 无（代码已落地，待实测验证） |
 | `T-REPAIR-TIMEOUT-CONFIG` | 修复环节还有三处超时值硬写在代码里、不读配置。上次就是这种硬编码让整个配置层静默失效、改了没反应。顺带清理一个名字叫 phase3 但实际只服务 phase4 的参数。 | 🟢 Med-Low | 💬 Discuss first | 🔴 Large·Arch | 2026-07-17 EDT | 无 |
 | `T-SMOKE-TRIAGE-BROKEN` | 一个自动化测试在主干上一直是坏的（至少从包重构那次起）。要先弄清是测试过期了还是它测的功能真坏了——如果是后者，生产里可能一直在静默出错。 | 🟢 Med-Low | ✅ Ready | 🟡 Medium | 2026-07-17 EDT | 无 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。 | 🟢 Med-Low | ⏸ Blocked | 🔴 Large·Arch | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
@@ -308,6 +308,8 @@ decision #27n 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
 ---
 
 ### [T-GATE-SCOPED-RECHECK] L3 gate 复检改定点：全文审校一次，之后只复检改过的地方
+
+**进展**（2026-07-17）：代码已落地（`logs/change_logs/2026-07-17_112727_gate-scoped-recheck.md`，决策 #66）——scoped gate + `check_scoped` 返回值过滤 + `modified_paths` 收集 + tracker 语义注释 + smoke D/E + docs 同步，import/smoke 全过。用户拍板「先落代码」，接受本轮未做基线对比的归因缺口。**剩余 = 完成标准里的实测验证**：跑 ≥1 完整 stage，与 effort-分档（#65）后的基线对比 round 数（期望 5→1–2）/ 墙钟 / defer 债。下方原始条目保留作验证清单。
 
 **上下文**
 

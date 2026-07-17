@@ -296,6 +296,9 @@ N. <决策陈述，一行>。
 65. **effort 分档 + 默认模型 opus-4-8 + effort 由调用点传（方案 A）。** 默认 `--effort` = `xhigh`（`max` 会随机触发服务端超长 thinking 的双峰，与 #49 在 phase 0 上的诊断同构；官方亦称 `xhigh` 是 coding/agentic 最佳档、`max` 收益递减）；默认 `--model` = `claude-opus-4-8`。repair 的 `_llm_call` 增 `effort` 参数透传 `run_with_retry`，**由各调用点自己传**（与现存 `timeout` 形态一致，非闭包捕获单值）。按「冷读 vs 复读」分档：**冷读**（Phase A 全量语义检查）不传、吃 backend 默认；**复读**（L3 gate 复检、Phase C fallback L3）+ T1 / T2 / triage 传 `medium`。
     → docs/decisions.md #65。
 
+66. **L3 gate 复检改定点：只复检本轮改过的 json_path，且代码层过滤返回值。** Phase A 全文审计一次即够；gate 职责是「这一刀改对了吗」而非重审全书。旧 gate 走 `run_layer(layer=3)` 全文复检，LLM 非确定每轮换目标 → 新指纹算 `introduced` → 打地鼠跑满 round cap，`resolved=N/introduced=N/persisting=0` 从两安全阀中间穿过。新走 `check_scoped(paths=本轮改过的 json_path)`，返回值按后代匹配过滤（程序保证，非 focus 软提示）；后端失败类 issue（`$` 锚）永不过滤。tracker 数学不变、`introduced` 语义变正确。有意取舍：放弃跨-path「修 A 是否搞坏 B」复检（Phase A 已覆盖）。边界：Phase C fallback L3 保持全文。与 #65 分两次落地保单变量。
+    → docs/decisions.md #66。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

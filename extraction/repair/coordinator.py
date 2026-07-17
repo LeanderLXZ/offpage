@@ -3,11 +3,13 @@
 Phase A: Full validation (L0–L3 if configured)
 Phase B: Fix loop — escalate T0→T1→T2 (each tier capped at 2 attempts,
          routed per issue rule by ``protocol.route_tiers``) with a scoped
-         L0–L2 recheck and an embedded L3 gate (re-runs the semantic
-         checker on files modified this round AND that had semantic
-         issues in Phase A). There is NO full-file regeneration tier —
-         issues the capped tiers can't fix are left for Phase C to
-         surface (and the caller to defer).
+         L0–L2 recheck and an embedded, SCOPED L3 gate. The gate re-reviews a
+         narrow per-file set of json_paths — what a fix touched this round
+         plus any semantic issue still open on that file — never the whole
+         file. Its job is "did this fix land + is the known problem still
+         there", Phase A already did the one full semantic pass. There is NO
+         full-file regeneration tier — issues the capped tiers can't fix are
+         left for Phase C to surface (and the caller to defer).
 Phase C: Final confirmation — reuses the last L3 gate result instead of
          issuing a fresh semantic call when possible
 
@@ -327,6 +329,9 @@ def _run_one_lifecycle(
         tier_groups = _group_by_start_tier(current_issues)
 
         modified_files: set[str] = set()
+        # Exact json_paths touched this round, per file — drives the scoped
+        # L3 gate below (re-review only what changed, not the whole file).
+        round_modified_paths: dict[str, set[str]] = {}
         round_fixer_candidates: dict[str, TriageVerdict] = {}
 
         for tier in sorted(tier_groups.keys()):
@@ -335,7 +340,7 @@ def _run_one_lifecycle(
                 continue
 
             tier_issues = tier_groups[tier]
-            tier_modified, tier_cands, tier_signal = (
+            tier_modified, tier_paths, tier_cands, tier_signal = (
                 _run_fixer_with_escalation(
                     fixer, fixers, tier, tier_issues, files,
                     source_context, config, tracker,
@@ -347,6 +352,8 @@ def _run_one_lifecycle(
                 )
             )
             modified_files.update(tier_modified)
+            for fpath, jpaths in tier_paths.items():
+                round_modified_paths.setdefault(fpath, set()).update(jpaths)
             round_fixer_candidates.update(tier_cands)
             if tier_signal:
                 lifecycle_signal = tier_signal
@@ -401,30 +408,60 @@ def _run_one_lifecycle(
             if i.fingerprint not in accepted_fps
         ]
 
-        # ---- L3 gate ----
+        # ---- L3 gate (scoped) ----
         # Gate the files this round actually modified, minus any that still
         # carry an L0–L2 error: the checker pipeline skips L3 for those on
         # purpose (don't burn tokens semantically reviewing a schema-broken
         # file), and the round is going to FAIL on that error anyway — a
         # semantic verdict here buys no decision.
+        #
+        # The gate re-checks a NARROW, per-file set of json_paths
+        # (T-GATE-SCOPED-RECHECK). Its job is "did this fix land", not
+        # "re-audit the whole book" — Phase A already did the one full
+        # semantic pass. A full-file re-review surfaces a different set of
+        # nondeterministic untouched-field nits every round, each a fresh
+        # ``introduced`` fingerprint, so the loop whacks moles until it hits
+        # the round cap.
+        #
+        # Per-file scope = (paths a fix TOUCHED this round) ∪ (paths of
+        # semantic issues CARRIED into this round for that file):
+        #   * touched paths verify the fix landed;
+        #   * carried semantic paths keep an issue the round did NOT fix — on
+        #     a path no fix touched — from silently vanishing. The round diff
+        #     below compares ``current_issues`` (full Phase-A set) against
+        #     ``combined_blocking``; if such an issue never re-enters the gate
+        #     result it reads as ``resolved`` and PASSes a still-broken file.
+        #     Re-checking its own path re-surfaces it so it persists to FAIL.
+        # Scoping PER FILE (not a flat union across files) stops one file's
+        # touched path from unblocking a same-named path's jitter on another
+        # file. Untouched CLEAN fields are still never re-scanned, so the
+        # whack-a-mole the scoping fixed stays fixed. A file whose scope comes
+        # out empty (nothing touched, no carried semantic issue) is skipped.
         gate_blocking: list[Issue] = []
         still_broken = {
             i.file for i in recheck_blocking if i.severity == "error"
         }
         gate_targets = (l3_file_set & modified_files) - still_broken
-        if (config.l3_gate_enabled and config.run_semantic
-                and gate_targets):
+        gate_scopes: dict[str, list[str]] = {}
+        for fpath in gate_targets:
+            fscope = _gate_scope(fpath, round_modified_paths, current_issues)
+            if fscope:
+                gate_scopes[fpath] = fscope
+        if (config.l3_gate_enabled and config.run_semantic and gate_scopes):
             logger.info(
-                "L3 gate: re-checking %d file(s) modified this round",
-                len(gate_targets))
-            gate_file_entries = [f for f in files if f.path in gate_targets]
+                "L3 gate: re-checking %d file(s), scoped per file to "
+                "touched + carried semantic path(s)", len(gate_scopes))
             # effort=medium (decision #65): the gate re-reads files whose
             # issues Phase A already surfaced, so it needs less reasoning
             # depth than the cold full pass — which omits effort entirely and
             # inherits the backend default.
-            gate_issues = pipeline.run_layer(
-                gate_file_entries, layer=3, effort="medium")
-            gate_blocking = _filter_blocking(gate_issues, config)
+            for f in files:
+                fscope = gate_scopes.get(f.path)
+                if not fscope:
+                    continue
+                f_gate_issues = pipeline.run_semantic_scoped(
+                    [f], paths=fscope, effort="medium")
+                gate_blocking.extend(_filter_blocking(f_gate_issues, config))
             tracker.record_l3_gate(
                 {i.fingerprint for i in gate_blocking})
             gate_ever_ran = True
@@ -449,7 +486,9 @@ def _run_one_lifecycle(
                 len(gate_blocking))
             _emit("l3_gate_result",
                   round=round_num + 1,
-                  targets=sorted(gate_targets),
+                  targets=sorted(gate_scopes),
+                  scope_paths=sorted({p for ps in gate_scopes.values()
+                                      for p in ps}),
                   blocking=len(gate_blocking))
 
         combined_blocking = recheck_blocking + gate_blocking
@@ -574,6 +613,27 @@ def _group_by_start_tier(issues: list[Issue]) -> dict[int, list[Issue]]:
     return groups
 
 
+def _gate_scope(fpath: str,
+                round_modified_paths: dict[str, set[str]],
+                current_issues: list[Issue]) -> list[str]:
+    """Json_paths the scoped L3 gate re-checks on ``fpath`` this round.
+
+    Two contributors (see the L3 gate block for the full rationale):
+      * paths a fix TOUCHED this round on ``fpath`` — verify the fix landed;
+      * paths of semantic issues CARRIED into this round for ``fpath`` — an
+        issue the round did NOT fix, on a path no fix touched, would drop out
+        of the round diff and false-PASS a still-broken file; re-checking its
+        own path keeps it alive until it is fixed or the run FAILs.
+
+    Restricted to ``fpath`` (per-file, not a flat cross-file union) so one
+    file's touched path can't unblock a same-named path's jitter on another.
+    """
+    paths = set(round_modified_paths.get(fpath, set()))
+    paths |= {i.json_path for i in current_issues
+              if i.file == fpath and i.category == "semantic"}
+    return sorted(paths)
+
+
 def _run_fixer_with_escalation(
     fixer,
     all_fixers: dict,
@@ -589,13 +649,20 @@ def _run_fixer_with_escalation(
     notes_writer: NotesWriter | None,
     accepted_notes: list[SourceNote],
     notes_per_file: dict[str, int],
-) -> tuple[set[str], dict[str, TriageVerdict], str]:
+) -> tuple[set[str], dict[str, set[str]], dict[str, TriageVerdict], str]:
     """Run a fixer tier; if attempts are exhausted, escalate to the next
     tier (capped per issue by ``protocol.route_tiers``; no tier > 2).
 
-    Returns ``(modified_files, fixer_candidates, lifecycle_signal)``:
+    Returns ``(modified_files, modified_paths, fixer_candidates,
+    lifecycle_signal)``:
       * ``modified_files`` — file paths touched by at least one
         successful fix in this invocation (feeds the L3 gate).
+      * ``modified_paths`` — ``{file_path: {json_path, ...}}``, the exact
+        json_paths a fix touched this round. Feeds the scoped L3 gate so it
+        re-reviews only what changed, not the whole file. Only paths carrying
+        a semantic-reviewable JSON change are recorded — sidecar-note accepts
+        (coverage_shortage) touch ``modified_files`` but NOT this map, since
+        no JSON changed for the gate to re-read.
       * ``fixer_candidates`` — T2 self-reported source_inherent verdicts,
         carried forward as priors for the post-gate triage.
       * ``lifecycle_signal`` — ``""`` for normal completion, or
@@ -605,6 +672,7 @@ def _run_fixer_with_escalation(
         the caller treats this as a terminal PASS.
     """
     modified_files: set[str] = set()
+    modified_paths: dict[str, set[str]] = {}
     remaining = list(issues)
     tier = start_tier
     # T2 self-report verdicts — used as priors for the residual triage.
@@ -651,22 +719,27 @@ def _run_fixer_with_escalation(
             if result.source_inherent_candidates and tier == 2:
                 t2_self_report.update(result.source_inherent_candidates)
 
-            fingerprint_to_file = {i.fingerprint: i.file for i in attempted}
+            fingerprint_to_issue = {i.fingerprint: i for i in attempted}
             for fp in result.resolved_fingerprints:
-                f_path = fingerprint_to_file.get(fp)
-                if f_path:
-                    modified_files.add(f_path)
+                issue = fingerprint_to_issue.get(fp)
+                if issue:
+                    modified_files.add(issue.file)
+                    modified_paths.setdefault(issue.file, set()).add(
+                        issue.json_path)
 
             # M4: a fixer (T1) can write a file to disk yet report the issue
             # NOT resolved (apply succeeds but the immediate re-verify still
             # flags it). Its semantic content changed, so the L3 gate must
             # still re-check it — add every file whose json_path was patched
-            # this round, regardless of resolution.
+            # this round, regardless of resolution. Record the exact patched
+            # json_path too, so the scoped gate re-reviews just that subtree.
             patched_json_paths = set(result.patched_paths)
             if patched_json_paths:
                 for issue in attempted:
                     if issue.json_path in patched_json_paths:
                         modified_files.add(issue.file)
+                        modified_paths.setdefault(issue.file, set()).add(
+                            issue.json_path)
 
             remaining = [
                 i for i in remaining
@@ -759,7 +832,7 @@ def _run_fixer_with_escalation(
                 "issue(s) (decision #48).", len(residual))
             lifecycle_signal = "LENGTH_TOLERANCE_PASS"
 
-    return modified_files, t2_self_report, lifecycle_signal
+    return modified_files, modified_paths, t2_self_report, lifecycle_signal
 
 
 def _all_length_only(issues: list[Issue]) -> bool:

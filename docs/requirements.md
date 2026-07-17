@@ -1842,7 +1842,13 @@ repair 是**单遍**（一次 Phase A→B→C），无 file-level lifecycle 重�
        → 剩余未接受的 issue 进入 defer 台账 (见 §11.4.7)
     3. 每次 fix 后 scoped recheck: 只 L0+L1+L2, 检查被 patch 的子树
     4. 本轮结束后, 对"本轮被 patch 过 且 已无 L0–L2 error"的文件:
-       → L3 gate: 重跑 L3
+       → L3 gate (scoped, 决策 #66): 只对本轮实际改过的 json_path 重跑 L3,
+         返回值在代码层过滤到那些 path 的子树 (程序保证, 非 prompt 软提示)。
+         gate 职责 = "这一刀改对了吗", 不是重审全书 —— A 阶段已做过一次全文
+         审计。全文复检会因 LLM 非确定每轮换目标, 制造新指纹被算作 introduced
+         而打地鼠跑满 round cap; scoped 复检让干净的修复 1 轮收敛。后端失败类
+         issue ($ 锚) 永不过滤 (否则复检没跑通却被静默丢 = 假 PASS); scope 为
+         空 (无语义可复检的改动) → 跳过 gate
          (仍有 L0–L2 error 的不进 gate —— 本轮注定 FAIL 在那个 error 上,
           语义结论买不到任何决策; 与 A 阶段的跳过规则一致)
        → 若 gate 仍有 blocking → triage (与上同机制):
@@ -1899,12 +1905,21 @@ commit）就**永远不会看到半同步状态**。重跑失败按首次失败�
 stage 进入 ERROR（`error_message` 前缀 `post-repair PP:` 以区分
 首次 PP 失败），`--resume` 重试。
 
-**L3 gate 触发条件**：一个文件进入 gate 当且仅当**本轮 Phase B 的修复操作
-改动过它**。没被改动的文件 gate 不会重复跑（节省 LLM 调用）。
-**不得**再加「且它在 Phase A 有过 L3 issue」这一条：checker pipeline 对
-有 L0–L2 error 的文件会跳过 L3（有意设计，不为 schema 已坏的文件烧 token），
-所以「Phase A 没报语义问题」通常意味着 L3 压根没跑，而非该文件语义干净；
-据此建集会让 T0 刚修完 schema 错的文件整轮零语义复审仍报 PASS。
+**L3 gate 触发条件与范围（scoped, 决策 #66）**：一个文件进入 gate 当且仅当
+**本轮 Phase B 的修复操作改动过它**；进入后 gate **只复检本轮实际改过的
+json_path**（不是整文件），返回值在代码层按 path 后代匹配过滤（程序保证，不靠
+prompt 的 `Focus review` 软提示）。gate 职责是「这一刀改对了吗」而非重审全书——
+Phase A 已做过一次全文审计。全文复检会因 LLM 非确定每轮换目标、把新指纹算作
+`introduced` 而打地鼠跑满轮次上限；scoped 让干净的修复 1 轮收敛。scope 为空
+（无语义可复检的改动，如仅落 sidecar note）→ 跳过 gate。**后端失败类 issue**
+（`semantic_unavailable` / `semantic_check_crashed` / `semantic_unparseable`，
+锚在 `$`）永不被 scope 过滤——否则复检没跑通却被静默丢弃 = 假 PASS。
+没被改动的文件 gate 不会重复跑（节省 LLM 调用）。**不得**再加「且它在 Phase A
+有过 L3 issue」这一条：checker pipeline 对有 L0–L2 error 的文件会跳过 L3
+（有意设计，不为 schema 已坏的文件烧 token），所以「Phase A 没报语义问题」通常
+意味着 L3 压根没跑，而非该文件语义干净；据此建集会让 T0 刚修完 schema 错的文件
+整轮零语义复审仍报 PASS。**有意取舍**：放弃「修 A 是否搞坏了跨 path 的 B」的
+全文复检——Phase A 已覆盖全量，且现状那个能力实际报的是审校抖动而非真回归。
 
 **L3 gate 失败后的升级链**：gate 返回的 issue 其 `category` 为
 `semantic`，按 rule 路由 `START_TIER=T2`（语义类需原文），T2 封顶 2 次
@@ -1913,8 +1928,8 @@ stage 进入 ERROR（`error_message` 前缀 `post-repair PP:` 以区分
 
 **LLM 预算（给定 N 个文件、最多 R 轮）**：
 - Phase A: N 次（每文件一次）
-- Phase B: 最多 N × R 次 L3 gate 调用（只复核本轮被改动过的文件——实际每轮
-  被改动的通常远少于 N）
+- Phase B: 最多 N × R 次 L3 gate 调用（只复核本轮被改动过的文件、且 scoped 到
+  改过的 json_path——实际每轮被改动的通常远少于 N）
   + 最多 N × R 次 triage 调用（每文件残留语义问题批量一次，上限；
     实际大多数文件只触发 1 次甚至 0 次）
 - Phase C: 0 次新增

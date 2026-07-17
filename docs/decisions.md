@@ -1103,6 +1103,48 @@ N. <决策陈述>。
     `extraction/repair/triage.py`。
     → logs/change_logs/2026-07-17_072038_effort-tier-tuning.md。
 
+66. **L3 gate 复检改定点：只复检本轮改过的 json_path（放弃每轮全文复检）。**
+    **背景**：2026-07-16 挂机跑逐行拆 repair 循环，发现 Phase B 每轮末的 L3 gate
+    把整份 ~50k 字符文件重读复检（`pipeline.run_layer(..., layer=3)` →
+    `SemanticChecker.check` 全文），是一个**正确性缺陷**而非仅仅慢：单 round 实测
+    T2 定点修复 16–18s vs L3 全文复检 4m36s（约 8× 不对称）。LLM 全文复审非确定，
+    每轮挑出的毛病天然不同 → 新指纹 → `tracker.diff` 记为 `introduced` → 循环
+    继续。实测某文件连续四轮 `resolved=1 / introduced=1 / persisting=0`，恰好从
+    两安全阀中间穿过（`is_regression` = `introduced>resolved` = `1>1` False；
+    `is_stalled` 需 persisting 恒 >0 而这里恒 0），每次跑满 `total_round_limit`
+    才判 FAIL，攒出本不该有的 defer 债。
+    **决策**：gate 只复检**本轮实际改过的 json_path**，且**在代码层按 paths
+    过滤返回值**——现成 `check_scoped` 只在 prompt 末尾加 `Focus review on these
+    paths` 软提示、不过滤返回值，是死代码且不能根治；真正的根治是程序过滤。
+    (a) `semantic.py check_scoped` 返回值过滤为「在某 scoped path 上或其后代」的
+    issue（`_path_in_scope` 后代匹配）；**后端失败类 issue**
+    （`semantic_unavailable` / `semantic_check_crashed` / `semantic_unparseable`，
+    锚在 `$`，见 `_BACKEND_FAILURE_RULES`）**永不过滤**——否则复检没跑通却被静默
+    丢弃 = 假 PASS。(b) pipeline 新增 `run_semantic_scoped(files, paths)` 路由到
+    L3 checker 的 `check_scoped`。(c) coordinator `_run_fixer_with_escalation`
+    额外返回 `modified_paths: {file: {json_path}}`（从 `resolved_fingerprints` +
+    M4 `patched_paths` 收集）；round 循环聚合后喂给 gate，gate 改调
+    `run_semantic_scoped(scope_paths)`，scope 为空则跳过 gate（无语义可复检的
+    改动，如仅落 sidecar note）。
+    **tracker 语义（数学不变、含义变正确）**：scoped 后 `introduced` 只可能出现
+    在改过的 path 上 = 「我这一刀改出了新问题」= 回归的真定义，不再被全文抖动
+    误触发；`is_regression` / `is_stalled`（`len(curr_fps)>0` 守卫保留）/
+    `is_l3_gate_reemerge` 复核后无需新守卫，仅更新注释。
+    **有意取舍**：放弃「修 A 是否搞坏了跨 path 的 B」的全文复检能力——Phase A 已
+    做全量审计，且现状那个能力实际报的是审校抖动而非真回归。
+    **边界**：Phase C fallback L3（`gate_ever_ran==False` 的兜底）保持全文——它
+    触发时本就无「改过的 path」可 scope，是「至少渲染一次语义判决再 PASS」的最后
+    保证。与 #65（effort 分档）分两次落地保单变量归因（本轮未做基线对比，用户
+    2026-07-17 拍板先落代码、接受归因缺口）。
+    Plumbing → `extraction/repair/checkers/semantic.py`（`check_scoped` 过滤 +
+    `_path_in_scope` + `_BACKEND_FAILURE_RULES`）、
+    `extraction/repair/checkers/__init__.py`（`run_semantic_scoped`）、
+    `extraction/repair/coordinator.py`（`_run_fixer_with_escalation` 返回
+    `modified_paths` + gate 调用点）、`extraction/repair/tracker.py`（语义注释）、
+    `extraction/repair/tests/_smoke_l3_gate.py`（场景 D 域外过滤 / E 后端失败
+    保留）、`docs/requirements.md` §11.4 + `docs/architecture/extraction_workflow.md`。
+    → logs/change_logs/2026-07-17_112727_gate-scoped-recheck.md。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

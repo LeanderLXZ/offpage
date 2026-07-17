@@ -721,7 +721,7 @@ orchestrator (Python)
     │       │                       ├── Phase A: L0–L3 全量检查
     │       │                       ├── Phase B: 修复循环 (按 rule 路由到
     │       │                       │       (start_tier, max_tier); T0/T1/T2 每 tier 封顶 2 次
-    │       │                       │       + 每轮末 L3 gate + 源文件问题 triage)
+    │       │                       │       + 每轮末 scoped L3 gate + 源文件问题 triage)
     │       │                       │       封顶仍 blocking 的语义类 → triage → defer 台账
     │       │                       └── Phase C: 最终确认 (复用最后一次 gate;
     │       │                               残留按类别 defer / ERROR)
@@ -795,15 +795,21 @@ orchestrator (Python)
   Phase A→B→C，无 file-level lifecycle 重置、无整文件重生成）。T1 / T2 都把
   该文件的 issue 批成一次 LLM 调用、写回后立即 scoped L0–L2 复检（issue 不再
   出现才算解决，杜绝"自报已修"空转）。
-  Phase B 每轮在 L0–L2 scoped recheck 后，对**本轮被修改的全部文件**跑一次
-  **L3 gate**，把语义层的失败回灌进下一轮 issue 队列。gate 集合**不能**只取
+  Phase B 每轮在 L0–L2 scoped recheck 后，对**本轮被修改的文件**跑一次 **scoped
+  L3 gate**（决策 #66）：只复检**本轮实际改过的 json_path**，返回值在代码层过滤
+  到那些 path 的子树（程序保证，非 prompt 软提示），把语义层的失败回灌进下一轮
+  issue 队列。gate 职责是「这一刀改对了吗」而非重审全书——Phase A 已做过一次全文
+  审计；全文复检会因 LLM 非确定每轮换目标、制造新指纹被算作 introduced 而打地鼠
+  跑满轮次上限，scoped 复检让干净的修复 1 轮收敛。gate 目标集**不能**只取
   "Phase A 报过 L3 问题"的文件——checker pipeline 对有 L0–L2 error 的文件跳过
   L3（有意设计：不为 schema 已坏的文件烧 token），所以"Phase A 没报语义问题"
   通常意味着 L3 压根没跑；据此建集会让 T0 刚修完 schema 错的文件整轮零语义
-  复审还报 PASS。
+  复审还报 PASS。后端失败类 issue（`$` 锚）永不被 scope 过滤（否则复检没跑通却
+  被静默丢 = 假 PASS）；scope 为空（无语义可复检的改动）则跳过 gate。
   Phase C 优先复用最后一次 gate 的结果。字段级精确修补（json_path 定位），
   不整文件回滚 / 不整文件重写。
-  安全阀：回归保护（introduced ≥ resolved → 停止该 tier、升级）、收敛检测
+  安全阀：回归保护（introduced > resolved → 停止该 tier、升级；scoped gate 下
+  introduced 只可能来自改过的 path，是真回归而非全文抖动）、收敛检测
   （持续集不变 → 升级）、**L3 gate 反复**（连续两轮 gate 返回相同 blocking
   集合 → 语义层不收敛 → 进 Phase C 按类别 defer / ERROR）、总轮次限制
   （默认 5 轮）。**Length-bound tolerance 兜底**：封顶 tier 后若剩余 issues

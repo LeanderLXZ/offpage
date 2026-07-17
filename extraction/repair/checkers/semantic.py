@@ -25,6 +25,34 @@ from ..protocol import FileEntry, Issue
 
 logger = logging.getLogger(__name__)
 
+# Rules that signal the semantic review COULD NOT RUN (backend down, empty
+# or unparseable output). They anchor at ``$`` and must survive scoped
+# filtering — dropping them would turn "review never happened" into a
+# silent clean pass, which is exactly the false-pass this checker exists to
+# prevent (see module docstring). ``check_scoped`` keeps them unconditionally.
+_BACKEND_FAILURE_RULES = frozenset({
+    "semantic_unavailable",
+    "semantic_check_crashed",
+    "semantic_unparseable",
+})
+
+
+def _path_in_scope(json_path: str, scope_paths: list[str]) -> bool:
+    """True when ``json_path`` is one of ``scope_paths`` or nested under one.
+
+    The L3 gate scopes a re-check to the json_paths a fix actually touched
+    this round. A fix patches the subtree at path ``P``; the re-review may
+    re-anchor a new finding at a leaf UNDER ``P`` (e.g. patched ``$.a`` →
+    finding at ``$.a.b``), which is still "a problem on the path I touched"
+    and must be kept. Anything outside every scoped subtree is review jitter
+    on an untouched field — dropped so the loop doesn't chase moving targets.
+    """
+    for p in scope_paths:
+        if json_path == p or json_path.startswith(p + ".") \
+                or json_path.startswith(p + "["):
+            return True
+    return False
+
 
 class SemanticReviewLLMUnavailable(Exception):
     """Raised by ``llm_call`` wrappers when the underlying LLM call
@@ -107,10 +135,24 @@ class SemanticChecker(BaseChecker):
 
     def check_scoped(self, files: list[FileEntry], paths: list[str],
                      effort: str | None = None) -> list[Issue]:
-        """Re-check only specific json_paths (for final verification)."""
+        """Re-check semantics restricted to ``paths`` — the json_paths a fix
+        actually touched this round.
+
+        The prompt's ``Focus review on these paths`` line is a SOFT hint; the
+        LLM may still report problems on fields it wasn't asked about. That is
+        precisely the whack-a-mole failure this method guards against: an
+        nondeterministic full-file re-review surfaces a different set of
+        untouched-field nits every round, each a fresh fingerprint that the
+        round diff counts as ``introduced``, so the loop never converges.
+
+        So filtering here is a PROGRAM guarantee, not a request: only issues
+        on (or nested under) a scoped path survive. Backend-failure issues
+        (``$``-anchored, see ``_BACKEND_FAILURE_RULES``) are always kept —
+        they mean the review couldn't run, and dropping them would be a
+        false pass. An empty ``paths`` therefore keeps only backend failures.
+        """
         if self._llm_call is None:
             return []
-        # For scoped review, include hint about which fields to focus on
         issues: list[Issue] = []
         for f in files:
             content = f.content if f.content is not None else f.load()
@@ -118,7 +160,10 @@ class SemanticChecker(BaseChecker):
                 continue
             file_issues = self._review_file(
                 f.path, content, focus_paths=paths, effort=effort)
-            issues.extend(file_issues)
+            for issue in file_issues:
+                if (issue.rule in _BACKEND_FAILURE_RULES
+                        or _path_in_scope(issue.json_path, paths)):
+                    issues.append(issue)
         return issues
 
     def _review_file(self, file_path: str, content: Any,
