@@ -105,3 +105,27 @@ none —— 三条计划动作全部落地，无增删。
 
 - **Status**: DONE
 - **Finished**: 2026-07-18 15:41:23 EDT
+
+<!-- /post-check writes -->
+
+## Review conclusion (full report in conversation)
+
+### Track 1 — requirement fulfillment
+- Fulfillment rate: 3/3 计划动作 + 5/5 validation criteria（validation 由复审者独立重跑，未采信日志记录）
+- Missed updates: 0 项
+
+### Track 2 — impact spread
+- Findings: High=1 / Medium=2 / Low=3
+- Open Questions: 1 项（见对话）
+
+H1 为**遗留缺口而非本轮 diff 的 bug**：实证显示 scenario B/C/D 在改动前那份完全
+损坏的 fixture 上照样通过（`assert not result.passed` / `<= cap` / 空集合上
+vacuously 成立的断言），本轮修好了病灶但未加固这三个场景的断言强度 —— 与
+`T-SMOKE-TRIAGE-BROKEN` 三个月失效的形态同构。本轮 diff 本身正确、计划全兑现。
+
+## Review state
+- **Reviewed**: 2026-07-18 16:01:06 EDT
+- **Status**: REVIEWED-FAIL
+  （按 rubric「track 2 有 High → FAIL」判定；语义是"本轮目标只达成一半"，
+  不是"落地的改动有错"——见上方 H1 说明）
+- **Conversation ref**: /post-check output in this session
