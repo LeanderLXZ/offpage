@@ -1908,7 +1908,7 @@ commit）就**永远不会看到半同步状态**。重跑失败按首次失败�
 stage 进入 ERROR（`error_message` 前缀 `post-repair PP:` 以区分
 首次 PP 失败），`--resume` 重试。
 
-**L3 gate 触发条件与范围（scoped, 决策 #66）**：一个文件进入 gate 当且仅当
+**L3 gate 触发条件与范围（scoped, 决策 #66/#67）**：一个文件进入 gate 当且仅当
 **本轮 Phase B 的修复操作改动过它**；进入后 gate 只复检该文件的 **scope**（不是
 整文件），返回值在代码层按 path 后代匹配过滤（程序保证，不靠 prompt 的
 `Focus review` 软提示）。
@@ -1930,9 +1930,11 @@ gate 职责因此是「这一刀改对了吗 + 已知的问题还在不在」而
 复检的改动，如仅落 sidecar note）→ 跳过该文件。**后端失败类 issue**
 （`semantic_unavailable` / `semantic_check_crashed` / `semantic_unparseable`，
 锚在 `$`）永不被 scope 过滤——否则复检没跑通却被静默丢弃 = 假 PASS。
-没被改动的文件 gate 不会重复跑（节省 LLM 调用）——**代价**：该文件携带的未修语义
-issue 因此本轮也不会被复检，会被 round diff 判成 resolved（已登记为
-`T-GATE-UNMODIFIED-FILE-CARRY`，本轮不修）。**不得**再加「且它在 Phase A
+没被改动的文件 gate 不会重复跑（节省 LLM 调用）。**这类文件的未修语义 issue 改为
+原样携带进本轮 blocking 集**（决策 #67）——没复检 = 状态未知 = fail-closed 保持
+原样。若不携带，它们没有任何来源能重新进入 `combined_blocking`（L0–L2 复检看不见
+语义），会被 round diff 判成 `resolved`，Phase C 的 gate-reuse 路径于是对一个带
+已知事实错误的文件报 PASS。**不得**再加「且它在 Phase A
 有过 L3 issue」这一条：checker pipeline 对有 L0–L2 error 的文件会跳过 L3
 （有意设计，不为 schema 已坏的文件烧 token），所以「Phase A 没报语义问题」通常
 意味着 L3 压根没跑，而非该文件语义干净；据此建集会让 T0 刚修完 schema 错的文件

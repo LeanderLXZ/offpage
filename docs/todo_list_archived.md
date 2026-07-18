@@ -103,6 +103,28 @@
 <!-- 已落地的任务。仅精简条目。 -->
 <!-- holo:section end -->
 
+### [T-GATE-UNMODIFIED-FILE-CARRY] 本轮零 patch 的文件，其未修语义 issue 原样携带 · 完成于 2026-07-18 · 主体完成（`accepted_fps` 过滤子项另案未做）
+
+`/post-check` 对 #66 复审查出的已确认假 PASS：`gate_targets` 的 `& modified_files`
+门控把「本轮零 patch 的文件」整体排除在 gate 之外，其语义 issue 在
+`combined_blocking` 里没有任何来源能重现（L0–L2 复检看不见语义）→ 被 `tracker.diff`
+判 resolved → 队列清空 break → Phase C 走 **reuse** 分支只 extend gate 结果 →
+对带已知事实错误的文件报 PASS。pre-existing（旧全文 gate 同样门控），#66 只是让它
+显眼。修法在 `combined_blocking` 处携带这些 issue（没复检 = 状态未知 = fail-closed），
+gate 实际判决过的文件不携带（`_gate_scope` 已覆盖；判据用真的跑过 gate 的
+`gated_files` 而非无条件构建的 `gate_scopes`，否则 gate 关闭时会重开本洞），携带集
+按 `accepted_fps` 过滤；新增 `outstanding_semantic`（gate 结果 + 携带集，安全阀
+break 前赋值以跨 break 存活）供 Phase C 使用，替代并删除 `last_gate_issues`。
+**未做（另案）**：`gate_blocking` / `outstanding_semantic` 在 Phase C 不按
+`accepted_fps` 过滤——方向保守（假 FAIL 非假 PASS），原 todo 改动清单里的顺带评估项，
+PRE 边界显式延后。**未选**「只改 Phase C 兜底」（轮内账目
+仍错）与「把未改动文件纳入 gate_targets」（每轮多烧 LLM 调用复 confirm 没人能修的
+问题）。回归测试 `_smoke_l3_gate` 场景 G——首版用 `minLength` 无效（T0 故意不 pad，
+导致无 patch → gate 没跑 → Phase C 走全文 fallback，FAIL 但原因不对），改用
+`maxLength` 才命中目标路径；已实证中和修复后该场景断言触发并打印 `Repair PASSED`。
+决策 #67。
+→ logs/change_logs/2026-07-18_044312_gate-unmodified-file-carry.md。
+
 ### [T-EFFORT-TIER-TUNING] effort 分档 + 模型切 4.8 + 语义审校超时收到 900s · 完成于 2026-07-17 · 代码完整落地，提速实测待挂机
 
 `effort=max` 的双峰思考被归因为速度头号成因（与 #49 在 phase 0 上的诊断同构）：

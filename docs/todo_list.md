@@ -18,7 +18,7 @@
 
 _(none)_
 
-### 🟡 Next (5)
+### 🟡 Next (4)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
@@ -26,7 +26,6 @@ _(none)_
 | `T-REPAIR-TIMEOUT-CONFIG` | 修复环节还有三处超时值硬写在代码里、不读配置。上次就是这种硬编码让整个配置层静默失效、改了没反应。顺带清理一个名字叫 phase3 但实际只服务 phase4 的参数。 | 🟢 Med-Low | 💬 Discuss first | 🔴 Large·Arch | 2026-07-17 EDT | 无 |
 | `T-SMOKE-TRIAGE-BROKEN` | 一个自动化测试在主干上一直是坏的（至少从包重构那次起）。要先弄清是测试过期了还是它测的功能真坏了——如果是后者，生产里可能一直在静默出错。 | 🟢 Med-Low | ✅ Ready | 🟡 Medium | 2026-07-17 EDT | 无 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。 | 🟢 Med-Low | ⏸ Blocked | 🔴 Large·Arch | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
-| `T-GATE-UNMODIFIED-FILE-CARRY` | 某个文件这一轮如果没被改动过，它身上没修好的问题会被当成已解决而放行——事实错误的数据会静默通过检查进到成品里。已确认可复现，且检查环节本身报的是"通过"。 | 🔴 High | 💬 Discuss first | 🔴 Large·Arch | 2026-07-18 EDT | 无（可立即启动；建议在 stage 实测前落地） |
 
 ### ⚪ Discussing (8)
 
@@ -41,7 +40,7 @@ _(none)_
 | `T-RETRY` | LLM 调用失败时的重试策略能更聪明些。现在不到 5 秒就失败的会重试，但人物抽取正常要跑 10-20 分钟，5 秒太短了——那种短时失败几乎都是启动错、不是真活干完才挂。打算扩到 60 秒，再按失败类型分流要不要重试。改动小，两个数值要拍板。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 
-**Total**: 13 — 🟢 In Progress 0 ｜ 🟡 Next 5 ｜ ⚪ Discussing 8
+**Total**: 12 — 🟢 In Progress 0 ｜ 🟡 Next 4 ｜ ⚪ Discussing 8
 
 <!-- holo:section start -->
 ---
@@ -564,69 +563,6 @@ AssertionError: expected at least one accepted note
 - 无（独立，可随时做）
 
 **更新时间**：2026-07-17 06:51 EDT
-
----
-
-### [T-GATE-UNMODIFIED-FILE-CARRY] 本轮没被碰过的文件，其未修语义问题会被当成已解决
-
-**上下文**
-
-2026-07-18 `/post-check` 复审决策 #66（gate 定点复检）时，Code 维度查出一条
-**已确认的假 PASS**（`extraction/repair/coordinator.py:444`）：
-
-```python
-gate_targets = (l3_file_set & modified_files) - still_broken
-```
-
-`& modified_files` 把**本轮没有产生任何 patch 的文件整体排除在 gate 之外**。
-决策 #66 新增的 `_gate_scope`「携带未修语义 path」只对**已进 gate_targets 的
-文件**生效，覆盖不到「文件整体未被触碰」这一半。
-
-失效链（两文件、均 L0–L2 干净）：F 带不可修语义 error（无 source / apply 失败
-→ F 本轮零 patch），G 本轮可修。→ `modified_files={G}`，F 不进 gate_targets、
-从不被复检 → `combined_blocking` 里没有 F 的 issue → `tracker.diff` 判其
-**resolved** → `current_issues` 清空后 break → Phase C 因 `gate_ever_ran=True`
-走 **reuse** 分支（而非全文 fallback），`last_gate_issues` 只含 G 的结果 →
-**PASS**。F 上那条 Phase A 明确报出、从未修好的语义 error 静默进 commit。
-
-**这是 pre-existing，不是 #66 引入的**：旧的全文 gate 有完全相同的
-`& modified_files` 门控，同样不复检未修改文件。#66 只是让这个洞变得显眼——它
-宣称「关闭语义假 PASS」，实际只关闭了一半。单文件场景（F 被修了一部分）已由
-#66 闭合并有回归测试 `_smoke_l3_gate` 场景 F 覆盖；本条是另一半。
-
-**待决策**
-
-1. 走哪条修法（二选一，见下方改动清单的 A / B）——A 改 Phase C 兜底更保守、
-   不增加 LLM 调用；B 改 gate 目标集更彻底但每轮可能多复检若干文件。
-
-**改动清单**
-
-- 方向 A（Phase C 兜底）：`extraction/repair/coordinator.py` Phase C reuse 分支
-  （约 :540-546）→ 把「Phase A 报过、且从未出现在任何一轮 gate 结果里」的
-  semantic issue 并入 `final_blocking`，而不是只 extend `last_gate_issues`
-- 方向 B（gate 目标集）：`extraction/repair/coordinator.py:444` → gate_targets
-  并入「带 carried semantic issue 且 L0–L2 干净」的文件（即便本轮未 modified），
-  由 `_gate_scope` 给出其 scope
-- `extraction/repair/tests/_smoke_l3_gate.py` → 补场景：两文件、一个可修一个
-  不可修 → 必须 FAIL（当前会 PASS）
-- 顺带评估 `coordinator.py:464` `gate_blocking` 不过滤 `accepted_fps`
-  （复审 L1，低危、方向保守=假 FAIL；两者都在 gate 结果处理路径上，一并改更经济）
-- 若行为语义变化 → `docs/requirements.md` §11.4 gate 段 + `ai_context/decisions.md`
-  + `docs/decisions.md`（#66 的边界补充或新决策条目）
-
-**完成标准**
-
-- 新增 smoke 场景（一个文件可修 + 一个文件带不可修语义 error）判 FAIL 而非 PASS
-- `_smoke_l3_gate` 原有 6 场景（A–F）不回归
-- 不重新引入全文复检（#66 的定点化收益必须保住——修法只扩「被复检的文件集」，
-  不扩「每个文件内被复检的范围」）
-
-**依赖**
-
-- 无（可立即启动）。与 T-GATE-SCOPED-RECHECK 的实测验证正交，但建议在那次
-  stage 实测**之前**落地——否则实测拿到的 PASS/defer 数据本身可能被这个假 PASS 污染
-
-**更新时间**：2026-07-18 04:15 EDT
 
 ---
 

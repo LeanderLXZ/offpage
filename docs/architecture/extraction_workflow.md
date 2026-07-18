@@ -804,7 +804,12 @@ orchestrator (Python)
   打地鼠跑满轮次上限，scoped 复检让干净的修复 1 轮收敛。**携带未修 path 不可省**：
   否则未修好的 issue 因其 path 本轮没被碰过而不进 gate 结果，会被 round diff 判成
   resolved = 假 PASS；**逐文件**算 scope 则避免 A 文件改过的 path 放行 B 文件同名
-  path 上的抖动。gate 目标集**不能**只取
+  path 上的抖动。
+  gate 只覆盖**本轮被改动过的**文件，所以「本轮零 patch 的文件」压根不进 gate ——
+  这类文件的未修语义 issue 改为**原样携带**进本轮 blocking 集（决策 #67，没复检 =
+  状态未知 = fail-closed）。不携带的话它们同样没有来源能重回 `combined_blocking`，
+  会被判 resolved，Phase C 的 gate-reuse 路径于是对带已知事实错误的文件报 PASS。
+  gate 目标集**不能**只取
   "Phase A 报过 L3 问题"的文件——checker pipeline 对有 L0–L2 error 的文件跳过
   L3（有意设计：不为 schema 已坏的文件烧 token），所以"Phase A 没报语义问题"
   通常意味着 L3 压根没跑；据此建集会让 T0 刚修完 schema 错的文件整轮零语义

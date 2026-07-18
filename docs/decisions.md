@@ -1161,6 +1161,49 @@ N. <决策陈述>。
     `docs/requirements.md` §11.4 + `docs/architecture/extraction_workflow.md`。
     → logs/change_logs/2026-07-17_112727_gate-scoped-recheck.md。
 
+67. **本轮未被 gate 的文件，其未修语义 issue 原样携带进 blocking 集（fail-closed）。**
+    **背景**：#66 把 gate 定点化后，`/post-check` 复审查出一条**已确认的假 PASS**
+    ——`gate_targets = (l3_file_set & modified_files) - still_broken` 把「本轮零
+    patch 的文件」整体排除在 gate 之外，而 #66 的 `_gate_scope`「携带未修语义
+    path」只对**已进 gate_targets 的文件**生效，覆盖不到「文件整体未被触碰」这
+    一半。失效链（两文件、均 L0–L2 干净）：F 带不可修语义 error（无 source →
+    T2 跳过 → F 零 patch），G 本轮可修 → gate 只跑 G、`gate_ever_ran=True` →
+    F 的 issue 在 `combined_blocking = recheck_blocking + gate_blocking` 里**没有
+    任何来源**能重新出现（L0–L2 复检看不见语义）→ `tracker.diff` 判其 resolved
+    → 队列清空后 break → Phase C 走 **reuse** 分支（而非全文 fallback），只 extend
+    `last_gate_issues` → **PASS**。**pre-existing**：旧的全文 gate 有完全相同的
+    `& modified_files` 门控，#66 只是让它显眼。
+    **决策**：在 `combined_blocking` 处把「本轮未被 gate 的文件的语义 issue」原样
+    携带进来。判据 = **没复检 = 状态未知 = 保持原样**（fail-closed）。gate **实际
+    判决过**的文件无需携带——`_gate_scope` 会把该文件所有未修语义 path 放进 scope，
+    gate 结果已对它们做出判决，再携带会重复计数。这里必须用「本轮真的跑过 gate 的
+    文件集」（`gated_files`）而非 `gate_scopes`：后者无条件构建，gate 关闭
+    （`l3_gate_enabled=False` 而 `run_semantic=True`）时文件会既不被 gate 也不被
+    携带，等于在另一个配置下重开本条要堵的洞。携带集同样按 `accepted_fps` 过滤
+    （与 `recheck_blocking` 一致），避免已被 triage 接受的 SourceNote 被永久携带。
+    新增 `outstanding_semantic`（= 本轮 gate 结果 + 携带集），在三个安全阀 break
+    **之前**赋值以跨 break 存活，Phase C 的 reuse 分支改用它替代 `last_gate_issues`
+    （后者是其子集，替换后成死变量，已删）。
+    **为何不选另两条**（避免未来重提）：(A) 只改 Phase C 兜底 —— 只修**出口**判决，
+    轮内 diff / 三个安全阀 / `resolved=N` 日志仍是错的，且「All blocking issues
+    resolved」仍可能提前 break；(B) 把带未修语义 issue 的干净文件也纳入
+    `gate_targets` —— **每轮每文件多烧一次 LLM 调用**去复 confirm 一个「因为没人
+    能修才没被改动」的问题，与 #66「不为没改的东西付复检成本」相悖。本条在源头
+    修正账目，diff / 安全阀 / 日志 / 提前 break 全部自动变准确，且零 LLM 成本增加。
+    **边界**：不动 `& modified_files` 门控本身（gate 仍只复检被改过的文件，#66 的
+    定点化收益保住）；不动 Phase C 的 `gate_ever_ran` 分支条件。
+    **回归测试**：`_smoke_l3_gate` 场景 G（G 文件 `maxLength` 超限让 T0 确定性
+    截断 → 有 patch → gate 跑起来 → Phase C 走 reuse；F 文件带不可修语义 error →
+    永不被 gate）。注意 T0 **不 pad `minLength`**（补内容 = 编造），必须用
+    `maxLength` 才能让 T0 真正落一次 patch——否则无 patch → gate 没跑 → Phase C
+    走全文 fallback，测试会因错误的原因 FAIL 而变成假阳性。已实证：临时中和携带
+    逻辑后该场景断言触发并打印 `Repair PASSED / Final issues: 0`。
+    Plumbing → `extraction/repair/coordinator.py`（`carried_semantic` +
+    `outstanding_semantic` + Phase C reuse 分支）、
+    `extraction/repair/tests/_smoke_l3_gate.py`（场景 G）、
+    `docs/requirements.md` §11.4 + `docs/architecture/extraction_workflow.md`。
+    → logs/change_logs/2026-07-18_044312_gate-unmodified-file-carry.md。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

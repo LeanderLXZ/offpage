@@ -28,6 +28,10 @@ gate:
   (E) Backend-failure preservation — a ``$``-anchored ``semantic_unavailable``
       issue survives scope filtering, so "review couldn't run" never collapses
       into a false clean pass. Also exercises ``run_semantic_scoped`` routing.
+  (G) Ungated-file carry (T-GATE-UNMODIFIED-FILE-CARRY) — end-to-end: a file no
+      fix touched this round is never gated, so its open semantic issue must be
+      carried into the round diff rather than read as ``resolved``. Two files
+      (one T0-fixable so the gate runs at all, one unfixable) → run must FAIL.
 
 Run:  python -m extraction.repair.tests._smoke_l3_gate
 """
@@ -256,6 +260,81 @@ def _scenario_f_gate_scope_carries_unfixed() -> None:
           f"(F={scope_f}, G={scope_g})")
 
 
+def _scenario_g_unmodified_file_carry() -> None:
+    """A file no fix touched this round keeps its open semantic issue.
+
+    Two files. ``g_schema.json`` overruns ``maxLength`` and T0 truncates it
+    deterministically (note: T0 deliberately does NOT pad ``minLength`` —
+    inventing text is fabrication — so an over-long value is the reliable way
+    to make T0 actually land a patch here). The round therefore HAS patches and
+    the L3 gate runs — but only on G, because ``gate_targets`` is
+    ``modified_files``-gated. ``f_semantic.json`` carries a semantic error
+    nothing can fix (no ``source_context`` → T2 skips it), so F is never
+    modified and therefore never gated.
+
+    That split matters: G being genuinely fixed is what makes ``gate_ever_ran``
+    true, which sends Phase C down the **reuse** branch. Were no patch to land,
+    the run would break early and Phase C's full-file **fallback** would
+    re-detect F's issue anyway — the run would FAIL for the wrong reason and
+    the test would pass even with the carry removed.
+
+    Without the carry, F's issue has no source to re-enter
+    ``combined_blocking``: the round diff reads it as ``resolved``, the loop
+    early-exits on "all resolved", and Phase C's gate-reuse path reports PASS
+    on a file with a known factual error (T-GATE-UNMODIFIED-FILE-CARRY). This
+    asserts the run FAILs and F's issue survives into the result.
+    """
+    tmp = Path(tempfile.mkdtemp(prefix="repair_smoke_carry_"))
+    f_path = tmp / "f_semantic.json"
+    g_path = tmp / "g_schema.json"
+    f_path.write_text(
+        json.dumps({"marker": "F-FILE", "note": "n" * 120}), encoding="utf-8")
+    g_path.write_text(
+        json.dumps({"marker": "G-FILE", "summary": "y" * 200}),
+        encoding="utf-8")
+
+    g_schema = {
+        "type": "object",
+        "properties": {
+            "marker": {"type": "string"},
+            "summary": {"type": "string", "minLength": 10, "maxLength": 150},
+        },
+        "required": ["marker", "summary"],
+        "additionalProperties": False,
+    }
+
+    def stub(prompt: str, timeout: int = 600,
+             effort: str | None = None) -> str:
+        if "quality reviewer" in prompt:
+            if "F-FILE" in prompt:
+                return json.dumps([{
+                    "json_path": "$.note",
+                    "severity": "error",
+                    "rule": "fact_mismatch",
+                    "message": "F: contradicts source (stub)",
+                }])
+            return json.dumps([])       # G is semantically clean
+        return "<<<malformed"           # any LLM fixer call fails
+
+    cfg = RepairConfig(
+        max_rounds=3, run_semantic=True, l3_gate_enabled=True,
+        triage_enabled=False,
+        retry_policy=RetryPolicy(t0_max=1, t1_max=1, t2_max=1,
+                                 max_total_rounds=3))
+    result = run(
+        files=[FileEntry(path=str(f_path)),
+               FileEntry(path=str(g_path), schema=g_schema)],
+        config=cfg, source_context=None, llm_call=stub)
+
+    assert not result.passed, (
+        "F's unfixed semantic error must not be dropped just because no fix "
+        f"touched F this round; report=\n{result.report}")
+    assert any(i.rule == "fact_mismatch" for i in result.issues), (
+        f"F's carried semantic issue must surface in the result; got "
+        f"{[i.rule for i in result.issues]}")
+    print("  [G] FAIL as expected — ungated file's open semantic issue carried")
+
+
 def main() -> int:
     print("Scenario A: Phase A clean → PASS")
     _scenario_a()
@@ -269,6 +348,8 @@ def main() -> int:
     _scenario_e_backend_failure_kept()
     print("Scenario F: gate scope carries unfixed semantic paths")
     _scenario_f_gate_scope_carries_unfixed()
+    print("Scenario G: ungated file keeps its open semantic issue")
+    _scenario_g_unmodified_file_carry()
     print("\nOK — single-pass repair behaves as expected.")
     return 0
 

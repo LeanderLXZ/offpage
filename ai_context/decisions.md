@@ -299,6 +299,9 @@ N. <决策陈述，一行>。
 66. **L3 gate 复检改定点：per-file 只复检「本轮改过的 json_path ∪ 本轮携带的未修语义 issue path」，且代码层过滤返回值。** Phase A 全文审计一次即够；gate 职责是「这一刀改对了吗 + 已知的问题还在不在」而非重审全书。旧 gate 走 `run_layer(layer=3)` 全文复检，LLM 非确定每轮换目标 → 新指纹算 `introduced` → 打地鼠跑满 round cap，`resolved=N/introduced=N/persisting=0` 从两安全阀中间穿过。新走 `check_scoped(paths=该文件的 scope)`，返回值按后代匹配过滤（程序保证，非 focus 软提示）；后端失败类 issue（`$` 锚）永不过滤。**scope 必须携带未修语义 issue 的 path**——否则未修好的 issue 因其 path 没被碰过而不进 gate 结果，被 round-diff 判成 resolved = 假 PASS（复审实测到的回归）；**逐文件**算 scope，避免跨文件同名 path 放行抖动。tracker 数学不变、`introduced` 语义变正确。有意取舍：放弃跨-path「修 A 是否搞坏 B」复检（Phase A 已覆盖）。边界：Phase C fallback L3 保持全文。与 #65 分两次落地保单变量。
     → docs/decisions.md #66。
 
+67. **本轮未被 gate 的文件，其未修语义 issue 原样携带进 blocking 集（fail-closed）。** #66 定点化后遗留的假 PASS：`gate_targets` 的 `& modified_files` 门控把「本轮零 patch 的文件」整体排除，其语义 issue 在 `combined_blocking` 里没有任何来源能重现（L0–L2 复检看不见语义）→ 被 diff 判 resolved → Phase C 走 reuse 分支只 extend gate 结果 → 对带已知事实错误的文件报 PASS（pre-existing，旧全文 gate 同样门控）。改为在 `combined_blocking` 处携带它们（没复检 = 状态未知 = 保持原样）；gate **实际判决过**的文件不携带（`_gate_scope` 已覆盖，重复计数）——判据用「真的跑过 gate 的文件集」`gated_files` 而非无条件构建的 `gate_scopes`，否则 gate 关闭时会重开本洞；携带集按 `accepted_fps` 过滤。新增 `outstanding_semantic`（gate 结果 + 携带集，在安全阀 break 前赋值以跨 break 存活）供 Phase C 使用，替代并删除 `last_gate_issues`。不选「只改 Phase C 兜底」（轮内 diff / 安全阀 / 日志仍错、仍可能提前 break）与「把未改动文件也纳入 gate_targets」（每轮每文件多烧 LLM 调用复 confirm 一个没人能修的问题）。边界：不动 `& modified_files` 门控本身，#66 的定点化收益保住。
+    → docs/decisions.md #67。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

@@ -314,7 +314,10 @@ def _run_one_lifecycle(
     _emit("phase_start", phase="B")
     prev_report = None
     current_issues = list(blocking)
-    last_gate_issues: list[Issue] | None = None
+    # The round's full semantic picture: this round's gate verdicts PLUS the
+    # semantic issues carried on files the round never gated. Assigned before
+    # the safety-valve breaks so it survives them, and handed to Phase C.
+    outstanding_semantic: list[Issue] = []
     gate_ever_ran = False
 
     for round_num in range(config.max_rounds):
@@ -447,6 +450,13 @@ def _run_one_lifecycle(
             fscope = _gate_scope(fpath, round_modified_paths, current_issues)
             if fscope:
                 gate_scopes[fpath] = fscope
+        # Files the gate ACTUALLY adjudicated this round. Not the same as
+        # ``gate_scopes``: that is built unconditionally above, while the gate
+        # only runs when it is enabled. Keying the carry below on gate_scopes
+        # would, with the gate disabled but semantics on, leave those files
+        # neither gated nor carried — reopening the very hole this carry
+        # closes. Only membership here means "a verdict was rendered".
+        gated_files: set[str] = set()
         if (config.l3_gate_enabled and config.run_semantic and gate_scopes):
             logger.info(
                 "L3 gate: re-checking %d file(s), scoped per file to "
@@ -462,6 +472,7 @@ def _run_one_lifecycle(
                 f_gate_issues = pipeline.run_semantic_scoped(
                     [f], paths=fscope, effort="medium")
                 gate_blocking.extend(_filter_blocking(f_gate_issues, config))
+                gated_files.add(f.path)
             tracker.record_l3_gate(
                 {i.fingerprint for i in gate_blocking})
             gate_ever_ran = True
@@ -480,7 +491,6 @@ def _run_one_lifecycle(
                     fixer_candidates=round_fixer_candidates,
                 )
 
-            last_gate_issues = gate_blocking
             logger.info(
                 "L3 gate result: %d blocking semantic issue(s) remain",
                 len(gate_blocking))
@@ -491,7 +501,37 @@ def _run_one_lifecycle(
                                       for p in ps}),
                   blocking=len(gate_blocking))
 
-        combined_blocking = recheck_blocking + gate_blocking
+        # ---- Carry semantic issues on files this round never gated ----
+        # ``gate_targets`` only covers files a fix actually modified, so a file
+        # nothing touched this round gets no semantic verdict at all. Its open
+        # issues have no other source to re-enter ``combined_blocking`` (the
+        # L0–L2 recheck can't see semantics), so without this they silently
+        # vanish, the diff below reads that as ``resolved``, and Phase C's
+        # gate-reuse path PASSes a file with a known factual error
+        # (T-GATE-UNMODIFIED-FILE-CARRY). Nothing re-checked them → their state
+        # is unknown → carry them unchanged (fail-closed).
+        # Files the gate actually adjudicated need no carry: ``_gate_scope``
+        # puts every still-open semantic path of that file into its scope, so
+        # the gate result already covers them — carrying would double-count.
+        # Already-accepted issues are excluded, mirroring ``recheck_blocking``,
+        # so a triage-accepted SourceNote isn't carried forever.
+        carried_semantic = [
+            i for i in current_issues
+            if i.category == "semantic"
+            and i.file not in gated_files
+            and i.fingerprint not in accepted_fps
+        ]
+        if carried_semantic:
+            logger.info(
+                "Carrying %d semantic issue(s) on %d ungated file(s)",
+                len(carried_semantic),
+                len({i.file for i in carried_semantic}))
+
+        combined_blocking = (
+            recheck_blocking + gate_blocking + carried_semantic)
+        # Assigned here — before the safety valves below can break out — so
+        # Phase C sees this round's semantic picture on every exit path.
+        outstanding_semantic = gate_blocking + carried_semantic
         report = tracker.diff(current_issues, combined_blocking)
         logger.info(
             "Round %d result: resolved=%d, persisting=%d, introduced=%d",
@@ -538,12 +578,16 @@ def _run_one_lifecycle(
 
     if had_semantic and config.run_semantic:
         if gate_ever_ran:
+            # The last round's gate verdicts PLUS the semantic issues carried
+            # on files that round never gated — reusing only the gate result
+            # would drop the latter and PASS a still-broken file
+            # (T-GATE-UNMODIFIED-FILE-CARRY).
             logger.info(
-                "Phase C: reusing last L3 gate result (%d issue(s))",
-                len(last_gate_issues or []))
+                "Phase C: reusing last L3 gate result + carried semantic "
+                "issue(s) (%d total)", len(outstanding_semantic))
             _emit("phase_c", mode="gate_reuse",
-                  carried=len(last_gate_issues or []))
-            final_issues.extend(last_gate_issues or [])
+                  carried=len(outstanding_semantic))
+            final_issues.extend(outstanding_semantic)
         else:
             # Same rule as the gate: only files that are clean at L0–L2 get a
             # semantic verdict. ``run_layer`` bypasses the pipeline's
