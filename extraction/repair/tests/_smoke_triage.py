@@ -8,9 +8,16 @@ with a stub LLM that:
   * when asked to triage, accepts the issue as source_inherent with a
     verbatim quote from the fake chapter
 
+The fixture writes a D4-complete character package — a
+``target_baseline.json`` plus the three target structures inside the
+snapshot. Without them ``TargetsKeysEqBaselineChecker`` reports a
+root-anchored L2 error,
+the pipeline then skips L3 for that file by design, and every scenario
+below silently stops testing triage at all.
+
 Scenarios exercised:
   (a) triage accepts a valid quote → the semantic residual is accepted
-      as a SourceNote (no regeneration tier exists to fire)
+      as a SourceNote
   (b) bad-quote triage is rejected by program verification
   (c) accept_cap_per_file caps acceptance within a single run
   (d) non-semantic issues cannot reach the LLM-triage path
@@ -47,19 +54,59 @@ CHAPTER_TEXT = (
 )
 
 
-def _write_work_layout(root: Path, stage_id: str = "S001") -> tuple[
-    Path, SourceContext]:
-    """Lay out a minimal work directory the triage path can navigate."""
+def _d4_structures(targets: tuple[str, ...]) -> dict:
+    """The three target structures a character snapshot must carry.
+
+    ``TargetsKeysEqBaselineChecker`` (L2) demands each of them exist and
+    key exactly on ``target_baseline.targets[].target_character_id``.
+    Examples arrays stay empty — the structural checker skips empty
+    entries (never-appeared target, D4 state 3), so the fixture adds no
+    unintended min_examples shortage.
+    """
+    return {
+        "voice_state": {"target_voice_map": [
+            {"target_character_id": t, "dialogue_examples": []}
+            for t in targets]},
+        "behavior_state": {"target_behavior_map": [
+            {"target_character_id": t, "action_examples": []}
+            for t in targets]},
+        "relationships": [{"target_character_id": t} for t in targets],
+    }
+
+
+def _write_work_layout(
+    root: Path,
+    stage_id: str = "S001",
+    baseline_targets: tuple[str, ...] = (),
+    snapshot_overrides: dict | None = None,
+) -> tuple[Path, SourceContext]:
+    """Lay out a minimal work directory the triage path can navigate.
+
+    Writes a D4-complete character package: ``target_baseline.json``
+    holding ``baseline_targets`` plus a snapshot carrying the matching
+    three target structures. ``snapshot_overrides`` replaces top-level
+    snapshot keys wholesale (scenario F swaps in a short
+    ``target_voice_map``).
+    """
     work = root / "works" / "smoke"
-    chars = work / "characters" / "A001" / "canon" / "stage_snapshots"
+    canon = work / "characters" / "A001" / "canon"
+    chars = canon / "stage_snapshots"
     chars.mkdir(parents=True, exist_ok=True)
 
-    target = chars / f"{stage_id}.json"
-    target.write_text(
-        json.dumps({"summary": "A001 is the wanderer — single name"},
+    (canon / "target_baseline.json").write_text(
+        json.dumps({"targets": [{"target_character_id": t}
+                                for t in baseline_targets]},
                    ensure_ascii=False),
         encoding="utf-8",
     )
+
+    snapshot: dict = {"summary": "A001 is the wanderer — single name"}
+    snapshot.update(_d4_structures(baseline_targets))
+    snapshot.update(snapshot_overrides or {})
+
+    target = chars / f"{stage_id}.json"
+    target.write_text(
+        json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
 
     chapters_dir = work / "sources" / "chapters"
     chapters_dir.mkdir(parents=True, exist_ok=True)
@@ -89,7 +136,7 @@ def _write_work_layout(root: Path, stage_id: str = "S001") -> tuple[
 
 def _stub_llm_accepting(quote: str):
     """LLM that always triages the single issue as source_inherent."""
-    state = {"semantic": 0, "triage": 0, "patch": 0, "regen": 0}
+    state = {"semantic": 0, "triage": 0, "patch": 0}
 
     def stub(prompt: str, timeout: int = 600,
              effort: str | None = None) -> str:
@@ -113,9 +160,6 @@ def _stub_llm_accepting(quote: str):
                 "rationale": "chapter uses two different names for A001",
                 "extraction_choice": "kept 'the wanderer' — the later one",
             }]})
-        if "regeneration tool" in prompt:
-            state["regen"] += 1
-            return json.dumps({"summary": "still broken"})
         state["patch"] += 1
         return "[]"
 
@@ -132,7 +176,7 @@ def _expected_fingerprint(prompt: str) -> str:
     return ""
 
 
-def scenario_a_pre_t3_accept() -> None:
+def scenario_a_triage_accept() -> None:
     tmp = Path(tempfile.mkdtemp(prefix="repair_smoke_triage_a_"))
     target, ctx = _write_work_layout(tmp)
 
@@ -154,9 +198,8 @@ def scenario_a_pre_t3_accept() -> None:
                   / "extraction_notes" / "S001.jsonl")
 
     print(f"[A] passed={result.passed}  notes={len(result.accepted_notes)}  "
-          f"T3 regen calls={state['regen']}  triage calls={state['triage']}")
+          f"triage calls={state['triage']}")
     assert result.accepted_notes, "expected at least one accepted note"
-    assert state["regen"] == 0, "T3 should be skipped when triage accepts"
     assert notes_path.exists(), f"notes file not written: {notes_path}"
 
     lines = [l for l in notes_path.read_text(encoding="utf-8").splitlines()
@@ -171,7 +214,7 @@ def scenario_a_pre_t3_accept() -> None:
     assert parsed["source_evidence"]["chapter_number"] == 1
     assert len(parsed["source_evidence"]["quote_sha256"]) == 64
 
-    print("[A] OK — pre-T3 triage accepted, notes persisted")
+    print("[A] OK — triage accepted, notes persisted")
 
 
 def scenario_b_bad_quote_rejected() -> None:
@@ -240,8 +283,6 @@ def scenario_c_cap_enforced() -> None:
                  "extraction_choice": "kept as-is"}
                 for fp in fps
             ]})
-        if "regeneration tool" in prompt:
-            return json.dumps({"summary": "still broken"})
         return "[]"
 
     cfg = RepairConfig(
@@ -386,47 +427,24 @@ def scenario_f_coverage_shortage_accepted() -> None:
       is the H1 regression that would otherwise FAIL the stage.
     """
     tmp = Path(tempfile.mkdtemp(prefix="repair_smoke_triage_f_"))
-    work = tmp / "works" / "smoke"
-    chars = work / "characters" / "A001" / "canon" / "stage_snapshots"
-    chars.mkdir(parents=True, exist_ok=True)
-
-    target = chars / "S001.json"
-    # 主角 → threshold 5; one example → shortage of 4.
-    target.write_text(json.dumps({
-        "voice_state": {
-            "target_voice_map": [{
-                "target_character_id": "A001",
-                "dialogue_examples": ["only example"],
-            }],
+    # 主角 → threshold 5; one example → shortage of 4. The behavior map
+    # and relationships keep their empty A001 entries from the shared
+    # fixture, so this is the run's only structural shortage.
+    target, ctx = _write_work_layout(
+        tmp,
+        baseline_targets=("A001",),
+        snapshot_overrides={
+            "voice_state": {
+                "target_voice_map": [{
+                    "target_character_id": "A001",
+                    "dialogue_examples": ["only example"],
+                }],
+            },
         },
-    }, ensure_ascii=False), encoding="utf-8")
-
-    chapters_dir = work / "sources" / "chapters"
-    chapters_dir.mkdir(parents=True, exist_ok=True)
-    (chapters_dir / "0001.txt").write_text(CHAPTER_TEXT, encoding="utf-8")
-
-    summaries_dir = work / "sources" / "summaries"
-    summaries_dir.mkdir(parents=True, exist_ok=True)
-    (summaries_dir / "0001.json").write_text(
-        json.dumps({"summary": "A001 gets two names"}), encoding="utf-8")
-
-    analysis = work / "analysis"
-    analysis.mkdir(parents=True, exist_ok=True)
-    (analysis / "stage_plan.json").write_text(
-        json.dumps({"stages": [{"stage_id": "S001",
-                                "chapters": "C0001-C0001"}]}),
-        encoding="utf-8",
-    )
-
-    ctx = SourceContext(
-        work_path=str(work),
-        stage_id="S001",
-        chapter_summaries_dir=str(summaries_dir),
-        chapters_dir=str(chapters_dir),
     )
 
     # Count any stray triage-prompt calls — they should stay at 0.
-    calls = {"triage": 0, "patch": 0, "regen": 0, "semantic": 0}
+    calls = {"triage": 0, "patch": 0, "semantic": 0}
 
     def stub(prompt: str, timeout: int = 600,
              effort: str | None = None) -> str:
@@ -436,9 +454,6 @@ def scenario_f_coverage_shortage_accepted() -> None:
         if "source-discrepancy triage tool" in prompt:
             calls["triage"] += 1
             return json.dumps({"verdicts": []})
-        if "regeneration tool" in prompt:
-            calls["regen"] += 1
-            return json.dumps({})
         # T2 source_patch prompt — return malformed JSON so the fixer
         # takes the ``except json.JSONDecodeError`` branch and applies
         # nothing. Returning "[]" would be parsed as an empty list and
@@ -465,7 +480,7 @@ def scenario_f_coverage_shortage_accepted() -> None:
                   / "extraction_notes" / "S001.jsonl")
 
     print(f"[F] passed={result.passed}  notes={len(result.accepted_notes)}  "
-          f"triage_calls={calls['triage']}  regen_calls={calls['regen']}")
+          f"triage_calls={calls['triage']}")
 
     assert result.passed, (
         "Phase C must not FAIL after coverage_shortage accept; H1 "
@@ -482,16 +497,13 @@ def scenario_f_coverage_shortage_accepted() -> None:
     assert calls["triage"] == 0, (
         f"coverage_shortage must be 0-token; saw {calls['triage']} "
         f"triage LLM calls")
-    assert calls["regen"] == 0, (
-        f"coverage_shortage issues must not escalate to T3; saw "
-        f"{calls['regen']} regen calls")
     assert notes_path.exists(), f"notes file not written: {notes_path}"
 
     print("[F] OK — coverage_shortage accepted at 0 token, Phase C clean")
 
 
 def main() -> int:
-    scenario_a_pre_t3_accept()
+    scenario_a_triage_accept()
     scenario_b_bad_quote_rejected()
     scenario_c_cap_enforced()
     scenario_d_non_semantic_rejected()

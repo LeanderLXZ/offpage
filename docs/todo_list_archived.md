@@ -103,6 +103,19 @@
 <!-- 已落地的任务。仅精简条目。 -->
 <!-- holo:section end -->
 
+### [T-SMOKE-TRIAGE-BROKEN] `_smoke_triage` 在 HEAD 上即坏 · 完成于 2026-07-18 · 完整完成
+
+判定为**测试 fixture 过期，triage 代码正常，生产无静默破损**。fixture 把被测文件
+放在 character stage_snapshot 路径却不写同级 `target_baseline.json`，L2 的
+`TargetsKeysEqBaselineChecker`（该 fixture 写成之后才加入 pipeline）报
+root-anchored 的 `targets_baseline_missing` error —— pipeline 按设计跳过该文件的
+L3，打桩 semantic issue 从未生成，triage 无输入。修法：fixture 改写为 D4-complete
+角色包（`target_baseline.json` + snapshot 三结构），scenario F 复用同一 fixture；
+顺带清掉决策 #62 已删除的 T3 残留（场景名 `pre_t3`、`regeneration tool` stub 分支、
+`regen` 计数断言）。生产代码零改动，5 个场景全过。
+
+→ `logs/change_logs/2026-07-18_153522_fix-smoke-triage-stale-fixture.md`
+
 ### [T-REPAIR-TIMEOUT-CONFIG] repair 的超时值统一进 config + `review_timeout_s` 命名归属清理 · 完成于 2026-07-18 · 完整完成
 
 `repair/` 里 T1 / T2 / triage 三处硬编码 timeout（600 / 600 / 300）收进

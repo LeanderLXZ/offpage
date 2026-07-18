@@ -18,12 +18,11 @@
 
 _(none)_
 
-### 🟡 Next (3)
+### 🟡 Next (2)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
 | `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。**代码已落地（log 112727，决策 #66）；剩：跑 1 stage 与基线对比 round 数/墙钟。** | 🔴 High | ✅ Ready | 🔴 Large·Arch | 2026-07-17 EDT | 无（代码已落地，待实测验证） |
-| `T-SMOKE-TRIAGE-BROKEN` | 一个自动化测试在主干上一直是坏的（至少从包重构那次起）。要先弄清是测试过期了还是它测的功能真坏了——如果是后者，生产里可能一直在静默出错。 | 🟢 Med-Low | ✅ Ready | 🟡 Medium | 2026-07-17 EDT | 无 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。 | 🟢 Med-Low | ⏸ Blocked | 🔴 Large·Arch | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
 ### ⚪ Discussing (8)
@@ -419,61 +418,6 @@ issues.extend(file_issues)   # ← 不过滤返回值
 - 与 T-SEMANTIC-FULLFILE-COST 相关但正交：本条改的是**每轮 gate 复检**；那条
   讨论的是 **Phase A 全量检查**读全文 + 50k 截断的问题。Phase A 保持全文是本条
   的前提（用户要的是「全文审查一次」）
-
-**更新时间**：2026-07-17 06:51 EDT
-
----
-
-### [T-SMOKE-TRIAGE-BROKEN] `_smoke_triage` 在 HEAD 上即坏（既有破损）
-
-**上下文**
-
-`python -m extraction.repair.tests._smoke_triage` 在 HEAD 上失败：
-
-```
-File "extraction/repair/tests/_smoke_triage.py", line 157, in scenario_a_pre_t3_accept
-  assert result.accepted_notes, "expected at least one accepted note"
-AssertionError: expected at least one accepted note
-[A] passed=False  notes=0  T3 regen calls=0  triage calls=0
-```
-
-**已用 `git stash` 对照证实与近期改动无关**——把 #64 的改动 stash 掉后，HEAD
-上以**完全相同的断言**失败。commit `5d9ef6f`（extraction 包重构）的 message
-里也记录过「smoke 6/7 全过（`_smoke_triage` HEAD 即坏，正交）」，说明它至少
-从那时起就是坏的。
-
-场景名 `scenario_a_pre_t3_accept` 里的 `pre_t3` 暗示它写于 T3 全文重跑还存在
-的年代；决策 #62（`010fb03`，2026-07-15）已删除 T3 与 `file_regen.py`。输出里
-`T3 regen calls=0` 也印证了——**这个测试很可能是在测一个已经不存在的路径**。
-
-**要做什么**
-
-先诊断是"测试过期"还是"triage 真坏了"，再决定修测试还是修代码。这个判断很
-重要：如果是后者，那 triage 的 `source_inherent` 接受路径在生产里一直是坏的
-而没人知道（`triage_enabled = true` 是本项目的现行配置）。
-
-**改动清单**
-
-- file: `extraction/repair/tests/_smoke_triage.py:157`（`scenario_a_pre_t3_accept`）
-  → 起点：为什么 `accepted_notes` 是空的
-- file: `extraction/repair/triage.py` → 被测对象，确认 `source_inherent`
-  接受路径是否仍按契约工作（`triage_accept_cap_per_file = 5`）
-- file: `extraction/repair/coordinator.py` → triage 的调用点与结果消费
-- 判定后二选一：
-  - **测试过期** → 重写场景对齐 #62 后的三层就地修复形态（删 T3 相关断言）
-  - **代码坏了** → 修 `triage.py`，并复核生产里是否已经有被静默吞掉的
-    `source_inherent` 接受（查 `works/*/characters/*/canon/extraction_notes/`
-    有没有 SourceNote 落盘）
-
-**完成标准**
-
-- `python -m extraction.repair.tests._smoke_triage` 全过
-- 如判定为"代码坏了"：给出生产影响面评估（有多少 stage 的 triage 接受被静默
-  吞掉），并在 `ai_context/decisions.md` 记录
-
-**依赖**
-
-- 无（独立，可随时做）
 
 **更新时间**：2026-07-17 06:51 EDT
 
