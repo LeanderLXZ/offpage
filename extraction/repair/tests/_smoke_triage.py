@@ -8,12 +8,15 @@ with a stub LLM that:
   * when asked to triage, accepts the issue as source_inherent with a
     verbatim quote from the fake chapter
 
-The fixture writes a D4-complete character package — a
-``target_baseline.json`` plus the three target structures inside the
-snapshot. Without them ``TargetsKeysEqBaselineChecker`` reports a
-root-anchored L2 error,
-the pipeline then skips L3 for that file by design, and every scenario
-below silently stops testing triage at all.
+The fixture satisfies ``TargetsKeysEqBaselineChecker`` — it writes a
+``target_baseline.json`` plus the three matching target structures
+inside the snapshot. Miss either half and that L2 checker errors, the
+pipeline then skips L3 for the file by design, and every scenario below
+silently stops testing triage at all. The two halves fail differently:
+a missing baseline file yields ``targets_baseline_missing`` anchored at
+the root (``json_path="$"``), which routes to ``NO_FIX_TIER``; a missing
+structure yields ``targets_keys_eq_baseline_missing_structure`` anchored
+at that structure's own path, which does not.
 
 Scenarios exercised:
   (a) triage accepts a valid quote → the semantic residual is accepted
@@ -82,11 +85,11 @@ def _write_work_layout(
 ) -> tuple[Path, SourceContext]:
     """Lay out a minimal work directory the triage path can navigate.
 
-    Writes a D4-complete character package: ``target_baseline.json``
-    holding ``baseline_targets`` plus a snapshot carrying the matching
-    three target structures. ``snapshot_overrides`` replaces top-level
-    snapshot keys wholesale (scenario F swaps in a short
-    ``target_voice_map``).
+    Writes a character package that satisfies
+    ``TargetsKeysEqBaselineChecker``: a ``target_baseline.json`` holding
+    ``baseline_targets`` plus a snapshot carrying the matching three
+    target structures. ``snapshot_overrides`` replaces top-level snapshot
+    keys wholesale (scenario F swaps in a short ``target_voice_map``).
     """
     work = root / "works" / "smoke"
     canon = work / "characters" / "A001" / "canon"
@@ -427,16 +430,22 @@ def scenario_f_coverage_shortage_accepted() -> None:
       is the H1 regression that would otherwise FAIL the stage.
     """
     tmp = Path(tempfile.mkdtemp(prefix="repair_smoke_triage_f_"))
+    # Target is S002, NOT the owning character A001 — a baseline listing
+    # its own character is a `target_self_reference` error in phase 2.
     # 主角 → threshold 5; one example → shortage of 4. The behavior map
-    # and relationships keep their empty A001 entries from the shared
-    # fixture, so this is the run's only structural shortage.
+    # and relationships keep their empty S002 entries from the shared
+    # fixture, so this is the run's only coverage shortage (the two
+    # relationships warnings it also raises never enter the blocking set).
+    # The three S002 literals below — baseline target, voice-map key, and
+    # importance_map key — must stay in sync: a mismatched importance key
+    # silently drops the threshold to 1 and the shortage disappears.
     target, ctx = _write_work_layout(
         tmp,
-        baseline_targets=("A001",),
+        baseline_targets=("S002",),
         snapshot_overrides={
             "voice_state": {
                 "target_voice_map": [{
-                    "target_character_id": "A001",
+                    "target_character_id": "S002",
                     "dialogue_examples": ["only example"],
                 }],
             },
@@ -473,7 +482,7 @@ def scenario_f_coverage_shortage_accepted() -> None:
     result = run(
         files=[FileEntry(path=str(target))],
         config=cfg, source_context=ctx, llm_call=stub,
-        importance_map={"A001": "主角"},
+        importance_map={"S002": "主角"},
     )
 
     notes_path = (Path(ctx.work_path) / "characters" / "A001" / "canon"
