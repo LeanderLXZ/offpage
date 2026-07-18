@@ -1104,15 +1104,12 @@ N. <决策陈述>。
     → logs/change_logs/2026-07-17_072038_effort-tier-tuning.md。
 
 66. **L3 gate 复检改定点：per-file 只复检「本轮改过的 json_path ∪ 本轮携带的未修语义 issue path」（放弃每轮全文复检）。**
-    **背景**：2026-07-16 挂机跑逐行拆 repair 循环，发现 Phase B 每轮末的 L3 gate
-    把整份 ~50k 字符文件重读复检（`pipeline.run_layer(..., layer=3)` →
-    `SemanticChecker.check` 全文），是一个**正确性缺陷**而非仅仅慢：单 round 实测
-    T2 定点修复 16–18s vs L3 全文复检 4m36s（约 8× 不对称）。LLM 全文复审非确定，
-    每轮挑出的毛病天然不同 → 新指纹 → `tracker.diff` 记为 `introduced` → 循环
-    继续。实测某文件连续四轮 `resolved=1 / introduced=1 / persisting=0`，恰好从
-    两安全阀中间穿过（`is_regression` = `introduced>resolved` = `1>1` False；
-    `is_stalled` 需 persisting 恒 >0 而这里恒 0），每次跑满 `total_round_limit`
-    才判 FAIL，攒出本不该有的 defer 债。
+    **背景**：Phase B 每轮末的 L3 gate 原本重读整份 ~50k 字符文件复检
+    （`run_layer(layer=3)` → `check` 全文），是**正确性缺陷**而非仅仅慢（实测 T2
+    定点修复 16–18s vs 全文复检 4m36s）：LLM 全文复审非确定，每轮挑出的毛病天然
+    不同 → 新指纹被记为 `introduced` → 打地鼠。且 `resolved=1 / introduced=1 /
+    persisting=0` 恰好从两安全阀中间穿过（`is_regression` 需 `introduced>resolved`；
+    `is_stalled` 需 persisting 恒 >0），每次跑满轮次上限才判 FAIL，攒出 defer 债。
     **决策**：gate 改为 **per-file 定点复检**，且**在代码层按 paths 过滤返回值**
     ——现成 `check_scoped` 只在 prompt 末尾加 `Focus review on these paths` 软提示、
     不过滤返回值，是死代码且不能根治；真正的根治是程序过滤。
@@ -1129,21 +1126,17 @@ N. <决策陈述>。
     **逐文件**算出 scope = 该文件改过的 path ∪ 该文件本轮携带的未修语义 issue
     的 path，gate 逐文件调 `run_semantic_scoped(该文件的 scope)`；某文件 scope
     为空则跳过它（无语义可复检的改动，如仅落 sidecar note）。
-    **携带「未修语义 issue 的 path」不是可选项**：round 末尾
-    `tracker.diff(current_issues, combined_blocking)` 的两侧 scope 不对称——prev
-    是 Phase A 的全量语义结果，curr 只有 scoped gate 的结果；未修好的 issue 若
-    因「其 path 本轮没被碰过」而不进 gate 结果，就会被判成 `resolved` 从队列消失，
-    Phase C 复用 gate 结果时也补不回来 = **假 PASS**（首版只留「改过的 path」，
-    复审时实测到这条回归后改成现形态；回归测试见 `_smoke_l3_gate` 场景 F）。
+    **携带「未修语义 issue 的 path」不是可选项**：首版只留「改过的 path」，未修好
+    的 issue 会因其 path 本轮没被碰过而掉出 round diff 被判 `resolved` = 假 PASS
+    （机制详见 #67——那条处理的是同一失效链的另一半「文件整体未进 gate」）。复审
+    实测到这条回归后改成现形态；回归测试 `_smoke_l3_gate` 场景 F。
     **逐文件而非跨文件扁平并集**：否则 A 文件改过的 path 会放行 B 文件同名 path
     上的审校抖动。
-    **tracker 语义（数学不变、含义变正确）**：scoped 后 `introduced` 只可能出现
-    在**本轮被复检的 path**（改过的 或 携带的未修 path）上，不再被「全文重审时
-    在无关干净字段上冒出的新毛病」误触发——在改过的 path 上即「我这一刀改出了新
-    问题」= 回归的真定义；在携带 path 上则是同一个未修问题换了指纹，由
-    `is_l3_gate_reemerge` / `is_stalled` / 轮次上限收敛。`is_regression` /
-    `is_stalled`（`len(curr_fps)>0` 守卫保留）/ `is_l3_gate_reemerge` 复核后
-    无需新守卫，仅更新注释。
+    **tracker 语义（数学不变、含义变正确）**：`introduced` 只可能出现在**本轮被
+    复检的 path** 上，不再被全文重审在无关干净字段上冒出的新毛病误触发——在改过的
+    path 上即「我这一刀改出了新问题」= 回归的真定义；在携带 path 上则是同一未修
+    问题换了指纹，由 `is_l3_gate_reemerge` / `is_stalled` / 轮次上限收敛。三个
+    安全阀复核后无需新守卫，仅更新注释。
     **有意取舍**：放弃「修 A 是否搞坏了跨 path 的 B」的全文复检能力——Phase A 已
     做全量审计，且现状那个能力实际报的是审校抖动而非真回归。
     **边界**：Phase C fallback L3（`gate_ever_ran==False` 的兜底）保持全文——它
@@ -1162,17 +1155,14 @@ N. <决策陈述>。
     → logs/change_logs/2026-07-17_112727_gate-scoped-recheck.md。
 
 67. **本轮未被 gate 的文件，其未修语义 issue 原样携带进 blocking 集（fail-closed）。**
-    **背景**：#66 把 gate 定点化后，`/post-check` 复审查出一条**已确认的假 PASS**
-    ——`gate_targets = (l3_file_set & modified_files) - still_broken` 把「本轮零
-    patch 的文件」整体排除在 gate 之外，而 #66 的 `_gate_scope`「携带未修语义
-    path」只对**已进 gate_targets 的文件**生效，覆盖不到「文件整体未被触碰」这
-    一半。失效链（两文件、均 L0–L2 干净）：F 带不可修语义 error（无 source →
-    T2 跳过 → F 零 patch），G 本轮可修 → gate 只跑 G、`gate_ever_ran=True` →
-    F 的 issue 在 `combined_blocking = recheck_blocking + gate_blocking` 里**没有
-    任何来源**能重新出现（L0–L2 复检看不见语义）→ `tracker.diff` 判其 resolved
-    → 队列清空后 break → Phase C 走 **reuse** 分支（而非全文 fallback），只 extend
-    `last_gate_issues` → **PASS**。**pre-existing**：旧的全文 gate 有完全相同的
-    `& modified_files` 门控，#66 只是让它显眼。
+    **背景**：`gate_targets = (l3_file_set & modified_files) - still_broken` 把
+    「本轮零 patch 的文件」整体排除在 gate 之外，而 #66 的 `_gate_scope` 只覆盖
+    **已进 gate_targets 的文件**内部——「文件整体未被触碰」这一半没人管。失效链：
+    F 带不可修语义 error（零 patch）、G 本轮可修 → gate 只跑 G、`gate_ever_ran=True`
+    → F 的 issue 在 `combined_blocking` 里**没有任何来源**能重现（L0–L2 复检看不见
+    语义）→ 被 `tracker.diff` 判 resolved → 队列清空 break → Phase C 走 **reuse**
+    分支（而非全文 fallback）只 extend gate 结果 → **PASS**。**pre-existing**：旧
+    全文 gate 有完全相同的 `& modified_files` 门控，#66 只是让它显眼。
     **决策**：在 `combined_blocking` 处把「本轮未被 gate 的文件的语义 issue」原样
     携带进来。判据 = **没复检 = 状态未知 = 保持原样**（fail-closed）。gate **实际
     判决过**的文件无需携带——`_gate_scope` 会把该文件所有未修语义 path 放进 scope，
