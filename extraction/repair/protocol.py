@@ -104,6 +104,13 @@ class RepairConfig:
     t1_timeout_s: int = 600              # T1 local_patch (no source text)
     t2_timeout_s: int = 600              # T2 source_patch (loads chapters)
     triage_timeout_s: int = 300          # source-discrepancy triage
+    # Reasoning depth for the **re-read** calls (decision #65): L3 gate
+    # recheck / T1 / T2 / triage / Phase C fallback all share it — they
+    # re-read a file whose issues are already known, so they need less depth
+    # than a cold pass. Phase A's full semantic check is the cold read: it
+    # passes no effort at all and inherits the backend default
+    # (``[llm].effort``). Same call-site-passes ownership as the timeouts.
+    recheck_effort: str = "medium"
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
 
 

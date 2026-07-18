@@ -1057,11 +1057,11 @@ N. <决策陈述>。
     vs 自身 p50 439s）。这与 **#49 在 phase 0 上的诊断完全同构**（「effort=max
     …随机触发服务端超长 thinking」），且 #49 已实证降档后完工、schema 合法、
     质量等同。
-    **决策**：(a) `--effort` 的 choices 补 `xhigh` 并将 default 由 `max` 改为
-    `xhigh` —— `xhigh` 位于 `high` 与 `max` 之间，官方明确它是「most coding
+    **决策**：(a) `--effort` 的 choices 补 `xhigh` 并将默认档由 `max` 改为
+    `xhigh`（该默认值的权威位置是 `[llm].effort`，见 #69） —— `xhigh` 位于 `high` 与 `max` 之间，官方明确它是「most coding
     and agentic use cases 的最佳设置」（也是 Claude Code 自身默认值），对
     `max` 的评价则是「可能过度思考、收益递减」；此前本项目连传都传不进去。
-    (b) `--model` default 由 `claude-opus-4-7` 改为 `claude-opus-4-8`（纯
+    (b) 默认 model 由 `claude-opus-4-7` 改为 `claude-opus-4-8`（纯
     model-ID 切换，无 breaking change）。(c) repair 的 `_llm_call` 增
     `effort` 参数并透传 `run_with_retry`（该 kwarg 由 #49 引入，
     `LLMBackend.run` / `run_with_retry` 早已支持，只是 repair 的闭包没接）。
@@ -1072,7 +1072,9 @@ N. <决策陈述>。
     整份文件需要完整推理深度；**复读**面对的是 Phase A 已定位过的问题，深度
     需求更低 —— L3 有**三个**入口，除 Phase A 外的两个（每轮末的 L3 gate 复检
     `coordinator.py` Phase B、`gate_ever_ran == False` 时的 Phase C fallback
-    L3）都传 `medium`；T1 / T2 / triage 同传 `medium`。
+    L3）都传复读档；T1 / T2 / triage 同传。五个复读调用点共用
+    `[repair].recheck_effort`（默认 `medium`），冷读吃 `[llm].effort` ——
+    值的权威位置见 #69，本条只定分档判据。
     Phase C fallback 这一路容易漏：它不在「gate」这个名字底下，但触发条件
     （`had_semantic and run_semantic and not gate_ever_ran` —— Phase A 报了
     语义问题却全轮零 patch）决定了它读的必然是 Phase A 已审过的文件，判据上
@@ -1231,6 +1233,49 @@ N. <决策陈述>。
     两个 `RepairConfig` 构造点）、
     `extraction/persona_extraction/phases/scene_archive.py`。
     → logs/change_logs/2026-07-18_070924_repair-timeout-config.md。
+
+69. **模型与推理档位的全局默认收进 `[llm]` 段；per-phase override 留在各自段内，
+    靠段注释做索引。**
+    **背景**：查「effort 到底怎么配」时发现它散在三个互不相干的机制里 ——
+    全局默认敲死在 `cli.py` 的 argparse、Phase 0 救火档在
+    `[phase0].recovery_effort`、repair 复读档是 5 处 `"medium"` 字面量。真正
+    刺眼的是第一条：**同一个 argparse 块里 `--backend` 读
+    `cfg.runtime.default_backend`、`--max-turns` 读 `cfg.phase3.max_turns`，
+    而 `--model` / `--effort` 是字面量** —— 于是 `config.local.toml` 能覆盖前
+    两个、唯独覆盖不了后两个。运行时常量住在 CLI 解析代码里，违反
+    `conventions.md §Single Source of Truth`。
+    **决策**：新增 `[llm]` 段承载**全局默认** `model` + `effort`，argparse
+    default 改读它；repair 的 5 处字面量收进 `[repair].recheck_effort`。落地后
+    effort 被 3 个键穷尽：`[llm].effort`（冷读 + Phase 0/1/2/3/4 全部抽取
+    lane）、`[phase0].recovery_effort`（#49）、`[repair].recheck_effort`（#65）。
+    **为何不全集中**（把 `recovery_effort` / `recheck_effort` 也搬进 `[llm]`）：
+    那需要把键改成 `phase0_recovery_effort` / `repair_recheck_effort` ——
+    **当一个键需要用段名做前缀时，通常说明它本该待在那个段里**。
+    `recovery_effort` 的语义是「phase 0 撞墙后怎么办」，属 phase 0 的故障处理
+    策略，只是恰好用 effort 表达；搬进 `[llm]` 会让它看起来像通用档位选项。
+    「一屏看全所有档位」的收益改由 `[llm]` 段注释里的索引表提供 —— 注释可能
+    漂，但本项目 config 本就靠大量中文注释承载设计说明，且这类漂移
+    `/post-check` 的表层维度会扫出来。
+    **段名不用 `tier`**（用户初版提议）：本仓库 tier 已有既定含义 ——
+    repair 的 fixer 层 T0/T1/T2（`[repair].t1_timeout_s` 即指它）。一个表示
+    推理深度的 `[tier]` 段挨着 `[repair]` 放会误导。
+    **边界**：`[runtime].default_backend` **不**搬入 —— backend 是进程 / 传输层
+    选择，与推理档位不是一回事，搬了 `[llm]` 就开始变杂物抽屉。不新增
+    per-phase 抽取 effort 键（无证据需要，要试用 CLI 即可）。档位数值与 model
+    ID 原样搬运，**行为不变**。
+    **必须随段落存在的一条警示**：**`codex` backend 完全忽略 effort** ——
+    codex CLI 无该参数，`CodexBackend.run` 收下 kwarg 后静默丢弃。这是全项目
+    唯一一处「配了但不生效且无任何提示」，已写进 `[llm]` 段注释与
+    `LLMConfig` docstring。
+    Plumbing → `extraction/config.toml`（`[llm]` 段 + `[repair].recheck_effort`）、
+    `extraction/persona_extraction/core/config.py`（`LLMConfig` +
+    `_SECTION_TYPES` + `Config.llm` + `RepairAgentConfig.recheck_effort`）、
+    `extraction/persona_extraction/cli.py`（两个 argparse default）、
+    `extraction/repair/protocol.py::RepairConfig`、
+    `extraction/repair/coordinator.py`（gate / fallback 两处 + 三个构造点）、
+    `extraction/repair/{fixers/local_patch,fixers/source_patch,triage}.py`、
+    `extraction/persona_extraction/orchestrator.py`（两个 `RepairConfig` 构造点）。
+    → logs/change_logs/2026-07-18_131623_llm-section-effort-config.md。
 
 ## Repository
 

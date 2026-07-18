@@ -13,6 +13,36 @@
 
 
 # ----------------------------------------------------------------
+# [llm] 模型与推理档位（全局默认）
+# ----------------------------------------------------------------
+# 本段只放**全局默认**。各 phase 的 per-phase override 留在自己的段里，
+# 索引如下 —— 调档位前先把这张表看全，否则容易只改了一处：
+#
+#   [llm].effort             = xhigh   主流程默认档：Phase 0/1/2/3/4 全部抽取
+#                                      lane + repair 的 Phase A 全量语义检查
+#                                      （冷读，显式传 None 落回本值）
+#   [phase0].recovery_effort = high    Phase 0 撞墙 chunk 的救火 sweep（决策 #49）
+#   [repair].recheck_effort  = medium  repair 复读档：L3 gate 复检 / T1 / T2 /
+#                                      triage / Phase C fallback（决策 #65）
+#
+# ⚠️ **`codex` backend 完全忽略 effort。** codex CLI 没有该参数，
+# `extraction/persona_extraction/core/llm_backend.py::CodexBackend.run`
+# 收下 kwarg 后静默丢弃。因此
+# `--backend codex`（或 `[runtime].default_backend = "codex"`）时上面三个
+# 档位键**一个都不生效，且不会有任何提示**。effort 只对 claude backend 有意义。
+[llm]
+# 抽取使用的模型。CLI `--model` / `-m` 覆盖。
+# 改这个键会换掉整条流水线的模型 —— 它是对外契约，不是随手可拧的旋钮。
+model = "claude-opus-4-8"
+
+# 主流程推理档位（low/medium/high/xhigh/max）。CLI `--effort` 覆盖。
+# 取 `xhigh` 而非 `max`：`max` 会随机触发服务端超长思考的双峰分布（与 #49 在
+# phase 0 上的诊断同构），且官方称 `xhigh` 是 coding / agentic 场景的最佳档、
+# `max` 收益递减。详见 ai_context/decisions.md #65。
+effort = "xhigh"
+
+
+# ----------------------------------------------------------------
 # [stage] 阶段规划
 # ----------------------------------------------------------------
 [stage]
@@ -205,6 +235,13 @@ t2_timeout_s = 600
 # 源文本差异 triage：通读本 stage 章节一遍，判定 L3 残留是否为源文本自带
 # 问题。输出只是一小份判定列表，四者中最短。
 triage_timeout_s = 300
+
+# repair 的**复读档**推理等级（决策 #65）。L3 gate 复检 / T1 / T2 / triage /
+# Phase C fallback 五个调用点共用此值 —— 它们复读的是一份问题已知的文件，
+# 不需要冷读那样的推理深度。Phase A 的全量语义检查是**冷读**，不传 effort、
+# 吃 `[llm].effort` 的主流程默认档。
+# 这是质量策略而非运维旋钮：调低省时但可能漏检，调高费时但更严。
+recheck_effort = "medium"
 
 # 单 stage 内每文件独立 repair 的并发 worker 数。每个 worker 跑一次
 # `coordinator.run(files=[single])`（Phase A + Phase B + L3 gate +

@@ -121,12 +121,16 @@ class Triager:
         llm_call: Callable[..., str] | None,
         retriever: ContextRetriever | None = None,
         timeout_s: int = 300,
+        recheck_effort: str = "medium",
     ) -> None:
         self._llm_call = llm_call
         self._retriever = retriever or ContextRetriever()
         # Hard timeout per triage call, passed explicitly on every call
         # (decision #68). Wired from ``RepairConfig.triage_timeout_s``.
         self._timeout_s = timeout_s
+        # Re-read reasoning depth (decision #65), wired from
+        # ``RepairConfig.recheck_effort``.
+        self._recheck_effort = recheck_effort
 
     # ------------------------------------------------------------------
     # Public API
@@ -372,7 +376,8 @@ class Triager:
 
         try:
             response = self._llm_call(
-                prompt, timeout=self._timeout_s, effort="medium")
+                prompt, timeout=self._timeout_s,
+                effort=self._recheck_effort)
         except Exception as exc:  # LLM transport errors — don't crash run
             logger.warning("triage LLM call failed for %s: %s", file_path, exc)
             return []

@@ -2136,6 +2136,7 @@ class ExtractionOrchestrator:
                 t1_timeout_s=ra_cfg.t1_timeout_s,
                 t2_timeout_s=ra_cfg.t2_timeout_s,
                 triage_timeout_s=ra_cfg.triage_timeout_s,
+                recheck_effort=ra_cfg.recheck_effort,
                 retry_policy=RetryPolicy(
                     t0_max=ra_cfg.t0_retry,
                     t1_max=ra_cfg.t1_retry,
@@ -3334,6 +3335,7 @@ class ExtractionOrchestrator:
                     t1_timeout_s=ra_cfg.t1_timeout_s,
                     t2_timeout_s=ra_cfg.t2_timeout_s,
                     triage_timeout_s=ra_cfg.triage_timeout_s,
+                    recheck_effort=ra_cfg.recheck_effort,
                     retry_policy=RetryPolicy(
                         t0_max=ra_cfg.t0_retry,
                         t1_max=ra_cfg.t1_retry,

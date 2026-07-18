@@ -115,10 +115,12 @@ def _build_fixers(
     return {
         0: ProgrammaticFixer(),
         1: LocalPatchFixer(llm_call=llm_call, verify_fn=verify_fn,
-                           timeout_s=cfg.t1_timeout_s),
+                           timeout_s=cfg.t1_timeout_s,
+                           recheck_effort=cfg.recheck_effort),
         2: SourcePatchFixer(llm_call=llm_call, retriever=retriever,
                             verify_fn=verify_fn,
-                            timeout_s=cfg.t2_timeout_s),
+                            timeout_s=cfg.t2_timeout_s,
+                            recheck_effort=cfg.recheck_effort),
     }
 
 
@@ -215,7 +217,8 @@ def run(
     notes_writer: NotesWriter | None = None
     if config.triage_enabled and source_context is not None:
         triager = Triager(llm_call=llm_call, retriever=retriever,
-                          timeout_s=config.triage_timeout_s)
+                          timeout_s=config.triage_timeout_s,
+                          recheck_effort=config.recheck_effort)
         notes_writer = NotesWriter(source_context.work_path)
 
     outcome = _run_one_lifecycle(
@@ -477,16 +480,16 @@ def _run_one_lifecycle(
             logger.info(
                 "L3 gate: re-checking %d file(s), scoped per file to "
                 "touched + carried semantic path(s)", len(gate_scopes))
-            # effort=medium (decision #65): the gate re-reads files whose
+            # Re-read tier (decision #65): the gate re-reads files whose
             # issues Phase A already surfaced, so it needs less reasoning
             # depth than the cold full pass — which omits effort entirely and
-            # inherits the backend default.
+            # inherits the backend default (``[llm].effort``).
             for f in files:
                 fscope = gate_scopes.get(f.path)
                 if not fscope:
                     continue
                 f_gate_issues = pipeline.run_semantic_scoped(
-                    [f], paths=fscope, effort="medium")
+                    [f], paths=fscope, effort=config.recheck_effort)
                 gate_blocking.extend(_filter_blocking(f_gate_issues, config))
                 gated_files.add(f.path)
             tracker.record_l3_gate(
@@ -618,11 +621,11 @@ def _run_one_lifecycle(
                     "Phase C: fallback semantic verification on %d clean "
                     "file(s) (gate never ran)", len(fallback_files))
                 _emit("phase_c", mode="fallback_l3")
-                # effort=medium, same reasoning as the gate (decision #65):
+                # Re-read tier, same reasoning as the gate (decision #65):
                 # Phase A is the cold read; this re-reads files it already
                 # reviewed, so it needs less reasoning depth.
                 l3_fallback = pipeline.run_layer(
-                    fallback_files, layer=3, effort="medium")
+                    fallback_files, layer=3, effort=config.recheck_effort)
                 final_issues.extend(l3_fallback)
 
     final_blocking = _filter_blocking(final_issues, config)

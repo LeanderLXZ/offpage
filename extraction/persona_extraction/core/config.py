@@ -30,6 +30,22 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
+class LLMConfig:
+    """Global model + reasoning-depth defaults.
+
+    Only the **global** defaults live here; per-phase overrides stay in their
+    own sections (``[phase0].recovery_effort`` for the Phase 0 recovery
+    sweep, ``[repair].recheck_effort`` for repair's re-read tier). The
+    ``[llm]`` section comment in ``config.toml`` carries the index of both.
+
+    NOTE: ``effort`` only reaches the ``claude`` backend — the codex CLI has
+    no effort flag, so ``CodexBackend.run`` silently drops the kwarg.
+    """
+    model: str = "claude-opus-4-8"
+    effort: str = "xhigh"
+
+
+@dataclass(frozen=True)
 class StageConfig:
     target_chapter_count: int = 10
     min_chapter_count: int = 8
@@ -144,6 +160,12 @@ class RepairAgentConfig:
     # triage — one pass over the stage's chapters classifying L3 residue
     # as source-inherent. Shortest: the output is a small verdict list.
     triage_timeout_s: int = 300
+    # Reasoning depth for repair's **re-read** calls (decision #65): L3 gate
+    # recheck / T1 / T2 / triage / Phase C fallback all share it — they
+    # re-read a file whose issues are already known, so they need less depth
+    # than a cold pass. Phase A's full semantic check is the cold read: it
+    # passes no effort and inherits ``[llm].effort``.
+    recheck_effort: str = "medium"
     # Max concurrent per-file repair workers within a single stage. Each
     # worker runs an independent ``coordinator.run(files=[single])``
     # pipeline. Anthropic Opus subscription tolerates ~8-10 concurrent
@@ -223,6 +245,7 @@ class GitConfig:
 
 @dataclass(frozen=True)
 class Config:
+    llm: LLMConfig = field(default_factory=LLMConfig)
     stage: StageConfig = field(default_factory=StageConfig)
     phase0: Phase0Config = field(default_factory=Phase0Config)
     phase1: Phase1Config = field(default_factory=Phase1Config)
@@ -242,6 +265,7 @@ class Config:
 # ---------------------------------------------------------------------------
 
 _SECTION_TYPES: dict[str, type] = {
+    "llm": LLMConfig,
     "stage": StageConfig,
     "phase0": Phase0Config,
     "phase1": Phase1Config,

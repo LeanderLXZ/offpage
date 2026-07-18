@@ -58,8 +58,14 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
 
 主要分段：
 
+- `[llm]` 模型与推理档位的**全局默认**（`model` 默认 `claude-opus-4-8`、
+  `effort` 默认 `xhigh`；CLI `--model` / `--effort` 覆盖）。per-phase override
+  留在各自段里（`[phase0].recovery_effort` / `[repair].recheck_effort`），
+  段注释内有索引表。**`codex` backend 忽略 effort**（其 CLI 无该参数，kwarg
+  被静默丢弃）。决策 #65 / #69
 - `[stage]` 章节数边界（target/min/max）
-- `[phase0]` chunk 并发、summarize 子进程超时、L2 修复超时
+- `[phase0]` chunk 并发、summarize 子进程超时、L2 修复超时、救火 sweep 的
+  推理档（`recovery_effort`，默认 `high`，决策 #49）
 - `[phase1]` stage_plan 出口验证重试上限
 - `[phase2]` baseline lane fan-out 并发（`lane_concurrency`，默认 5）、
   输出缺失重跑上限（`output_missing_max_retry`）、per-lane repair 开关
@@ -80,6 +86,8 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
   `t2_timeout_s` **600** / `triage_timeout_s` **300** —— 四个值都由
   `extraction/repair/` 的调用点显式传出，注入方不留兜底 default，故 config
   改动不会被静默 shadow；L3 预算最大因需通读整份 stage_snapshot，决策 #68）、
+  复读档推理等级（`recheck_effort`，默认 `medium` —— L3 gate 复检 / T1 / T2 /
+  triage / Phase C fallback 共用；Phase A 冷读吃 `[llm].effort`，决策 #65）、
   per-file 并发度（`repair_concurrency`，默认 10）
 - `[backoff]` 快速空失败退避序列
 - `[rate_limit]` Token 限额暂停策略（reset 缓冲、DST 感知时区解析、

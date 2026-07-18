@@ -293,7 +293,7 @@ N. <决策陈述，一行>。
 64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 900s）—— 值的权威位置是 `config.toml`，`repair/` 不再硬编码。** `checkers/semantic.py` 原写死 `timeout=600` 覆盖注入的默认值，使 config 层完全失效（`orchestrator` 的 `default_timeout` 是死代码）。900 = 实测未删失尾部 743s 的 1.2×，既容跑次间波动，又足够紧让卡死调用及时释放并发槽位。传递形态见 #68。
     → docs/decisions.md #64。
 
-65. **effort 分档 + 默认模型 opus-4-8 + effort 由调用点传（方案 A）。** 默认 `--effort` = `xhigh`（`max` 会随机触发服务端超长 thinking 的双峰，与 #49 在 phase 0 上的诊断同构；官方亦称 `xhigh` 是 coding/agentic 最佳档、`max` 收益递减）；默认 `--model` = `claude-opus-4-8`。repair 的 `_llm_call` 增 `effort` 参数透传 `run_with_retry`，**由各调用点自己传**（与现存 `timeout` 形态一致，非闭包捕获单值）。按「冷读 vs 复读」分档：**冷读**（Phase A 全量语义检查）不传、吃 backend 默认；**复读**（L3 gate 复检、Phase C fallback L3）+ T1 / T2 / triage 传 `medium`。
+65. **effort 分档 + 默认模型 opus-4-8 + effort 由调用点传（方案 A）。** 默认 effort = `xhigh`（`max` 会随机触发服务端超长 thinking 的双峰，与 #49 在 phase 0 上的诊断同构；官方亦称 `xhigh` 是 coding/agentic 最佳档、`max` 收益递减）；默认 model = `claude-opus-4-8`。两者的权威位置是 `[llm]` 段（#69）。repair 的 `_llm_call` 增 `effort` 参数透传 `run_with_retry`，**由各调用点自己传**（与现存 `timeout` 形态一致，非闭包捕获单值）。按「冷读 vs 复读」分档：**冷读**（Phase A 全量语义检查）不传、吃 backend 默认（= `[llm].effort`）；**复读**（L3 gate 复检、Phase C fallback L3）+ T1 / T2 / triage 传 `[repair].recheck_effort`（默认 `medium`）。
     → docs/decisions.md #65。
 
 66. **L3 gate 复检改定点：per-file 只复检「本轮改过的 json_path ∪ 本轮携带的未修语义 issue path」，且代码层过滤返回值。** Phase A 全文审计一次即够；gate 职责是「这一刀改对了吗 + 已知的问题还在不在」而非重审全书。旧 gate 走 `run_layer(layer=3)` 全文复检，LLM 非确定每轮换目标 → 新指纹算 `introduced` → 打地鼠跑满 round cap，`resolved=N/introduced=N/persisting=0` 从两安全阀中间穿过。新走 `check_scoped(paths=该文件的 scope)`，返回值按后代匹配过滤（程序保证，非 focus 软提示）；后端失败类 issue（`$` 锚）永不过滤。**scope 必须携带未修语义 issue 的 path**——否则未修好的 issue 因其 path 没被碰过而不进 gate 结果，被 round-diff 判成 resolved = 假 PASS（复审实测到的回归）；**逐文件**算 scope，避免跨文件同名 path 放行抖动。tracker 数学不变、`introduced` 语义变正确。有意取舍：放弃跨-path「修 A 是否搞坏 B」复检（Phase A 已覆盖）。边界：Phase C fallback L3 保持全文。与 #65 分两次落地保单变量。
@@ -304,6 +304,9 @@ N. <决策陈述，一行>。
 
 68. **repair 四类 LLM 调用的 timeout 全部由调用点显式传出，注入方不留兜底 default。** `RepairConfig` 携带 `semantic_timeout_s` 900 / `t1_timeout_s` 600 / `t2_timeout_s` 600 / `triage_timeout_s` 300，四个 `_llm_call` 调用点各传各的；`orchestrator` 两个包装器里的 `default_timeout` / `default_review_timeout` 一并删除（后者本就是死代码）。与 #65 的 effort 归属（方案 A）同构 —— 同一函数上两个参数一套哲学；`repair/` 仍不读 config.toml，只消费注入方填好的 `RepairConfig`。不选「注入方按调用类型分派 default」：那是把策略搬进包装器，且四类预算差异会被一个 default 抹平。附带确立 phase 4 场景切分超时归 `[phase4].scene_split_timeout_s`。纯 refactor，四个值不变。
     → docs/decisions.md #68。
+
+69. **模型与推理档位的全局默认收进 `[llm]` 段；per-phase override 留在各自段内，靠段注释做索引。** `--model` / `--effort` 原本敲死在 argparse（同块的 `--backend` / `--max-turns` 却读 config），`config.local.toml` 因此覆盖不了它们；repair 的复读档另有 5 处 `"medium"` 字面量，一并收进 `[repair].recheck_effort`。落地后 effort 被 3 个键穷尽：`[llm].effort`（冷读 / 全部抽取 lane）、`[phase0].recovery_effort`、`[repair].recheck_effort`。不选「全集中」：那需要给键加 `phase0_` / `repair_` 前缀，而需要用段名做前缀通常说明键本该待在那个段里。段名不用 `tier`（与 repair 的 T0/T1/T2 撞车）。边界：`[runtime].default_backend` 不搬入（backend 是传输层选择，非推理档位）；无 per-phase 抽取 effort 键。**`codex` backend 忽略 effort**，是唯一「配了不生效且无提示」处，已写进段注释。
+    → docs/decisions.md #69。
 
 ## Repository
 

@@ -68,12 +68,16 @@ class SourcePatchFixer(BaseFixer):
     def __init__(self, llm_call: Callable[..., str] | None = None,
                  retriever: ContextRetriever | None = None,
                  verify_fn: Callable[[list[FileEntry]], set[str]] | None = None,
-                 timeout_s: int = 600):
+                 timeout_s: int = 600,
+                 recheck_effort: str = "medium"):
         self._llm_call = llm_call
         self._retriever = retriever or ContextRetriever()
         # Hard timeout per patch call, passed explicitly on every call
         # (decision #68). Wired from ``RepairConfig.t2_timeout_s``.
         self._timeout_s = timeout_s
+        # Re-read reasoning depth (decision #65), wired from
+        # ``RepairConfig.recheck_effort``.
+        self._recheck_effort = recheck_effort
         # Scoped L0–L2 re-verify injected by the coordinator, same contract as
         # ``LocalPatchFixer``. ``None`` falls back to the legacy
         # "apply == resolved" behaviour (used by tests / standalone).
@@ -124,7 +128,8 @@ class SourcePatchFixer(BaseFixer):
 
             try:
                 response = self._llm_call(
-                    prompt, timeout=self._timeout_s, effort="medium")
+                    prompt, timeout=self._timeout_s,
+                    effort=self._recheck_effort)
                 parsed = json.loads(response.strip())
             except (json.JSONDecodeError, Exception) as exc:
                 logger.warning("T2 fix failed for %s: %s",

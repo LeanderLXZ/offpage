@@ -66,14 +66,15 @@
 - **Recovery sweep**（main ThreadPool 之后、最终 gate 之前触发）：扫
   `phase0_summaries.json` 找 `state=='failed'` 且 error_message 含
   `'timed out'` 或 `'error_max_turns'` 且 `recovery_attempted==False`
-  的 chunk；用 `LLMBackend.run(effort='high')` per-call kwarg 重跑一次
+  的 chunk；用 `[phase0].recovery_effort`（默认 `high`）作 per-call effort 重跑一次
   完整 `_summarize_chunk`（含 L1/L2/L3+tolerance），并发复用
   `phase0.concurrency`。结果不论成败都置 `recovery_attempted=True`，
   `--resume` 时跳过（避免无限救火）。背景：更高的 effort 档（`xhigh` /
   `max`）在多字段 chunk synthesis 上偶发服务器端长思考超 1800s wall
   （实测 effort=high 14 min 完工、schema valid、质量等价），故"主流程按
-  `--effort` 默认档跑 + sweep 降到 `high` 救撞墙"是精准兜底而非全局降级；
-  相对主流程默认的 `xhigh`（决策 #65）仍是降档，语义成立
+  `[llm].effort` 跑 + sweep 降到 `high` 救撞墙"是精准兜底而非全局降级；
+  相对主流程默认的 `xhigh`（分档判据见决策 #65，键归属见 #69）仍是降档，
+  语义成立
 - 输出：`works/{work_id}/analysis/chapter_summaries/`
 
 ### 3. 全书分析（Phase 1）
