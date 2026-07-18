@@ -2624,9 +2624,10 @@ TOML 中的同名键；TOML 缺失键时回落到代码内部 dataclass 默认�
 | `[stage]` | 阶段规划目标/上下限章节数 |
 | `[phase0]` | 章节归纳并发、summarize 子进程超时、JSON 修复超时 |
 | `[phase1]` | 出口验证重试 |
+| `[phase2]` | baseline lane fan-out 并发（`lane_concurrency`）、输出缺失重跑上限、per-lane repair 开关 |
 | `[phase3]` | 提取超时、`--max-turns` |
 | `[phase4]` | 场景切分并发、场景切分超时（`scene_split_timeout_s`，600s）、circuit breaker |
-| `[repair]` | 各 tier 重试、lifecycle 上限、triage 接受上限、总轮数、per-file 并发、四类 LLM 调用超时（`semantic_timeout_s` 900s / `t1_timeout_s` 600s / `t2_timeout_s` 600s / `triage_timeout_s` 300s，均由调用点显式传出，决策 #68）|
+| `[repair]` | 各 tier 重试、总轮数（`total_round_limit`）、triage 开关 + 接受上限、per-file 并发、未决问题延后开关（`defer_unresolved_semantic`，决策 #60）、四类 LLM 调用超时（`semantic_timeout_s` 900s / `t1_timeout_s` 600s / `t2_timeout_s` 600s / `triage_timeout_s` 300s，均由调用点显式传出，决策 #68）|
 | `[backoff]` | 快速空失败的退避序列 |
 | `[rate_limit]` | reset buffer、解析失败 fallback、周限额阈值与动作 |
 | `[runtime]` | 默认 `--max-runtime`、心跳间隔、默认 backend |

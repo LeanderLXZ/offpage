@@ -65,8 +65,7 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
   输出缺失重跑上限（`output_missing_max_retry`）、per-lane repair 开关
   （`repair_enabled`，决策 #59 缩水版：T0/T1 + 程序 checker，不含
   T2/L3/triage）
-- `[phase3]` 提取超时、`max_turns`、`concurrency`（默认 **12**，
-  覆盖 2 角色场景 sub-lane on 时峰值 `1 + 2×4 + 2 = 11`）、
+- `[phase3]` 提取超时、`max_turns`、
   `char_snapshot_sub_lanes`（缺省 `true` — 单 char_snapshot lane 内部拆
   **4** 并行 sub-lane 跑同一份 prompt 模板的不同字段子集，merge 程序
   合并；prev snapshot 按 lane 切 4 个 slice 喂入避免每 sub-lane 读完整
