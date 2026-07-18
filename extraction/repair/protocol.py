@@ -92,6 +92,18 @@ class RepairConfig:
                                          # source_inherent + L2
                                          # coverage_shortage; accumulates
                                          # on disk)
+    # Hard timeout (seconds) for each kind of repair LLM call. Every call
+    # site passes its own value explicitly — same ownership model as
+    # ``effort`` (decision #65): the injected ``llm_call`` holds no default
+    # budget, so a config change can never be silently shadowed. Budgets
+    # differ by call kind: L3 reads a whole ~50k-char stage_snapshot, T1/T2
+    # patch single fields, triage reads the stage's chapters once.
+    # ``repair/`` never reads config.toml — the injector fills these in.
+    semantic_timeout_s: int = 900        # L3 semantic review (Phase A full
+                                         # check + per-round gate recheck)
+    t1_timeout_s: int = 600              # T1 local_patch (no source text)
+    t2_timeout_s: int = 600              # T2 source_patch (loads chapters)
+    triage_timeout_s: int = 300          # source-discrepancy triage
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
 
 

@@ -109,10 +109,6 @@ repair_enabled            = true
 # 三种 lane 共用此值。订阅模式下推理耗时不固定，1h 给充足余量。
 extraction_timeout_s = 3600
 
-# 单次审校 / repair 内 LLM 调用硬超时（秒）。比提取短，因为审校 prompt
-# 输入更小、输出更确定。
-review_timeout_s     = 600
-
 # claude -p --max-turns 上限：单次会话内最多允许的 agentic 轮数。
 # 调高可让 agent 探索更多文件 / 完成更多 schema 修订循环；调低可强制
 # agent 早返回。Phase 0 chunk 20 章 / chunk-level 5 字段聚合 + Phase 3
@@ -144,6 +140,10 @@ char_snapshot_sub_lanes = true
 # 并行越高越快但也越容易撞限额。默认 **12**，与 [phase0].concurrency 对齐
 # （决策 #55 4-sub-lane 拓扑覆盖）。
 concurrency = 12
+
+# 单章节场景切分 LLM 调用硬超时（秒）。比 phase 3 抽取短：prompt 只读单章
+# 原文、输出形状高度确定。
+scene_split_timeout_s = 600
 
 # 单章节单次运行内的 retry 次数上限。FAILED 章节（validate 失败 / 解析失败 /
 # LLM 错误）会被回插队列并在 prompt 里注入 prior_error 重新切，最多再试这么
@@ -184,15 +184,27 @@ triage_enabled = true
 # 限制 coverage_shortage 滥用。
 triage_accept_cap_per_file = 5
 
-# L3 语义审校单次 LLM 调用硬超时（秒）。Phase A 全量检查与每轮末的 L3 gate
-# 复检共用（两者都走 `SemanticChecker._review_file`）；T1/T2 修复器与 triage
-# 各自显式传 timeout，不受此值影响。与 `[phase3].review_timeout_s` 解耦
-# （决策 #47 的结构教训）：L3 要通读整份 ~50k 字符的 stage_snapshot，单次
-# wall 常达数百秒，需要独立预算。
+# repair 四类 LLM 调用各自的硬超时（秒）。四个值都由 `extraction/repair/`
+# 里的调用点**显式传出**（决策 #68，与 #65 的 effort 归属模型同构）：注入方
+# 不留兜底 default，因此这里的改动不会被任何硬编码或 default 静默 shadow 掉。
+# 预算按调用体量分档：
+
+# L3 语义审校。Phase A 全量检查与每轮末的 L3 gate 复检共用（两者都走
+# `SemanticChecker._review_file`）。它要通读整份 ~50k 字符的 stage_snapshot，
+# 单次 wall 常达数百秒，是四者中预算最大的一个。
 # 取值依据 = 实测未删失尾部 743s 的 1.2×：既给跑次间波动留余量，又足够紧
 # —— 卡死的调用能及时释放并发槽位（`repair_concurrency=10` 下这直接计入每个
 # stage 的 wall time）。完整取值推导见 docs/decisions.md #64。
 semantic_timeout_s = 900
+
+# T1 局部 patch（不载原文）/ T2 source_patch（载相关章节原文）。两者都只改
+# 单个 json_path，输入输出都远小于 L3。
+t1_timeout_s = 600
+t2_timeout_s = 600
+
+# 源文本差异 triage：通读本 stage 章节一遍，判定 L3 残留是否为源文本自带
+# 问题。输出只是一小份判定列表，四者中最短。
+triage_timeout_s = 300
 
 # 单 stage 内每文件独立 repair 的并发 worker 数。每个 worker 跑一次
 # `coordinator.run(files=[single])`（Phase A + Phase B + L3 gate +

@@ -2105,14 +2105,16 @@ class ExtractionOrchestrator:
         if repair_enabled:
             repair_logs_dir.mkdir(parents=True, exist_ok=True)
 
-        default_review_timeout = cfg.phase3.review_timeout_s
-
-        def _llm_call(prompt: str, timeout: int | None = None,
+        # No default timeout here: every repair call site passes its own
+        # budget from ``RepairConfig`` (decision #68). A default would let a
+        # missing / wrong call-site value silently ride on it — exactly the
+        # failure #64 diagnosed.
+        def _llm_call(prompt: str, timeout: int,
                       effort: str | None = None) -> str:
             result = run_with_retry(
                 self.reviewer_backend or self.backend,
                 prompt,
-                timeout_seconds=timeout or default_review_timeout,
+                timeout_seconds=timeout,
                 lane_name="repair[phase2]",
                 effort=effort,
             )
@@ -2130,6 +2132,10 @@ class ExtractionOrchestrator:
                 run_semantic=False,
                 l3_gate_enabled=False,
                 triage_enabled=False,
+                semantic_timeout_s=ra_cfg.semantic_timeout_s,
+                t1_timeout_s=ra_cfg.t1_timeout_s,
+                t2_timeout_s=ra_cfg.t2_timeout_s,
+                triage_timeout_s=ra_cfg.triage_timeout_s,
                 retry_policy=RetryPolicy(
                     t0_max=ra_cfg.t0_retry,
                     t1_max=ra_cfg.t1_retry,
@@ -3285,14 +3291,16 @@ class ExtractionOrchestrator:
             # it into a blocking issue instead of a silent pass. Other
             # call sites (T1/T2/T3 fixers) likewise see a hard error
             # rather than an empty string.
-            default_timeout = get_config().repair.semantic_timeout_s
-
-            def _llm_call(prompt: str, timeout: int | None = None,
+            # No default timeout here: every repair call site passes its own
+            # budget from ``RepairConfig`` (decision #68). A default would
+            # let a missing / wrong call-site value silently ride on it —
+            # exactly the failure #64 diagnosed.
+            def _llm_call(prompt: str, timeout: int,
                           effort: str | None = None) -> str:
                 result = run_with_retry(
                     self.reviewer_backend or self.backend,
                     prompt,
-                    timeout_seconds=timeout or default_timeout,
+                    timeout_seconds=timeout,
                     lane_name=f"repair[{stage.stage_id}]",
                     effort=effort,
                 )
@@ -3322,6 +3330,10 @@ class ExtractionOrchestrator:
                     run_semantic=True,
                     triage_enabled=ra_cfg.triage_enabled,
                     accept_cap_per_file=ra_cfg.triage_accept_cap_per_file,
+                    semantic_timeout_s=ra_cfg.semantic_timeout_s,
+                    t1_timeout_s=ra_cfg.t1_timeout_s,
+                    t2_timeout_s=ra_cfg.t2_timeout_s,
+                    triage_timeout_s=ra_cfg.triage_timeout_s,
                     retry_policy=RetryPolicy(
                         t0_max=ra_cfg.t0_retry,
                         t1_max=ra_cfg.t1_retry,

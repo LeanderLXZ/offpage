@@ -103,6 +103,18 @@
 <!-- 已落地的任务。仅精简条目。 -->
 <!-- holo:section end -->
 
+### [T-REPAIR-TIMEOUT-CONFIG] repair 的超时值统一进 config + `review_timeout_s` 命名归属清理 · 完成于 2026-07-18 · 完整完成
+
+`repair/` 里 T1 / T2 / triage 三处硬编码 timeout（600 / 600 / 300）收进
+`RepairConfig` + `[repair]` 三个新键；连同 `semantic_timeout_s` 一起改为**四个
+调用点各自显式传出**，`orchestrator` 两个 `_llm_call` 的兜底 default 删除
+（决策 #68 —— 与 #65 的 effort 归属方案 A 同构，注入方不留 default 则漏传是
+TypeError 而非静默走兜底）。附带 `[phase3].review_timeout_s` →
+`[phase4].scene_split_timeout_s` 重命名移段 + 删死代码 `default_review_timeout`。
+纯 refactor：四个值不变，已逐调用点验证实际传出 900/600/600/300 与改动前相等。
+
+→ `logs/change_logs/2026-07-18_070924_repair-timeout-config.md`
+
 ### [T-GATE-UNMODIFIED-FILE-CARRY] 本轮零 patch 的文件，其未修语义 issue 原样携带 · 完成于 2026-07-18 · 主体完成（`accepted_fps` 过滤子项另案未做）
 
 `/post-check` 对 #66 复审查出的已确认假 PASS：`gate_targets` 的 `& modified_files`

@@ -65,7 +65,7 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
   输出缺失重跑上限（`output_missing_max_retry`）、per-lane repair 开关
   （`repair_enabled`，决策 #59 缩水版：T0/T1 + 程序 checker，不含
   T2/L3/triage）
-- `[phase3]` 提取 / 审校超时、`max_turns`、`concurrency`（默认 **12**，
+- `[phase3]` 提取超时、`max_turns`、`concurrency`（默认 **12**，
   覆盖 2 角色场景 sub-lane on 时峰值 `1 + 2×4 + 2 = 11`）、
   `char_snapshot_sub_lanes`（缺省 `true` — 单 char_snapshot lane 内部拆
   **4** 并行 sub-lane 跑同一份 prompt 模板的不同字段子集，merge 程序
@@ -74,12 +74,14 @@ CLI flag  >  config.local.toml  >  config.toml  >  代码默认值
   覆盖；light_novel 模式 stage 字符数小可手动关；详见
   `docs/architecture/extraction_workflow.md` §6.2 sub-lane 字段归属表 +
   决策 #55）
-- `[phase4]` 章节并发、短路熔断阈值
+- `[phase4]` 章节并发、场景切分超时（`scene_split_timeout_s`，默认 **600**）、
+  短路熔断阈值
 - `[repair]` 各 tier 重试次数（每 tier 封顶 2）、triage 接受上限、总轮数、
-  L3 语义审校超时（`semantic_timeout_s`，默认 **900** —— Phase A 检查与
-  L3 gate 复检共用；T1/T2 修复器与 triage 各自显式传值不受影响；与
-  `[phase3].review_timeout_s` 解耦，因 L3 需通读整份 stage_snapshot，
-  单次 wall 常达数百秒）、per-file 并发度（`repair_concurrency`，默认 10）
+  四类 LLM 调用超时（`semantic_timeout_s` **900** / `t1_timeout_s` **600** /
+  `t2_timeout_s` **600** / `triage_timeout_s` **300** —— 四个值都由
+  `extraction/repair/` 的调用点显式传出，注入方不留兜底 default，故 config
+  改动不会被静默 shadow；L3 预算最大因需通读整份 stage_snapshot，决策 #68）、
+  per-file 并发度（`repair_concurrency`，默认 10）
 - `[backoff]` 快速空失败退避序列
 - `[rate_limit]` Token 限额暂停策略（reset 缓冲、DST 感知时区解析、
   解析失败 fallback、周限额上限/动作、probe leader 选举 TTL、probe
@@ -194,8 +196,10 @@ works/{work_id}/analysis/.extraction.lock
 ### 子进程超时
 
 - 提取 agent：3600 秒（60 分钟）超时后自动 kill
-- Repair 的 L3 语义审校：900 秒（15 分钟）超时（`[repair].semantic_timeout_s`）
-- Repair 的 T1 / T2 / triage LLM 调用：600 / 600 / 300 秒超时
+- Repair 的四类 LLM 调用：L3 语义审校 900 秒（15 分钟）/ T1 600 / T2 600 /
+  triage 300 —— 分别对应 `[repair]` 的 `semantic_timeout_s` /
+  `t1_timeout_s` / `t2_timeout_s` / `triage_timeout_s`
+- Phase 4 场景切分：600 秒（`[phase4].scene_split_timeout_s`）
 - 修复循环总轮次限制（默认 5 轮），未解决 → stage ERROR
 - **kill 的是整棵进程树**：子进程以 `start_new_session=True` 起在独立进程组，
   超时走 `killpg`。CLI backend 的 Bash 工具会派生继承管道的孙进程——只杀直接

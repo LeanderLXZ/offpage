@@ -18,12 +18,11 @@
 
 _(none)_
 
-### 🟡 Next (4)
+### 🟡 Next (3)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
 | `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。**代码已落地（log 112727，决策 #66）；剩：跑 1 stage 与基线对比 round 数/墙钟。** | 🔴 High | ✅ Ready | 🔴 Large·Arch | 2026-07-17 EDT | 无（代码已落地，待实测验证） |
-| `T-REPAIR-TIMEOUT-CONFIG` | 修复环节还有三处超时值硬写在代码里、不读配置。上次就是这种硬编码让整个配置层静默失效、改了没反应。顺带清理一个名字叫 phase3 但实际只服务 phase4 的参数。 | 🟢 Med-Low | 💬 Discuss first | 🔴 Large·Arch | 2026-07-17 EDT | 无 |
 | `T-SMOKE-TRIAGE-BROKEN` | 一个自动化测试在主干上一直是坏的（至少从包重构那次起）。要先弄清是测试过期了还是它测的功能真坏了——如果是后者，生产里可能一直在静默出错。 | 🟢 Med-Low | ✅ Ready | 🟡 Medium | 2026-07-17 EDT | 无 |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。 | 🟢 Med-Low | ⏸ Blocked | 🔴 Large·Arch | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
@@ -40,7 +39,7 @@ _(none)_
 | `T-RETRY` | LLM 调用失败时的重试策略能更聪明些。现在不到 5 秒就失败的会重试，但人物抽取正常要跑 10-20 分钟，5 秒太短了——那种短时失败几乎都是启动错、不是真活干完才挂。打算扩到 60 秒，再按失败类型分流要不要重试。改动小，两个数值要拍板。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 
-**Total**: 12 — 🟢 In Progress 0 ｜ 🟡 Next 4 ｜ ⚪ Discussing 8
+**Total**: 11 — 🟢 In Progress 0 ｜ 🟡 Next 3 ｜ ⚪ Discussing 8
 
 <!-- holo:section start -->
 ---
@@ -420,92 +419,6 @@ issues.extend(file_issues)   # ← 不过滤返回值
 - 与 T-SEMANTIC-FULLFILE-COST 相关但正交：本条改的是**每轮 gate 复检**；那条
   讨论的是 **Phase A 全量检查**读全文 + 50k 截断的问题。Phase A 保持全文是本条
   的前提（用户要的是「全文审查一次」）
-
-**更新时间**：2026-07-17 06:51 EDT
-
----
-
-### [T-REPAIR-TIMEOUT-CONFIG] repair 的超时值统一进 config + `review_timeout_s` 命名归属清理
-
-**上下文**
-
-决策 #64（2026-07-16）把 L3 语义审校的超时解耦到
-`[repair].semantic_timeout_s` 并去掉 `checkers/semantic.py` 里 shadow 掉
-config 的硬编码。但**同类问题在另外三处仍然存在**——`repair/` 内其余调用点
-都还在传硬编码 timeout，全都不读 config：
-
-| 调用点 | 硬编码值 | 用途 |
-|---|---|---|
-| `fixers/local_patch.py:106` | 600 | T1 定点修复 |
-| `fixers/source_patch.py:122` | 600 | T2 原文修复 |
-| `triage.py:370` | 300 | triage |
-
-这违反 `ai_context/conventions.md §Single Source of Truth`（运行时常量的权威
-位置是 config 文件）。#64 的教训是：**硬编码会 shadow 掉 config，让整个配置
-层静默失效**——那次 `orchestrator` 的 `default_timeout` 因此成了死代码，改
-config 完全不产生效果，直到 runtime 验证才发现。这三处是同一个雷。
-
-**附带的命名问题**：#64 落地后 `[phase3].review_timeout_s = 600` 只剩 2 个
-引用点，且**都不属于 phase 3**：
-
-- `phases/scene_archive.py:429` → **phase 4** scene split：**唯一真实消费者**
-  （`timeout_seconds=cfg.phase3.review_timeout_s` 直接传值）
-- `orchestrator.py:2108` → **phase 2** per-lane repair 的
-  `default_review_timeout`：**同属死代码**——#59 缩水版关掉 `run_semantic` /
-  `l3_gate` / `triage` 且 `t2_max=0`，phase 2 唯一可达的 LLM 调用是 T1
-  `local_patch`，而它显式传 `timeout=600` ⇒ 该 default 从不被消费
-
-即**一个名为 `[phase3]` 的参数实际只服务 phase 4**。#47 已经就地修正过一次
-它的错误描述（原称"服务 phase 3 reviewer 短链"——该短链不存在）。
-
-**要做什么**
-
-把三处硬编码超时收进 config；顺带清理 `review_timeout_s` 的命名与归属。
-
-**改动清单**
-
-- file: `extraction/persona_extraction/core/config.py::RepairAgentConfig` →
-  新增 `t1_timeout_s: int = 600` / `t2_timeout_s: int = 600` /
-  `triage_timeout_s: int = 300`（与 `semantic_timeout_s` 并列）
-- file: `extraction/config.toml` `[repair]` → 三个同名键 + 中文注释
-- file: `extraction/repair/fixers/local_patch.py:106` /
-  `fixers/source_patch.py:122` / `triage.py:370` → 去掉显式硬编码，改由注入方
-  持有预算（与 #64 对 `semantic.py` 的处理形态一致：`repair/` 保持
-  config-agnostic，`orchestrator` 的 `_llm_call` 按调用类型给默认值）。
-  **注意**：这与已定的方案 A（effort 由调用点自己传，决策 #65）方向相反——
-  落地前需先想清楚 timeout 和 effort 是否该用同一种归属模型，避免同一函数上
-  两个参数两套哲学
-- file: `extraction/persona_extraction/core/config.py::Phase3Config` +
-  `extraction/config.toml [phase3]` → `review_timeout_s` 重命名 / 移段
-  （候选：移到 `[phase4]` 作 `scene_split_timeout_s`，因为唯一消费者是
-  phase 4 scene split）
-- file: `extraction/persona_extraction/orchestrator.py:2108` → 删除死代码
-  `default_review_timeout`（或在 phase 2 repair 接入 config 化的 timeout 后
-  让它真正生效——二选一，需拍板）
-- file: `extraction/persona_extraction/phases/scene_archive.py:429` → 跟随
-  重命名
-- file: `ai_context/decisions.md` + `docs/decisions.md` → #47 / #64 的边界
-  描述同步（#64 现在写着「唯一真实消费者是 phase 4 scene split」，重命名后要改）
-- file: `extraction/README.md` + `docs/requirements.md` +
-  `docs/architecture/extraction_workflow.md` → 配置分节表同步
-
-**完成标准**
-
-- `grep -rE "timeout=[0-9]+" extraction/repair/` 命中 0（全部走 config 或注入方）
-- `grep -rn "phase3.review_timeout_s" extraction/` 命中 0
-- `load_config()` 能读到全部新键；`config.local.toml` 覆盖链对新键生效
-- smoke 全过；**行为不变**（同样的值，只是来源从硬编码变成 config）
-
-**依赖**
-
-- 无前置。effort 的归属模型已定为方案 A（决策 #65），本条要么沿用同一模型、
-  要么明确论证 timeout 为何该不同——见上方 change list 的「注意」
-- 纯 refactor，无行为变化，可随时插队
-
-**暂不做的事**
-
-- 不动数值本身（`semantic_timeout_s` = 900 已由决策 #64 定案）
-- 不给 phase 2 repair 接 L3（#59 缩水版是有意设计）
 
 **更新时间**：2026-07-17 06:51 EDT
 

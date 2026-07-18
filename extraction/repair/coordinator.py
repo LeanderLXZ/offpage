@@ -76,13 +76,16 @@ def _build_pipeline(
     llm_call: Callable[..., str] | None = None,
     importance_map: dict[str, str] | None = None,
     extra_checkers: list[Any] | None = None,
+    config: RepairConfig | None = None,
 ) -> CheckerPipeline:
+    cfg = config or RepairConfig()
     pipeline = CheckerPipeline()
     pipeline.register(JsonSyntaxChecker())
     pipeline.register(SchemaChecker())
     pipeline.register(StructuralChecker(importance_map=importance_map))
     pipeline.register(TargetsKeysEqBaselineChecker())
-    pipeline.register(SemanticChecker(llm_call=llm_call))
+    pipeline.register(SemanticChecker(llm_call=llm_call,
+                                      timeout_s=cfg.semantic_timeout_s))
     for checker in extra_checkers or []:
         pipeline.register(checker)
     return pipeline
@@ -98,7 +101,9 @@ def _build_fixers(
     llm_call: Callable[..., str] | None = None,
     retriever: ContextRetriever | None = None,
     pipeline: CheckerPipeline | None = None,
+    config: RepairConfig | None = None,
 ) -> dict[int, object]:
+    cfg = config or RepairConfig()
     # Immediate re-verify for the LLM tiers: scoped L0–L2 recheck (0 token)
     # returning the set of issue fingerprints still present after a patch.
     verify_fn: Callable[[list[FileEntry]], set[str]] | None = None
@@ -109,9 +114,11 @@ def _build_fixers(
 
     return {
         0: ProgrammaticFixer(),
-        1: LocalPatchFixer(llm_call=llm_call, verify_fn=verify_fn),
+        1: LocalPatchFixer(llm_call=llm_call, verify_fn=verify_fn,
+                           timeout_s=cfg.t1_timeout_s),
         2: SourcePatchFixer(llm_call=llm_call, retriever=retriever,
-                            verify_fn=verify_fn),
+                            verify_fn=verify_fn,
+                            timeout_s=cfg.t2_timeout_s),
     }
 
 
@@ -148,12 +155,18 @@ def validate_only(
     run_semantic: bool = False,
     importance_map: dict[str, str] | None = None,
     extra_checkers: list[Any] | None = None,
+    config: RepairConfig | None = None,
 ) -> list[Issue]:
-    """Run all checkers without any repair. Returns issue list."""
+    """Run all checkers without any repair. Returns issue list.
+
+    ``config`` only supplies ``semantic_timeout_s`` here (no fixers run);
+    ``None`` uses the ``RepairConfig`` defaults.
+    """
     pipeline = _build_pipeline(
         llm_call=llm_call,
         importance_map=importance_map,
         extra_checkers=extra_checkers,
+        config=config,
     )
     return pipeline.run(files, run_semantic=run_semantic)
 
@@ -188,18 +201,21 @@ def run(
         llm_call=llm_call,
         importance_map=importance_map,
         extra_checkers=extra_checkers,
+        config=config,
     )
     retriever = ContextRetriever()
     fixers = _build_fixers(
         llm_call=llm_call,
         retriever=retriever,
         pipeline=pipeline,
+        config=config,
     )
 
     triager: Triager | None = None
     notes_writer: NotesWriter | None = None
     if config.triage_enabled and source_context is not None:
-        triager = Triager(llm_call=llm_call, retriever=retriever)
+        triager = Triager(llm_call=llm_call, retriever=retriever,
+                          timeout_s=config.triage_timeout_s)
         notes_writer = NotesWriter(source_context.work_path)
 
     outcome = _run_one_lifecycle(

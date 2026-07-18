@@ -917,10 +917,11 @@ orchestrator (Python)
   按 phase / lane 聚合小表。best-effort：未 init 或异常均静默 no-op，绝不
   阻断提取。区别于 §6.4 的 `failed_lane_log`（仅失败时、单 lane 全量 dump）。
 - `--max-runtime` 总时间限制，到期后在 stage 间优雅停止
-- 子进程硬超时（Phase 0 summarize 1800s、Phase 3 提取 3600s、repair 的
-  L3 语义审校 900s、repair 内 T1/T2/triage 600s/600s/300s；阈值分别由
-  `extraction/config.toml` 的 `[phase0]` / `[phase3]` / `[repair]` 段控制，
-  T1/T2/triage 目前仍硬编码在 `extraction/repair/` 内）
+- 子进程硬超时（Phase 0 summarize 1800s、Phase 3 提取 3600s、Phase 4 场景
+  切分 600s、repair 的 L3 语义审校 900s、repair 内 T1/T2/triage
+  600s/600s/300s；阈值分别由 `extraction/config.toml` 的 `[phase0]` /
+  `[phase3]` / `[phase4]` / `[repair]` 段控制，repair 四类调用的预算由
+  `extraction/repair/` 内的调用点从 `RepairConfig` 显式传出，决策 #68）
 - Token/context limit 与 rate limit 区分：前者不重试（相同 prompt 必定再超限），
   后者由 `RateLimitController` 暂停所有新请求直到 reset，再重发同一 prompt
   （**不消耗重试次数**，详见 `docs/requirements.md` §11.13）。订阅模式下

@@ -243,7 +243,7 @@ N. <决策陈述，一行>。
 46. Token 限额自动暂停（订阅模型，§11.13）—— `RateLimitController` 解析 DST 感知的 reset，写 flock 合并的 `rate_limit_pause.json`，在预启动 + 每次 `run_with_retry` 处阻塞，reset 后重跑失败的 prompt 且不消耗重试槽。ISO 分支必须校验解析结果在未来才采信（它不以 `reset` 关键字锚定，会命中日志前缀 / 请求时间戳；`resume_at` 落在过去 → `wait_s<=0` → `attempt -= 1` 重发 → 零间隔热循环无退避）。
     → docs/decisions.md #46。
 
-47. Phase 0 摘要子进程超时 = `[phase0].summarize_timeout_s`（默认 1800s），而不是历史上借用的 `[phase3].review_timeout_s`（600s）。
+47. Phase 0 摘要子进程超时 = `[phase0].summarize_timeout_s`（默认 1800s），而不是与 phase 4 场景切分共用一个 600s 预算。
     → docs/decisions.md #47。
 
 48. **长度 bound 容差门（B 方案）。**
@@ -290,7 +290,7 @@ N. <决策陈述，一行>。
 
 63. **LLM 子进程起在独立进程组，超时杀整棵树。** `Popen(start_new_session=True)` + 超时 `killpg`（而非只 `proc.kill()` 直接子进程）；收尾 `communicate()` 另带有限 timeout 兜底。代价：子进程不再收终端 Ctrl+C（有意取舍，换无人值守不死锁）。**三件配套，缺一即退化**：无 `start_new_session` 时子进程与 orchestrator 同组、killpg 会自杀（helper 有守卫拒绝）；信号 handler 必须经 `terminate_all_children()` 在**放锁前**杀掉在飞子进程，否则停机要空转到子进程超时（≤3600s）而 PID 锁已谎称无人在跑。
     → docs/decisions.md #63。
-64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 900s），且由注入方持有预算、`repair/` 不再硬编码。** `checkers/semantic.py` 原写死 `timeout=600` 覆盖注入的默认值，使 config 层完全失效（`orchestrator` 的 `default_timeout` 是死代码）—— 值的权威位置必须是 `config.toml`。900 = 实测未删失尾部 743s 的 1.2×，既容跑次间波动，又足够紧让卡死调用及时释放并发槽位。
+64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 900s）—— 值的权威位置是 `config.toml`，`repair/` 不再硬编码。** `checkers/semantic.py` 原写死 `timeout=600` 覆盖注入的默认值，使 config 层完全失效（`orchestrator` 的 `default_timeout` 是死代码）。900 = 实测未删失尾部 743s 的 1.2×，既容跑次间波动，又足够紧让卡死调用及时释放并发槽位。传递形态见 #68。
     → docs/decisions.md #64。
 
 65. **effort 分档 + 默认模型 opus-4-8 + effort 由调用点传（方案 A）。** 默认 `--effort` = `xhigh`（`max` 会随机触发服务端超长 thinking 的双峰，与 #49 在 phase 0 上的诊断同构；官方亦称 `xhigh` 是 coding/agentic 最佳档、`max` 收益递减）；默认 `--model` = `claude-opus-4-8`。repair 的 `_llm_call` 增 `effort` 参数透传 `run_with_retry`，**由各调用点自己传**（与现存 `timeout` 形态一致，非闭包捕获单值）。按「冷读 vs 复读」分档：**冷读**（Phase A 全量语义检查）不传、吃 backend 默认；**复读**（L3 gate 复检、Phase C fallback L3）+ T1 / T2 / triage 传 `medium`。
@@ -301,6 +301,9 @@ N. <决策陈述，一行>。
 
 67. **本轮未被 gate 的文件，其未修语义 issue 原样携带进 blocking 集（fail-closed）。** #66 定点化后遗留的假 PASS：`gate_targets` 的 `& modified_files` 门控把「本轮零 patch 的文件」整体排除，其语义 issue 在 `combined_blocking` 里没有任何来源能重现（L0–L2 复检看不见语义）→ 被 diff 判 resolved → Phase C 走 reuse 分支只 extend gate 结果 → 对带已知事实错误的文件报 PASS（pre-existing，旧全文 gate 同样门控）。改为在 `combined_blocking` 处携带它们（没复检 = 状态未知 = 保持原样）；gate **实际判决过**的文件不携带（`_gate_scope` 已覆盖，重复计数）——判据用「真的跑过 gate 的文件集」`gated_files` 而非无条件构建的 `gate_scopes`，否则 gate 关闭时会重开本洞；携带集按 `accepted_fps` 过滤。新增 `outstanding_semantic`（gate 结果 + 携带集，在安全阀 break 前赋值以跨 break 存活）供 Phase C 使用，替代并删除 `last_gate_issues`。不选「只改 Phase C 兜底」（轮内 diff / 安全阀 / 日志仍错、仍可能提前 break）与「把未改动文件也纳入 gate_targets」（每轮每文件多烧 LLM 调用复 confirm 一个没人能修的问题）。边界：不动 `& modified_files` 门控本身，#66 的定点化收益保住。
     → docs/decisions.md #67。
+
+68. **repair 四类 LLM 调用的 timeout 全部由调用点显式传出，注入方不留兜底 default。** `RepairConfig` 携带 `semantic_timeout_s` 900 / `t1_timeout_s` 600 / `t2_timeout_s` 600 / `triage_timeout_s` 300，四个 `_llm_call` 调用点各传各的；`orchestrator` 两个包装器里的 `default_timeout` / `default_review_timeout` 一并删除（后者本就是死代码）。与 #65 的 effort 归属（方案 A）同构 —— 同一函数上两个参数一套哲学；`repair/` 仍不读 config.toml，只消费注入方填好的 `RepairConfig`。不选「注入方按调用类型分派 default」：那是把策略搬进包装器，且四类预算差异会被一个 default 抹平。附带确立 phase 4 场景切分超时归 `[phase4].scene_split_timeout_s`。纯 refactor，四个值不变。
+    → docs/decisions.md #68。
 
 ## Repository
 

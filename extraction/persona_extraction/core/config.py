@@ -83,7 +83,6 @@ class Phase2Config:
 @dataclass(frozen=True)
 class Phase3Config:
     extraction_timeout_s: int = 3600
-    review_timeout_s: int = 600
     max_turns: int = 80
     # Decision #55 — Sub-lane fan-out for the per-character char_snapshot
     # lane. ``true`` (default) splits the single LLM call into 4 parallel
@@ -101,6 +100,10 @@ class Phase4Config:
     # Default = 12 (raised from 10 with decision #55 4-sub-lane topology;
     # see Phase0Config.concurrency for rationale).
     concurrency: int = 12
+    # Hard timeout for one chapter's scene-split LLM call. Shorter than
+    # phase 3 extraction: the prompt reads a single chapter and the output
+    # shape is highly determined.
+    scene_split_timeout_s: int = 600
     # Per-chapter retry budget within a single Phase 4 run. A FAILED
     # chapter (validate_scene_split errors / parse failure / LLM error)
     # is requeued with the prior error injected into the prompt up to
@@ -120,18 +123,27 @@ class RepairAgentConfig:
     total_round_limit: int = 5
     triage_enabled: bool = True
     triage_accept_cap_per_file: int = 5
-    # Hard timeout for the L3 semantic review LLM call — both the Phase A
-    # full check and the per-round gate recheck, which share
-    # ``SemanticChecker._review_file``. The T1/T2 fixers and triage pass
-    # their own explicit timeouts and are unaffected. Decoupled from
-    # ``[phase3].review_timeout_s`` (decision #47's structural lesson):
-    # L3 reads a whole ~50k-char stage_snapshot and needs its own budget.
-    # 900 = 1.2x the measured uncensored tail (743s) — enough headroom for
-    # run-to-run variance, tight enough that a hung call frees its
-    # concurrency slot instead of holding one for the full budget (under
+    # Hard timeouts for the four kinds of repair LLM call. Each is passed
+    # explicitly by its call site in ``extraction/repair/`` (decision #68 —
+    # same ownership model as ``effort``, #65); no injector-side default
+    # can shadow them. Budgets differ because the calls differ in size.
+    #
+    # semantic — L3 review (Phase A full check + per-round gate recheck,
+    # both via ``SemanticChecker._review_file``). It reads a whole ~50k-char
+    # stage_snapshot, so it needs the largest budget. 900 = 1.2x the
+    # measured uncensored tail (743s): enough headroom for run-to-run
+    # variance, tight enough that a hung call frees its concurrency slot
+    # instead of holding one for the full budget (under
     # ``repair_concurrency=10`` that lands directly in the stage's wall
     # time). Full derivation: docs/decisions.md #64.
     semantic_timeout_s: int = 900
+    # t1 / t2 — field-level patch calls. T1 carries no source text, T2
+    # loads the relevant chapters; both patch a single json_path.
+    t1_timeout_s: int = 600
+    t2_timeout_s: int = 600
+    # triage — one pass over the stage's chapters classifying L3 residue
+    # as source-inherent. Shortest: the output is a small verdict list.
+    triage_timeout_s: int = 300
     # Max concurrent per-file repair workers within a single stage. Each
     # worker runs an independent ``coordinator.run(files=[single])``
     # pipeline. Anthropic Opus subscription tolerates ~8-10 concurrent

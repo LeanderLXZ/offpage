@@ -97,20 +97,23 @@ class SemanticChecker(BaseChecker):
 
     layer = 3
 
-    def __init__(self, llm_call: Callable[..., str] | None = None):
+    def __init__(self, llm_call: Callable[..., str] | None = None,
+                 timeout_s: int = 900):
         """
         Args:
-            llm_call: A callable ``(prompt: str, timeout: int | None = None,
+            llm_call: A callable ``(prompt: str, timeout: int,
                 effort: str | None = None) -> str`` that invokes an LLM and
                 returns the raw text response. It MUST accept ``effort`` as a
                 keyword on every path — this checker always passes it, sending
                 ``effort=None`` on the Phase A full pass so that pass inherits
-                the backend default. ``timeout`` MUST have a default: this
-                checker never passes it, so the injector owns the budget
-                (wired to ``[repair].semantic_timeout_s``). If None, semantic
-                checking is a no-op.
+                the backend default. If None, semantic checking is a no-op.
+            timeout_s: hard timeout per review call, passed explicitly on
+                every call (decision #68 — no injector-side default that a
+                config change could be shadowed by). Wired from
+                ``RepairConfig.semantic_timeout_s``.
         """
         self._llm_call = llm_call
+        self._timeout_s = timeout_s
 
     def check(self, files: list[FileEntry], effort: str | None = None,
               **kwargs) -> list[Issue]:
@@ -199,13 +202,13 @@ class SemanticChecker(BaseChecker):
         prompt = "\n".join(prompt_parts)
 
         try:
-            # No explicit timeout: the injected ``llm_call`` owns that budget
-            # (orchestrator wires it to ``[repair].semantic_timeout_s``).
-            # Hardcoding it here would shadow the config — reviewing a whole
-            # ~50k-char snapshot needs a budget the caller can tune per phase.
-            # ``effort=None`` inherits the backend default (Phase A); the L3
-            # gate passes it down explicitly.
-            response = self._llm_call(prompt, effort=effort)
+            # Timeout comes from the injected ``RepairConfig`` and is passed
+            # explicitly (decision #68) — a literal here would shadow the
+            # config, and an injector-side default would hide it from the
+            # call site. ``effort=None`` inherits the backend default
+            # (Phase A); the L3 gate passes it down explicitly.
+            response = self._llm_call(
+                prompt, timeout=self._timeout_s, effort=effort)
         except SemanticReviewLLMUnavailable as exc:
             # Backend reported failure. Treat as blocking so repair
             # coordinator does NOT mark the file PASS. Detail in message

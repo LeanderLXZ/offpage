@@ -426,7 +426,7 @@ def _process_chapter(
     cfg = get_config()
     result = run_with_retry(
         backend, prompt,
-        timeout_seconds=cfg.phase3.review_timeout_s,
+        timeout_seconds=cfg.phase4.scene_split_timeout_s,
         lane_name=f"scene[{chapter_id}]",
     )
 

@@ -2320,8 +2320,8 @@ Backend `run()` 接受可选 `lane_name` 参数，用于在 PID 打印和 heartb
 **自我保护**：防止进程因异常而无限运行占用资源：
 
 - 每个 LLM 子进程有硬超时（Phase 0 summarize 1800s、Phase 3 提取
-  3600s、repair 的 L3 语义审校 900s、repair 内 T1/T2/triage
-  600s/600s/300s）
+  3600s、Phase 4 场景切分 600s、repair 的 L3 语义审校 900s、repair 内
+  T1/T2/triage 600s/600s/300s）
 - **超时必须杀整棵进程树，不能只杀直接子进程**：CLI backend 会派生孙进程
   （它自己的 Bash 工具），孙进程继承 orchestrator 的 stdout / stderr 管道。
   只 `kill` 直接子进程会留下孙进程攥着管道写端，随后的 `communicate()` 等一个
@@ -2624,9 +2624,9 @@ TOML 中的同名键；TOML 缺失键时回落到代码内部 dataclass 默认�
 | `[stage]` | 阶段规划目标/上下限章节数 |
 | `[phase0]` | 章节归纳并发、summarize 子进程超时、JSON 修复超时 |
 | `[phase1]` | 出口验证重试 |
-| `[phase3]` | 提取/审校超时、`--max-turns` |
-| `[phase4]` | 场景切分并发、circuit breaker |
-| `[repair]` | 各 tier 重试、lifecycle 上限、triage 接受上限、总轮数、per-file 并发、L3 语义审校超时（`semantic_timeout_s`，900s）|
+| `[phase3]` | 提取超时、`--max-turns` |
+| `[phase4]` | 场景切分并发、场景切分超时（`scene_split_timeout_s`，600s）、circuit breaker |
+| `[repair]` | 各 tier 重试、lifecycle 上限、triage 接受上限、总轮数、per-file 并发、四类 LLM 调用超时（`semantic_timeout_s` 900s / `t1_timeout_s` 600s / `t2_timeout_s` 600s / `triage_timeout_s` 300s，均由调用点显式传出，决策 #68）|
 | `[backoff]` | 快速空失败的退避序列 |
 | `[rate_limit]` | reset buffer、解析失败 fallback、周限额阈值与动作 |
 | `[runtime]` | 默认 `--max-runtime`、心跳间隔、默认 backend |
