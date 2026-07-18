@@ -796,11 +796,15 @@ orchestrator (Python)
   该文件的 issue 批成一次 LLM 调用、写回后立即 scoped L0–L2 复检（issue 不再
   出现才算解决，杜绝"自报已修"空转）。
   Phase B 每轮在 L0–L2 scoped recheck 后，对**本轮被修改的文件**跑一次 **scoped
-  L3 gate**（决策 #66）：只复检**本轮实际改过的 json_path**，返回值在代码层过滤
-  到那些 path 的子树（程序保证，非 prompt 软提示），把语义层的失败回灌进下一轮
-  issue 队列。gate 职责是「这一刀改对了吗」而非重审全书——Phase A 已做过一次全文
-  审计；全文复检会因 LLM 非确定每轮换目标、制造新指纹被算作 introduced 而打地鼠
-  跑满轮次上限，scoped 复检让干净的修复 1 轮收敛。gate 目标集**不能**只取
+  L3 gate**（决策 #66）：**逐文件**算出 scope =「本轮改过的 json_path ∪ 本轮携带
+  的未修语义 issue 的 json_path」，只复检该 scope，返回值在代码层过滤到那些 path
+  的子树（程序保证，非 prompt 软提示），把语义层的失败回灌进下一轮 issue 队列。
+  gate 职责是「这一刀改对了吗 + 已知的问题还在不在」而非重审全书——Phase A 已做过
+  一次全文审计；全文复检会因 LLM 非确定每轮换目标、制造新指纹被算作 introduced 而
+  打地鼠跑满轮次上限，scoped 复检让干净的修复 1 轮收敛。**携带未修 path 不可省**：
+  否则未修好的 issue 因其 path 本轮没被碰过而不进 gate 结果，会被 round diff 判成
+  resolved = 假 PASS；**逐文件**算 scope 则避免 A 文件改过的 path 放行 B 文件同名
+  path 上的抖动。gate 目标集**不能**只取
   "Phase A 报过 L3 问题"的文件——checker pipeline 对有 L0–L2 error 的文件跳过
   L3（有意设计：不为 schema 已坏的文件烧 token），所以"Phase A 没报语义问题"
   通常意味着 L3 压根没跑；据此建集会让 T0 刚修完 schema 错的文件整轮零语义

@@ -1103,7 +1103,7 @@ N. <决策陈述>。
     `extraction/repair/triage.py`。
     → logs/change_logs/2026-07-17_072038_effort-tier-tuning.md。
 
-66. **L3 gate 复检改定点：只复检本轮改过的 json_path（放弃每轮全文复检）。**
+66. **L3 gate 复检改定点：per-file 只复检「本轮改过的 json_path ∪ 本轮携带的未修语义 issue path」（放弃每轮全文复检）。**
     **背景**：2026-07-16 挂机跑逐行拆 repair 循环，发现 Phase B 每轮末的 L3 gate
     把整份 ~50k 字符文件重读复检（`pipeline.run_layer(..., layer=3)` →
     `SemanticChecker.check` 全文），是一个**正确性缺陷**而非仅仅慢：单 round 实测
@@ -1113,9 +1113,11 @@ N. <决策陈述>。
     两安全阀中间穿过（`is_regression` = `introduced>resolved` = `1>1` False；
     `is_stalled` 需 persisting 恒 >0 而这里恒 0），每次跑满 `total_round_limit`
     才判 FAIL，攒出本不该有的 defer 债。
-    **决策**：gate 只复检**本轮实际改过的 json_path**，且**在代码层按 paths
-    过滤返回值**——现成 `check_scoped` 只在 prompt 末尾加 `Focus review on these
-    paths` 软提示、不过滤返回值，是死代码且不能根治；真正的根治是程序过滤。
+    **决策**：gate 改为 **per-file 定点复检**，且**在代码层按 paths 过滤返回值**
+    ——现成 `check_scoped` 只在 prompt 末尾加 `Focus review on these paths` 软提示、
+    不过滤返回值，是死代码且不能根治；真正的根治是程序过滤。
+    **scope 的两个来源（缺一即错，见 (c)）**：本轮**改过的** json_path ∪ 本轮
+    **携带的未修语义 issue** 的 json_path。
     (a) `semantic.py check_scoped` 返回值过滤为「在某 scoped path 上或其后代」的
     issue（`_path_in_scope` 后代匹配）；**后端失败类 issue**
     （`semantic_unavailable` / `semantic_check_crashed` / `semantic_unparseable`，
@@ -1123,13 +1125,25 @@ N. <决策陈述>。
     丢弃 = 假 PASS。(b) pipeline 新增 `run_semantic_scoped(files, paths)` 路由到
     L3 checker 的 `check_scoped`。(c) coordinator `_run_fixer_with_escalation`
     额外返回 `modified_paths: {file: {json_path}}`（从 `resolved_fingerprints` +
-    M4 `patched_paths` 收集）；round 循环聚合后喂给 gate，gate 改调
-    `run_semantic_scoped(scope_paths)`，scope 为空则跳过 gate（无语义可复检的
-    改动，如仅落 sidecar note）。
+    M4 `patched_paths` 收集）；round 循环聚合后由 `_gate_scope(fpath, ...)`
+    **逐文件**算出 scope = 该文件改过的 path ∪ 该文件本轮携带的未修语义 issue
+    的 path，gate 逐文件调 `run_semantic_scoped(该文件的 scope)`；某文件 scope
+    为空则跳过它（无语义可复检的改动，如仅落 sidecar note）。
+    **携带「未修语义 issue 的 path」不是可选项**：round 末尾
+    `tracker.diff(current_issues, combined_blocking)` 的两侧 scope 不对称——prev
+    是 Phase A 的全量语义结果，curr 只有 scoped gate 的结果；未修好的 issue 若
+    因「其 path 本轮没被碰过」而不进 gate 结果，就会被判成 `resolved` 从队列消失，
+    Phase C 复用 gate 结果时也补不回来 = **假 PASS**（首版只留「改过的 path」，
+    复审时实测到这条回归后改成现形态；回归测试见 `_smoke_l3_gate` 场景 F）。
+    **逐文件而非跨文件扁平并集**：否则 A 文件改过的 path 会放行 B 文件同名 path
+    上的审校抖动。
     **tracker 语义（数学不变、含义变正确）**：scoped 后 `introduced` 只可能出现
-    在改过的 path 上 = 「我这一刀改出了新问题」= 回归的真定义，不再被全文抖动
-    误触发；`is_regression` / `is_stalled`（`len(curr_fps)>0` 守卫保留）/
-    `is_l3_gate_reemerge` 复核后无需新守卫，仅更新注释。
+    在**本轮被复检的 path**（改过的 或 携带的未修 path）上，不再被「全文重审时
+    在无关干净字段上冒出的新毛病」误触发——在改过的 path 上即「我这一刀改出了新
+    问题」= 回归的真定义；在携带 path 上则是同一个未修问题换了指纹，由
+    `is_l3_gate_reemerge` / `is_stalled` / 轮次上限收敛。`is_regression` /
+    `is_stalled`（`len(curr_fps)>0` 守卫保留）/ `is_l3_gate_reemerge` 复核后
+    无需新守卫，仅更新注释。
     **有意取舍**：放弃「修 A 是否搞坏了跨 path 的 B」的全文复检能力——Phase A 已
     做全量审计，且现状那个能力实际报的是审校抖动而非真回归。
     **边界**：Phase C fallback L3（`gate_ever_ran==False` 的兜底）保持全文——它
@@ -1140,9 +1154,11 @@ N. <决策陈述>。
     `_path_in_scope` + `_BACKEND_FAILURE_RULES`）、
     `extraction/repair/checkers/__init__.py`（`run_semantic_scoped`）、
     `extraction/repair/coordinator.py`（`_run_fixer_with_escalation` 返回
-    `modified_paths` + gate 调用点）、`extraction/repair/tracker.py`（语义注释）、
+    `modified_paths` + `_gate_scope` 纯函数 + 逐文件 gate 调用点）、
+    `extraction/repair/tracker.py`（语义注释）、
     `extraction/repair/tests/_smoke_l3_gate.py`（场景 D 域外过滤 / E 后端失败
-    保留）、`docs/requirements.md` §11.4 + `docs/architecture/extraction_workflow.md`。
+    保留 / F scope 携带未修 path 且无跨文件 bleed）、
+    `docs/requirements.md` §11.4 + `docs/architecture/extraction_workflow.md`。
     → logs/change_logs/2026-07-17_112727_gate-scoped-recheck.md。
 
 ## Repository

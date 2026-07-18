@@ -112,13 +112,16 @@ class CheckerPipeline:
         """Re-check the semantic layer (L3) restricted to ``paths``.
 
         The Phase B L3 gate uses this instead of ``run_layer(..., layer=3)``:
-        it re-checks ONLY the json_paths a fix touched this round, and the
+        it re-checks ONLY the paths it is handed — the caller's per-file gate
+        scope (``coordinator._gate_scope``: what a fix touched this round plus
+        the paths of semantic issues still open on that file) — and the
         semantic checker filters its output down to those paths (a program
         guarantee, not the soft prompt hint). This is what makes the gate a
-        "did my fix land" verdict rather than a full-file re-audit — the
-        latter re-flags nondeterministic untouched-field nits every round and
-        never converges. Checkers at L3 without ``check_scoped`` fall back to
-        the full ``check``. Empty if no L3 checker is registered.
+        "did my fix land + is the known problem still there" verdict rather
+        than a full-file re-audit — the latter re-flags nondeterministic
+        untouched-field nits every round and never converges. Checkers at L3
+        without ``check_scoped`` fall back to the full ``check``. Empty if no
+        L3 checker is registered.
         """
         issues: list[Issue] = []
         for checker in self._checkers:

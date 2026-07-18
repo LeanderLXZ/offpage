@@ -1,14 +1,21 @@
 """Issue tracking across repair rounds — fingerprint diff, convergence
 and regression detection.
 
-Since the Phase B L3 gate re-checks only the json_paths a fix touched this
-round (T-GATE-SCOPED-RECHECK), the round diff below acquires a sharper
-meaning than it had under the old full-file gate: an ``introduced`` semantic
-issue can now only appear ON A PATH A FIX TOUCHED, so it is a genuine "my fix
-broke something here", not the nondeterministic untouched-field jitter the
-full-file re-review used to manufacture every round. The math is unchanged;
-the interpretation is what tightened. That is why ``is_regression`` /
-``is_stalled`` / ``is_l3_gate_reemerge`` remain valid without new guards.
+Since the Phase B L3 gate re-checks only a narrow per-file scope — the
+json_paths a fix touched this round PLUS the paths of semantic issues still
+open on that file (T-GATE-SCOPED-RECHECK) — the round diff below acquires a
+sharper meaning than it had under the old full-file gate: an ``introduced``
+semantic issue can now only appear ON A PATH THIS ROUND ACTUALLY RE-CHECKED,
+never on an untouched clean field, so it is no longer the nondeterministic
+jitter the full-file re-review manufactured every round. On a touched path it
+means "my fix broke something here"; on a carried (still-open) path it is the
+same unresolved problem wearing a new fingerprint, which converges via
+``is_l3_gate_reemerge`` / ``is_stalled`` / the round cap. One exception:
+``$``-anchored backend-failure issues are never scope-filtered, so they can
+surface as ``introduced`` from outside the scope — those mean "the re-check
+could not run", not a regression. The math is unchanged; the interpretation
+is what tightened. That is why ``is_regression`` / ``is_stalled`` /
+``is_l3_gate_reemerge`` remain valid without new guards.
 """
 
 from __future__ import annotations
@@ -58,10 +65,11 @@ class IssueTracker:
         """True if a round introduced strictly more issues than it resolved.
 
         Under the scoped L3 gate ``introduced`` counts only new problems on
-        json_paths a fix touched this round, so this is now a real "the fixes
-        broke more than they mended" signal rather than being tripped by
-        full-file review jitter (which used to keep ``introduced`` at ~1 every
-        round and slip past this valve).
+        paths this round actually re-checked (touched by a fix, or carrying a
+        still-open semantic issue) — never an untouched clean field. So this
+        is now a real "the fixes broke more than they mended" signal rather
+        than being tripped by full-file review jitter (which used to keep
+        ``introduced`` at ~1 every round and slip past this valve).
         """
         return len(report.introduced) > len(report.resolved)
 

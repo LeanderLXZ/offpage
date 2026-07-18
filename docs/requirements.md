@@ -1842,13 +1842,16 @@ repair 是**单遍**（一次 Phase A→B→C），无 file-level lifecycle 重�
        → 剩余未接受的 issue 进入 defer 台账 (见 §11.4.7)
     3. 每次 fix 后 scoped recheck: 只 L0+L1+L2, 检查被 patch 的子树
     4. 本轮结束后, 对"本轮被 patch 过 且 已无 L0–L2 error"的文件:
-       → L3 gate (scoped, 决策 #66): 只对本轮实际改过的 json_path 重跑 L3,
+       → L3 gate (scoped, 决策 #66): 逐文件算 scope = 本轮改过的 json_path
+         ∪ 本轮携带的未修语义 issue 的 json_path, 只对该 scope 重跑 L3,
          返回值在代码层过滤到那些 path 的子树 (程序保证, 非 prompt 软提示)。
-         gate 职责 = "这一刀改对了吗", 不是重审全书 —— A 阶段已做过一次全文
-         审计。全文复检会因 LLM 非确定每轮换目标, 制造新指纹被算作 introduced
-         而打地鼠跑满 round cap; scoped 复检让干净的修复 1 轮收敛。后端失败类
-         issue ($ 锚) 永不过滤 (否则复检没跑通却被静默丢 = 假 PASS); scope 为
-         空 (无语义可复检的改动) → 跳过 gate
+         gate 职责 = "这一刀改对了吗 + 已知的问题还在不在", 不是重审全书 ——
+         A 阶段已做过一次全文审计。全文复检会因 LLM 非确定每轮换目标, 制造新
+         指纹被算作 introduced 而打地鼠跑满 round cap; scoped 复检让干净的修复
+         1 轮收敛。携带未修 path 是必需的: 否则未修好的 issue 因其 path 本轮
+         没被碰过而不进 gate 结果, 会被 round diff 判成 resolved = 假 PASS。
+         后端失败类 issue ($ 锚) 永不过滤 (否则复检没跑通却被静默丢 = 假 PASS);
+         某文件 scope 为空 (无语义可复检的改动) → 跳过该文件
          (仍有 L0–L2 error 的不进 gate —— 本轮注定 FAIL 在那个 error 上,
           语义结论买不到任何决策; 与 A 阶段的跳过规则一致)
        → 若 gate 仍有 blocking → triage (与上同机制):
@@ -1906,15 +1909,30 @@ stage 进入 ERROR（`error_message` 前缀 `post-repair PP:` 以区分
 首次 PP 失败），`--resume` 重试。
 
 **L3 gate 触发条件与范围（scoped, 决策 #66）**：一个文件进入 gate 当且仅当
-**本轮 Phase B 的修复操作改动过它**；进入后 gate **只复检本轮实际改过的
-json_path**（不是整文件），返回值在代码层按 path 后代匹配过滤（程序保证，不靠
-prompt 的 `Focus review` 软提示）。gate 职责是「这一刀改对了吗」而非重审全书——
-Phase A 已做过一次全文审计。全文复检会因 LLM 非确定每轮换目标、把新指纹算作
-`introduced` 而打地鼠跑满轮次上限；scoped 让干净的修复 1 轮收敛。scope 为空
-（无语义可复检的改动，如仅落 sidecar note）→ 跳过 gate。**后端失败类 issue**
+**本轮 Phase B 的修复操作改动过它**；进入后 gate 只复检该文件的 **scope**（不是
+整文件），返回值在代码层按 path 后代匹配过滤（程序保证，不靠 prompt 的
+`Focus review` 软提示）。
+
+**scope 逐文件计算**（`coordinator._gate_scope`）= 本轮**改过的** json_path
+**∪** 本轮**携带的未修语义 issue** 的 json_path：
+
+- 改过的 path 回答「这一刀改对了吗」；
+- 携带的未修 path 回答「已知的问题还在不在」——**这一半不可省**：round 末尾
+  `tracker.diff` 的 prev 侧是 Phase A 全量语义结果、curr 侧只有 scoped gate
+  结果，未修好的 issue 若因其 path 本轮没被碰过而不进 gate 结果，就会被判成
+  `resolved` 而从队列消失、Phase C 也补不回来 = **假 PASS**；
+- **逐文件**而非跨文件扁平并集，否则 A 文件改过的 path 会放行 B 文件同名 path
+  上的审校抖动。
+
+gate 职责因此是「这一刀改对了吗 + 已知的问题还在不在」而非重审全书——Phase A 已
+做过一次全文审计。全文复检会因 LLM 非确定每轮换目标、把新指纹算作 `introduced`
+而打地鼠跑满轮次上限；scoped 让干净的修复 1 轮收敛。某文件 scope 为空（无语义可
+复检的改动，如仅落 sidecar note）→ 跳过该文件。**后端失败类 issue**
 （`semantic_unavailable` / `semantic_check_crashed` / `semantic_unparseable`，
 锚在 `$`）永不被 scope 过滤——否则复检没跑通却被静默丢弃 = 假 PASS。
-没被改动的文件 gate 不会重复跑（节省 LLM 调用）。**不得**再加「且它在 Phase A
+没被改动的文件 gate 不会重复跑（节省 LLM 调用）——**代价**：该文件携带的未修语义
+issue 因此本轮也不会被复检，会被 round diff 判成 resolved（已登记为
+`T-GATE-UNMODIFIED-FILE-CARRY`，本轮不修）。**不得**再加「且它在 Phase A
 有过 L3 issue」这一条：checker pipeline 对有 L0–L2 error 的文件会跳过 L3
 （有意设计，不为 schema 已坏的文件烧 token），所以「Phase A 没报语义问题」通常
 意味着 L3 压根没跑，而非该文件语义干净；据此建集会让 T0 刚修完 schema 错的文件

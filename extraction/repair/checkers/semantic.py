@@ -40,12 +40,14 @@ _BACKEND_FAILURE_RULES = frozenset({
 def _path_in_scope(json_path: str, scope_paths: list[str]) -> bool:
     """True when ``json_path`` is one of ``scope_paths`` or nested under one.
 
-    The L3 gate scopes a re-check to the json_paths a fix actually touched
-    this round. A fix patches the subtree at path ``P``; the re-review may
-    re-anchor a new finding at a leaf UNDER ``P`` (e.g. patched ``$.a`` →
-    finding at ``$.a.b``), which is still "a problem on the path I touched"
-    and must be kept. Anything outside every scoped subtree is review jitter
-    on an untouched field — dropped so the loop doesn't chase moving targets.
+    The L3 gate scopes a re-check to a narrow per-file path set — see
+    ``coordinator._gate_scope``: what a fix touched this round, plus the paths
+    of semantic issues still open on that file. A fix patches the subtree at
+    path ``P``; the re-review may re-anchor a new finding at a leaf UNDER
+    ``P`` (e.g. patched ``$.a`` → finding at ``$.a.b``), which is still "a
+    problem on the path I touched" and must be kept. Anything outside every
+    scoped subtree is review jitter on an untouched field — dropped so the
+    loop doesn't chase moving targets.
     """
     for p in scope_paths:
         if json_path == p or json_path.startswith(p + ".") \
@@ -135,8 +137,9 @@ class SemanticChecker(BaseChecker):
 
     def check_scoped(self, files: list[FileEntry], paths: list[str],
                      effort: str | None = None) -> list[Issue]:
-        """Re-check semantics restricted to ``paths`` — the json_paths a fix
-        actually touched this round.
+        """Re-check semantics restricted to ``paths`` — the caller's per-file
+        gate scope (``coordinator._gate_scope``: touched this round ∪ paths of
+        still-open semantic issues on that file).
 
         The prompt's ``Focus review on these paths`` line is a SOFT hint; the
         LLM may still report problems on fields it wasn't asked about. That is
