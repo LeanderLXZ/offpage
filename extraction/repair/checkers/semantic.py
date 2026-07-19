@@ -181,19 +181,13 @@ class SemanticChecker(BaseChecker):
         assert self._llm_call is not None
         prompt_parts = [SEMANTIC_REVIEW_SYSTEM, "\n--- FILE ---\n"]
 
-        content_str = json.dumps(content, ensure_ascii=False, indent=2)
-        # Truncate very large files to stay within context limits. Log a
-        # warning when we truncate so the tail of the file (where the LLM
-        # might catch real semantic issues) isn't silently dropped.
-        _SEMANTIC_MAX_CHARS = 50000
-        if len(content_str) > _SEMANTIC_MAX_CHARS:
-            logger.warning(
-                "Semantic review truncated %s: %d chars → %d chars "
-                "(tail dropped from review)",
-                file_path, len(content_str), _SEMANTIC_MAX_CHARS)
-            content_str = (content_str[:_SEMANTIC_MAX_CHARS]
-                           + "\n... (truncated)")
-        prompt_parts.append(content_str)
+        # The file goes in WHOLE — never truncated, and deliberately NOT a
+        # tunable (decision #70). Phase A is the only full-file semantic pass
+        # in the repair lifecycle, so whatever it does not see, nothing
+        # downstream sees either. A file that overruns the context window
+        # fails the call, which the handlers below turn into a blocking issue
+        # — loud failure beats a silent partial review reporting PASS.
+        prompt_parts.append(json.dumps(content, ensure_ascii=False, indent=2))
 
         if focus_paths:
             prompt_parts.append(

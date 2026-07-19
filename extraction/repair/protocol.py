@@ -96,7 +96,7 @@ class RepairConfig:
     # site passes its own value explicitly — same ownership model as
     # ``effort`` (decision #65): the injected ``llm_call`` holds no default
     # budget, so a config change can never be silently shadowed. Budgets
-    # differ by call kind: L3 reads a whole ~50k-char stage_snapshot, T1/T2
+    # differ by call kind: L3 reads the stage_snapshot in full, T1/T2
     # patch single fields, triage reads the stage's chapters once.
     # ``repair/`` never reads config.toml — the injector fills these in.
     semantic_timeout_s: int = 900        # L3 semantic review (Phase A full

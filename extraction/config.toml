@@ -220,7 +220,7 @@ triage_accept_cap_per_file = 5
 # 预算按调用体量分档：
 
 # L3 语义审校。Phase A 全量检查与每轮末的 L3 gate 复检共用（两者都走
-# `SemanticChecker._review_file`）。它要通读整份 ~50k 字符的 stage_snapshot，
+# `SemanticChecker._review_file`）。它要通读整份 stage_snapshot（从不截断），
 # 单次 wall 常达数百秒，是四者中预算最大的一个。
 # 取值依据 = 实测未删失尾部 743s 的 1.2×：既给跑次间波动留余量，又足够紧
 # —— 卡死的调用能及时释放并发槽位（`repair_concurrency=10` 下这直接计入每个

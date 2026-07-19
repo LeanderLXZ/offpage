@@ -308,6 +308,9 @@ N. <决策陈述，一行>。
 69. **模型与推理档位的全局默认收进 `[llm]` 段；per-phase override 留在各自段内，靠段注释做索引。** `--model` / `--effort` 原本敲死在 argparse（同块的 `--backend` / `--max-turns` 却读 config），`config.local.toml` 因此覆盖不了它们；repair 的复读档另有 5 处 `"medium"` 字面量，一并收进 `[repair].recheck_effort`。落地后 effort 被 3 个键穷尽：`[llm].effort`（冷读 / 全部抽取 lane）、`[phase0].recovery_effort`、`[repair].recheck_effort`。不选「全集中」：那需要给键加 `phase0_` / `repair_` 前缀，而需要用段名做前缀通常说明键本该待在那个段里。段名不用 `tier`（与 repair 的 T0/T1/T2 撞车）。边界：`[runtime].default_backend` 不搬入（backend 是传输层选择，非推理档位）；无 per-phase 抽取 effort 键。**`codex` backend 忽略 effort**，是唯一「配了不生效且无提示」处，已写进段注释。
     → docs/decisions.md #69。
 
+70. **L3 语义审校的输入永不截断，且这不是配置项。** Phase A 是整条 repair 生命周期中唯一一次全文语义审校（T1/T2 只收 `extract_subtree` 的子树，gate 只判决 Phase A 报出的问题），因此 Phase A 没看到的内容下游再无环节会看到 —— 裁剪输入不是省成本，是削减找问题的能力；而"多少字符算该丢"没有可辩护的答案，故不留配置键。超出 context window 时 LLM 调用失败转成阻塞 `semantic_unavailable`，响亮失败优于静默半审报 PASS。边界：gate 复检的 prompt 输入**不**做 scope 化、Phase A **不**降 effort、**不**按 importance 分级跳审。
+    → docs/decisions.md #70。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

@@ -22,7 +22,7 @@ _(none)_
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
-| `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。**代码已落地（log 112727，决策 #66）；剩：跑 1 stage 与基线对比 round 数/墙钟。** | 🔴 High | ✅ Ready | 🔴 Large·Arch | 2026-07-17 EDT | 无（代码已落地，待实测验证） |
+| `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。**代码已落地（log 112727，决策 #66）；剩：跑 1 stage 与基线对比 round 数/墙钟。** | 🔴 High | ✅ Ready | 🔴 Large·Arch | 2026-07-18 EDT | 无（代码已落地，待实测验证） |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。 | 🟢 Med-Low | ⏸ Blocked | 🔴 Large·Arch | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
 ### ⚪ Discussing (8)
@@ -30,7 +30,7 @@ _(none)_
 | ID | Brief | Open decisions | Updated | Blocked by |
 |---|---|---|---|---|
 | `T-PHASE35-DEFERRED-FIX` | 决策 #60 落地了"记录不停机"——repair 修不平的 L3 语义残留写进 deferred_repairs 台账、stage 照常继续。本 todo 是那个"跑完全部 stage 后读台账逐条 field-level 精准修 + 复验"的收尾 pass（Part B），不重跑整个 stage。等真实台账数据积累后据此设计 fixer 形态。 | 4 | 2026-07-15 EDT | deferred_repairs 台账在真实运行中积累出样本 |
-| `T-SEMANTIC-FULLFILE-COST` | 语义审校每次把整个文件读一遍，超过 5 万字符的部分直接丢掉不审——大文件的尾部从来没被检查过，而且这不是理论风险，每个 stage 都在发生。检查还吃掉了修复环节 92% 的开销：改一个字段却要通读全书。 | 4 | 2026-07-17 EDT | T-EFFORT-TIER-TUNING + T-GATE-SCOPED-RECHECK 的实测数据 |
+| `T-SEMANTIC-FULLFILE-COST` | 语义审校每次把整个文件读一遍，是 repair 里最重的一类调用。截断问题已解决（决策 #70，尾部不再被丢）；剩下的成本问题卡在测不出来——账本不区分"检查"和"修复"两类调用，原条目"检查吃掉 92% 开销"的结论复现不出来。要先给账本加分类标签。 | 4 | 2026-07-18 EDT | 账本分类标签 + T-GATE-SCOPED-RECHECK 的实测验证跑 |
 | `T-SEMANTIC-UNPARSEABLE` | 审校跑完了但返回的内容不是合法格式，3 个 stage 里出现 2 次。这跟超时是两回事，加时间救不了。它还和真实内容问题混在同一个待修账本里，下游没法区分处理。 | 4 | 2026-07-17 EDT | 无（诊断可立即启动） |
 | `T-REPAIR-EVENT-DRIVEN` | Phase 3 一抽完一个文件就立刻去修复、跟下一文件的抽取并行——理论最快。但实测算过只比当前方案省 4 分钟/stage，要为这点收益引入双线程池 + 撞限额风险，性价比太低。先做简单版（E1），等真实跑数据出来再决定要不要做这个。 | 0 | — | T-REPAIR-PARALLEL 先落地 |
 | `T-PROMPT-SCHEMA-INJECT` | 项目约定"长度上限这种数字只在 schema 写一份"，但少数 prompt 和 doc 里仍有手写的数字（"150-200 字"之类）。万一 schema 改了，这些地方就会偷偷不一致。要么写代码让 prompt 自动从 schema 读，要么修约定明说"prompt 允许例外"。 | 3 | — | 无（路径决策即可启动） |
@@ -38,7 +38,7 @@ _(none)_
 | `T-RETRY` | LLM 调用失败时的重试策略能更聪明些。现在不到 5 秒就失败的会重试，但人物抽取正常要跑 10-20 分钟，5 秒太短了——那种短时失败几乎都是启动错、不是真活干完才挂。打算扩到 60 秒，再按失败类型分流要不要重试。改动小，两个数值要拍板。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 
-**Total**: 11 — 🟢 In Progress 0 ｜ 🟡 Next 3 ｜ ⚪ Discussing 8
+**Total**: 10 — 🟢 In Progress 0 ｜ 🟡 Next 2 ｜ ⚪ Discussing 8
 
 <!-- holo:section start -->
 ---
@@ -312,7 +312,7 @@ decision #27n 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
 **上下文**
 
 2026-07-16 挂机跑 S003 时逐行拆 repair 循环，发现一个**正确性缺陷**（不只是
-慢）：**每轮末的 L3 gate 把整份 50k 字符文件重读一遍复检，导致打地鼠循环**。
+慢）：**每轮末的 L3 gate 把整份文件重读一遍复检，导致打地鼠循环**。
 
 单个 round 的实测拆分（`Character A/canon/stage_snapshots/S003.json`）：
 
@@ -416,10 +416,10 @@ issues.extend(file_issues)   # ← 不过滤返回值
 - **必须等 effort 分档（决策 #65）的基线对比 stage 跑完再单独 `/go`**——单变量：
   effort 降档的提速幅度尚未实测，两条混在一起就分不清耗时变化的归因
 - 与 T-SEMANTIC-FULLFILE-COST 相关但正交：本条改的是**每轮 gate 复检**；那条
-  讨论的是 **Phase A 全量检查**读全文 + 50k 截断的问题。Phase A 保持全文是本条
-  的前提（用户要的是「全文审查一次」）
+  讨论的是 **Phase A 全量检查**的成本。Phase A 通读全文是本条的前提（用户要的是
+  「全文审查一次」），该前提已由决策 #70 固化
 
-**更新时间**：2026-07-17 06:51 EDT
+**更新时间**：2026-07-18 22:05 EDT
 
 ---
 
@@ -685,71 +685,62 @@ T-LOG 已落地：[llm_backend.py:565-680](../extraction/persona_extraction/core
 
 ---
 
-### [T-SEMANTIC-FULLFILE-COST] Phase A 全文语义审校：50k 截断 + 读全文的成本
+### [T-SEMANTIC-FULLFILE-COST] Phase A 全文语义审校的成本
+
+**进展**（2026-07-18）：原条目的两半里，**质量缺口那半已解决**——L3 审校的输入
+截断已删除，Phase A 现在无条件通读整份文件，且刻意不做成配置项（决策 #70，
+`logs/change_logs/2026-07-18_215402_semantic-no-truncation.md`）。**剩余 = 成本
+那半**，但其原有支撑数据经核账不成立，见下。
 
 **上下文**
 
-L3 语义审校（`repair/checkers/semantic.py::_review_file`）把**整份文件**塞给
-LLM 通读。两个后果，一个是质量缺口、一个是成本，**同源**：
+Phase A 是整条 repair 链路中**唯一一次**全文语义审校：T1 / T2 修复与 Phase B
+gate 复检都只处理 Phase A 报出的问题。它把整份 `stage_snapshot`（实测约 59KB）
+送给 LLM 通读，单次 wall 可达数百秒，是 repair 里最重的一类调用。问题是：这个
+"最重"到底占多少，目前**测不出来**。
 
-**① 尾部从未被审校。** `semantic.py:121` 有个硬编码截断：
+**成本口径（已按账本订正）**
 
-```python
-_SEMANTIC_MAX_CHARS = 50000
-if len(content_str) > _SEMANTIC_MAX_CHARS:
-    logger.warning("Semantic review truncated %s: %d chars → %d chars "
-                   "(tail dropped from review)", ...)
-```
+口径以账本为准（`logs/runs/<work_id>_2026-07-16_144353.jsonl`，3-stage 跑）：
 
-实测**正在持续触发**——2026-07-16 那轮 S003 的日志里
-`Semantic review truncated .../canon/stage_snapshots/S00N.json` 反复出现
-（`stage_snapshot` 实测 59KB）。即**大文件超出 50k 的部分从来没被审校过**，
-而这不是理论风险，是每个 stage 都在发生。
+| 口径 | 账本实测 |
+|---|---|
+| 全跑总成本（3 stage） | $157.86 |
+| repair 部分 | **69 次调用 / $46.23 / 占 29.3%** |
+| repair output tokens | 951k |
+| repair cache_read / cache_creation | 2.15M / 2.14M（prompt caching 生效） |
 
-**② 检查吃掉 repair 的绝大部分开销。** 2026-07-16 单 stage 的 repair 内部
-按调用类型拆分（`logs/runs/*.jsonl`）：
+**测量局限**：账本的 lane 标签只有 `repair[S00N]`，不携带调用类型，因此
+"检查（Phase A + gate 复检）vs 修复（T1 + T2）"的开销比**无法从现有数据得出**。
+任何声称该比值的结论都需要先补上这个测量能力才能验证 —— 见待决项 1。
 
-| 类型 | n | p50 | 累计 out_tok | 成本 |
-|---|---|---|---|---|
-| T1 local_patch 修复 | 34 | **14s** | ~14k | ~$2.61 |
-| T2 source_patch 修复 | 2 | **28s** | | |
-| L3 语义检查 (Phase A) | 38 | 152s | ~172k | ~$6.24 |
-| L3 gate 复检 | 24 | 185s | | |
-
-**检查吃掉 repair 的 92% token，修复只占 8%。** 决策 #62 的定点修复完全生效
-（改一个 `json_path` 只要 14 秒），但**检查的粒度和修复的粒度差了三个数量级**：
-修复只碰一个字段，检查读整份 50k 字符。
-
-全轮成本参照：3 个 stage = $157.86；按 $52.6/stage 外推 53 个 stage ≈ **$2,800**，
-其中 repair 约 21%（$470），而 repair 的 92% 是检查（≈$430 花在"找问题"上）。
-
-**注意边界**：本条讨论的是 **Phase A 全量检查**。**每轮 gate 复检**改定点是
-另一条（T-GATE-SCOPED-RECHECK，用户已拍板方向：「全文审查一次就够了，之后修啥
-复审啥」）——那条的前提正是 Phase A **保持全文**。所以本条不是"要不要全文"，
-而是"全文这一次该怎么做得更好"。
+**边界**：Phase B gate 复检的 prompt 输入仍是整份 JSON（scope 过滤发生在返回值
+上），**已决定不改**——理由与收益上限见决策 #70。本条不重开该议题。
 
 **待决策项**
 
-1. **截断怎么办**：`stage_snapshot` 实测 59KB > 50k，尾部恒定被丢。选项：
-   (a) 调大 `_SEMANTIC_MAX_CHARS`（多少？context window 是 1M，50k 这个值的
-   来历需要考古）；(b) 分块审校后合并 issue；(c) 按字段分组审校（与 #55 的
-   sub-lane 字段归属表对齐）；(d) 接受现状但至少把它变成 config 而非硬编码
-2. **Phase A 要不要也降 effort**：T-EFFORT-TIER-TUNING 只给 gate/T1/T2/triage
-   降到 medium，Phase A 保持 backend 默认。它是"找问题"不是"创作"——medium
-   够不够？需要先有 xhigh 的基线数据才好判断
+1. **先补测量**：`core/run_metrics.py` 的 lane 标签加上调用类型
+   （`repair[S003]:phase_a` / `:gate` / `:t1` / `:t2` / `:triage`），否则下面
+   三项都只能靠猜。改动小，但要定标签格式——已有账本文件的解析方是否需要兼容？
+2. **Phase A 要不要降 effort**：目前不传 effort、吃 `[llm].effort`（xhigh）；
+   gate / T1 / T2 / triage 已由 `[repair].recheck_effort` 降到 medium（决策 #65）。
+   Phase A 是"找问题"不是"创作"——medium 够不够？需要 xhigh 的基线数据才好判断
 3. **要不要按 importance 分级审校**：`validation/shared/importance.py` 已有
    `importance_for_target`——低 importance 的 target 相关字段是否可以跳过 L3？
-4. **值不值得**：$430 找问题，最后 defer 了几条。这个投入产出比是否可接受，
-   本质是用户对"审校覆盖率 vs 成本"的取舍——需要用户拍板，不是技术问题
+   风险：实测残留多为跨字段一致性问题（`cross_field_consistency` /
+   `voice_ownership`），按 target 切字段未必等比例降成本，却会在跨字段问题上开洞
+4. **值不值得**：本质是"审校覆盖率 vs 成本"的取舍，需要用户拍板，不是技术问题。
+   但在待决项 1 落地前，讨论缺少事实基础
 
 **未落地原因**
 
-- 需要 T-EFFORT-TIER-TUNING + T-GATE-SCOPED-RECHECK 的数据才好评估：如果那两条
-  把 repair 从 32min 压到 15min，本条的紧迫性就下降；如果压不动，Phase A 就是
-  下一个靶子
-- 决策 1 的选项 (b)/(c) 是架构改动，成本远高于前两条 todo
+- 待决项 1 未做 → 2/3/4 都没有可靠数据支撑
+- 需要 #65 / #66 / #67 落地**之后**的新账本：如果那几条已把 repair 压下来，
+  本条的紧迫性就下降；压不动才轮到 Phase A 当靶子
 
-**依赖**：T-EFFORT-TIER-TUNING + T-GATE-SCOPED-RECHECK 的实测数据
+**依赖**：待决项 1（账本分类标签）+ T-GATE-SCOPED-RECHECK 的实测验证跑
+
+**更新时间**：2026-07-18 22:05 EDT
 
 ---
 

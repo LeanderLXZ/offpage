@@ -145,8 +145,8 @@ class RepairAgentConfig:
     # can shadow them. Budgets differ because the calls differ in size.
     #
     # semantic — L3 review (Phase A full check + per-round gate recheck,
-    # both via ``SemanticChecker._review_file``). It reads a whole ~50k-char
-    # stage_snapshot, so it needs the largest budget. 900 = 1.2x the
+    # both via ``SemanticChecker._review_file``). It reads the stage_snapshot
+    # in full — never truncated — so it needs the largest budget. 900 = 1.2x the
     # measured uncensored tail (743s): enough headroom for run-to-run
     # variance, tight enough that a hung call frees its concurrency slot
     # instead of holding one for the full budget (under

@@ -1019,7 +1019,7 @@ N. <决策陈述>。
     这是 `conventions.md §Single Source of Truth` 的直接推论（具体的传递形态
     见 #68）。其二是**取值**：
     600s 源自 `d79dc7f`（该值比该 commit 更早，属"常量改读 config"搬运物），
-    当时服务的 reviewer 短链与今日 L3（通读 ~50k 字符 stage_snapshot）
+    当时服务的 reviewer 短链与今日 L3（通读整份 stage_snapshot）
     负载形态完全不同。
     **取值依据（长尾分布，非套用 #47 的 3×）= 实测未删失尾部 743s 的 1.2×**。
     #47 的形态是「全员偏慢」（典型 wall ≥600s → 3× = 1800）；本处是「p50 快 +
@@ -1099,7 +1099,7 @@ N. <决策陈述>。
     → logs/change_logs/2026-07-17_072038_effort-tier-tuning.md。
 
 66. **L3 gate 复检改定点：per-file 只复检「本轮改过的 json_path ∪ 本轮携带的未修语义 issue path」（放弃每轮全文复检）。**
-    **背景**：Phase B 每轮末的 L3 gate 原本重读整份 ~50k 字符文件复检
+    **背景**：Phase B 每轮末的 L3 gate 原本重读整份文件复检
     （`run_layer(layer=3)` → `check` 全文），是**正确性缺陷**而非仅仅慢（实测 T2
     定点修复 16–18s vs 全文复检 4m36s）：LLM 全文复审非确定，每轮挑出的毛病天然
     不同 → 新指纹被记为 `introduced` → 打地鼠。且 `resolved=1 / introduced=1 /
@@ -1204,7 +1204,7 @@ N. <决策陈述>。
     `_llm_call` 的 `timeout` 改为必填位置参数。
     **为何是「调用点传」而非「注入方持有」**：(1) 与 #65 的 effort 归属
     （方案 A）同构 —— 同一函数上的 `timeout` 与 `effort` 一套哲学，而不是
-    两个参数两种来源；(2) 四类调用的预算本就不同（L3 通读 ~50k 字符 snapshot，
+    两个参数两种来源；(2) 四类调用的预算本就不同（L3 通读整份 snapshot，
     T1/T2 只改单个 json_path，triage 通读章节出一份小判定列表），共享一个
     注入方 default 会抹平这个差异；(3) 给 `_llm_call` 加 kind 分派能保住差异，
     但那是把策略搬进包装器，比直接传值更绕；(4) 不留 default 意味着漏传是
@@ -1276,6 +1276,51 @@ N. <决策陈述>。
     `extraction/repair/{fixers/local_patch,fixers/source_patch,triage}.py`、
     `extraction/persona_extraction/orchestrator.py`（两个 `RepairConfig` 构造点）。
     → logs/change_logs/2026-07-18_131623_llm-section-effort-config.md。
+
+70. **L3 语义审校的输入永不截断，且这不是配置项。**
+    **背景**：`checkers/semantic.py::_review_file` 原有硬编码
+    `_SEMANTIC_MAX_CHARS = 50000`，超出部分丢弃并打一条 warning。实测
+    `stage_snapshot` 约 59KB，即每份大文件尾部约 15% 从未进入任何一次语义审校，
+    且每个 stage 都在触发。
+    **决策**：删除截断分支，整份文件无条件送审；**不**引入
+    `[repair].semantic_max_chars` 之类的配置键。
+    **理据**：Phase A 是整条 repair 生命周期中**唯一一次**全文语义审校 ——
+    T1 / T2 修复只处理单个 `json_path`（输入是 `extract_subtree` 的子树，不是
+    全文），Phase B gate 复检也只判决 Phase A 报出的问题。因此
+    **Phase A 没看到的内容，下游没有任何环节会再看到它**：在这里裁剪输入不是
+    省成本，是直接削减"找问题"的能力。
+    **为何不做成配置项**：配置键的语义是"此值存在合理取舍、需按项目调"，而
+    "多少字符算该丢"没有可辩护的答案；留一个键等于把"何时开始漏审"做成可调
+    旋钮，还要配一段注释解释它为何存在。防再引入的措施是就地注释（改动点即
+    `_review_file` 内），说明此处刻意不截断。
+    **失败模式反而更好**：若文件真的超出 context window，LLM 调用会失败并经
+    `SemanticReviewLLMUnavailable` 转成阻塞的 `semantic_unavailable` issue ——
+    响亮失败优于"静默半审 + 报 PASS"。
+    **成本代价**：Phase A 输入从 50KB 增至约 59KB（+18%）。按
+    `logs/runs/<work_id>_2026-07-16_144353.jsonl` 的实测口径（3 stage 全跑
+    $157.86，其中 repair 69 次调用 / $46.23 / 29.3%；output 951k tok、
+    cache_read 2.15M / cache_creation 2.14M，即输出约占 repair 成本 2/3、
+    输入约 1/3），折算约为 repair 开销的个位数百分点 —— 用它换回"文件尾部终于
+    被审过"，划算。
+    **边界 —— 三件同期讨论过但决定不做的事**：
+    (a) **Phase B gate 复检的 prompt 输入不做 scope 化**。现状是输入整份 JSON、
+    scope 过滤发生在返回值上（#66 的原意是止打地鼠收敛，并未承诺省 token）。
+    按上面的成本构成，输入侧优化的收益上限仅约 repair 成本的百分之十几，且判定
+    单个字段常需兄弟字段作上下文，有质量风险。杠杆排序为：调用次数 ≫ 输出档位
+    ≫ 输入大小，本项属最小者。
+    (b) **Phase A 不降 effort**（仍不传 effort、吃 `[llm].effort`）——
+    缺 xhigh 基线数据，加一个默认值等于现状的旋钮是纯增复杂度。
+    (c) **不按 importance 分级跳过 L3** —— 实测残留多为跨字段一致性问题
+    （`cross_field_consistency` / `voice_ownership`），按 target 切字段不能等比例
+    降成本，却会在跨字段问题上开洞。
+    (b)/(c) 连同"检查 vs 修复开销比目前测不出来"（账本 lane 标签不区分调用
+    类型）留在 `docs/todo_list.md` 的 `T-SEMANTIC-FULLFILE-COST` 待决项里。
+    Plumbing → `extraction/repair/checkers/semantic.py`（删截断 + 防再引入注释）、
+    `extraction/repair/protocol.py::RepairConfig`、
+    `extraction/persona_extraction/core/config.py::RepairAgentConfig`、
+    `extraction/config.toml`（`[repair].semantic_timeout_s` 段注释）—— 后三处均为
+    引用旧截断值的措辞校正。
+    → logs/change_logs/2026-07-18_215402_semantic-no-truncation.md。
 
 ## Repository
 
