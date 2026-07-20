@@ -56,6 +56,37 @@ def _path_in_scope(json_path: str, scope_paths: list[str]) -> bool:
     return False
 
 
+def _decode_top_level_arrays(text: str) -> list[list]:
+    """Decode every top-level JSON array in ``text``, in order.
+
+    ``text`` starts at the first ``[``. The model is asked for exactly one
+    array but has been observed emitting two (``[] [{...}]``), so a
+    first-``[``-to-last-``]`` slice would splice them into invalid JSON.
+    Decoding value by value handles that, while still tolerating the
+    non-JSON tail the old slice absorbed (markdown fences, closing prose).
+
+    Junk between arrays is skipped by seeking the next ``[``. A decode
+    failure raises only when nothing has been decoded yet — once at least
+    one array is in hand, trailing garbage is the model padding its answer,
+    not a broken response.
+    """
+    decoder = json.JSONDecoder()
+    arrays: list[list] = []
+    pos = 0
+    while True:
+        pos = text.find("[", pos)
+        if pos < 0:
+            return arrays
+        try:
+            value, pos = decoder.raw_decode(text, pos)
+        except json.JSONDecodeError:
+            if arrays:
+                return arrays
+            raise
+        if isinstance(value, list):
+            arrays.append(value)
+
+
 class SemanticReviewLLMUnavailable(Exception):
     """Raised by ``llm_call`` wrappers when the underlying LLM call
     failed (e.g. token limit, retry budget exhausted, backend error).
@@ -254,10 +285,8 @@ class SemanticChecker(BaseChecker):
                 rule="semantic_unparseable",
                 message="L3 semantic backend returned empty output.",
             )]
-        # Try to find JSON array in the response
         start = text.find("[")
-        end = text.rfind("]")
-        if start < 0 or end < 0:
+        if start < 0:
             logger.warning("Could not parse semantic review response for %s",
                            file_path)
             return [Issue(
@@ -271,7 +300,7 @@ class SemanticChecker(BaseChecker):
             )]
 
         try:
-            items = json.loads(text[start:end + 1])
+            arrays = _decode_top_level_arrays(text[start:])
         except json.JSONDecodeError as exc:
             logger.warning("Invalid JSON in semantic review for %s", file_path)
             return [Issue(
@@ -280,8 +309,19 @@ class SemanticChecker(BaseChecker):
                 category="semantic",
                 severity="error",
                 rule="semantic_unparseable",
-                message=f"L3 semantic JSON decode failed: {exc}",
+                message=(f"L3 semantic JSON decode failed: {exc}; "
+                         f"first 80 chars: {text[:80]!r}"),
             )]
+
+        if len(arrays) > 1:
+            # The model emitted more than one array (observed shape:
+            # ``[] [{...}]`` — an empty one followed by the real findings).
+            # Merging is the only safe read: taking just the first would
+            # report a clean pass while the actual issues sat in the second.
+            logger.warning(
+                "Semantic review for %s returned %d top-level arrays; "
+                "merged into one issue list", file_path, len(arrays))
+        items = [item for arr in arrays for item in arr]
 
         issues: list[Issue] = []
         for item in items:

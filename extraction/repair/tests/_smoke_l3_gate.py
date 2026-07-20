@@ -335,6 +335,38 @@ def _scenario_g_unmodified_file_carry() -> None:
     print("  [G] FAIL as expected — ungated file's open semantic issue carried")
 
 
+def _scenario_h_multi_array_response() -> None:
+    """Two top-level arrays in one response still yield the real findings.
+
+    Observed in production (`deferred_repairs` ledgers for two stages): the
+    model answers ``[] [{...}]`` — an empty array, a space, then the actual
+    issue list. A first-``[``-to-last-``]`` slice splices both into invalid
+    JSON, so the whole review was discarded as ``semantic_unparseable`` and
+    the file's findings were lost. Merging is required rather than taking
+    the first array: the first one is the EMPTY one, so "first wins" would
+    report a clean pass on a file that has real errors.
+
+    Also asserts the tail the old slice used to absorb still parses — a
+    markdown fence after the array must not turn into a decode failure.
+    """
+    target = _new_target({"a": 1})
+    body = ('{"json_path": "$.a", "severity": "error", '
+            '"rule": "fact_mismatch", "message": "real finding"}')
+
+    for label, response in (
+        ("[] + real array", f"[] [{body}]"),
+        ("[] + 2 spaces", f"[]  [{body}]"),
+        ("fenced single array", f"```json\n[{body}]\n```"),
+    ):
+        issues = SemanticChecker(
+            llm_call=lambda prompt, effort=None, _r=response, **kw: _r,
+        ).check([FileEntry(path=str(target))])
+        assert [i.rule for i in issues] == ["fact_mismatch"], (
+            f"{label}: expected the real finding to survive; "
+            f"got {[i.rule for i in issues]}")
+    print("  [H] PASS — multi-array + fenced responses both parsed")
+
+
 def main() -> int:
     print("Scenario A: Phase A clean → PASS")
     _scenario_a()
@@ -350,6 +382,8 @@ def main() -> int:
     _scenario_f_gate_scope_carries_unfixed()
     print("Scenario G: ungated file keeps its open semantic issue")
     _scenario_g_unmodified_file_carry()
+    print("Scenario H: multi-array response still yields findings")
+    _scenario_h_multi_array_response()
     print("\nOK — single-pass repair behaves as expected.")
     return 0
 
