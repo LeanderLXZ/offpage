@@ -911,12 +911,16 @@ orchestrator (Python)
 - Run 指标账本（`core/run_metrics.py`）：每次 `claude -p` / `codex` 调用
   在唯一接入点 `run_with_retry` 落一行结构化记录到
   `logs/runs/{work_id}_{YYYY-MM-DD_HHMMSS}.jsonl`（run 启动时间戳进文件名，
-  每 run 独立）；字段 `{ts, phase, lane, success, duration_s, num_turns,
-  input_tokens, output_tokens, cache_read, cache_creation, cost}`，token /
-  cost 取自成功路径 `LLMResult.raw.usage`（失败路径回退解析 stdout）。
-  `phase` 由各 phase 方法顶部 `set_phase()` 标注（phase0–4）。run 结束打印
-  按 phase / lane 聚合小表。best-effort：未 init 或异常均静默 no-op，绝不
-  阻断提取。区别于 §6.4 的 `failed_lane_log`（仅失败时、单 lane 全量 dump）。
+  每 run 独立）；字段 `{ts, phase, lane, call_type, success, duration_s,
+  num_turns, input_tokens, output_tokens, cache_read, cache_creation, cost}`，
+  token / cost 取自成功路径 `LLMResult.raw.usage`（失败路径回退解析 stdout）。
+  `phase` 由各 phase 方法顶部 `set_phase()` 标注（phase0–4）。`call_type` 把
+  一条 lane 内的调用再分类（决策 #71），取值为闭集 `check_full` /
+  `check_scoped` / `fix_t1` / `fix_t2` / `triage`，由 `extraction/repair/` 的
+  调用点显式传出；非 repair 调用写 `null`——提取 lane 靠 `lane` 本身就能区分，
+  不编造二级标签。run 结束打印按 phase / lane / call_type 聚合小表。
+  best-effort：未 init 或异常均静默 no-op，绝不阻断提取。区别于 §6.4 的
+  `failed_lane_log`（仅失败时、单 lane 全量 dump）。
 - `--max-runtime` 总时间限制，到期后在 stage 间优雅停止
 - 子进程硬超时（Phase 0 summarize 1800s、Phase 3 提取 3600s、Phase 4 场景
   切分 600s、repair 的 L3 语义审校 900s、repair 内 T1/T2/triage

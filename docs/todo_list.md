@@ -29,7 +29,7 @@ _(none)_
 | ID | Brief | Open decisions | Updated | Blocked by |
 |---|---|---|---|---|
 | `T-PHASE35-DEFERRED-FIX` | 决策 #60 落地了"记录不停机"——repair 修不平的 L3 语义残留写进 deferred_repairs 台账、stage 照常继续。本 todo 是那个"跑完全部 stage 后读台账逐条 field-level 精准修 + 复验"的收尾 pass（Part B），不重跑整个 stage。台账现在混着"审校故障"与"真实内容问题"两类，下游需分流（2026-07-20 从 T-SEMANTIC-UNPARSEABLE 并入）。 | 5 | 2026-07-20 EDT | deferred_repairs 台账在真实运行中积累出样本 |
-| `T-SEMANTIC-FULLFILE-COST` | 语义审校每次把整个文件读一遍，是 repair 里最重的一类调用。截断问题已解决（决策 #70，尾部不再被丢）；剩下的成本问题卡在测不出来——账本不区分"检查"和"修复"两类调用，原条目"检查吃掉 92% 开销"的结论复现不出来。要先给账本加分类标签。 | 4 | 2026-07-18 EDT | 账本分类标签（T-GATE-SCOPED-RECHECK 已于 2026-07-20 验证完成） |
+| `T-SEMANTIC-FULLFILE-COST` | 语义审校每次把整个文件读一遍，是 repair 里最重的一类调用。截断问题已解决（决策 #70）；成本问题原先卡在测不出来，现在尺子已装好（决策 #71 给账本加了调用类型标签），只差跑一次提取产出带标签的账本。紧迫性已降——scoped gate 落地后 repair 从 38min 降到 8min。 | 3 | 2026-07-20 EDT | 一次带 call_type 标签的真实提取跑 |
 | `T-REPAIR-EVENT-DRIVEN` | Phase 3 一抽完一个文件就立刻去修复、跟下一文件的抽取并行——理论最快。但实测算过只比当前方案省 4 分钟/stage，要为这点收益引入双线程池 + 撞限额风险，性价比太低。先做简单版（E1），等真实跑数据出来再决定要不要做这个。 | 0 | — | T-REPAIR-PARALLEL 先落地 |
 | `T-PROMPT-SCHEMA-INJECT` | 项目约定"长度上限这种数字只在 schema 写一份"，但少数 prompt 和 doc 里仍有手写的数字（"150-200 字"之类）。万一 schema 改了，这些地方就会偷偷不一致。要么写代码让 prompt 自动从 schema 读，要么修约定明说"prompt 允许例外"。 | 3 | — | 无（路径决策即可启动） |
 | `T-PHASE5-RETRIEVAL` | 好几份架构文档都在说"每部作品下应该有个 indexes/ 目录"，但实际没有任何阶段在生成它——目录在磁盘上压根不存在。打算加一个 Phase 5 专门做检索类产物（词典、关键词、向量索引、RAG 数据等）。等 phase 3 跑完 + 检索层设计定稿再启动。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
@@ -599,18 +599,25 @@ gate 复检都只处理 Phase A 报出的问题。它把整份 `stage_snapshot`�
 | repair output tokens | 951k |
 | repair cache_read / cache_creation | 2.15M / 2.14M（prompt caching 生效） |
 
-**测量局限**：账本的 lane 标签只有 `repair[S00N]`，不携带调用类型，因此
-"检查（Phase A + gate 复检）vs 修复（T1 + T2）"的开销比**无法从现有数据得出**。
-任何声称该比值的结论都需要先补上这个测量能力才能验证 —— 见待决项 1。
+**上表的测量局限（限于 2026-07-16 那份账本）**：当时的 lane 标签只有
+`repair[S00N]`、不携带调用类型，因此"检查（Phase A + gate 复检）vs 修复
+（T1 + T2）"的开销比**无法从上表数据得出** —— 任何声称该比值的结论都不能拿
+这份账本验证。此限制自决策 #71 起解除：新账本每行带 `call_type`，可直接分组
+（见待决项 1，已完成）。**下次跑任意 stage 即产出第一份可分组的账本。**
 
 **边界**：Phase B gate 复检的 prompt 输入仍是整份 JSON（scope 过滤发生在返回值
 上），**已决定不改**——理由与收益上限见决策 #70。本条不重开该议题。
 
 **待决策项**
 
-1. **先补测量**：`core/run_metrics.py` 的 lane 标签加上调用类型
-   （`repair[S003]:phase_a` / `:gate` / `:t1` / `:t2` / `:triage`），否则下面
-   三项都只能靠猜。改动小，但要定标签格式——已有账本文件的解析方是否需要兼容？
+1. ~~**先补测量**：账本加调用类型标签~~ —— **已完成（2026-07-20，决策 #71）**。
+   实现与本条原设想不同：**没有**把类型拼进 `lane` 后缀，而是加了独立的
+   `call_type` 字段（闭集 `check_full` / `check_scoped` / `fix_t1` / `fix_t2` /
+   `triage`，非 repair 调用写 `null`），`summarize()` 聚合键扩展为
+   `(phase, lane_type, call_type)`。独立字段比 lane 后缀好在：不破坏既有
+   `lane` 解析、`_lane_type()` 的折叠逻辑不用改、旧账本文件读出来 `call_type`
+   缺失即 `None`（向后兼容，无需迁移）。
+   → logs/change_logs/2026-07-20_140928_ledger-call-type-label.md
 2. **Phase A 要不要降 effort**：目前不传 effort、吃 `[llm].effort`（xhigh）；
    gate / T1 / T2 / triage 已由 `[repair].recheck_effort` 降到 medium（决策 #65）。
    Phase A 是"找问题"不是"创作"——medium 够不够？需要 xhigh 的基线数据才好判断
@@ -623,10 +630,12 @@ gate 复检都只处理 Phase A 报出的问题。它把整份 `stage_snapshot`�
 
 **未落地原因**
 
-- 待决项 1 未做 → 2/3/4 都没有可靠数据支撑
-- 需要 #65 / #66 / #67 落地**之后**的新账本：如果那几条已把 repair 压下来，
-  本条的紧迫性就下降；压不动才轮到 Phase A 当靶子
+- 尺子已装好（待决项 1，决策 #71），但**还没有带标签的真实账本** —— 本轮只改了
+  记账代码，没有跑提取。下次跑任意一个 stage 就会产出第一份可直接分组的账本，
+  届时 2/3/4 才有事实基础
+- 紧迫性已下降：#65/#66/#67 落地后 S004 实测 repair 墙钟从基线 27/31/38min 降到
+  **8m04s**，检查的绝对开销小了很多。本条现在更接近"想清楚再说"而非"赶紧修"
 
-**依赖**：待决项 1（账本分类标签）+ T-GATE-SCOPED-RECHECK 的实测验证跑
+**依赖**：一次带 `call_type` 标签的真实提取跑（跑任意 stage 即可产出）
 
-**更新时间**：2026-07-18 22:05 EDT
+**更新时间**：2026-07-20 14:09 EDT

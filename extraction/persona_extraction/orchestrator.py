@@ -2110,13 +2110,15 @@ class ExtractionOrchestrator:
         # missing / wrong call-site value silently ride on it — exactly the
         # failure #64 diagnosed.
         def _llm_call(prompt: str, timeout: int,
-                      effort: str | None = None) -> str:
+                      effort: str | None = None,
+                      call_type: str | None = None) -> str:
             result = run_with_retry(
                 self.reviewer_backend or self.backend,
                 prompt,
                 timeout_seconds=timeout,
                 lane_name="repair[phase2]",
                 effort=effort,
+                call_type=call_type,
             )
             if not result.success:
                 raise SemanticReviewLLMUnavailable(
@@ -3297,13 +3299,15 @@ class ExtractionOrchestrator:
             # let a missing / wrong call-site value silently ride on it —
             # exactly the failure #64 diagnosed.
             def _llm_call(prompt: str, timeout: int,
-                          effort: str | None = None) -> str:
+                          effort: str | None = None,
+                          call_type: str | None = None) -> str:
                 result = run_with_retry(
                     self.reviewer_backend or self.backend,
                     prompt,
                     timeout_seconds=timeout,
                     lane_name=f"repair[{stage.stage_id}]",
                     effort=effort,
+                    call_type=call_type,
                 )
                 if not result.success:
                     raise SemanticReviewLLMUnavailable(

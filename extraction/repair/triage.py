@@ -377,7 +377,8 @@ class Triager:
         try:
             response = self._llm_call(
                 prompt, timeout=self._timeout_s,
-                effort=self._recheck_effort)
+                effort=self._recheck_effort,
+                call_type="triage")
         except Exception as exc:  # LLM transport errors — don't crash run
             logger.warning("triage LLM call failed for %s: %s", file_path, exc)
             return []

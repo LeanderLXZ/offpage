@@ -142,7 +142,7 @@ def _stub_llm_accepting(quote: str):
     state = {"semantic": 0, "triage": 0, "patch": 0}
 
     def stub(prompt: str, timeout: int = 600,
-             effort: str | None = None) -> str:
+             effort: str | None = None, **kwargs) -> str:
         if "quality reviewer" in prompt:
             state["semantic"] += 1
             return json.dumps([{
@@ -262,7 +262,7 @@ def scenario_c_cap_enforced() -> None:
         "already named 'the seeker' in chapter one.")
 
     def stub(prompt: str, timeout: int = 600,
-             effort: str | None = None) -> str:
+             effort: str | None = None, **kwargs) -> str:
         if "quality reviewer" in prompt:
             return json.dumps([
                 {"json_path": f"$.field_{n}",
@@ -342,7 +342,7 @@ def scenario_d_non_semantic_rejected() -> None:
         "already named 'the seeker' in chapter one.")
 
     def stub(prompt: str, timeout: int = 600,
-             effort: str | None = None) -> str:
+             effort: str | None = None, **kwargs) -> str:
         if "source-discrepancy triage tool" in prompt:
             fps = [l.split("fingerprint:", 1)[1].strip()
                    for l in prompt.splitlines()
@@ -456,7 +456,7 @@ def scenario_f_coverage_shortage_accepted() -> None:
     calls = {"triage": 0, "patch": 0, "semantic": 0}
 
     def stub(prompt: str, timeout: int = 600,
-             effort: str | None = None) -> str:
+             effort: str | None = None, **kwargs) -> str:
         if "quality reviewer" in prompt:
             calls["semantic"] += 1
             return "[]"

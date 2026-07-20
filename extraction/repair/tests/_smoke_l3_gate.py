@@ -70,7 +70,7 @@ def _scenario_a() -> None:
     )
 
     def stub(prompt: str, timeout: int = 600,
-             effort: str | None = None) -> str:
+             effort: str | None = None, **kwargs) -> str:
         if "quality reviewer" in prompt:
             state["semantic_calls"] += 1
             return json.dumps([])
@@ -91,7 +91,7 @@ def _scenario_b() -> None:
     state = {"semantic_calls": 0, "patch_calls": 0}
 
     def stub(prompt: str, timeout: int = 600,
-             effort: str | None = None) -> str:
+             effort: str | None = None, **kwargs) -> str:
         if "quality reviewer" in prompt:
             state["semantic_calls"] += 1
             return json.dumps([{
@@ -142,7 +142,7 @@ def _scenario_c() -> None:
     }
 
     def stub(prompt: str, timeout: int = 600,
-             effort: str | None = None) -> str:
+             effort: str | None = None, **kwargs) -> str:
         if "quality reviewer" in prompt:
             state["semantic_calls"] += 1
             return json.dumps([])  # no semantic issues
@@ -304,7 +304,7 @@ def _scenario_g_unmodified_file_carry() -> None:
     }
 
     def stub(prompt: str, timeout: int = 600,
-             effort: str | None = None) -> str:
+             effort: str | None = None, **kwargs) -> str:
         if "quality reviewer" in prompt:
             if "F-FILE" in prompt:
                 return json.dumps([{

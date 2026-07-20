@@ -311,6 +311,9 @@ N. <决策陈述，一行>。
 70. **L3 语义审校的输入永不截断，且这不是配置项。** Phase A 是整条 repair 生命周期中唯一一次全文语义审校（T1/T2 只收 `extract_subtree` 的子树，gate 只判决 Phase A 报出的问题），因此 Phase A 没看到的内容下游再无环节会看到 —— 裁剪输入不是省成本，是削减找问题的能力；而"多少字符算该丢"没有可辩护的答案，故不留配置键。超出 context window 时 LLM 调用失败转成阻塞 `semantic_unavailable`，响亮失败优于静默半审报 PASS。边界：gate 复检的 prompt 输入**不**做 scope 化、Phase A **不**降 effort、**不**按 importance 分级跳审。
     → docs/decisions.md #70。
 
+71. **Run ledger 的 `call_type` 标签由调用点显式给出，不在事后从日志推断。** `lane=repair` 无法回答"检查 vs 修复各花多少"（`T-SEMANTIC-FULLFILE-COST` 卡在这），而只有 `repair/` 自己知道一次调用的性质。闭集 5 值：`check_full` / `check_scoped` / `fix_t1` / `fix_t2` / `triage`；非 repair 调用写 `null`（提取 lane 靠 `lane` 已可区分，不编造二级标签）。`check_full` / `check_scoped` 由 `SemanticChecker` 的两个 public 方法各自内部定死——"全量还是定点"是方法身份自带的，不该让 coordinator 重复声明。
+    → docs/decisions.md #71。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

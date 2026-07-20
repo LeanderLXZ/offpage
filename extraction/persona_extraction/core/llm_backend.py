@@ -713,7 +713,8 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
                    timeout_seconds: int = 600,
                    lane_name: str | None = None,
                    on_failure: Any = None,
-                   effort: str | None = None) -> LLMResult:
+                   effort: str | None = None,
+                   call_type: str | None = None) -> LLMResult:
     """Run prompt with automatic retry on fast-fail errors.
 
     Rate-limit handling is **out-of-band**: when ``rate_limit`` is detected,
@@ -727,6 +728,12 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
 
     ``effort`` per-call override (decision #49) — passed through to
     ``backend.run``. ``None`` falls back to backend instance default.
+
+    ``call_type`` sub-classifies this call within its lane for the run ledger
+    (``check_full`` / ``check_scoped`` / ``fix_t1`` / ``fix_t2`` / ``triage``;
+    see ``run_metrics.Recorder.record``). It is recorded, never acted on.
+    ``None`` = not a repair call — extraction lanes stay separable by
+    ``lane_name`` alone.
     """
     backoff_cfg = get_config().backoff
     fast_backoff = backoff_cfg.fast_empty_failure_backoff_s
@@ -741,7 +748,7 @@ def run_with_retry(backend: LLMBackend, prompt: str, *,
         # Record per-call time / token / cost to the run ledger (no-op when
         # uninitialised; every attempt — incl. retries — is a real subprocess
         # that spent tokens, so record each one).
-        _record_run_metrics(lane_name, result)
+        _record_run_metrics(lane_name, result, call_type)
         if not result.success and on_failure is not None:
             try:
                 on_failure(result, attempt)

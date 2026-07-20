@@ -129,7 +129,8 @@ class SourcePatchFixer(BaseFixer):
             try:
                 response = self._llm_call(
                     prompt, timeout=self._timeout_s,
-                    effort=self._recheck_effort)
+                    effort=self._recheck_effort,
+                    call_type="fix_t2")
                 parsed = json.loads(response.strip())
             except (json.JSONDecodeError, Exception) as exc:
                 logger.warning("T2 fix failed for %s: %s",

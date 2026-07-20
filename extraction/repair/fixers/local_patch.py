@@ -113,7 +113,8 @@ class LocalPatchFixer(BaseFixer):
             try:
                 response = self._llm_call(
                     prompt, timeout=self._timeout_s,
-                    effort=self._recheck_effort)
+                    effort=self._recheck_effort,
+                    call_type="fix_t1")
                 patch_map = self._parse_response(response, targets)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("T1 fix failed for %s: %s", file_path, exc)

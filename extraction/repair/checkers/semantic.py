@@ -133,11 +133,20 @@ class SemanticChecker(BaseChecker):
         """
         Args:
             llm_call: A callable ``(prompt: str, timeout: int,
-                effort: str | None = None) -> str`` that invokes an LLM and
-                returns the raw text response. It MUST accept ``effort`` as a
-                keyword on every path — this checker always passes it, sending
-                ``effort=None`` on the Phase A full pass so that pass inherits
-                the backend default. If None, semantic checking is a no-op.
+                effort: str | None = None, call_type: str | None = None)
+                -> str`` that invokes an LLM and returns the raw text
+                response. It MUST accept BOTH ``effort`` and ``call_type`` as
+                keywords on every path (a ``**kwargs`` catch-all also works) —
+                this checker always passes both. ``effort=None`` on the
+                Phase A full pass so that pass inherits the backend default;
+                ``call_type`` is ``check_full`` or ``check_scoped`` depending
+                on which public method routed here (decision #71). A callable
+                missing either keyword raises ``TypeError``, which
+                ``_review_file``'s broad ``except`` turns into a
+                ``semantic_check_crashed`` issue rather than a loud crash —
+                so a signature mismatch surfaces as a puzzling failed
+                assertion, not an obvious error. If None, semantic checking
+                is a no-op.
             timeout_s: hard timeout per review call, passed explicitly on
                 every call (decision #68 — no injector-side default that a
                 config change could be shadowed by). Wired from
@@ -165,7 +174,8 @@ class SemanticChecker(BaseChecker):
             content = f.content if f.content is not None else f.load()
             if content is None:
                 continue
-            file_issues = self._review_file(f.path, content, effort=effort)
+            file_issues = self._review_file(
+                f.path, content, effort=effort, call_type="check_full")
             issues.extend(file_issues)
         return issues
 
@@ -196,7 +206,8 @@ class SemanticChecker(BaseChecker):
             if content is None:
                 continue
             file_issues = self._review_file(
-                f.path, content, focus_paths=paths, effort=effort)
+                f.path, content, focus_paths=paths, effort=effort,
+                call_type="check_scoped")
             for issue in file_issues:
                 if (issue.rule in _BACKEND_FAILURE_RULES
                         or _path_in_scope(issue.json_path, paths)):
@@ -205,7 +216,13 @@ class SemanticChecker(BaseChecker):
 
     def _review_file(self, file_path: str, content: Any,
                      focus_paths: list[str] | None = None,
-                     effort: str | None = None) -> list[Issue]:
+                     effort: str | None = None,
+                     call_type: str | None = None) -> list[Issue]:
+        # ``call_type`` is supplied by whichever public method routed here —
+        # ``check`` → ``check_full``, ``check_scoped`` → ``check_scoped``.
+        # It is NOT a caller-facing parameter: "full pass or scoped re-check"
+        # is inherent to the method being called, so the coordinator would
+        # only be restating what the method identity already says.
         # Callers (`check` / `check_scoped`) guard with `_llm_call is None`
         # before invoking this method; assert reflects that contract for
         # the type checker, since narrowing doesn't cross method boundaries.
@@ -233,7 +250,8 @@ class SemanticChecker(BaseChecker):
             # call site. ``effort=None`` inherits the backend default
             # (Phase A); the L3 gate passes it down explicitly.
             response = self._llm_call(
-                prompt, timeout=self._timeout_s, effort=effort)
+                prompt, timeout=self._timeout_s, effort=effort,
+                call_type=call_type)
         except SemanticReviewLLMUnavailable as exc:
             # Backend reported failure. Treat as blocking so repair
             # coordinator does NOT mark the file PASS. Detail in message

@@ -1322,6 +1322,37 @@ N. <决策陈述>。
     引用旧截断值的措辞校正。
     → logs/change_logs/2026-07-18_215402_semantic-no-truncation.md。
 
+71. **Run ledger 的 `call_type` 标签由调用点显式给出，不在事后从日志推断。**
+    **背景**：`T-SEMANTIC-FULLFILE-COST` 想回答"语义审校在 repair 里花的钱值不值"，
+    但 ledger 只记 `lane`，repair 的全部调用都是 `lane=repair`。该 todo 引用的
+    "检查吃掉 repair 92% token"这一结论，是 2026-07-16 靠日志上下文猜出来的——
+    看到调用前有 `Retrieved N chapters` 当修复、看到 `L3 gate` 当检查。决策 #66
+    把 gate 改成 scoped 后调用形态变了，同样的猜法复现不出原数字。**没有尺子，
+    就无法判断优化值不值得。**
+    **为何由调用点给**：只有 `repair/` 自己知道一次调用是检查还是修复；从日志
+    上下文反推正是上面失效的那套。形态沿用 #49 的 `effort` per-call kwarg（同一条
+    `run_with_retry` 透传链）与 #68 的"调用点显式传出、注入方不留兜底 default"
+    （避免 #64 式的 config 被静默 shadow）。
+    **闭集 5 值**（扩展改这里，不在调用点随手加）：`check_full`（Phase A 全量
+    冷读）/ `check_scoped`（L3 gate 定点复检，#66）/ `fix_t1`（T1 局部 patch）/
+    `fix_t2`（T2 原文 patch）/ `triage`。非 repair 调用写 `null`——提取 lane、
+    Phase 0 summarize、Phase 1/2 lane 靠 `lane` 本身（`world` / `char_snapshot` /
+    `char_support`）已可区分，**不给它们编造二级标签**。
+    **设计要点**：`_review_file` 被 `check` 与 `check_scoped` 共用，是一个调用点
+    服务两种类型。让两个 public 方法各自在内部定死自己的 `call_type`，而非让
+    coordinator 传入——"全量检查还是定点复检"是方法身份自带的信息，让调用方重复
+    声明只会制造第二处可漂移的真相。副作用：`coordinator.py` 不进改动集。
+    **边界**：本条只装尺子，不据此做任何优化决策；不动任何超时 / effort 值；
+    不改 repair 行为。`summarize()` 的聚合键相应扩展为
+    `(phase, lane_type, call_type)`。
+    Plumbing → `extraction/persona_extraction/core/run_metrics.py`
+    （`RunMetricsRecorder.record` + 模块级 `record` + `summarize`）、
+    `extraction/persona_extraction/core/llm_backend.py::run_with_retry`、
+    `extraction/persona_extraction/orchestrator.py`（两处 `_llm_call` 闭包）、
+    `extraction/repair/{checkers/semantic,fixers/local_patch,fixers/source_patch,
+    triage}.py`。
+    → logs/change_logs/2026-07-20_140928_ledger-call-type-label.md。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。
