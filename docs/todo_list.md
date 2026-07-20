@@ -18,27 +18,25 @@
 
 _(none)_
 
-### 🟡 Next (2)
+### 🟡 Next (1)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
-| `T-GATE-SCOPED-RECHECK` | 修完一个字段后系统会把整份文件重审一遍，每次挑出不同的毛病，于是修一个冒一个、白跑五轮才放弃，还攒出本不该有的待修债。改成只复检改过的地方——全文审一次就够了。**代码已落地（log 112727，决策 #66）；剩：跑 1 stage 与基线对比 round 数/墙钟。** | 🔴 High | ✅ Ready | 🔴 Large·Arch | 2026-07-18 EDT | 无（代码已落地，待实测验证） |
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。 | 🟢 Med-Low | ⏸ Blocked | 🔴 Large·Arch | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
 
-### ⚪ Discussing (8)
+### ⚪ Discussing (7)
 
 | ID | Brief | Open decisions | Updated | Blocked by |
 |---|---|---|---|---|
-| `T-PHASE35-DEFERRED-FIX` | 决策 #60 落地了"记录不停机"——repair 修不平的 L3 语义残留写进 deferred_repairs 台账、stage 照常继续。本 todo 是那个"跑完全部 stage 后读台账逐条 field-level 精准修 + 复验"的收尾 pass（Part B），不重跑整个 stage。等真实台账数据积累后据此设计 fixer 形态。 | 4 | 2026-07-15 EDT | deferred_repairs 台账在真实运行中积累出样本 |
-| `T-SEMANTIC-FULLFILE-COST` | 语义审校每次把整个文件读一遍，是 repair 里最重的一类调用。截断问题已解决（决策 #70，尾部不再被丢）；剩下的成本问题卡在测不出来——账本不区分"检查"和"修复"两类调用，原条目"检查吃掉 92% 开销"的结论复现不出来。要先给账本加分类标签。 | 4 | 2026-07-18 EDT | 账本分类标签 + T-GATE-SCOPED-RECHECK 的实测验证跑 |
-| `T-SEMANTIC-UNPARSEABLE` | 审校跑完了但返回的内容不是合法格式，3 个 stage 里出现 2 次。这跟超时是两回事，加时间救不了。它还和真实内容问题混在同一个待修账本里，下游没法区分处理。 | 4 | 2026-07-17 EDT | 无（诊断可立即启动） |
+| `T-PHASE35-DEFERRED-FIX` | 决策 #60 落地了"记录不停机"——repair 修不平的 L3 语义残留写进 deferred_repairs 台账、stage 照常继续。本 todo 是那个"跑完全部 stage 后读台账逐条 field-level 精准修 + 复验"的收尾 pass（Part B），不重跑整个 stage。台账现在混着"审校故障"与"真实内容问题"两类，下游需分流（2026-07-20 从 T-SEMANTIC-UNPARSEABLE 并入）。 | 5 | 2026-07-20 EDT | deferred_repairs 台账在真实运行中积累出样本 |
+| `T-SEMANTIC-FULLFILE-COST` | 语义审校每次把整个文件读一遍，是 repair 里最重的一类调用。截断问题已解决（决策 #70，尾部不再被丢）；剩下的成本问题卡在测不出来——账本不区分"检查"和"修复"两类调用，原条目"检查吃掉 92% 开销"的结论复现不出来。要先给账本加分类标签。 | 4 | 2026-07-18 EDT | 账本分类标签（T-GATE-SCOPED-RECHECK 已于 2026-07-20 验证完成） |
 | `T-REPAIR-EVENT-DRIVEN` | Phase 3 一抽完一个文件就立刻去修复、跟下一文件的抽取并行——理论最快。但实测算过只比当前方案省 4 分钟/stage，要为这点收益引入双线程池 + 撞限额风险，性价比太低。先做简单版（E1），等真实跑数据出来再决定要不要做这个。 | 0 | — | T-REPAIR-PARALLEL 先落地 |
 | `T-PROMPT-SCHEMA-INJECT` | 项目约定"长度上限这种数字只在 schema 写一份"，但少数 prompt 和 doc 里仍有手写的数字（"150-200 字"之类）。万一 schema 改了，这些地方就会偷偷不一致。要么写代码让 prompt 自动从 schema 读，要么修约定明说"prompt 允许例外"。 | 3 | — | 无（路径决策即可启动） |
 | `T-PHASE5-RETRIEVAL` | 好几份架构文档都在说"每部作品下应该有个 indexes/ 目录"，但实际没有任何阶段在生成它——目录在磁盘上压根不存在。打算加一个 Phase 5 专门做检索类产物（词典、关键词、向量索引、RAG 数据等）。等 phase 3 跑完 + 检索层设计定稿再启动。 | 5 | — | Phase 3 全量完成 + retrieval 层设计定稿 |
 | `T-RETRY` | LLM 调用失败时的重试策略能更聪明些。现在不到 5 秒就失败的会重试，但人物抽取正常要跑 10-20 分钟，5 秒太短了——那种短时失败几乎都是启动错、不是真活干完才挂。打算扩到 60 秒，再按失败类型分流要不要重试。改动小，两个数值要拍板。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 
-**Total**: 10 — 🟢 In Progress 0 ｜ 🟡 Next 2 ｜ ⚪ Discussing 8
+**Total**: 8 — 🟢 In Progress 0 ｜ 🟡 Next 1 ｜ ⚪ Discussing 7
 
 <!-- holo:section start -->
 ---
@@ -305,123 +303,6 @@ decision #27n 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
 
 ---
 
-### [T-GATE-SCOPED-RECHECK] L3 gate 复检改定点：全文审校一次，之后只复检改过的地方
-
-**进展**（2026-07-17）：代码已落地（`logs/change_logs/2026-07-17_112727_gate-scoped-recheck.md`，决策 #66）——scoped gate + `check_scoped` 返回值过滤 + `modified_paths` 收集 + tracker 语义注释 + smoke D/E + docs 同步，import/smoke 全过。用户拍板「先落代码」，接受本轮未做基线对比的归因缺口。**剩余 = 完成标准里的实测验证**：跑 ≥1 完整 stage，与 effort-分档（#65）后的基线对比 round 数（期望 5→1–2）/ 墙钟 / defer 债。下方原始条目保留作验证清单。
-
-**上下文**
-
-2026-07-16 挂机跑 S003 时逐行拆 repair 循环，发现一个**正确性缺陷**（不只是
-慢）：**每轮末的 L3 gate 把整份文件重读一遍复检，导致打地鼠循环**。
-
-单个 round 的实测拆分（`Character A/canon/stage_snapshots/S003.json`）：
-
-```
-Fix round 1 — 2 issues
-  T2 定点修复 #1  →  18s
-  T2 定点修复 #2  →  16s
-  L3 gate 全文复检 → 4m36s          ← 8 倍不对称
-Round 1 result: resolved=2, persisting=0, introduced=1
-```
-
-而 `introduced` 的定义是**指纹集合差**（`repair/tracker.py:30`）：
-
-```python
-introduced = [curr_fps[fp] for fp in curr_fps if fp not in prev_fps]
-```
-
-**任何"上轮没有、这轮有"的 issue 都算 introduced，不管是不是修复造成的。**
-全文复检每轮重读整份文件，LLM 审校本身不确定，每次挑出的毛病天然不同 →
-新指纹 → 算 introduced → 循环继续。实测某文件连续四轮：
-
-```
-Round 1: resolved=2, persisting=0, introduced=1
-Round 2: resolved=1, persisting=0, introduced=1
-Round 3: resolved=1, persisting=0, introduced=1
-Round 4: resolved=1, persisting=0, introduced=1
-Fix round 5 — No patches applied — stopping   → FAIL
-```
-
-**修复根本没搞坏任何东西——是复检自己每轮换了个目标。**
-
-**更糟：两个安全阀对这个模式全盲。**
-
-- `is_regression()` = `len(introduced) > len(resolved)` → `1 > 1` = False
-- `is_stalled()` = persisting 两轮相同 **且** `len(curr_fps) > 0` →
-  persisting 恒为 0 → False
-
-`resolved=1 / introduced=1 / persisting=0` 恰好从两阀中间穿过，**每次跑满
-`total_round_limit=5` 然后判 FAIL**，攒出本不该有的 defer 债（S003 的 4 条
-defer 里 `inconsistent_relationship_type` / `realm_label_contradiction` /
-`missing_true_state_change` 高度疑似由此而来）。
-
-**用户 2026-07-17 的判断**：「全文审查一次就够了，之后应该是修啥复审啥」。
-
-**关键陷阱**：`repair/checkers/semantic.py:96` 已有 `check_scoped(files, paths)`
-方法，docstring 明写 `"""Re-check only specific json_paths (for final
-verification)."""`——**但全仓零调用方，是死代码**（gate 走的是 `check`，全文）。
-而且**它现成的实现并不能解决问题**：
-
-```python
-file_issues = self._review_file(f.path, content, focus_paths=paths)
-#                                        ^^^^^^^ 仍传全量 content
-issues.extend(file_issues)   # ← 不过滤返回值
-```
-
-它只在 prompt 末尾加一句 `Focus review on these paths: ...`——**是软提示、不是
-硬约束，且返回值不过滤**。LLM 完全可能照样报 focus 之外的问题，打地鼠继续。
-**真正的根治必须在代码层过滤 gate 结果到本轮实际改过的 json_path。**
-
-**要做什么**
-
-让 gate 的职责回归「我这一刀改对了吗」，而不是「再审一遍全书」——Phase A
-已经做过全文审计了。
-
-**改动清单**
-
-- file: `extraction/repair/coordinator.py:~415`（`if config.l3_gate_enabled
-  and config.run_semantic and gate_targets` 那处）→ gate 改调
-  `check_scoped(files, paths=<本轮改过的 json_path 集合>)`，不再走
-  `run_layer → check`
-- file: `extraction/repair/coordinator.py` → 收集"本轮实际改过的 json_path"
-  （T0/T1/T2 各 fixer 的 `FixResult` 已带 patch 信息，需确认是否已暴露改过的
-  path；若无则补）
-- file: `extraction/repair/checkers/semantic.py:96 check_scoped` →
-  **返回值按 `paths` 过滤**（程序保证，不指望 LLM 听 focus 提示）；同时
-  评估 prompt 里 focus 段是否需要加严成硬约束
-- file: `extraction/repair/tracker.py:47-58` → **scoped 之后 `introduced` /
-  `is_regression` 的语义必须重想**。scoped gate 只看改过的 path，`introduced`
-  的含义从"文件里冒出个新问题"变成"我这一刀改出了新问题"——那才是回归的真定义。
-  `is_stalled` 的 `len(curr_fps) > 0` 守卫也要复核（persisting 恒 0 的场景）
-- file: `extraction/repair/tests/_smoke_l3_gate.py` → 补 scoped gate 的场景：
-  (a) 修复成功 → scoped 复检 0 issue → 早退不再跑满 5 轮；
-  (b) 修复真的引入了新问题（改过的 path 上）→ 仍被 `introduced` 抓到
-- file: `ai_context/decisions.md` + `docs/decisions.md` → 新增决策条目（gate
-  职责边界 = 验证本刀，不是重新审计；放弃"修 A 是否搞坏 B"的跨 path 检测能力
-  是有意取舍——Phase A 已覆盖，且现状那个能力实际报的是审校抖动不是真回归）
-- file: `docs/requirements.md` §11.4 repair 三阶段描述 → gate 语义同步
-- file: `docs/architecture/extraction_workflow.md` → 同步
-
-**完成标准**
-
-- 跑至少 1 个完整 stage，与基线对比 **round 数**（基线：S003 单文件最多 5 轮
-  且撞 `total_round_limit`；期望降到 1–2 轮）
-- 不再出现 `resolved=N, persisting=0, introduced=N` 的连续打平模式
-- repair 墙钟下降（基线 S001 27min / S002 31min / S003 38min）
-- **defer 债不增加**，且 defer 的 rule 分布里不再出现「每轮换一个目标」的痕迹
-- `_smoke_l3_gate` 新增场景全过
-
-**依赖**
-
-- **必须等 effort 分档（决策 #65）的基线对比 stage 跑完再单独 `/go`**——单变量：
-  effort 降档的提速幅度尚未实测，两条混在一起就分不清耗时变化的归因
-- 与 T-SEMANTIC-FULLFILE-COST 相关但正交：本条改的是**每轮 gate 复检**；那条
-  讨论的是 **Phase A 全量检查**的成本。Phase A 通读全文是本条的前提（用户要的是
-  「全文审查一次」），该前提已由决策 #70 固化
-
-**更新时间**：2026-07-18 22:05 EDT
-
----
 
 ## Discussing (Undecided) <!-- holo:heading -->
 
@@ -462,6 +343,14 @@ stage 后逐条精准修"的收尾 pass（决策 #60 显式登记的 Part B）�
    （靠 Phase 3.5 一致性检查，还是要局部重抽受影响 stage）？
 4. 台账"同类错反复出现"的聚合诊断——是否顺便产一个汇总，指导回改提取
    prompt？
+5. **defer 桶分流**（2026-07-20 从 `T-SEMANTIC-UNPARSEABLE` 并入）：台账里
+   混着两类性质不同的东西——「审校故障」（`rule: semantic_unparseable` /
+   `semantic_unavailable`，记录的是**审校从未跑出结论**）与「真实内容问题」
+   （`cross_field_consistency` / `voice_ownership` / `realm_label_contradiction`
+   等，记录的是**已知有瑕疵**）。两者下游处置应当不同：前者该**重跑审校**，
+   后者才是**逐条精准修**。是在写台账时就分成两个桶，还是让本 pass 按 `rule`
+   分流？（`semantic_unparseable` 的根因已于 #e39c5fa 修复，但
+   `semantic_unavailable` 仍可能因超时产生，故本项依然成立）
 
 **未落地原因**
 
@@ -741,52 +630,3 @@ gate 复检都只处理 Phase A 报出的问题。它把整份 `stage_snapshot`�
 **依赖**：待决项 1（账本分类标签）+ T-GATE-SCOPED-RECHECK 的实测验证跑
 
 **更新时间**：2026-07-18 22:05 EDT
-
----
-
-### [T-SEMANTIC-UNPARSEABLE] L3 审校返回非法 JSON（实测 3 个 stage 中 2 次）
-
-**上下文**
-
-`repair/checkers/semantic.py` 的审校返回值解析失败，日志：
-
-```
-[WARNING] extraction.repair.checkers.semantic: Invalid JSON in semantic
-review for .../canon/stage_snapshots/S00N.json
-```
-
-2026-07-16 那轮 3 个 committed stage 里**出现 2 次**（S001 / S003 的
-`deferred_repairs/*.jsonl` 各含 1 条 `rule: semantic_unparseable`），
-出现率 ~33%。
-
-**这与超时是不同的故障**：审校 LLM 跑完了、返回了内容，但内容不是合法 JSON。
-决策 #64 放宽超时**救不了它**——那是输出格式问题，不是时间问题。
-
-**性质要分清**：它经决策 #60 的 defer 通道写进账本、stage 照常提交，但它记录的
-是「**审校从未跑出结论**」，而不是「已知有瑕疵」。同一个 defer 桶里混着两种
-东西——S001 的 4 条里 1 条是 `semantic_unparseable`（审校故障）、3 条是
-`cross_field_consistency` / `voice_ownership`（真实内容问题）。下游 Phase 3.5
-（T-PHASE35-DEFERRED-FIX）消费账本时，这两类需要不同处理：前者应该**重跑审校**，
-后者才是**逐条精准修**。
-
-**待决策项**
-
-1. **根因是什么**：prompt 让 LLM 输出 JSON 的方式不够硬？还是解析太严
-   （比如 LLM 包了 markdown ```json 围栏、或前后加了说明文字）？需要抓一次
-   原始返回值看。`_parse_response` 在 `semantic.py`，先读它怎么解析的
-2. **要不要用结构化输出**：`claude` CLI 有 `--json-schema <schema>` flag
-   （`claude --help` 可见）——能否用它硬约束审校返回值的形状？这可能是根治
-3. **要不要重试**：现在是一次非法就 defer。重试一次的成本 vs 收益？
-   （L3 检查 p50 152s，不便宜）
-4. **defer 桶要不要分流**：`semantic_unparseable` 和真实内容问题混在一起，
-   Phase 3.5 需要区分处理——是在写账本时就分开，还是让 3.5 按 `rule` 分流？
-   （与 T-PHASE35-DEFERRED-FIX 的待决项 4 有关联）
-
-**未落地原因**
-
-- 根因未知，需要先抓一次原始返回值（决策 1）才能选方案
-- 33% 是 3 个 stage 的样本，n 太小——可能是巧合，也可能更高。跑更多 stage 会
-  自然攒出样本
-
-**依赖**：无（诊断可立即启动）；但方案选择依赖决策 1 的结果
-

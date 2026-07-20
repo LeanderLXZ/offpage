@@ -103,6 +103,43 @@
 <!-- 已落地的任务。仅精简条目。 -->
 <!-- holo:section end -->
 
+### [T-GATE-SCOPED-RECHECK] L3 gate 复检改定点 · 完成于 2026-07-20 · 完整完成
+
+代码 2026-07-17 落地（决策 #66/#67），2026-07-20 跑 S004 补上实测验证，5 项完成
+标准全部满足。**根因证实**：此前「修一个冒一个、白跑五轮判 FAIL」的打地鼠循环，
+是每轮末 gate 全文重读 50k 字符导致的审校抖动（LLM 每次挑出不同毛病 → 新指纹 →
+算 `introduced`），不是修复真的搞坏了什么。改 scoped（只复检 touched ∪ carried
+的 json_path）后 `introduced` 全线归零：4 个文件 round 1 收工，1 个 5-issue 文件
+round 2 停。**安全阀同时恢复工作**——基线时代 `persisting` 恒为 0 让
+`is_regression` / `is_stalled` 两阀全盲，现在 `persisting=1` 连续两轮触发
+`is_stalled` 诚实停手，证明 scoped 不是「看不见所以都 PASS」。gate 耗时
+276–567s → 9–20s；repair 墙钟 27/31/38min → 8m04s；S004 零 defer；
+`_smoke_l3_gate` 场景 A–H 全过。
+→ logs/change_logs/2026-07-17_112727_gate-scoped-recheck.md
+→ logs/change_logs/2026-07-20_133600_effort-gate-validation-run.md
+
+---
+
+### [T-SEMANTIC-UNPARSEABLE] L3 审校返回非法 JSON · 完成于 2026-07-20 · 部分完成（根因已修，余项转出）
+
+**根因抓到并修复**（`e39c5fa`）：台账两条 `semantic_unparseable` 的报错偏移
+（char 3 / char 4）逐字复现为——模型最终消息里有**两个顶层 JSON 数组、同行空格
+分隔**（`[] [{...}]`），解析器只认单个顶层数组故判非法。修法是容忍多顶层数组并
+合并，`_smoke_l3_gate` 加场景 H 覆盖。S004 实测 0 次（基线 3 stage / 2 次，
+出现率 ~33%）。
+
+原 4 项待决策的处置：第 1 项（根因是什么）已由本次修复回答；第 2 项
+（`--json-schema` 硬约束）与第 3 项（要不要重试）在根因已修后判定为不必要——
+问题不是「格式全错」而是「多了一个空数组」，无需上结构化输出或重试；**第 4 项
+（defer 桶把审校故障与真实内容问题混在一起，下游需分流）与本条根因无关、独立
+成立，已并入 `T-PHASE35-DEFERRED-FIX` 的待决策项**。
+
+证据边界：S004 只有 5 个文件进 repair，0 次不足以证明彻底消除；若后续 stage 再
+出现，按新形态重开条目。
+→ 根因修复见 commit `e39c5fa`
+
+---
+
 ### [T-SMOKE-TRIAGE-BROKEN] `_smoke_triage` 在 HEAD 上即坏 · 完成于 2026-07-18 · 完整完成
 
 判定为**测试 fixture 过期，triage 代码正常，生产无静默破损**。fixture 把被测文件
