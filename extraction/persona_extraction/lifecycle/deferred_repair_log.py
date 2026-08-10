@@ -142,3 +142,100 @@ def write_deferred_repairs(
         "Deferred %d unresolved semantic issue(s) for stage %s → %s",
         len(issues), stage_id, path)
     return path
+
+
+# ---------------------------------------------------------------------------
+# Resolutions — the Phase 3.5 write-back side of the ledger
+# ---------------------------------------------------------------------------
+#
+# The ledger itself is an append-only historical statement: it records what a
+# stage's repair could not fix at the time it ran, and is never rewritten
+# afterwards. Phase 3.5 settles those debts, so it needs somewhere to record
+# "this one is now fixed" — otherwise a settled debt keeps failing the gate
+# forever.
+#
+# Two shapes of debt, two ways to clear:
+#
+#   * schema-class debts are re-verifiable by code — Phase 3.5 simply
+#     re-validates the current file and the debt disappears on its own. No
+#     resolution record needed, and none is trusted: the file is the truth.
+#   * semantic-class debts cannot be re-verified programmatically, so a
+#     resolution record IS the evidence. It is written per issue the moment
+#     that issue is fixed, so an interrupted Phase 3.5 re-run skips what it
+#     already settled instead of re-paying it.
+#
+# Kept in a sidecar file rather than mutating the ledger so the original
+# statement stays intact and both files remain append-only.
+
+def resolution_ledger_path(work_root: Path, stage_id: str) -> Path:
+    """Path of the resolution sidecar for ``stage_id``'s deferred ledger."""
+    return (work_root / "analysis" / "deferred_repairs"
+            / f"{stage_id}.resolved.jsonl")
+
+
+def issue_key(record: dict[str, Any]) -> str:
+    """Stable identity of a ledger row: ``file::json_path::rule``.
+
+    Deliberately not the repair framework's ``fingerprint`` — that is derived
+    from message text, which a fix legitimately changes. Location plus rule is
+    what stays constant between "the debt was recorded" and "the debt was
+    settled".
+    """
+    return (f"{record.get('file', '')}::{record.get('json_path', '')}"
+            f"::{record.get('rule', '')}")
+
+
+def read_deferred_ledger(work_root: Path, stage_id: str) -> list[dict]:
+    """Read a stage's deferred ledger. Missing / unreadable → empty list."""
+    return _read_jsonl(deferred_ledger_path(work_root, stage_id))
+
+
+def read_resolutions(work_root: Path, stage_id: str) -> set[str]:
+    """Return the ``issue_key`` set already recorded as resolved."""
+    return {
+        key for rec in _read_jsonl(resolution_ledger_path(work_root, stage_id))
+        if (key := rec.get("issue_key"))
+    }
+
+
+def append_resolution(
+    work_root: Path,
+    stage_id: str,
+    record: dict[str, Any],
+    *,
+    resolved_by: str,
+    note: str = "",
+) -> None:
+    """Append one resolution row, flushed immediately.
+
+    Written per issue rather than batched at the end of the pass: a crash
+    mid-pass must not lose the record of work already done, otherwise the
+    re-run pays for the same fixes again.
+    """
+    path = resolution_ledger_path(work_root, stage_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    row = {
+        "issue_key": issue_key(record),
+        "stage_id": stage_id,
+        "file": record.get("file", ""),
+        "json_path": record.get("json_path", ""),
+        "rule": record.get("rule", ""),
+        "resolved_by": resolved_by,
+        "note": note,
+    }
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    rows: list[dict] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                rows.append(json.loads(line))
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("Failed to read %s: %s", path, exc)
+        return []
+    return rows

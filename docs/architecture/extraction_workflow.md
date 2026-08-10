@@ -528,35 +528,78 @@ merge 成功才写 complete；任一 sub-lane 或 merge 失败则整 lane 重跑
 打断写盘时不会留下残缺 JSON。最坏场景：丢掉最后一次 `mark_lane_complete`
 的落盘 → resume 时该 lane 被重跑一次（幂等）。
 
-### 7. 跨阶段一致性检查（Phase 3.5）
+### 7. 最终关卡（Phase 3.5）
 
-Phase 3 全部 stage 提交后、进入 Phase 4 之前，运行跨阶段一致性检查。
+Phase 3 全部 stage 提交后、进入 Phase 4 之前运行。这是 stage 文件经过的
+**最后一道关卡**，回答两个此前无人回答的问题：跨阶段结构是否完整，以及
+Phase 3 记下的欠债是否已结清（决策 #72）。
 
-**程序化检查**（零 token 开销）：
+**六段流程**（段间串行、段内并行）：
 
-1. alias 一致性 — stage_snapshot active_aliases vs identity.json aliases
-2. 快照字段完整性 — 必填维度是否齐全（以 `schemas/character/stage_snapshot.schema.json` 的 `required` 列表为准）
-3. 关系连续性 — 相邻 stage 间 attitude/trust/intimacy 变化是否有 driving_events
-4. memory_digest 对应 — memory_digest.jsonl ↔ memory_timeline 一一对应
-5. memory_digest 摘要一致 — `memory_digest.summary` 与对应 `digest_summary` 文本完全相等（1:1 拷贝契约）
-6. target_map 样本数 — importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）
-7. stage_id 对齐 — 世界/角色 catalog 与 snapshot 目录对齐
-8. world_event_digest 对应 — digest 条目数 ↔ world snapshot `stage_events` 逐阶段对应
-9. world_event_digest 摘要一致 — `world_event_digest.summary` 与对应 `stage_events[i]` 文本完全相等（1:1 拷贝契约，i 由 `event_id` 的 seq 推得）
+| 段 | 内容 | 成本 |
+|---|---|---|
+| 1 | 程序全扫 → 得到债务清单 | 0 token，秒级 |
+| 2 | 结清台账债务（定点 field patch） | LLM，`recheck_effort` |
+| 3 | 跨阶段连贯审校 | LLM 冷读，`[llm].effort` |
+| 4 | 审校发现走同一套定点修复循环 | LLM，`recheck_effort` |
+| 5 | 受影响 stage 重跑 post-processing | 0 token |
+| 6 | 复扫 + 门判 + 报告 | 0 token |
 
-**LLM 裁定**（可选）：仅在有标记项时调用独立 agent 进行语义裁定。
+段 3 必须在段 2 **之后**：台账债恰好落在段 3 要投影的字段上，先审会读到
+即将变化的状态；放在其后还让审校顺带成为段 2 语义补丁的终审。段 5 不可
+省——段 2/4 会 patch primary，而 digest 是其 1:1 代码投影（决策 #61），
+缺此步段 6 的派生一致性检查必然报本阶段自己造成的差异。
 
-**产出**：`works/{work_id}/analysis/consistency_report.json`
+**三层检查**（全部零 token）：
 
-有 error 级别问题时阻断 Phase 4，需人工处理后继续。
+- **L1 结构完整性** — 每个 stage 的 world/角色 snapshot 与 memory_timeline
+  在位且可解析；`stage_id` 与世界/角色 catalog、snapshot 目录对齐。
+- **L2 派生一致性** — `memory_digest` ↔ `memory_timeline` 的 `memory_id`
+  双向对应；`memory_digest.summary` 与 `digest_summary` 逐字相等；
+  `world_event_digest` 条目数与 `summary` 同 `stage_events[i]` 逐字相等。
+  决策 #61 把 digest 移出 repair 后，**只有这一层能发现投影漂移**。
+- **L3 台账结清** — 读 `deferred_repairs/{stage_id}.jsonl`，但**不采信其
+  陈述**：schema / structural 类债对当前文件重新校验（修好的自动销账，
+  无需回写台账）；semantic 类无程序化复验途径，只能凭
+  `{stage_id}.resolved.jsonl` 的 resolution 记录结清。
 
-**提交契约**：编排器在 `save_report` 之后、`_offer_squash_merge` 之前
-在 extraction 分支上 commit `consistency_report.json`
-（`phase3.5: consistency_report S###..S###`），不分 pass/fail。未提交的
-报告会以 dirty 状态挡住 `checkout_main`，也会被 squash-merge 漏掉。
-同理，一致性检查器加载 JSON/JSONL 源文件必须**只读**——不再顺带触发
-L1 JSON 修复写盘（修复是 repair 的职责，Phase 3.5 不越权改写已
-COMMITTED 的产物）。
+**辅助检查**（计入判定）：快照字段完整性、关系连续性（相邻 stage 的
+attitude/trust/intimacy 变化是否有 driving_events）、target_map 样本数
+（importance 阈值：主角 ≥5 / 重要配角 ≥3 / 其他 ≥1）。
+
+**跨阶段连贯审校**（段 3）——全流水线唯一同时看到多个阶段的环节。Phase 3
+的语义审校一次只读一个文件，因此弧线自相矛盾、不可逆量倒退、关系数值无因
+跳变、知识倒流、状态接不上、世界线冲突这六类断裂此前**零覆盖**。输入是
+程序拼的**瘦投影**（`phases/cross_stage_projection.py`：只取连贯性相关
+字段，每行标注来源 `json_path`），不是完整文件；审校只需**定位**断裂，
+修复环节再读真实文件。投影按 `[phase3_5].review_window_chars` 切窗、窗间
+重叠 `review_window_overlap_stages` 个 stage，使落在边界上的相邻断裂至少
+被一个窗口看见。审校发现在进入修复前先做程序级存在性确认，`$` 根锚点与
+不存在的路径直接丢弃。
+
+**定点修复**：段 2/4 复用 `repair.run(seed_issues=...)` —— 已知问题直接
+进修复循环，跳过 Phase A 的发现扫描（问题已在手，重跑发现等于把每个文件
+再全文读一遍去得出同一结论）。seed 之后的 tier 路由、scoped 复验、L3
+gate、安全阀全部照旧，修复仍须自证落地。**零文件重生成**：T3 已于决策
+#62 删除，`$` 根锚点永不升 LLM 层。
+
+**门判**：`passed = error_count == 0 AND skipped_total == 0`。**coverage
+账本**逐 check 记 `checked / skipped / hit`——此前文件读不到时静默
+`continue`，"检查通过"与"根本没检查"在报告里长得一模一样；现在跳过即
+显式失败。
+
+**产出**：`works/{work_id}/analysis/consistency_report.json`（含 coverage
+账本）+ `deferred_repairs/{stage_id}.resolved.jsonl` resolution 记录
+（append-only、逐条即时落盘，故中途崩溃重跑天然幂等）。
+
+有 error 或 skipped 时阻断 Phase 4。
+
+**提交契约**：编排器在 `save_report` 之后、`_offer_squash_merge` 之前在
+extraction 分支上 commit，不分 pass/fail。本阶段若 patch 过文件，提交面
+是整个 work scope（修复后的 stage 文件 + resolution 台账 + 重投影的派生
+产物 + 报告）；未 patch 时仅提交报告。未提交的产物会以 dirty 状态挡住
+`checkout_main`，也会被 squash-merge 漏掉。检查器加载 JSON/JSONL 源文件
+**只读**——写盘只发生在段 2/4 的定点 patch 与段 5 的重投影里。
 
 ### 8. 场景切分（Phase 4）
 
@@ -738,9 +781,9 @@ orchestrator (Python)
     │       └── [任一文件 json_syntax 残留(文件不可解析) 或 repair worker 崩溃
     │             或 PP 重跑失败] → stage ERROR (--resume 重置 → PENDING)
     │
-    ├── 跨阶段一致性检查 (Phase 3.5):
-    │       ├── 程序化检查 (Python, 0 token)
-    │       └── 可选 LLM 裁定 (仅有标记项时)
+    ├── 最终关卡 (Phase 3.5) — 六段串行、段内并行:
+    │       ├── ①程序全扫 → ②结清台账债 → ③跨阶段审校
+    │       └── ④定点修 → ⑤重投影 → ⑥复扫门判
     │
     └── 场景切分 → 每个 stage (可并行):
             └── claude -p (场景切分 prompt)

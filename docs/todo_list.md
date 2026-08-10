@@ -18,12 +18,11 @@
 
 _(none)_
 
-### 🟡 Next (2)
+### 🟡 Next (1)
 
 | ID | Brief | Importance | Ready | Scope | Updated | Deps |
 |---|---|---|---|---|---|---|
 | `T-LIGHTNOVEL-SCHEMA-ONEOF` | stage_plan 里"一个 stage 包几章"这个数字，普通模式是 8-15、轻小说模式是 1。schema 现在只允许 ≥5，所以轻小说产物自己跑 schema 校验过不了——但实际没有外部校验它，所以是个已知缺陷不致命。 | 🟢 Med-Low | ⏸ Blocked | 🔴 Large·Arch | 2026-05-12 EDT | 等首个外部 artifact validator 消费方出现 |
-| `T-PHASE35-DEFERRED-FIX` | Phase 3.5 重做为六段流程：程序全扫+机械修 → semantic 债定点修 → 跨 stage 连贯审校（全管线唯一空白视角）→ 审校发现定点修 → PP 重投影 → 复扫门判。同时清掉 38 条 deferred 债；全部 json_path 定点 patch、零文件重生成；现有 alias check 40 条全误报，删。2026-08-05 经 /plan 两轮审视收敛。 | 🔴 High | ✅ Ready | 🔴 Large·Arch | 2026-08-05 EDT | 无（53 stage 已全部 COMMITTED） |
 
 ### ⚪ Discussing (6)
 
@@ -36,7 +35,7 @@ _(none)_
 | `T-RETRY` | LLM 调用失败时的重试策略能更聪明些。现在不到 5 秒就失败的会重试，但人物抽取正常要跑 10-20 分钟，5 秒太短了——那种短时失败几乎都是启动错、不是真活干完才挂。打算扩到 60 秒，再按失败类型分流要不要重试。改动小，两个数值要拍板。 | 2 | — | 无（T-LOG 已完成） |
 | `T-USER-AUX-SCHEMAS` | users/ 目录下有几个辅助 JSON 文件（session 索引、归档引用之类）没绑 schema，字段长啥样全靠模板猜。simulation 运行时一旦写起来要消费这些文件，到时候字段可能已经漂得不像样。等 simulation 选完 loader 设计再补 schema。 | 2 | — | simulation runtime loader 选型 / 设计定稿 |
 
-**Total**: 8 — 🟢 In Progress 0 ｜ 🟡 Next 2 ｜ ⚪ Discussing 6
+**Total**: 7 — 🟢 In Progress 0 ｜ 🟡 Next 1 ｜ ⚪ Discussing 6
 
 <!-- holo:section start -->
 ---
@@ -303,84 +302,6 @@ decision #27n 把 `stage_plan.chapter_count=1` 在 schema 下 schema-invalid 标
 
 ---
 
-### [T-PHASE35-DEFERRED-FIX] Phase 3.5 重做 —— 六段流程：跨 stage 全面检查 + 遗留债定点修复
-
-**上下文**
-
-原 todo 是决策 #60 的 Part B（读台账逐条精修）。2026-08-02/03 两轮提取跑完
-全部 53 stage 后实测：Phase 3.5 现有 9 项检查在真实数据上 0.26s 跑完、唯一
-报出的 40 条 alias warning 全部误报（规则前提错误——`identity.aliases` 收
-专有称号、`active_names` 收关系性称呼，两集合语义不同）、台账 38 条债
-（17 maxLength / 5 type / 16 semantic，27 个文件）一条不在检查面上、台账
-零消费方。2026-08-05 经 /plan 两轮审视收敛为重做方案：Phase 3.5 扩为
-「跨 stage 全面检查 + 遗留债定点修复」的最后关卡，Part B 并入其中
-（原待决项 1–5 全部裁决：并入 Phase 3.5 / 定点无 T3 / 追加 commit /
-聚合诊断入报告 / 按 rule 分流）。
-
-**需求**
-
-- 全面但不重：不重复 Phase A 已做的逐文件全文语义审校；补的是全管线唯一
-  空白——跨 stage 连贯视角（arc 断裂 / 境界倒退 / 关系跳变 / 知识倒流）
-- 同时清账：38 条 deferred 债在本关修平或明确 error 阻断 Phase 4
-- 全部定点修复（json_path patch），零文件重生成（T3 已删，结构性保证）
-- 段内并行加速；`passed = error==0 && skipped==0`（静默跳过 = 显式失败）
-
-**方案要点（六段串行、段内并行）**
-
-1. 程序全扫 + 机械修（0 token，秒级）：jsonschema 全量复验 + 现有跨文件
-   检查（删 alias check）+ 台账 schema 债就地复验自动销账；maxLength 处理
-   链 = #48 容差门先行 → 仍超走 T1 压缩改写（不硬截断散文——17 条债全是
-   200+ 字成段散文）；T0 扩展 index-keyed dict → array（键按数字排序）
-2. semantic 债定点修复（T2 `medium`，~14 文件 12 路并行）；
-   `semantic_unparseable` 的文件单独重跑 check_full（`xhigh` 冷读，唯一
-   补课例外——该文件 Phase A 实际从未读成）
-3. 跨 stage 连贯审校（新增，3 次冷读 `xhigh` 并行）：程序拼每角色 + world
-   的瘦投影时间线（character_arc / stage_delta / current_status / 关系数值
-   链 / 境界 / knowledge_scope），LLM 找断裂；先量文档尺寸，超限才滑窗
-   分块（1-stage 重叠）
-4. 审校发现 → 同一套定点修复循环（`medium`；修前程序存在性确认防幻觉
-   锚点，prompt 附相邻 stage 瘦视图带连续性上下文；仅一轮，不做二轮审校）
-5. PP 重投影：受影响 stage 重跑 `run_stage_post_processing`（幂等 0
-   token）——缺此步 #32/#33 的 L2 检查必假 FAIL
-6. 程序复扫 + 门判 + 报告；coverage 账本（每 check 记 checked/skipped/hit）
-   入报告
-
-resolved 标记 append-only、逐条即时落盘（崩溃重跑天然幂等）。全程
-extraction 分支，结束 commit（patched files + resolutions + report）。
-effort 沿用现有 3 键：冷读 `[llm].effort`(xhigh) / 修复复验
-`[repair].recheck_effort`(medium)，不新增配置。
-
-**改动清单**
-
-- `extraction/validation/gates/phase3_5_consistency.py`：三层重构（L1 结构
-  / L2 派生 / L3 台账复验），删 `_check_alias_consistency`，加 coverage 账本
-- `extraction/persona_extraction/orchestrator.py`：`_run_consistency_check`
-  扩为六段流程 + PP 重跑 + commit 扩面（patched files + resolutions + report）
-- `extraction/repair/fixers/programmatic.py`：T0 加 index-keyed dict → array
-- `extraction/persona_extraction/lifecycle/deferred_repair_log.py`：
-  resolution 追加读写（append-only）
-- 新增：跨 stage 瘦投影拼接器 + 审校 prompt
-  （`extraction/persona_extraction/prompts/`）
-- 契约同步：`docs/architecture/extraction_workflow.md` §Phase 3.5、
-  `docs/requirements.md` §11.10、`ai_context/architecture.md`、decisions
-  新条目（索引 + 归档 lockstep）
-- 第 0 步排查：读 1 份 `repair_logs/repair_S0XX_*.jsonl` 定位 11 个纯
-  length 债文件为何未被 phase 3 T0 修掉（若 phase 3 repair 有真 bug 另立
-  修复项）
-
-**完成标准**
-
-- 当前作品跑通：38 条债全部销账或明确 error 阻断；coverage 无 skipped；
-  报告落盘并 commit
-- git diff 验证全部修复为 json_path 定点 patch，无整文件重写
-- alias 40 条误报归零；smoke test 通过
-- 预估运行 ~25–35 min / ~$30（LLM ~35–50 次调用）；实现量 5+ 文件，走 /go
-
-**依赖**：无硬依赖（53 stage 已全部 COMMITTED；台账样本已足）
-
-**更新时间**：2026-08-05 05:41 EDT
-
----
 
 
 ## Discussing (Undecided) <!-- holo:heading -->

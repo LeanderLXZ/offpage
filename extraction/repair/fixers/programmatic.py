@@ -222,8 +222,16 @@ class ProgrammaticFixer(BaseFixer):
                 return None
         if expected == "string" and isinstance(current, (int, float)):
             return apply_field_patch(content, issue.json_path, str(current))
-        if expected == "array" and not isinstance(current, list):
-            return apply_field_patch(content, issue.json_path, [current])
+        if expected == "array":
+            # LLM backends routinely emit an array as an index-keyed object
+            # ({"0": ..., "1": ...}) — the values are intact and ordered, only
+            # the container shape is wrong, so recover it losslessly by
+            # numeric key order rather than wrapping the dict in a list.
+            ordered = _index_keyed_to_list(current)
+            if ordered is not None:
+                return apply_field_patch(content, issue.json_path, ordered)
+            if not isinstance(current, list):
+                return apply_field_patch(content, issue.json_path, [current])
 
         return None
 
@@ -280,10 +288,60 @@ class ProgrammaticFixer(BaseFixer):
 
         if validator_type == "maxLength" and isinstance(limit, int):
             if len(current) > limit:
-                truncated = current[:limit]
-                return apply_field_patch(content, issue.json_path, truncated)
+                return apply_field_patch(
+                    content, issue.json_path, _truncate_at_boundary(
+                        current, limit))
 
         return None
+
+
+# ---------------------------------------------------------------------------
+# Value-shape helpers
+# ---------------------------------------------------------------------------
+
+# Sentence / clause enders used to land a truncation on a readable boundary.
+# CJK punctuation first (the content language of the artifacts), ASCII after.
+_CLAUSE_ENDERS = "。！？；…】」』）.!?;)"
+
+
+def _truncate_at_boundary(text: str, limit: int) -> str:
+    """Cut ``text`` to ``limit`` chars, preferring a clause boundary.
+
+    A blind ``text[:limit]`` leaves a severed half-sentence, which is what
+    these fields actually are — 200+ character CJK prose. Prefer the last
+    clause ender inside the budget; fall back to a hard cut when that would
+    discard too much (>25% of the budget), because a stub is worse than a
+    slightly ragged tail.
+    """
+    if len(text) <= limit:
+        return text
+    window = text[:limit]
+    cut = max((window.rfind(ch) for ch in _CLAUSE_ENDERS), default=-1)
+    if cut >= 0 and (cut + 1) >= limit * 0.75:
+        return window[:cut + 1]
+    return window
+
+
+def _index_keyed_to_list(value: Any) -> list | None:
+    """Recover ``{"0": a, "1": b}`` → ``[a, b]``; None when not that shape.
+
+    Requires every key to be a decimal integer string and the key set to be
+    exactly ``0..n-1`` — a partial or offset key set means the object is
+    something other than a mis-serialised array, and guessing there would
+    silently reorder real data.
+    """
+    if not isinstance(value, dict) or not value:
+        return None
+    try:
+        indexed = {int(k): v for k, v in value.items()}
+    except (TypeError, ValueError):
+        return None
+    if not all(isinstance(k, str) and k.lstrip("-").isdigit()
+               for k in value):
+        return None
+    if sorted(indexed) != list(range(len(indexed))):
+        return None
+    return [indexed[i] for i in range(len(indexed))]
 
 
 # ---------------------------------------------------------------------------

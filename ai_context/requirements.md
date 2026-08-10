@@ -123,7 +123,8 @@ MAINTENANCE — 编辑本文件前请先阅读。
 
 Phase 0 章节摘要（并行 chunk，chunk 级字段与消费矩阵见 `docs/architecture/schema_reference.md`）
 → Phase 1 三 lane 全局分析（light_novel 2 lane + 程序化 stage_plan，决策 #52）→ Phase 1.5
-角色确认 → Phase 2 baseline（2+2N lane fan-out + per-lane repair 缩水版，决策 #54/#59）→ Phase 3 协同阶段提取（文件级 repair）→ Phase 4
+角色确认 → Phase 2 baseline（2+2N lane fan-out + per-lane repair 缩水版，决策 #54/#59）→ Phase 3 协同阶段提取（文件级 repair）
+→ Phase 3.5 最终关卡（六段：程序全扫 → 结清台账债 → 跨阶段连贯审校 → 定点修 → 重投影 → 复扫门判，决策 #72）→ Phase 4
 场景归档 → 包校验；每阶段 snapshot 自包含（含未变字段）。
 → `docs/requirements.md` §9。
 

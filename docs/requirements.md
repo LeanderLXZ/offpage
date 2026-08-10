@@ -823,9 +823,9 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 │  │ 每个 stage 可修正 baseline（不限第一个 stage）      │              │
 │  └───────────────────────┬───────────────────────────┘              │
 │                          ▼                                          │
-│  Phase 3.5 ─ 跨阶段一致性检查（全部 stage 提交后）                    │
+│  Phase 3.5 ─ 最终关卡（全部 stage 提交后）                            │
 │  ┌───────────────────────────────────────────────────┐              │
-│  │ 程序化检查（0 token）──→ 可选 LLM 裁定 ──→ 报告    │              │
+│  │ 全扫 → 结清债 → 跨阶段审校 → 定点修 → 重投影 → 门判│              │
 │  └───────────────────────┬───────────────────────────┘              │
 │                          ▼                                          │
 │  Phase 4 ─ 场景切分（逐章并行，--concurrency 控制）                   │
@@ -868,8 +868,8 @@ voice / behavior / boundary / failure_modes 不再有独立 baseline 文件—�
 6. **协同阶段提取**（Phase 3）：每个 stage 读原文，1+2N 全并行产出
    （1 世界 + N 角色快照 + N 角色支撑）。每个 stage 经过 JSON 修复 →
    程序校验 → 语义审核 → git 提交。每个 stage 都可修正和补充 baseline
-7. **跨阶段一致性检查**（Phase 3.5）：Phase 3 全部 stage 提交后，运行程序化
-   跨阶段一致性检查（零 token），对标记的问题可选 LLM 裁定。详见 §11.10
+7. **最终关卡**（Phase 3.5）：Phase 3 全部 stage 提交后，运行六段流程——
+   跨阶段全面检查 + 结清 Phase 3 遗留债，全部定点修复。详见 §11.10
 8. **场景切分**（Phase 4）：逐章读原文，LLM 标注场景边界和元数据（起止行号、
    时间、地点、在场角色、摘要），程序根据行号从原文拼接 `full_text`。
    前置条件仅需 `stage_plan.json` 存在（Phase 1 产物），与 Phase 3
@@ -1414,9 +1414,9 @@ prompt template + Phase 3.5 一致性审计（§11.5）继续负责把"应有变
 │  │    · 全部 lane complete → stage 直接进 EXTRACTED    │            │
 │  └──────────────────────┬──────────────────────────────┘         │
 │                         ▼                                        │
-│  ┌─ Phase 3.5 ─ 跨阶段一致性检查（全部 committed 后）─┐          │
-│  │  9 项程序化检查 (0 token) → 可选 LLM 裁定          │          │
-│  │  error → 阻断, warning → 提示                      │          │
+│  ┌─ Phase 3.5 ─ 最终关卡（全部 committed 后）────────┐          │
+│  │  三层检查 (0 token) + 结清台账债 + 跨阶段审校      │          │
+│  │  error 或 skipped → 阻断, warning → 提示           │          │
 │  └──────────────────────┬─────────────────────────────┘          │
 │                         ▼                                        │
 │  ┌─ Squash merge → library（一个干净 commit）─────────┐          │
@@ -2366,56 +2366,124 @@ LLM 产出的 stage plan 可能违反章节数上限（实测常见）。Phase 1
    其他已产出文件（foundation / candidate_characters lane）保留不变
 5. 若重试耗尽仍有超限，终止流程（`sys.exit(1)`），不允许带违规 plan 继续
 
-### 11.10 跨阶段一致性检查（Phase 3.5）
+### 11.10 最终关卡（Phase 3.5）
 
-Phase 3 全部 stage 提交后，运行跨阶段一致性检查。
-主要为程序化检查（零 token 开销），仅对标记项可选 LLM 裁定。
+Phase 3 全部 stage 提交后运行。stage 文件是整个系统最重要的资产，本阶段
+是它们经过的最后一道关卡，因此同时承担两件事：**做一次跨阶段的全面检查**，
+以及**结清 Phase 3 留下的欠债**（决策 #72）。
 
-#### 程序化检查项
+#### 六段流程
 
-| # | 检查 | 说明 |
+段间串行、段内并行：
+
+| 段 | 内容 | 成本 |
 |---|------|------|
-| 1 | alias 一致性 | stage_snapshot 的 active_aliases 是否在 identity.json aliases 中有定义 |
-| 2 | 快照字段完整性 | 每个 stage_snapshot 的必填维度是否齐全；维度清单以 `schemas/character/stage_snapshot.schema.json` 的 `required` 列表为单一权威来源（schema 是权威，本文档不复述具体字段名 / 条数，避免漂移） |
-| 3 | 关系连续性 | 相邻 stage 间 attitude/trust/intimacy 变化是否有 driving_events 归因 |
-| 4 | memory_digest 对应 | memory_digest.jsonl 条目是否与 memory_timeline memory_id 一一对应 |
-| 5 | memory_digest 摘要一致 | 每条 memory_digest `summary` 是否与对应 memory_timeline `digest_summary` **文本完全相等**（1:1 拷贝契约，防止 repair 改写源字段后 digest 漂移） |
-| 6 | target_map 样本数 | target_voice_map / target_behavior_map 样本数是否满足 importance-based 阈值（§11.4.3） |
-| 7 | stage_id 对齐 | 世界/角色 stage_catalog 和 stage_snapshots 目录是否对齐 |
-| 8 | world_event_digest 对应 | world_event_digest.jsonl 条目数是否与 world stage_snapshot `stage_events` 逐条对应 |
-| 9 | world_event_digest 摘要一致 | 每条 world_event_digest `summary` 是否与对应 world stage_snapshot `stage_events[i]` **文本完全相等**（1:1 拷贝契约，i 由 `event_id` 的 seq 推得） |
+| 1 | 程序全扫，得到债务清单 | 0 token |
+| 2 | 结清台账债务（定点 field patch，按文件并行） | LLM |
+| 3 | 跨阶段连贯审校（按投影窗口并行） | LLM 冷读 |
+| 4 | 审校发现走同一套定点修复循环 | LLM |
+| 5 | 受影响 stage 重跑 post-processing 重投影 | 0 token |
+| 6 | 复扫 + 门判 + 报告 | 0 token |
 
-> 所有字段级长度 / 条数约束由 schema `minLength` / `maxLength` /
-> `maxItems` 在每阶段程序化校验时硬阻断，无需 Phase 3.5 再重复聚合
-> 检查。具体数值见对应 schema 文件。
+段 3 在段 2 之后：台账债正落在段 3 要投影的字段上，先审会读到即将变化的
+状态；置后还让审校兼任段 2 语义补丁的终审。段 5 不可省——段 2/4 patch 的是
+primary，而 digest 是其 1:1 代码投影（§11.4.5），缺此步段 6 必然报出本阶段
+自己造成的差异。
 
-#### LLM 裁定（可选）
+#### 三层检查（零 token）
 
-对程序化检查标记的 warning/error 项，可调用独立 LLM agent 进行语义层面的
-裁定（如判断关系变化是否合理、摘要是否空泛）。仅在有标记项时调用，
-无标记项则跳过。
+| 层 | 检查 | 说明 |
+|---|------|------|
+| L1 | stage 文件在位 | 每 stage 的 world/角色 snapshot 与 memory_timeline 存在且可解析 |
+| L1 | stage_id 对齐 | 世界/角色 stage_catalog 与 stage_snapshots 目录对齐 |
+| L2 | memory_digest 对应 | `memory_digest.jsonl` 与 memory_timeline `memory_id` 双向一一对应 |
+| L2 | memory_digest 摘要一致 | 每条 `summary` 与对应 `digest_summary` **文本完全相等** |
+| L2 | world_event_digest 对应 | 条目数与 world snapshot `stage_events` 逐阶段对应 |
+| L2 | world_event_digest 摘要一致 | 每条 `summary` 与对应 `stage_events[i]` **文本完全相等**（i 由 `event_id` seq 推得） |
+| L3 | 台账结清 | 见下 |
+
+L2 是本阶段的核心存在理由：派生文件移出 repair 后（§11.4.5），只有这一层
+能发现投影漂移。
+
+**辅助检查**（计入判定）：快照字段完整性（维度清单以
+`schemas/character/stage_snapshot.schema.json` 的 `required` 为单一权威
+来源）、关系连续性（相邻 stage 的 attitude/trust/intimacy 变化是否有
+driving_events 归因）、target_map 样本数（importance 阈值见 §11.4.3）。
+
+> 字段级长度 / 条数约束由 schema 在每阶段程序化校验时硬阻断，本阶段不再
+> 重复聚合检查。具体数值见对应 schema 文件。
+
+#### L3 台账结清
+
+读 `deferred_repairs/{stage_id}.jsonl`，但**不采信台账的陈述**——台账记的是
+"repair 当时修不平"，此刻可能已结清，照搬会让门永远失败。按债的性质分两条
+结清路径：
+
+- **schema / structural 类**：对当前文件重新校验，`json_path` 不再出现在
+  违规集即为已结清。**这是台账自愈的机制**——修好的债自动消失，无需回写。
+- **semantic 类**：无程序化复验途径，只能凭
+  `deferred_repairs/{stage_id}.resolved.jsonl` 的 resolution 记录结清。
+  resolution 逐条即时落盘、append-only，故本阶段中途崩溃后重跑天然幂等。
+
+无复验能力时（未注入 revalidator）schema 类债保持未决，不假设已结清。
+
+#### 跨阶段连贯审校（段 3）
+
+Phase 3 的语义审校一次只读一个文件，因此**没有任何环节看过多个阶段的并列
+视图**。以下六类断裂此前零覆盖，本段专门找它们：弧线自相矛盾、不可逆量
+倒退、关系数值无因跳变、知识倒流、状态接不上、世界线冲突。
+
+输入是程序拼的**瘦投影**而非完整文件：只取连贯性相关字段，每行标注来源
+`json_path`。审校只需**定位**断裂，修复环节再读真实文件。投影按
+`[phase3_5].review_window_chars` 切窗，窗间重叠
+`review_window_overlap_stages` 个 stage，使落在边界上的相邻断裂（主要失败
+模式）至少被一个窗口看见。
+
+审校发现在进入修复前先做**程序级存在性确认**；`$` 根锚点与不存在的路径
+直接丢弃。审校调用失败按 §11.9 的"响亮失败"处理——记为阻塞问题，绝不把
+未审窗口当作无断裂。
+
+#### 定点修复原则
+
+段 2/4 复用 repair 框架的 `seed_issues` 入口：已知问题直接进修复循环，跳过
+发现扫描（问题已在手，重跑发现等于把每个文件再全文读一遍去得出同一结论）。
+seed 之后的 tier 路由、scoped 复验、L3 gate、安全阀全部照旧，修复仍须自证
+落地。**所有修复都是 `json_path` 定点 patch，零文件重生成**（T3 已删，
+`$` 根锚点永不升 LLM 层）。
+
+#### 门判与 coverage 账本
+
+`passed = error_count == 0 AND skipped_total == 0`。
+
+每个 check 记录 `checked / skipped / hit`。**skipped 是承重字段**：此前
+文件读不到时静默 `continue`，"检查通过"与"根本没检查"在报告里无法区分；
+现在跳过即显式失败。
 
 #### 产出
 
-- `works/{work_id}/analysis/consistency_report.json`
-- 控制台打印摘要（error/warning/info 计数）
-- 有 error 级别问题时阻断 Phase 4（需人工处理后继续）
+- `works/{work_id}/analysis/consistency_report.json`（含 coverage 账本）
+- `works/{work_id}/analysis/deferred_repairs/{stage_id}.resolved.jsonl`
+- 控制台打印六段进度 + coverage 账本 + error 明细
+- error 或 skipped 非零时阻断 Phase 4
 
 #### Phase 3.5 产物提交契约
 
-Phase 3.5 的产物（`consistency_report.json`）是 tracked 文件；编排器在
-保存报告后立即在 extraction 分支上 commit（`phase3.5: consistency_report
-{S###..S###}`），与 pass/fail 无关。两条理由：
-1. 未提交的报告会以 dirty 状态留在工作区，阻塞 `checkout_main` 在 work
+产物是 tracked 文件；编排器在保存报告后立即在 extraction 分支上 commit，
+与 pass/fail 无关。两条理由：
+
+1. 未提交的产物会以 dirty 状态留在工作区，阻塞 `checkout_main` 在 work
    scope 下清场。
-2. 接受 squash-merge 时，报告必须是 extraction 分支的已提交对象才能进入
+2. 接受 squash-merge 时，产物必须是 extraction 分支的已提交对象才能进入
    最终 squash-merge 的 commit（默认目标 `library`，由
    `[git].squash_merge_target` 配置）。
 
-同理，Phase 3.5 的一致性检查器只能以**只读**方式加载 JSON / JSONL 源文件——
-不得顺带触发 L1 JSON 修复写盘。原始文件的完整性是 repair 的职责，
-Phase 3.5 若遇到解析失败应报 `warning/error` 并返回，而不是静默改写
-已 COMMITTED 的产物造成"Phase 3.5 运行完工作区变脏"的路径依赖。
+提交面随本阶段是否改过文件而定：patch 过则提交整个 work scope（修复后的
+stage 文件 + resolution 台账 + 重投影的派生产物 + 报告）；未 patch 则仅
+提交报告。
+
+检查器加载 JSON / JSONL 源文件**只读**——不得顺带触发 L1 JSON 修复写盘。
+本阶段的写盘只发生在段 2/4 的定点 patch 与段 5 的重投影，二者都是显式
+动作，不是加载的副作用。
 
 ### 11.11 场景切分（Phase 4）
 

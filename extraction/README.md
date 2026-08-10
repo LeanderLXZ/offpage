@@ -312,7 +312,7 @@ extraction/
 │   ├── __init__.py / types.py
 │   ├── gates/                                ← 相位边界 validator（orchestrator 直调，不走 repair 循环）
 │   │   ├── phase2_baseline.py                ← Phase 2 baseline 校验
-│   │   └── phase3_5_consistency.py           ← Phase 3.5 跨 stage 一致性
+│   │   └── phase3_5_consistency.py           ← Phase 3.5 三层检查 + coverage 账本
 │   └── shared/                               ← 纯函数原语（gates / repair.checkers 共享）
 │       ├── importance.py                     ← importance_for_target / importance_min_examples
 │       └── schema_tolerance.py               ← validate_with_length_tolerance / relaxed_schema_for_length
@@ -444,7 +444,9 @@ cross_file}`，或是 `coverage_shortage` 薄内容残留（`severity=warning` �
 判定**逐文件进行**而非把所有 issue 摊平——崩溃产生的合成结果 `issues=[]`
 对摊平集合毫无贡献，按整池判会让崩溃文件搭兄弟文件可延后 issue 的顺风车
 提交、且不进台账，Phase 3.5 收尾 pass 永远不会知道它。
-台账留待 Phase 3.5 收尾修复 pass 逐条精准修（不重跑 stage）。判据 + 写出：
+台账由 Phase 3.5 的 L3 层消费并结清（不重跑 stage）：schema 类对当前文件
+重新校验、修好的自动销账；semantic 类凭 `{stage_id}.resolved.jsonl` 的
+resolution 记录结清。判据 + 读写：
 `persona_extraction/lifecycle/deferred_repair_log.py`。
 
 代码：`repair/`
@@ -534,17 +536,42 @@ retry 通路接住，不引入新模块：
   回退到 `FAILED`，避免产生"状态已 commit 但 git 里没有对应 object"的伪
   committed 漂移
 
-## Phase 3.5：跨阶段一致性检查
+## Phase 3.5：最终关卡
 
-Phase 3 全部 stage 提交后自动运行。包含 9 项程序化检查（零 token，含
-`memory_digest.summary` ↔ timeline `digest_summary` 以及
-`world_event_digest.summary` ↔ world `stage_events[i]` 两条 1:1 文本
-等值 gate），可选 LLM 裁定标记项。产出 `consistency_report.json`，并在
-extraction 分支上立即 commit（`phase3.5: consistency_report S###..S###`）。
-有 error 级别问题时阻断 Phase 4，需人工处理后继续。target_map 样本数
-检查使用 importance-based 阈值（主角≥5, 重要配角≥3, 其他≥1）。
+Phase 3 全部 stage 提交后自动运行。这是 stage 文件经过的最后一道关卡，
+同时做跨阶段全面检查与遗留债结清（决策 #72）。
 
-代码：`extraction/validation/gates/phase3_5_consistency.py`
+**六段**（段间串行、段内并行）：①程序全扫（0 token）→ ②结清台账债
+（定点 patch，按文件并行）→ ③跨阶段连贯审校（按投影窗口并行，冷读）
+→ ④审校发现走同一套定点修复 → ⑤受影响 stage 重跑 post-processing
+重投影（0 token）→ ⑥复扫 + 门判 + 报告。
+
+**三层检查**（零 token）：L1 结构在位（stage 文件齐全 + `stage_id` 对齐）
+/ L2 派生 1:1（`memory_digest.summary` ↔ timeline `digest_summary`、
+`world_event_digest.summary` ↔ world `stage_events[i]`、`memory_id`
+双向对应——决策 #61 后只有这层能发现投影漂移）/ L3 台账结清
+（schema 类重校验自愈、semantic 类凭 `{stage_id}.resolved.jsonl`）。
+另有辅助检查：字段完整性、关系连续性、target_map 样本数
+（importance 阈值：主角 ≥5 / 重要配角 ≥3 / 其他 ≥1）。
+
+**跨阶段审校**是全流水线唯一同时看到多个阶段的环节（Phase A 一次只读
+一个文件），专找六类断裂：弧线自相矛盾 / 不可逆量倒退 / 关系数值无因
+跳变 / 知识倒流 / 状态接不上 / 世界线冲突。输入是程序拼的瘦投影
+（`phases/cross_stage_projection.py`），按 `[phase3_5].review_window_chars`
+切窗、重叠 1 stage。
+
+**门判**：`error == 0 且 skipped == 0` 才过——coverage 账本逐 check 记
+`checked / skipped / hit`，读不到的文件计 skipped 并显式失败，不再静默
+跳过。有 error 或 skipped 时阻断 Phase 4。
+
+产出 `consistency_report.json`（含 coverage 账本）+ resolution 台账，
+在 extraction 分支上立即 commit；本阶段 patch 过文件时提交整个 work
+scope，未 patch 时仅提交报告。
+
+代码：`extraction/validation/gates/phase3_5_consistency.py`（三层检查）、
+`persona_extraction/phases/cross_stage_projection.py`（瘦投影）、
+`persona_extraction/prompts/cross_stage_review.md`（审校 prompt）、
+`persona_extraction/orchestrator.py::_run_consistency_check`（六段驱动）
 
 ## Phase 4：场景切分
 

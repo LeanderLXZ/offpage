@@ -181,13 +181,14 @@ def run(
     importance_map: dict[str, str] | None = None,
     recorder: RepairRecorder | None = None,
     extra_checkers: list[Any] | None = None,
+    seed_issues: list[Issue] | None = None,
 ) -> RepairResult:
     """Single-pass three-phase repair (Phase A → B → C).
 
     Args:
         importance_map: ``{character_id: importance}`` — raises the
             structural min-examples threshold for main / important
-            characters (主角 → 5, 重要配角 → 3, others → 1).
+            characters (main → 5, important supporting → 3, others → 1).
         recorder: optional ``RepairRecorder`` that receives a structured
             JSONL event at each phase / round / issue / fix / triage /
             completion transition. ``None`` disables structured logging.
@@ -195,6 +196,13 @@ def run(
             registered on top of the built-in pipeline (decision #59 —
             phase 2 baseline reference checkers carry their hints via
             constructor injection, keeping ``FileEntry.content`` clean).
+        seed_issues: when given, Phase A's discovery scan is skipped and
+            these issues are fixed directly. For a caller that already
+            knows what is wrong — Phase 3.5 settling a recorded debt, say —
+            re-running discovery would re-read every file in full to
+            re-derive a conclusion it was handed. The fix loop, scoped
+            recheck, L3 gate and safety valves are unchanged, so a seeded
+            run still proves its fixes landed rather than trusting them.
     """
     if config is None:
         config = RepairConfig()
@@ -230,6 +238,7 @@ def run(
         triager=triager,
         notes_writer=notes_writer,
         recorder=recorder,
+        seed_issues=seed_issues,
     )
 
     passed = outcome.terminated_by == "PASS"
@@ -264,6 +273,7 @@ def _run_one_lifecycle(
     triager: Triager | None,
     notes_writer: NotesWriter | None,
     recorder: RepairRecorder | None,
+    seed_issues: list[Issue] | None = None,
 ) -> _LifecycleOutcome:
     """Execute one complete Phase A → B → C pass.
 
@@ -282,9 +292,16 @@ def _run_one_lifecycle(
     # Phase A — Full check (L0–L3)
     # =================================================================
     logger.info("Phase A: full validation")
+    seeded = seed_issues is not None
     _emit("phase_start", phase="A",
-          file_count=len(files), run_semantic=config.run_semantic)
-    all_issues = pipeline.run(files, run_semantic=config.run_semantic)
+          file_count=len(files), run_semantic=config.run_semantic,
+          seeded=seeded)
+    if seeded:
+        logger.info("Phase A: seeded with %d known issue(s) — "
+                    "skipping discovery scan", len(seed_issues))
+        all_issues = list(seed_issues)
+    else:
+        all_issues = pipeline.run(files, run_semantic=config.run_semantic)
 
     blocking = _filter_blocking(all_issues, config)
 
@@ -323,7 +340,13 @@ def _run_one_lifecycle(
     # L0–L2 errors T0 had just fixed sail through the whole round with zero
     # semantic review and still report PASS. Track every file under review and
     # let the L3 gate below re-check whichever of them this round modified.
-    had_semantic = config.run_semantic
+    # A seeded run knows its issue set exactly, so it can key the semantic
+    # machinery on whether any seed actually is semantic — a purely
+    # mechanical settle then costs zero L3 calls. The reasoning above only
+    # applies to a discovery run, where "Phase A reported nothing semantic"
+    # is genuinely ambiguous.
+    had_semantic = config.run_semantic and (
+        any(i.category == "semantic" for i in blocking) if seeded else True)
     l3_file_set: set[str] = {f.path for f in files}
 
     # =================================================================
@@ -429,6 +452,31 @@ def _run_one_lifecycle(
             i for i in _filter_blocking(recheck_issues, config)
             if i.fingerprint not in accepted_fps
         ]
+
+        # ---- Self-inflicted length sweep (0 token) ----
+        # An LLM tier rewriting a prose field to fix a semantic issue
+        # routinely lands a value longer than its ``maxLength``. That
+        # overrun is a BRAND-NEW fingerprint on a path this round just
+        # touched, so the diff below counts it as ``introduced`` and the
+        # regression valve breaks the round — leaving a mechanically
+        # trivial overrun permanently unfixed (it was the dominant source
+        # of deferred length debt in production ledgers). Sweep those with
+        # T0 before the diff: deterministic, in-round, no valve trip.
+        # Strictly scoped to overruns this round CAUSED (new fingerprint +
+        # path we patched); pre-existing length issues keep their normal
+        # tier routing and the decision #48 tolerance gate.
+        if _sweep_self_inflicted_length(
+                recheck_blocking,
+                files=files,
+                fixers=fixers,
+                prior_fingerprints={i.fingerprint for i in current_issues},
+                round_modified_paths=round_modified_paths):
+            recheck_issues = pipeline.run_scoped(
+                files, patched_paths=[], max_layer=2)
+            recheck_blocking = [
+                i for i in _filter_blocking(recheck_issues, config)
+                if i.fingerprint not in accepted_fps
+            ]
 
         # ---- L3 gate (scoped) ----
         # Gate the files this round actually modified, minus any that still
@@ -898,12 +946,66 @@ def _run_fixer_with_escalation(
     return modified_files, modified_paths, t2_self_report, lifecycle_signal
 
 
+_LENGTH_RULES = ("schema_minLength", "schema_maxLength")
+
+
 def _all_length_only(issues: list[Issue]) -> bool:
     """True when every issue is a pure minLength/maxLength schema miss."""
     return bool(issues) and all(
-        i.category == "schema"
-        and i.rule in ("schema_minLength", "schema_maxLength")
+        i.category == "schema" and i.rule in _LENGTH_RULES
         for i in issues)
+
+
+def _sweep_self_inflicted_length(
+    recheck_blocking: list[Issue],
+    *,
+    files: list[FileEntry],
+    fixers: dict[int, object],
+    prior_fingerprints: set[str],
+    round_modified_paths: dict[str, set[str]],
+) -> bool:
+    """T0-repair length overruns this round's own patches introduced.
+
+    Selection is deliberately narrow — an issue qualifies only when all
+    three hold:
+
+    1. it is a pure ``minLength`` / ``maxLength`` schema miss;
+    2. its fingerprint was NOT in the round's incoming issue set (so it
+       appeared as a consequence of this round's patching, not before it);
+    3. its ``json_path`` is one a fix actually touched this round.
+
+    Anything failing those keeps its normal ``route_tiers`` routing and the
+    decision #48 tolerance gate — this sweep never pre-empts them.
+
+    Returns True when at least one patch was applied (caller re-runs the
+    scoped recheck to pick up the new state).
+    """
+    t0 = fixers.get(0)
+    if t0 is None:
+        return False
+
+    self_inflicted = [
+        i for i in recheck_blocking
+        if i.category == "schema"
+        and i.rule in _LENGTH_RULES
+        and i.fingerprint not in prior_fingerprints
+        and i.json_path in round_modified_paths.get(i.file, set())
+    ]
+    if not self_inflicted:
+        return False
+
+    logger.info(
+        "Self-inflicted length sweep: T0-repairing %d overrun(s) a fix "
+        "introduced this round", len(self_inflicted))
+    result = t0.fix(
+        files=files,
+        issues=self_inflicted,
+        strategy="standard",
+        source_context=None,
+        attempt_num=0,
+        max_attempts=1,
+    )
+    return bool(result.patched_paths)
 
 
 def _length_tolerance_pass(issues: list[Issue],

@@ -1353,6 +1353,122 @@ N. <决策陈述>。
     triage}.py`。
     → logs/change_logs/2026-07-20_140928_ledger-call-type-label.md。
 
+72. **Phase 3.5 重做为六段最终关卡：跨阶段审校 + 台账结清，全定点修复。**
+
+    **触发**：在真实数据上实测旧版（53 stage × 2 角色，0.26s 跑完）——
+    9 项检查里唯一报出东西的 alias 检查产 40 条 warning，**全部误报**：
+    `identity.aliases` 收的是专有称号，`active_names` 收的是关系性称呼，
+    两个集合语义不同，"后者 ⊆ 前者"的前提根本不成立，改不出正确语义，
+    删除。同时 38 条 `deferred_repairs` 台账债一条不在检查面上，且全仓
+    grep 确认台账**零消费方**——只有写入方，没有读取方。
+
+    **重做形态**：三层 + 六段。三层 = L1 结构在位 / L2 派生 1:1 /
+    L3 台账结清；六段 = 程序全扫 → 结清台账债 → 跨阶段连贯审校 →
+    审校发现定点修 → 受影响 stage 重投影 → 复扫门判，段间串行、段内并行。
+
+    **为何 L2 是核心**：决策 #61 把 digest 移出 repair 后，派生文件不再被
+    任何单 stage 环节校验，只有这里能发现投影漂移。
+
+    **为何段 3 必须在段 2 之后**（不是并行）：台账债恰好落在段 3 要投影的
+    字段上（`character_arc` / `stage_delta` / `current_status` /
+    `relationships[].summary`），并行会让审校读到即将变化的脏状态——报出
+    正在被修的问题（浪费调用）或锚定到即将失效的内容。置后还有正收益：
+    段 2 的语义补丁正是那种"局部看合理、跨 stage 可能引入新断裂"的编辑，
+    而段 3 是全流水线唯一能审这个的环节，顺带成为段 2 的终审。代价是墙钟
+    从 ~15min 变 ~25–35min，对最后关卡这个价钱值。
+
+    **为何段 5 不可省**：段 2/4 patch 的是 primary（`stage_events` /
+    `digest_summary` / timeline 条目），而 digest 是其 1:1 代码投影。缺重
+    投影，段 6 的 §32/§33 等值检查必然报出本阶段自己造成的差异——门自己
+    把自己卡死。
+
+    **L3 不采信台账陈述**：台账是 append-only 的历史陈述（"repair 当时
+    修不平"），照搬会让已结清的债永远失败。按债的性质分两条结清路径——
+    schema / structural 类对当前文件重新校验（`json_path` 不再违规即结清，
+    **台账因此自愈，无需回写**）；semantic 类无程序化复验途径，只能凭
+    `{stage_id}.resolved.jsonl` 的 resolution 记录（append-only、逐条即时
+    落盘，故中途崩溃重跑天然幂等）。无复验器时 schema 类债保持未决，
+    fail-closed。
+
+    **跨阶段审校的定位**：Phase A 一次只读一个文件，因此弧线自相矛盾 /
+    不可逆量倒退 / 关系数值无因跳变 / 知识倒流 / 状态接不上 / 世界线冲突
+    这六类**此前零覆盖**。这不是重做 Phase A 已做的事——恰恰相反，它做
+    Phase A 结构上做不到的事。输入是程序拼的瘦投影而非全文：连贯性字段
+    只占快照一小部分，审校只需**定位**断裂，修复环节再读真实文件。实测
+    角色投影 ~410k 字符 / 53 stage，故按 `[phase3_5].review_window_chars`
+    切窗（重叠 1 stage，使边界上的相邻断裂——主要失败模式——至少被一个
+    窗口看见）；实测切出 9 次调用。取舍：放弃跨窗口的长程比对。
+
+    **定点修复复用而非新建**：段 2/4 走 `repair.run(seed_issues=...)`——
+    新增的 seed 入口跳过 Phase A 发现扫描（问题已在手，重跑发现等于把每个
+    文件再全文读一遍去得出同一结论），seed 之后 tier 路由 / scoped 复验 /
+    L3 gate / 安全阀全部照旧，修复仍须自证落地。审校发现在进入修复前做
+    程序级存在性确认（读投影的审校可能锚到不存在的路径，交给 fixer 会白
+    烧一次调用）；`$` 根锚点直接丢弃——把根路径交给 LLM 就是全文重写，
+    即被 #62 删掉的 T3 换马甲。
+
+    **coverage 账本 + 门判**：`passed = error_count == 0 AND
+    skipped_total == 0`。旧版多处 `if snapshot is None: continue` 静默
+    跳过，使"检查通过"与"根本没检查"在报告里无法区分——这比误报更危险。
+    每个 check 现在记 `checked / skipped / hit`，跳过即显式失败。
+
+    **保留计入判定**（用户拍板）：field_completeness / relationship_
+    continuity / target_map_counts 三项实测零命中（5108 次关系比较、
+    2941 次样本数扫描），但零命中只证明这一部作品干净，换作品仍可能有用；
+    代码成本已沉没，保留不增加复杂度。仅与 L1 去重：文件缺失只由 L1 判决
+    一次。
+
+    **提交面扩大**：本阶段从"只写报告"变成"会改 stage 文件"，故 patch 过
+    时提交整个 work scope（修复后的文件 + resolution 台账 + 重投影产物 +
+    报告），未 patch 时仍只提交报告。
+
+    **边界**：不重跑 Phase A 全量语义审校（唯一例外是
+    `semantic_unparseable` 的文件——它 Phase A 实际从未读成，属补课，不是
+    重复）；不新建修复框架；不做事件驱动双线程池（`T-REPAIR-EVENT-DRIVEN`
+    已论证性价比低）；不给段 3 做二轮迭代（循环的开口，边际收益低——改由
+    段 4 的 prompt 附带相邻 stage 瘦视图 + 段 6 程序复扫兜底）；不动程序
+    部分性能（0.26s 已达标，"高效"不是这一阶段的问题）。
+    effort 沿用现有 3 键，不新增：冷读吃 `[llm].effort`，修复与复验用
+    `[repair].recheck_effort`（#65）。新增的 `[phase3_5]` 段只装窗口尺寸，
+    不装推理档位。
+    → logs/change_logs/2026-08-10_164040_phase35-rework-six-segment.md。
+
+73. **length 债的制造机是 repair 轮循环自身，不是 T0 失灵。**
+
+    **诊断**：17 条 `schema_maxLength` 台账债逐条比对 `repair_logs/*.jsonl`，
+    **16 条是 repair 自己制造的**。机制：T2 为修语义而重写散文字段
+    （如 `$.character_arc`）→ 改写后超 `maxLength` → 轮内 scoped recheck
+    捕获为**新指纹** → `introduced=1 > resolved=0` → 回归安全阀
+    （`coordinator.py`）立即 break → Phase C 复扫仍报 → FAIL → 入台账。
+    T0 从未见过它们。典型样本 `repair_S035_stage_snapshots_S035`：
+    `phase_a_result blocking=4`（全 semantic）→ `round_result resolved=0,
+    persisting=4, introduced=1` → `complete FAIL issues_remaining=1`。
+    先前"T0 路由有 bug"或"#48 容差门没触发"的假设均被此证据推翻。
+
+    **修法**（最小、确定性）：轮内 scoped recheck 之后、算 round diff 之前，
+    把**本轮自造**的纯长度类超限先交 T0 就地修。判定严格取三条合取：
+    规则是 `schema_{min,max}Length` ∧ 指纹不在本轮入场 issue 集（说明是
+    patch 的后果而非既存）∧ `json_path` 是本轮某个 fix 碰过的路径。三条
+    有一条不满足就保持原 `route_tiers` 路由与 #48 容差门不变——这个 sweep
+    绝不抢占它们。
+
+    **为何不改回归阀本身**：阀的语义"修的比坏的多就停手"是对的，问题在于
+    一个确定性可修的自造超限本不该计入"坏"。在阀之前把它消掉，比放宽阀
+    的判据更保守。
+
+    **附带两处 T0 强化**：截断改为句读边界收口——这些字段实测是 200+ 字
+    CJK 散文（`event_description` ≈204–244、`character_arc` 207、
+    `snapshot_summary` 212），`text[:limit]` 硬砍留下断句残文；优先切到
+    预算内最后一个句读符，若那会丢掉超过 25% 预算则退回硬切（残桩比略毛糙
+    的尾巴更糟）。另新增 index-keyed dict → array 转换：LLM 常把数组写成
+    `{"0": ..., "1": ...}`，值完整有序、只是容器形状错，按数字键序无损
+    还原比把 dict 整个塞进 list 正确；要求键集恰为 `0..n-1`，否则可能是
+    别的东西，猜测会静默重排真实数据。
+
+    **边界**：不改 `is_regression` 判据；不动 #48 容差门的触发条件；
+    `minLength` 仍不由 T0 填充（补短是编造内容）。
+    → logs/change_logs/2026-08-10_164040_phase35-rework-six-segment.md。
+
 ## Repository
 
 41. Git 里不放小说 / 数据库 / 索引 / 大产物 / 真实用户 package。

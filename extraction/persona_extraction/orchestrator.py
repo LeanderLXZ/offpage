@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import signal
 import sys
 import time
@@ -31,10 +32,22 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .core.config import get_config
-from ..validation.gates.phase3_5_consistency import run_consistency_check, save_report
+from ..validation.gates.phase3_5_consistency import (
+    REVALIDATABLE_CATEGORIES,
+    ConsistencyIssue,
+    run_consistency_check,
+    save_report,
+)
 from .lifecycle.deferred_repair_log import (
+    append_resolution,
     deferrable_issues,
     write_deferred_repairs,
+)
+from .phases.cross_stage_projection import (
+    ProjectionDoc,
+    build_character_projection,
+    build_world_projection,
+    split_windows,
 )
 from .lifecycle.failed_lane_log import write_failed_lane_log
 from .core.git_utils import (
@@ -204,11 +217,13 @@ from ..validation.gates.phase2_baseline import (
 from ..validation.shared.schema_tolerance import validate_with_length_tolerance
 from ..repair import (
     FileEntry as RepairFileEntry,
+    Issue as RepairIssue,
     RepairConfig,
     RepairResult,
     RetryPolicy,
     SourceContext,
     run as run_repair,
+    validate_only,
 )
 from ..repair.checkers.phase2_baseline_refs import (
     FixedRelationshipsPartiesChecker,
@@ -216,6 +231,7 @@ from ..repair.checkers.phase2_baseline_refs import (
     TargetBaselineKeysChecker,
 )
 from ..repair.checkers.semantic import SemanticReviewLLMUnavailable
+from ..repair.field_patch import extract_subtree
 from ..repair.recorder import RepairRecorder
 
 logger = logging.getLogger(__name__)
@@ -224,6 +240,74 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Progress tracker
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Phase 3.5 helpers
+# ---------------------------------------------------------------------------
+
+def _extract_json_array(text: str) -> list:
+    """Pull the JSON array out of a reviewer response.
+
+    Models wrap arrays in prose or fences despite instructions, and a
+    response that cannot be parsed must not read as "no findings" — an
+    unparseable review is an unreviewed window, so the caller treats an
+    empty return as such only when the text genuinely contained ``[]``.
+    """
+    text = text.strip()
+    if not text:
+        return []
+    fenced = re.search(r"```(?:json)?\s*(.+?)```", text, re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    start = text.find("[")
+    end = text.rfind("]")
+    if start < 0 or end <= start:
+        return []
+    try:
+        parsed = json.loads(text[start:end + 1])
+    except json.JSONDecodeError:
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
+def _json_path_exists(path: Path, json_path: str) -> bool:
+    """True when ``json_path`` resolves inside the file at ``path``.
+
+    Guards the fix loop against a reviewer that anchored to a field which
+    is not there — reading the projection, not the file, makes that a real
+    possibility, and dispatching a fixer at a phantom path burns an LLM
+    call to discover nothing.
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    try:
+        extract_subtree(data, json_path)
+    except (KeyError, IndexError, TypeError, ValueError):
+        return False
+    return True
+
+
+def _dedupe_findings(
+    findings: list[ConsistencyIssue],
+) -> list[ConsistencyIssue]:
+    """Collapse findings duplicated by the window overlap.
+
+    Adjacent review windows share one stage on purpose, so a break sitting
+    on that stage is legitimately reported twice; keying on file + path +
+    rule keeps the first and drops the echo.
+    """
+    seen: set[tuple[str, str, str]] = set()
+    out: list[ConsistencyIssue] = []
+    for f in findings:
+        key = (f.file, f.json_path, f.rule)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f)
+    return out
+
 
 def _fmt_duration(seconds: float) -> str:
     """Format seconds as human-readable string."""
@@ -3560,80 +3644,514 @@ class ExtractionOrchestrator:
             tracker.finish_stage()
 
     def _run_consistency_check(self) -> bool:
-        """Run Phase 3.5 cross-stage consistency check.
+        """Run Phase 3.5 — the last gate stage files pass through.
 
-        Returns True if no error-level issues found (safe to proceed).
-        Returns False if errors exist (should block Phase 4).
+        Six segments, serial between and parallel within:
 
-        The generated ``consistency_report.json`` is committed to the
-        extraction branch before returning — regardless of pass/fail.
-        Committing on both paths keeps ``checkout_main`` clean (report
-        sits in the work scope) and ensures the squash-merge includes
-        the report as documented in current_status.md.
+        1. programmatic full scan (0 token) — establishes the debt list
+        2. debt settlement — targeted field patches, no re-discovery
+        3. cross-stage continuity review — the one view no earlier phase has
+        4. review findings settled through the same targeted fix loop
+        5. post-processing re-projection of touched stages
+        6. re-scan, verdict, report
+
+        Segments 3–4 run *after* 2 on purpose: the recorded debts sit on
+        exactly the fields segment 3 projects, so reviewing first would read
+        a state about to change — and running the review last lets it double
+        as the audit of the semantic patches segment 2 just applied.
+
+        Returns True when the gate passes (safe to proceed to Phase 4).
+        The report is committed on both paths so it never lingers as
+        uncommitted dirt blocking ``checkout_main``.
         """
         assert self.pipeline and self.phase3
-        print("\n--- Phase 3.5: Cross-stage consistency check ---")
+        print("\n--- Phase 3.5: Final gate (six segments) ---")
         stage_ids = [b.stage_id for b in self.phase3.stages
                      if b.state.value == "committed"]
         char_ids = self.pipeline.target_characters or []
+        work_id = self.pipeline.work_id
+        work_dir = self.project_root / "works" / work_id
+        revalidate = self._p35_build_revalidator(work_dir, stage_ids, char_ids)
 
+        # ---- Segment 1: programmatic scan ----
+        print("  [1/6] Programmatic scan...")
         report = run_consistency_check(
-            self.project_root, self.pipeline.work_id, char_ids, stage_ids)
+            self.project_root, work_id, char_ids, stage_ids,
+            revalidate_schema=revalidate)
+        print(f"        {report.error_count} error(s), "
+              f"{report.warning_count} warning(s), "
+              f"{report.skipped_total} skipped")
 
-        # Save + commit the report on the extraction branch. Commit is
-        # best-effort — the report save itself is authoritative, the
-        # commit is so the file doesn't linger as uncommitted dirt when
-        # the orchestrator later attempts checkout_main().
-        save_report(report, self.project_root, self.pipeline.work_id)
-        self._commit_consistency_report(stage_ids)
+        # ---- Segment 2: settle recorded debts ----
+        debts = [i for i in report.issues if i.layer == "L3"]
+        touched: set[str] = set()
+        if debts:
+            print(f"  [2/6] Settling {len(debts)} recorded debt(s)...")
+            touched |= self._p35_settle_debts(work_dir, debts)
+        else:
+            print("  [2/6] No recorded debts — skipped")
 
-        # Print summary
-        errors = sum(1 for i in report.issues if i.severity == "error")
-        warnings = sum(1 for i in report.issues if i.severity == "warning")
-        print(f"  Results: {errors} errors, {warnings} warnings, "
-              f"{len(report.issues) - errors - warnings} info")
+        # ---- Segment 3: cross-stage continuity review ----
+        print("  [3/6] Cross-stage continuity review...")
+        findings = self._p35_cross_stage_review(
+            work_dir, char_ids, stage_ids)
+        print(f"        {len(findings)} continuity finding(s)")
 
-        if errors > 0:
-            print("  [BLOCKED] Errors found — Phase 4 blocked. "
-                  "Review consistency_report.json and fix before retrying.")
+        # ---- Segment 4: settle review findings ----
+        if findings:
+            print(f"  [4/6] Settling {len(findings)} finding(s)...")
+            touched |= self._p35_settle_debts(work_dir, findings)
+        else:
+            print("  [4/6] Nothing to settle — skipped")
+
+        # ---- Segment 5: re-project derived artifacts ----
+        # Segments 2 and 4 patch primaries (stage_events, digest_summary,
+        # timeline entries). The digests are 1:1 code projections of those
+        # (decision #61), so without this the L2 equality checks in segment
+        # 6 would fail on a discrepancy this phase itself created.
+        touched_stages = self._p35_stages_of(touched, stage_ids)
+        if touched_stages:
+            print(f"  [5/6] Re-projecting {len(touched_stages)} stage(s)...")
+            self._p35_reproject(work_id, touched_stages, char_ids)
+        else:
+            print("  [5/6] No files touched — skipped")
+
+        # ---- Segment 6: re-scan + verdict ----
+        print("  [6/6] Re-scan + verdict...")
+        report = run_consistency_check(
+            self.project_root, work_id, char_ids, stage_ids,
+            revalidate_schema=revalidate)
+
+        save_report(report, self.project_root, work_id)
+        self._commit_consistency_report(stage_ids, touched=bool(touched))
+
+        print(f"  Results: {report.error_count} errors, "
+              f"{report.warning_count} warnings, "
+              f"{report.skipped_total} skipped")
+        for c in report.coverage:
+            flag = "  ⚠ SKIPS" if c.skipped else ""
+            print(f"        [{c.layer}] {c.name}: checked={c.checked} "
+                  f"hit={c.hit} skipped={c.skipped}{flag}")
+
+        if not report.passed:
+            print("  [BLOCKED] Gate failed — Phase 4 blocked. "
+                  "Review consistency_report.json.")
             for issue in report.issues:
                 if issue.severity == "error":
-                    print(f"    [ERROR] [{issue.category}] {issue.location}: "
-                          f"{issue.message}")
+                    print(f"    [ERROR] [{issue.layer}/{issue.category}] "
+                          f"{issue.location}: {issue.message}")
             return False
 
-        print("  [OK] No blocking issues found.")
+        print("  [OK] Gate passed.")
         return True
 
-    def _commit_consistency_report(self, stage_ids: list[str]) -> None:
-        """Commit consistency_report.json on the extraction branch.
+    # ------------------------------------------------------------------
+    # Phase 3.5 segments
+    # ------------------------------------------------------------------
 
-        Called right after ``save_report`` in ``_run_consistency_check``.
-        A missing commit here would leave the tracked report as
-        uncommitted dirt, blocking the final ``checkout_main`` under
-        the work scope (see gpt-5 H4).
+    def _p35_repair_files(
+        self, work_dir: Path, stage_ids: list[str], char_ids: list[str],
+    ) -> dict[str, RepairFileEntry]:
+        """All stage files of the work, keyed by absolute path.
+
+        Built once from ``_collect_stage_files`` so schema binding stays in
+        exactly one place — Phase 3.5 must never grow its own copy of the
+        path→schema mapping, or the two drift and the gate starts validating
+        against the wrong contract.
+        """
+        by_path: dict[str, RepairFileEntry] = {}
+        for idx, stage_id in enumerate(stage_ids):
+            for f in self._collect_stage_files(
+                    work_dir, stage_id, idx + 1, char_ids):
+                by_path.setdefault(f.path, f)
+        return by_path
+
+    def _p35_build_revalidator(
+        self, work_dir: Path, stage_ids: list[str], char_ids: list[str],
+    ) -> Callable[[str], list[str]]:
+        """``file_path -> [violating json_path, ...]`` for the L3 layer.
+
+        Lets the gate re-adjudicate a recorded schema debt against the file
+        as it stands now instead of replaying the ledger's claim, which is
+        what makes a settled debt disappear without anyone writing to the
+        ledger.
+        """
+        entries = self._p35_repair_files(work_dir, stage_ids, char_ids)
+
+        def _revalidate(file_path: str) -> list[str]:
+            entry = entries.get(file_path)
+            if entry is None:
+                # Not a file this phase governs — treat as no violations
+                # rather than inventing a verdict for it.
+                return []
+            entry.content = None  # force a re-read; the file may have changed
+            issues = validate_only(files=[entry], run_semantic=False)
+            return [i.json_path for i in issues if i.severity == "error"]
+
+        return _revalidate
+
+    def _p35_settle_debts(
+        self, work_dir: Path, issues: list[ConsistencyIssue],
+    ) -> set[str]:
+        """Fix known issues in place, one repair transaction per file.
+
+        Seeds ``repair.run`` with the issues instead of letting it rediscover
+        them: the finding is already in hand, and a discovery pass would
+        re-read every file in full to reach the same conclusion. Everything
+        after the seed — tier routing, scoped recheck, L3 gate, safety
+        valves — is the standard loop, so a fix still has to prove it landed.
+
+        Returns the set of file paths that were actually modified.
         """
         assert self.pipeline
-        rel = (
-            f"works/{self.pipeline.work_id}/analysis/consistency_report.json")
+        work_id = self.pipeline.work_id
+        by_file: dict[str, list[ConsistencyIssue]] = {}
+        for issue in issues:
+            if not issue.file or not issue.json_path or issue.json_path == "$":
+                # A root-anchored or unlocatable finding has no field to
+                # patch; a fixer handed one rewrites the whole document,
+                # which is the full-file regeneration decision #62 removed.
+                logger.info("Phase 3.5: skipping unlocatable issue %s",
+                            issue.message[:80])
+                continue
+            by_file.setdefault(issue.file, []).append(issue)
+        if not by_file:
+            return set()
+
+        ra_cfg = get_config().repair
+        importance_map = load_importance_map(self.project_root, work_id)
+        progress_dir = work_dir / "analysis" / "progress"
+        repair_logs_dir = progress_dir / "repair_logs"
+        repair_logs_dir.mkdir(parents=True, exist_ok=True)
+
+        def _llm_call(prompt: str, timeout: int,
+                      effort: str | None = None,
+                      call_type: str | None = None) -> str:
+            result = run_with_retry(
+                self.reviewer_backend or self.backend,
+                prompt,
+                timeout_seconds=timeout,
+                lane_name="phase3.5-fix",
+                effort=effort,
+                call_type=call_type,
+            )
+            if not result.success:
+                raise SemanticReviewLLMUnavailable(
+                    result.error or "LLM call failed")
+            return result.text
+
+        entries = self._p35_repair_files(
+            work_dir,
+            [b.stage_id for b in self.phase3.stages] if self.phase3 else [],
+            self.pipeline.target_characters or [])
+
+        def _settle_one(fpath: str) -> tuple[str, bool, list[ConsistencyIssue]]:
+            entry = entries.get(fpath)
+            if entry is None:
+                logger.warning("Phase 3.5: no repair entry for %s", fpath)
+                return fpath, False, []
+            entry.content = None
+            file_issues = by_file[fpath]
+            stage_id = self._p35_stage_of(fpath) or "phase3.5"
+            source_ctx = SourceContext(
+                work_path=str(work_dir),
+                stage_id=stage_id,
+                chapter_summaries_dir=str(
+                    work_dir / "analysis" / "chapter_summaries"),
+                chapters_dir=str(
+                    self.project_root / "sources" / "works"
+                    / work_id / "chapters"),
+            )
+            seeds = [
+                RepairIssue(
+                    file=fpath,
+                    json_path=i.json_path,
+                    category=i.category if i.category in (
+                        "semantic", "schema", "structural", "cross_file")
+                    else "semantic",
+                    severity="error",
+                    rule=i.rule or "phase3_5_finding",
+                    message=i.message,
+                )
+                for i in file_issues
+            ]
+            rec_path = repair_logs_dir / (
+                f"phase3_5_{stage_id}_{_repair_slug(fpath)}.jsonl")
+            with RepairRecorder(rec_path) as recorder:
+                result = run_repair(
+                    files=[entry],
+                    config=RepairConfig(
+                        max_rounds=ra_cfg.total_round_limit,
+                        run_semantic=True,
+                        triage_enabled=False,
+                        semantic_timeout_s=ra_cfg.semantic_timeout_s,
+                        t1_timeout_s=ra_cfg.t1_timeout_s,
+                        t2_timeout_s=ra_cfg.t2_timeout_s,
+                        triage_timeout_s=ra_cfg.triage_timeout_s,
+                        recheck_effort=ra_cfg.recheck_effort,
+                        retry_policy=RetryPolicy(
+                            t0_max=ra_cfg.t0_retry,
+                            t1_max=ra_cfg.t1_retry,
+                            t2_max=ra_cfg.t2_retry,
+                            max_total_rounds=ra_cfg.total_round_limit,
+                        ),
+                    ),
+                    source_context=source_ctx,
+                    llm_call=_llm_call,
+                    importance_map=importance_map,
+                    recorder=recorder,
+                    seed_issues=seeds,
+                )
+            return fpath, result.passed, file_issues
+
+        modified: set[str] = set()
+        concurrency = max(1, ra_cfg.repair_concurrency)
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            futures = {pool.submit(_settle_one, p): p for p in by_file}
+            for fut in as_completed(futures):
+                try:
+                    fpath, passed, settled = fut.result()
+                except RateLimitHardStop:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    raise
+                except Exception:  # noqa: BLE001
+                    logger.exception("Phase 3.5 settle raised for %s",
+                                     futures[fut])
+                    continue
+                modified.add(fpath)
+                if passed:
+                    self._p35_record_resolutions(work_dir, settled)
+        return modified
+
+    def _p35_record_resolutions(
+        self, work_dir: Path, settled: list[ConsistencyIssue],
+    ) -> None:
+        """Write resolution rows for settled semantic debts.
+
+        Only semantic debts get one. A schema debt proves itself settled by
+        no longer failing validation, and recording a resolution for it would
+        be worse than redundant — the gate would honour that record forever,
+        suppressing the debt even if the field broke again later.
+
+        The row's key must match the ledger's (``file::json_path::rule``),
+        so ``rule`` is taken from the issue verbatim rather than parsed back
+        out of the message.
+        """
+        for issue in settled:
+            if issue.category in REVALIDATABLE_CATEGORIES:
+                continue
+            stage_id = self._p35_stage_of(issue.file)
+            if not stage_id:
+                continue
+            append_resolution(
+                work_dir, stage_id,
+                {"file": issue.file, "json_path": issue.json_path,
+                 "rule": issue.rule},
+                resolved_by="phase3.5",
+                note=issue.message[:200],
+            )
+
+    @staticmethod
+    def _p35_stage_of(file_path: str) -> str | None:
+        """Extract the ``S###`` stage id from an artifact path."""
+        m = re.search(r"(S\d{3})", Path(file_path).name)
+        return m.group(1) if m else None
+
+    def _p35_stages_of(
+        self, file_paths: set[str], stage_ids: list[str],
+    ) -> list[str]:
+        known = set(stage_ids)
+        out = {s for p in file_paths
+               if (s := self._p35_stage_of(p)) and s in known}
+        return sorted(out)
+
+    def _p35_reproject(
+        self, work_id: str, stage_ids: list[str], char_ids: list[str],
+    ) -> None:
+        """Re-run post-processing for stages whose primaries changed."""
+        assert self.phase3
+        ranges = {b.stage_id: b.chapters for b in self.phase3.stages}
+        for stage_id in stage_ids:
+            try:
+                errs, warns = run_stage_post_processing(
+                    self.project_root, work_id, stage_id, char_ids,
+                    ranges.get(stage_id, ""))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Phase 3.5 re-projection failed for %s: %s",
+                               stage_id, exc)
+                continue
+            for e in errs:
+                logger.warning("re-projection %s: %s", stage_id, e)
+
+    def _p35_cross_stage_review(
+        self, work_dir: Path, char_ids: list[str], stage_ids: list[str],
+    ) -> list[ConsistencyIssue]:
+        """Review each subject's stage timeline for cross-stage breaks.
+
+        This is the only place in the pipeline where more than one stage is
+        in view at once, so it looks for exactly the breaks that require
+        that view and nothing else. Input is a thin projection rather than
+        the files themselves — the continuity-bearing fields are a small
+        fraction of a snapshot, and the reviewer only has to *locate* a
+        break; the fix loop reads the real file afterwards.
+        """
+        p35 = get_config().phase3_5
+        max_chars = p35.review_window_chars
+        overlap = p35.review_window_overlap_stages
+        docs: list[ProjectionDoc] = []
+        for char_id in char_ids:
+            docs.extend(split_windows(
+                build_character_projection(work_dir, char_id, stage_ids),
+                max_chars=max_chars, overlap_stages=overlap))
+        docs.extend(split_windows(
+            build_world_projection(work_dir, stage_ids),
+            max_chars=max_chars, overlap_stages=overlap))
+
+        template = (Path(__file__).parent / "prompts"
+                    / "cross_stage_review.md").read_text(encoding="utf-8")
+        assert self.pipeline
+        work_id = self.pipeline.work_id
+        valid_stages = set(stage_ids)
+
+        def _review_one(doc: ProjectionDoc) -> list[ConsistencyIssue]:
+            window_note = (f"，窗口 {doc.window_label}"
+                           if doc.window_label else "")
+            prompt = template.format(
+                work_id=work_id,
+                subject=doc.subject,
+                subject_kind=doc.kind,
+                subject_label=("世界线" if doc.kind == "world"
+                               else f"角色 {doc.subject}"),
+                stage_span=doc.stage_span,
+                stage_count=doc.stage_count,
+                window_note=window_note,
+                projection=doc.text,
+            )
+            # Cold read: omit effort so it inherits [llm].effort, per the
+            # decision #65 split — this pass sees the timeline for the first
+            # time, unlike the recheck tiers.
+            result = run_with_retry(
+                self.reviewer_backend or self.backend,
+                prompt,
+                timeout_seconds=get_config().repair.semantic_timeout_s,
+                lane_name=f"phase3.5-review[{doc.subject}]",
+                call_type="check_full",
+            )
+            if not result.success:
+                # A review that never returned is not a clean review. Report
+                # it as a blocking issue so the gate fails loudly instead of
+                # counting the unreviewed window as break-free (decision #70).
+                return [ConsistencyIssue(
+                    "error", "cross_stage_review_unavailable",
+                    f"{doc.subject}/{doc.stage_span}",
+                    f"continuity review failed: {result.error}",
+                    layer="L3")]
+            return self._p35_parse_findings(result.text, doc, valid_stages,
+                                            work_dir)
+
+        findings: list[ConsistencyIssue] = []
+        concurrency = max(1, get_config().repair.repair_concurrency)
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            futures = {pool.submit(_review_one, d): d for d in docs}
+            for fut in as_completed(futures):
+                try:
+                    findings.extend(fut.result())
+                except RateLimitHardStop:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    raise
+                except Exception:  # noqa: BLE001
+                    logger.exception("Phase 3.5 review raised for %s",
+                                     futures[fut].subject)
+        return _dedupe_findings(findings)
+
+    def _p35_parse_findings(
+        self, text: str, doc: ProjectionDoc, valid_stages: set[str],
+        work_dir: Path,
+    ) -> list[ConsistencyIssue]:
+        """Parse reviewer output into locatable, verified findings.
+
+        Every finding is confirmed against the file before it is trusted: a
+        reviewer working from a projection can anchor to a path that does
+        not exist, and handing that to a fixer spends an LLM call to
+        discover nothing is there.
+        """
+        rows = _extract_json_array(text)
+        out: list[ConsistencyIssue] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            stage_id = str(row.get("stage_id", "")).strip()
+            json_path = str(row.get("json_path", "")).strip()
+            message = str(row.get("message", "")).strip()
+            if stage_id not in valid_stages or not message:
+                continue
+            if not json_path or json_path == "$":
+                continue
+            target = self._p35_finding_file(work_dir, doc, stage_id)
+            if target is None or not target.exists():
+                continue
+            if not _json_path_exists(target, json_path):
+                logger.info("Phase 3.5 review: dropping finding on absent "
+                            "path %s in %s", json_path, target.name)
+                continue
+            severity = ("warning" if str(row.get("severity")) == "warning"
+                        else "error")
+            rule = str(row.get("rule", "")).strip() or "cross_stage_break"
+            out.append(ConsistencyIssue(
+                severity, "semantic", f"{doc.subject}/{stage_id}",
+                f"{rule}: {message}",
+                layer="L3", file=str(target), json_path=json_path,
+                rule=rule))
+        return out
+
+    @staticmethod
+    def _p35_finding_file(
+        work_dir: Path, doc: ProjectionDoc, stage_id: str,
+    ) -> Path | None:
+        if doc.kind == "world":
+            return work_dir / "world" / "stage_snapshots" / f"{stage_id}.json"
+        return (work_dir / "characters" / doc.subject / "canon"
+                / "stage_snapshots" / f"{stage_id}.json")
+
+    def _commit_consistency_report(
+        self, stage_ids: list[str], touched: bool = False,
+    ) -> None:
+        """Commit the Phase 3.5 output on the extraction branch.
+
+        Commits the whole work scope when the phase patched files: the
+        report alone would leave the repaired stage files and the resolution
+        ledgers as uncommitted dirt, which blocks the final
+        ``checkout_main`` under the work scope.
+        """
+        assert self.pipeline
         stage_span = (
             f"{stage_ids[0]}..{stage_ids[-1]}"
             if stage_ids else "no-stages")
-        message = (
-            f"phase3.5: consistency_report {stage_span}\n\n"
-            f"Cross-stage consistency check output.\n"
-            f"Automated by persona-extraction orchestrator.")
+        if touched:
+            files = None  # whole work scope
+            message = (
+                f"phase3.5: gate + settled repairs {stage_span}\n\n"
+                f"Cross-stage gate output, targeted field repairs, "
+                f"resolution ledgers and re-projected derived artifacts.\n"
+                f"Automated by persona-extraction orchestrator.")
+        else:
+            files = [f"works/{self.pipeline.work_id}/analysis/"
+                     f"consistency_report.json"]
+            message = (
+                f"phase3.5: consistency_report {stage_span}\n\n"
+                f"Cross-stage consistency check output.\n"
+                f"Automated by persona-extraction orchestrator.")
         try:
             sha = commit_stage(
                 self.project_root, "phase3.5",
                 work_id=self.pipeline.work_id,
-                message=message, files=[rel])
+                message=message, files=files)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "Consistency report commit raised (non-fatal): %s", exc)
             return
         if sha:
-            print(f"  [git] Committed consistency_report as {sha}")
+            print(f"  [git] Committed phase3.5 output as {sha}")
         else:
             # commit_stage returns None when the diff is empty — the
             # report was already committed or the file is unchanged.

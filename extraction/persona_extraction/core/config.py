@@ -132,6 +132,21 @@ class Phase4Config:
 
 
 @dataclass(frozen=True)
+class Phase35Config:
+    # Character budget for one cross-stage review call. A whole work's
+    # character projection runs to several hundred thousand characters;
+    # handing that to a single call measurably costs the reviewer its
+    # ability to spot a local break, so the projection is sliced into
+    # windows of this size. Smaller = more calls, finer attention;
+    # larger = fewer calls, longer comparison span.
+    review_window_chars: int = 120_000
+    # Stages re-included from the previous window. One is enough to keep a
+    # break sitting exactly on a boundary visible to some window (the
+    # adjacent-stage case, which dominates); more only re-reviews content.
+    review_window_overlap_stages: int = 1
+
+
+@dataclass(frozen=True)
 class RepairAgentConfig:
     t0_retry: int = 1
     t1_retry: int = 3
@@ -252,6 +267,7 @@ class Config:
     phase2: Phase2Config = field(default_factory=Phase2Config)
     phase3: Phase3Config = field(default_factory=Phase3Config)
     phase4: Phase4Config = field(default_factory=Phase4Config)
+    phase3_5: Phase35Config = field(default_factory=Phase35Config)
     repair: RepairAgentConfig = field(default_factory=RepairAgentConfig)
     backoff: BackoffConfig = field(default_factory=BackoffConfig)
     rate_limit: RateLimitConfig = field(default_factory=RateLimitConfig)
@@ -272,6 +288,7 @@ _SECTION_TYPES: dict[str, type] = {
     "phase2": Phase2Config,
     "phase3": Phase3Config,
     "phase4": Phase4Config,
+    "phase3_5": Phase35Config,
     "repair": RepairAgentConfig,
     "backoff": BackoffConfig,
     "rate_limit": RateLimitConfig,

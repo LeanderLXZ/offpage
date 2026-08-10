@@ -139,8 +139,9 @@
    一个 snapshot/memory + identity，不传全部历史。`stage_snapshot` 含本
    stage 全量 voice / behavior / boundary / failure_modes 字段（演变链
    承载，无独立 baseline 文件）；任何阶段 char_support 可修正 identity
-5. **阶段 3.5 — 跨阶段一致性检查**：Phase 3 全部 stage 提交后，运行程序化
-   跨阶段一致性检查（零 token），可选 LLM 裁定标记项。有 error 时阻断 Phase 4
+5. **阶段 3.5 — 最终关卡**：Phase 3 全部 stage 提交后运行六段流程——程序
+   全扫（三层：结构 / 派生 1:1 / 台账结清）→ 结清遗留债 → 跨阶段连贯审校
+   → 定点修 → 重投影 → 复扫门判。error 或 skipped 非零时阻断 Phase 4
 6. **阶段 4 — 场景切分**：Phase 3.5 通过后，逐 stage 范围读原文，按自然场景
    边界切分产出 scene_archive 条目。各 stage 间无依赖，可并行。与 Phase 3
    分离以避免单次调用任务过重影响质量

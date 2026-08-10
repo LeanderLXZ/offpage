@@ -59,7 +59,7 @@ MAINTENANCE — 编辑本文件前请先阅读。
 |---|---|
 | 项目阶段 | 架构脚手架完成；schema + 提取管线 + simulation 设计已落地，无运行时代码。作品级提取状态在 `works/{work_id}/analysis/progress/`，此处只跟框架级进度 |
 | 已有 | 完整目录脚手架 + `docs/architecture/` 正式文档；角色 / 世界 / 用户 schema（索引 → `docs/architecture/schema_reference.md`）；simulation 仅设计（flows / contracts / retrieval / prompt templates）；`prompts/` 手动场景；提取编排器 `extraction/persona_extraction/`（→ `architecture.md` §自动化抽取流水线 + `extraction/README.md`）；`users/_template/` 用户包模板 |
-| 当前 gap | 提取管线尚未端到端跑通（无完成的角色包）；无真实用户包；无 simulation 服务实现；无终端适配器；无检索实现（设计已定，等提取产物）；无最终扮演 prompt |
+| 当前 gap | Phase 3.5 最终关卡已实现但尚未在真实数据上跑过（首跑会因 38 条历史台账债判 FAIL，属预期——债须结清才进 Phase 4）；Phase 4 未跑；无完成的角色包；无真实用户包；无 simulation 服务实现；无终端适配器；无检索实现（设计已定，等提取产物）；无最终扮演 prompt |
 | 生效规则 | 内容语言 = 作品语言；真实用户包仅本地；git 不入小说 / 数据库 / 索引 / 大产物（决策 #41）；`works/*` 跟踪细则 → `works/README.md`；`logs/` 以写为主不主动读；阶段按自然剧情边界（默认 10 章 / 8–15） |
 
 ## 下一步 <!-- holo:heading -->
