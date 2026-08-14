@@ -561,7 +561,10 @@ Phase 3 记下的欠债是否已结清（决策 #72）。
 - **L3 台账结清** — 读 `deferred_repairs/{stage_id}.jsonl`，但**不采信其
   陈述**：schema / structural 类债对当前文件重新校验（修好的自动销账，
   无需回写台账）；semantic 类无程序化复验途径，只能凭
-  `{stage_id}.resolved.jsonl` 的 resolution 记录结清。
+  `{stage_id}.resolved.jsonl` 的 resolution 记录结清。复验对某文件抛错时
+  该文件按「不可复验」标记，其每条债各自记 skipped 并报出——**不可复验
+  不等于已结清**。债的 stage 取自台账行本身而非文件名，故 work 级产物
+  （如 catalog）这类文件名不含 `S###` 的债同样能写出 resolution。
 
 **辅助检查**（计入判定）：快照字段完整性、关系连续性（相邻 stage 的
 attitude/trust/intimacy 变化是否有 driving_events）、target_map 样本数
@@ -575,7 +578,8 @@ attitude/trust/intimacy 变化是否有 driving_events）、target_map 样本数
 修复环节再读真实文件。投影按 `[phase3_5].review_window_chars` 切窗、窗间
 重叠 `review_window_overlap_stages` 个 stage，使落在边界上的相邻断裂至少
 被一个窗口看见。审校发现在进入修复前先做程序级存在性确认，`$` 根锚点与
-不存在的路径直接丢弃。
+不存在的路径直接丢弃。审校**调用失败**或**返回不可解析内容**都记为阻塞
+问题——读不出结论的窗口是没审过，不能与「审过且干净」的空发现混同。
 
 **定点修复**：段 2/4 复用 `repair.run(seed_issues=...)` —— 已知问题直接
 进修复循环，跳过 Phase A 的发现扫描（问题已在手，重跑发现等于把每个文件

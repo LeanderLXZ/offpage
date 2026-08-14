@@ -245,29 +245,31 @@ logger = logging.getLogger(__name__)
 # Phase 3.5 helpers
 # ---------------------------------------------------------------------------
 
-def _extract_json_array(text: str) -> list:
+def _extract_json_array(text: str) -> list | None:
     """Pull the JSON array out of a reviewer response.
 
-    Models wrap arrays in prose or fences despite instructions, and a
-    response that cannot be parsed must not read as "no findings" — an
-    unparseable review is an unreviewed window, so the caller treats an
-    empty return as such only when the text genuinely contained ``[]``.
+    Returns the parsed list, or ``None`` when the response could not be
+    parsed at all. The distinction is the point: models wrap arrays in prose
+    or fences despite instructions, and a response nobody could read is an
+    *unreviewed* window, not a clean one. Collapsing both onto ``[]`` would
+    let a garbled reply pass as "no breaks found" — the silent half-review
+    decision #70 rules out.
     """
     text = text.strip()
     if not text:
-        return []
+        return None
     fenced = re.search(r"```(?:json)?\s*(.+?)```", text, re.DOTALL)
     if fenced:
         text = fenced.group(1).strip()
     start = text.find("[")
     end = text.rfind("]")
     if start < 0 or end <= start:
-        return []
+        return None
     try:
         parsed = json.loads(text[start:end + 1])
     except json.JSONDecodeError:
-        return []
-    return parsed if isinstance(parsed, list) else []
+        return None
+    return parsed if isinstance(parsed, list) else None
 
 
 def _json_path_exists(path: Path, json_path: str) -> bool:
@@ -297,11 +299,18 @@ def _dedupe_findings(
     Adjacent review windows share one stage on purpose, so a break sitting
     on that stage is legitimately reported twice; keying on file + path +
     rule keeps the first and drops the echo.
+
+    ``location`` joins the key so that findings carrying no file anchor —
+    a window whose review failed or came back unparseable — stay one entry
+    per window. Without it every failed window in a run would collapse into
+    a single report line, understating how much went unreviewed. It does
+    not weaken the overlap dedupe: two windows reporting the same break
+    share the same ``subject/stage_id`` location.
     """
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str]] = set()
     out: list[ConsistencyIssue] = []
     for f in findings:
-        key = (f.file, f.json_path, f.rule)
+        key = (f.file, f.json_path, f.rule, f.location)
         if key in seen:
             continue
         seen.add(key)
@@ -3852,7 +3861,9 @@ class ExtractionOrchestrator:
                 return fpath, False, []
             entry.content = None
             file_issues = by_file[fpath]
-            stage_id = self._p35_stage_of(fpath) or "phase3.5"
+            stage_id = (next((i.stage_id for i in file_issues if i.stage_id),
+                             None)
+                        or self._p35_stage_of(fpath) or "phase3.5")
             source_ctx = SourceContext(
                 work_path=str(work_dir),
                 stage_id=stage_id,
@@ -3936,12 +3947,20 @@ class ExtractionOrchestrator:
         The row's key must match the ledger's (``file::json_path::rule``),
         so ``rule`` is taken from the issue verbatim rather than parsed back
         out of the message.
+
+        ``stage_id`` likewise comes from the ledger row, not from the file
+        name. A work-level artifact (a catalog, say) carries no ``S###`` in
+        its path, and deriving the stage from the path would leave such a
+        debt with nowhere to record its resolution — permanently unsettled.
         """
         for issue in settled:
             if issue.category in REVALIDATABLE_CATEGORIES:
                 continue
-            stage_id = self._p35_stage_of(issue.file)
+            stage_id = issue.stage_id or self._p35_stage_of(issue.file)
             if not stage_id:
+                logger.warning(
+                    "Phase 3.5: no stage for %s — resolution not recorded",
+                    issue.file)
                 continue
             append_resolution(
                 work_dir, stage_id,
@@ -4042,10 +4061,10 @@ class ExtractionOrchestrator:
                 # it as a blocking issue so the gate fails loudly instead of
                 # counting the unreviewed window as break-free (decision #70).
                 return [ConsistencyIssue(
-                    "error", "cross_stage_review_unavailable",
+                    "error", "semantic",
                     f"{doc.subject}/{doc.stage_span}",
                     f"continuity review failed: {result.error}",
-                    layer="L3")]
+                    layer="L3", rule="cross_stage_review_unavailable")]
             return self._p35_parse_findings(result.text, doc, valid_stages,
                                             work_dir)
 
@@ -4074,8 +4093,22 @@ class ExtractionOrchestrator:
         reviewer working from a projection can anchor to a path that does
         not exist, and handing that to a fixer spends an LLM call to
         discover nothing is there.
+
+        An unparseable response is reported as a blocking issue rather than
+        an empty finding list — the window went unreviewed, and saying
+        nothing about it would read as "reviewed, nothing found".
         """
         rows = _extract_json_array(text)
+        if rows is None:
+            logger.warning(
+                "Phase 3.5 review: unparseable response for %s/%s",
+                doc.subject, doc.stage_span)
+            return [ConsistencyIssue(
+                "error", "semantic",
+                f"{doc.subject}/{doc.stage_span}",
+                "continuity review returned an unparseable response — "
+                "this window was not reviewed",
+                layer="L3", rule="cross_stage_review_unparseable")]
         out: list[ConsistencyIssue] = []
         for row in rows:
             if not isinstance(row, dict):

@@ -292,7 +292,8 @@ extraction/
 │   ├── phases/                               ← 相位特化
 │   │   ├── scene_archive.py                  ← Phase 4 场景切分
 │   │   ├── snapshot_merge.py                 ← char_snapshot 4 sub-lane 合并（决策 #55）
-│   │   └── post_processing.py                ← 程序化后处理（digest/catalog）
+│   │   ├── post_processing.py                ← 程序化后处理（digest/catalog）
+│   │   └── cross_stage_projection.py         ← Phase 3.5 跨阶段瘦投影（决策 #72）
 │   ├── prompts/                              ← 提取的 prompt 模板
 │   │   ├── summarization.md                  ← Phase 0 章节归纳
 │   │   ├── analysis_foundation.md            ← Phase 1 lane: foundation (decision #54)
@@ -305,7 +306,8 @@ extraction/
 │   │   ├── world_extraction.md               ← Phase 3 世界层提取
 │   │   ├── character_snapshot_extraction.md  ← Phase 3 角色快照提取
 │   │   ├── character_support_extraction.md   ← Phase 3 角色支持层提取
-│   │   └── scene_split.md                    ← Phase 4 场景切分
+│   │   ├── scene_split.md                    ← Phase 4 场景切分
+│   │   └── cross_stage_review.md             ← Phase 3.5 跨阶段连贯审校（决策 #72）
 │   └── tests/                                ← _smoke_*.py 集合
 ├── validation/                               ← 数据正确性框架（详见 validation/README.md）
 │   ├── README.md

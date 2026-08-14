@@ -67,6 +67,10 @@ logger = logging.getLogger(__name__)
 # the file without the judgement that produced it.
 REVALIDATABLE_CATEGORIES = frozenset({"schema", "structural"})
 
+# Cache marker for "revalidation raised on this file". Distinct from an
+# empty violation set, which means "checked, and clean".
+_UNVERIFIABLE = object()
+
 
 # ---------------------------------------------------------------------------
 # Data types
@@ -91,6 +95,12 @@ class ConsistencyIssue:
     # "debt recorded" and "debt settled" — and a debt that can never be
     # matched can never be cleared.
     rule: str = ""
+    # L3 only — the stage the ledger filed this debt under. Taken from
+    # the ledger row rather than parsed out of the file path: an artifact
+    # like a work-level catalog carries no ``S###`` in its name, and a
+    # semantic debt with no stage cannot have a resolution written for
+    # it, so it would stay unsettled forever.
+    stage_id: str = ""
 
     def to_dict(self) -> dict:
         out = {
@@ -107,6 +117,8 @@ class ConsistencyIssue:
             out["json_path"] = self.json_path
         if self.rule:
             out["rule"] = self.rule
+        if self.stage_id:
+            out["stage_id"] = self.stage_id
         return out
 
     def __str__(self) -> str:
@@ -488,9 +500,15 @@ def _check_deferred_ledgers(
     """
     c = cov.check("deferred_ledgers", "L3")
     issues: list[ConsistencyIssue] = []
-    # file path -> current schema violation json_paths (computed lazily; a
-    # file usually carries several debts and revalidation is not free).
-    violation_cache: dict[str, set[str]] = {}
+    # file path -> current schema violation json_paths, or _UNVERIFIABLE when
+    # revalidation raised. Computed lazily: a file usually carries several
+    # debts and revalidation is not free.
+    #
+    # The sentinel matters. Caching an empty set on failure would make every
+    # later debt on that file read as "not in the violation set" — i.e.
+    # settled — so one broken revalidation would silently clear the rest of
+    # the file's debts. Unverifiable is not settled.
+    violation_cache: dict[str, set[str] | object] = {}
 
     for stage_id in stage_ids:
         rows = read_deferred_ledger(work_dir, stage_id)
@@ -517,7 +535,8 @@ def _check_deferred_ledgers(
                         "error", category or "schema", f"{stage_id}",
                         f"{rule} at {jpath} cannot be re-adjudicated "
                         "(no schema revalidator supplied)",
-                        layer="L3", file=fpath, json_path=jpath, rule=rule))
+                        layer="L3", file=fpath, json_path=jpath,
+                        rule=rule, stage_id=stage_id))
                     continue
                 if fpath not in violation_cache:
                     try:
@@ -525,17 +544,19 @@ def _check_deferred_ledgers(
                     except Exception as exc:  # defensive: never abort the gate
                         logger.warning(
                             "revalidate_schema failed for %s: %s", fpath, exc)
-                        c.skipped += 1
-                        c.skipped_targets.append(fpath)
-                        violation_cache[fpath] = set()
-                        issues.append(ConsistencyIssue(
-                            "error", category or "schema", f"{stage_id}",
-                            f"{rule} at {jpath} could not be re-validated "
-                            f"({exc})",
-                            layer="L3", file=fpath, json_path=jpath,
-                            rule=rule))
-                        continue
-                if jpath not in violation_cache[fpath]:
+                        violation_cache[fpath] = _UNVERIFIABLE
+                violations = violation_cache[fpath]
+                if violations is _UNVERIFIABLE:
+                    c.skipped += 1
+                    c.skipped_targets.append(f"{stage_id}:{issue_key(row)}")
+                    issues.append(ConsistencyIssue(
+                        "error", category or "schema", f"{stage_id}",
+                        f"{rule} at {jpath} could not be re-validated "
+                        "(revalidation failed for this file)",
+                        layer="L3", file=fpath, json_path=jpath,
+                        rule=rule, stage_id=stage_id))
+                    continue
+                if jpath not in violations:
                     continue  # settled — the file no longer violates it
             elif issue_key(row) in resolved:
                 # Semantic debts have no programmatic re-derivation, so a
@@ -546,7 +567,8 @@ def _check_deferred_ledgers(
             issues.append(ConsistencyIssue(
                 "error", category or "semantic", f"{stage_id}",
                 f"unsettled {rule} at {jpath}: {row.get('message', '')}",
-                layer="L3", file=fpath, json_path=jpath, rule=rule))
+                layer="L3", file=fpath, json_path=jpath, rule=rule,
+                stage_id=stage_id))
 
     return issues
 
