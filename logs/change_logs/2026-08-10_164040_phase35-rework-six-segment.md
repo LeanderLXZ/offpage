@@ -217,3 +217,21 @@ Phase 3.5 从"只 check 不修的跨 stage 校验器"重做为 stage 文件的�
 
 - **Status**: DONE
 - **Finished**: 2026-08-10 17:12:34 EDT
+
+<!-- /post-check writes -->
+
+## Review conclusion (full report in conversation)
+
+### Track 1 — requirement fulfillment
+- Fulfillment rate: 12/12 计划文件项 + 10/10 验证标准
+- Missed updates: 1 项（见对话：extraction/README.md 目录树未列新模块）
+
+### Track 2 — impact spread
+- Findings: High=1 / Medium=3 / Low=2
+- Open Questions: 1 项（见对话）
+
+## Review state
+- **Reviewed**: 2026-08-14 12:03:30 EDT
+- **Status**: REVIEWED-FAIL
+  - H1：L3 revalidator 抛异常后，同文件其余债被静默判为已结清（假 PASS）
+- **Conversation ref**: /post-check output in this session
