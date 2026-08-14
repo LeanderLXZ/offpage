@@ -21,20 +21,9 @@ import logging
 from typing import Any, Callable
 
 from . import BaseChecker
-from ..protocol import FileEntry, Issue
+from ..protocol import BACKEND_FAILURE_RULES, FileEntry, Issue
 
 logger = logging.getLogger(__name__)
-
-# Rules that signal the semantic review COULD NOT RUN (backend down, empty
-# or unparseable output). They anchor at ``$`` and must survive scoped
-# filtering — dropping them would turn "review never happened" into a
-# silent clean pass, which is exactly the false-pass this checker exists to
-# prevent (see module docstring). ``check_scoped`` keeps them unconditionally.
-_BACKEND_FAILURE_RULES = frozenset({
-    "semantic_unavailable",
-    "semantic_check_crashed",
-    "semantic_unparseable",
-})
 
 
 def _path_in_scope(json_path: str, scope_paths: list[str]) -> bool:
@@ -194,9 +183,10 @@ class SemanticChecker(BaseChecker):
 
         So filtering here is a PROGRAM guarantee, not a request: only issues
         on (or nested under) a scoped path survive. Backend-failure issues
-        (``$``-anchored, see ``_BACKEND_FAILURE_RULES``) are always kept —
-        they mean the review couldn't run, and dropping them would be a
-        false pass. An empty ``paths`` therefore keeps only backend failures.
+        (``$``-anchored, see ``protocol.BACKEND_FAILURE_RULES``) are always
+        kept — they mean the review couldn't run, and dropping them would be
+        a false pass. An empty ``paths`` therefore keeps only backend
+        failures.
         """
         if self._llm_call is None:
             return []
@@ -209,7 +199,7 @@ class SemanticChecker(BaseChecker):
                 f.path, content, focus_paths=paths, effort=effort,
                 call_type="check_scoped")
             for issue in file_issues:
-                if (issue.rule in _BACKEND_FAILURE_RULES
+                if (issue.rule in BACKEND_FAILURE_RULES
                         or _path_in_scope(issue.json_path, paths)):
                     issues.append(issue)
         return issues

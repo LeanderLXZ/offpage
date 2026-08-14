@@ -12,8 +12,9 @@ Public API::
     issues = validate_only(files=[...])
 """
 
-from .coordinator import run, validate_only
+from .coordinator import length_tolerance_pass, run, validate_only
 from .protocol import (
+    BACKEND_FAILURE_RULES,
     DISCREPANCY_TYPES,
     FileEntry,
     Issue,
@@ -28,6 +29,7 @@ from .protocol import (
 )
 
 __all__ = [
+    "BACKEND_FAILURE_RULES",
     "DISCREPANCY_TYPES",
     "FileEntry",
     "Issue",
@@ -39,6 +41,7 @@ __all__ = [
     "SourceEvidence",
     "SourceNote",
     "TriageVerdict",
+    "length_tolerance_pass",
     "run",
     "validate_only",
 ]

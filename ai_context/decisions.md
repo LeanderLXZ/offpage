@@ -313,11 +313,14 @@ N. <决策陈述，一行>。
 
 71. **Run ledger 的 `call_type` 标签由调用点显式给出，不在事后从日志推断。** `lane=repair` 无法回答"检查 vs 修复各花多少"（`T-SEMANTIC-FULLFILE-COST` 卡在这），而只有 `repair/` 自己知道一次调用的性质。闭集 5 值：`check_full` / `check_scoped` / `fix_t1` / `fix_t2` / `triage`；非 repair 调用写 `null`（提取 lane 靠 `lane` 已可区分，不编造二级标签）。`check_full` / `check_scoped` 由 `SemanticChecker` 的两个 public 方法各自内部定死——"全量还是定点"是方法身份自带的，不该让 coordinator 重复声明。
     → docs/decisions.md #71。
-72. **Phase 3.5 重做为六段最终关卡：跨阶段审校 + 台账结清，全定点修复。** 实测旧版在 53 stage 上 0.26s 跑完却只报出 40 条 alias 误报（规则前提错：`identity.aliases` 收专有称号、`active_names` 收关系性称呼），38 条台账债一条不在检查面上、台账零消费方。重做为三层（L1 结构 / L2 派生 1:1 / L3 台账结清）+ 六段流程（程序全扫 → 结清债 → 跨阶段审校 → 定点修 → 重投影 → 复扫门判），段间串行段内并行。L3 **不采信台账陈述**：schema 类重校验自愈、semantic 类凭 append-only resolution 结清。段 3 是全流水线唯一多阶段并列视图（Phase A 一次只看一个文件），吃瘦投影而非全文。coverage 账本使 `passed = error==0 && skipped==0`，静默跳过变显式失败。
+72. **Phase 3.5 重做为六段最终关卡：跨阶段审校 + 台账结清，全定点修复。** 实测旧版在 53 stage 上 0.26s 跑完却只报出 40 条 alias 误报（规则前提错：`identity.aliases` 收专有称号、`active_names` 收关系性称呼），38 条台账债一条不在检查面上、台账零消费方。重做为三层（L1 结构 / L2 派生 1:1 / L3 台账结清）+ 六段流程（程序全扫 → 结清债 → 跨阶段审校 → 定点修 → 重投影 → 复扫门判），段间串行段内并行。L3 **不采信台账陈述**：schema 类重校验自愈、semantic 类凭 append-only resolution 结清。段 3 是全流水线唯一多阶段并列视图（Phase A 一次只看一个文件），吃瘦投影而非全文。coverage 账本使 `passed = error==0 && skipped==0`，静默跳过变显式失败。结清回路的当前形态见 #74。
     → docs/decisions.md #72。
 
 73. **length 债的制造机是 repair 轮循环自身：T2 改写散文后超 `maxLength` 被判 `introduced` → 回归阀停轮 → 债入台账。** 17 条 length 债里 16 条如此（repair_logs 逐条比对）。修法：轮内 scoped recheck 后、算 diff 前，把**本轮自造**的纯长度类超限（新指纹 + 路径本轮被 patch 过）先交 T0 就地修，不让它触发回归阀；预存在的长度问题保持原路由与 #48 容差门不变。附带 T0 截断改为句读边界收口（这些字段是 200+ 字散文，硬砍留断句残文）+ 新增 index-keyed dict → array 转换。
     → docs/decisions.md #73。
+
+74. **Phase 3.5 结清回路：不自造判定 + 未结清一律回台账 + 两次机会后记录放弃。** 长度复校委托 `repair.length_tolerance_pass`（门比修复循环严 = 造出无人能结清的债）；`rule ∈ BACKEND_FAILURE_RULES` 的行归 unverified，走不带 seed 的完整 repair 事务（审校没跑成，重跑审校才是结清方式），不走打补丁；段 4 未结清的审校发现回写台账，使台账成为判定唯一输入；每文件两次机会（第二次从残留 re-seed + 改用 `[llm].effort`），仍失败写 `resolution="given_up"` 降为 warning 放行 Phase 4 并在 verdict 单独成段列出。抛异常与残留含审校器失败类都不算用尽机会；无 stage 可挂的发现（整窗口审校失败）直接并入判定。
+    → docs/decisions.md #74。
 
 
 ## Repository

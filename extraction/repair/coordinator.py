@@ -936,12 +936,11 @@ def _run_fixer_with_escalation(
     # miss, re-validate the affected files with a relaxed schema (×0.9
     # floor / ×1.1 ceil); if they pass, accept them and signal a terminal
     # PASS instead of leaving them to fail Phase C.
-    if residual and _all_length_only(residual):
-        if _length_tolerance_pass(residual, files):
-            logger.info(
-                "Length-bound tolerance gate accepted %d residual "
-                "issue(s) (decision #48).", len(residual))
-            lifecycle_signal = "LENGTH_TOLERANCE_PASS"
+    if length_tolerance_pass(residual, files):
+        logger.info(
+            "Length-bound tolerance gate accepted %d residual "
+            "issue(s) (decision #48).", len(residual))
+        lifecycle_signal = "LENGTH_TOLERANCE_PASS"
 
     return modified_files, modified_paths, t2_self_report, lifecycle_signal
 
@@ -1008,12 +1007,28 @@ def _sweep_self_inflicted_length(
     return bool(result.patched_paths)
 
 
-def _length_tolerance_pass(issues: list[Issue],
-                           files: list[FileEntry]) -> bool:
-    """Re-validate the files behind ``issues`` against a length-relaxed
-    schema (decision #48). Returns True only when every affected file
-    passes the ×0.9 floor / ×1.1 ceil re-check.
+def length_tolerance_pass(issues: list[Issue],
+                          files: list[FileEntry]) -> bool:
+    """True when ``issues`` are all length misses the tolerance accepts.
+
+    Two conditions, and the first is not optional: **every** issue must be a
+    pure ``minLength`` / ``maxLength`` schema miss, and the affected files
+    must then pass the ×0.9 floor / ×1.1 ceil re-check (decision #48).
+
+    The category guard lives inside rather than at each call site because
+    the re-check alone cannot stand in for it: it runs JSON Schema, which is
+    blind to whole checker layers. A structural issue would sail through a
+    relaxed schema validation and read as "tolerated", silently clearing a
+    debt that has nothing to do with length.
+
+    Public because this IS the project's definition of "close enough on a
+    length bound". Any later gate that re-adjudicates a schema debt must ask
+    the same question the fix loop asked before declaring PASS — a stricter
+    second opinion turns a tolerated overrun into a debt nothing can ever
+    settle (the fix loop passes it, the gate fails it, forever).
     """
+    if not _all_length_only(issues):
+        return False
     from extraction.validation.shared.schema_tolerance import (
         validate_with_length_tolerance)
 

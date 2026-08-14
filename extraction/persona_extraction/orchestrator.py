@@ -35,12 +35,17 @@ from .core.config import get_config
 from ..validation.gates.phase3_5_consistency import (
     REVALIDATABLE_CATEGORIES,
     ConsistencyIssue,
+    ConsistencyReport,
     run_consistency_check,
     save_report,
 )
 from .lifecycle.deferred_repair_log import (
+    RESOLUTION_FIXED,
+    RESOLUTION_GIVEN_UP,
+    append_deferred_repairs,
     append_resolution,
     deferrable_issues,
+    is_unverified_row,
     write_deferred_repairs,
 )
 from .phases.cross_stage_projection import (
@@ -216,12 +221,14 @@ from ..validation.gates.phase2_baseline import (
 )
 from ..validation.shared.schema_tolerance import validate_with_length_tolerance
 from ..repair import (
+    BACKEND_FAILURE_RULES,
     FileEntry as RepairFileEntry,
     Issue as RepairIssue,
     RepairConfig,
     RepairResult,
     RetryPolicy,
     SourceContext,
+    length_tolerance_pass,
     run as run_repair,
     validate_only,
 )
@@ -244,6 +251,40 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Phase 3.5 helpers
 # ---------------------------------------------------------------------------
+
+# How many settlement transactions one debt gets before it is released.
+# Two, not one: the first transaction ends on a terminal (tier cap, or the
+# semantic layer failing to converge) that the *next* one can get past, since
+# it starts from a changed file and re-seeds from the residual. Not more than
+# two: a third pays full price to re-derive the same terminal, and a debt that
+# survived two informed tries needs a human, not another round.
+_P35_SETTLE_ATTEMPTS = 2
+
+
+def _p35_is_unverified(issue: ConsistencyIssue) -> bool:
+    """True when a Phase 3.5 issue records a failed review, not a defect."""
+    return is_unverified_row({"rule": issue.rule})
+
+
+def _merge_carried(
+    report: ConsistencyReport, carried: list[ConsistencyIssue],
+) -> None:
+    """Fold findings the ledger could not hold into the verdict.
+
+    The re-scan reads the ledger, so a finding with no stage to be filed
+    under is invisible to it. Merging keeps the verdict honest about what
+    this run actually found; the counts and ``passed`` are recomputed rather
+    than patched so the report stays internally consistent.
+    """
+    if not carried:
+        return
+    report.issues.extend(carried)
+    report.error_count = sum(
+        1 for i in report.issues if i.severity == "error")
+    report.warning_count = sum(
+        1 for i in report.issues if i.severity == "warning")
+    report.passed = report.error_count == 0 and report.skipped_total == 0
+
 
 def _extract_json_array(text: str) -> list | None:
     """Pull the JSON array out of a reviewer response.
@@ -3669,7 +3710,16 @@ class ExtractionOrchestrator:
         a state about to change — and running the review last lets it double
         as the audit of the semantic patches segment 2 just applied.
 
-        Returns True when the gate passes (safe to proceed to Phase 4).
+        Everything segments 2 and 4 fail to settle ends up in the deferred
+        ledger, which is the only input segment 6 judges — so a debt and a
+        review finding are judged the same way, and neither can vanish
+        between the segment that found it and the verdict.
+
+        Returns True when the gate passes (safe to proceed to Phase 4). A
+        debt released after ``_P35_SETTLE_ATTEMPTS`` tries does not block,
+        but is reported in its own block: passing with known defects on
+        record must never look like passing clean.
+
         The report is committed on both paths so it never lingers as
         uncommitted dirt blocking ``checkout_main``.
         """
@@ -3692,11 +3742,19 @@ class ExtractionOrchestrator:
               f"{report.skipped_total} skipped")
 
         # ---- Segment 2: settle recorded debts ----
-        debts = [i for i in report.issues if i.layer == "L3"]
+        # Errors only. A warning here is a debt already given up, and paying
+        # two more transactions per run to re-derive the same terminal is the
+        # loss the release was supposed to stop.
+        debts = [i for i in report.issues
+                 if i.layer == "L3" and i.severity == "error"]
         touched: set[str] = set()
+        carried: list[ConsistencyIssue] = []
         if debts:
             print(f"  [2/6] Settling {len(debts)} recorded debt(s)...")
-            touched |= self._p35_settle_debts(work_dir, debts)
+            files, open_debts = self._p35_settle_debts(work_dir, debts)
+            touched |= files
+            print(f"        {len(debts) - len(open_debts)} settled, "
+                  f"{len(open_debts)} still open")
         else:
             print("  [2/6] No recorded debts — skipped")
 
@@ -3709,9 +3767,26 @@ class ExtractionOrchestrator:
         # ---- Segment 4: settle review findings ----
         if findings:
             print(f"  [4/6] Settling {len(findings)} finding(s)...")
-            touched |= self._p35_settle_debts(work_dir, findings)
+            files, open_findings = self._p35_settle_debts(work_dir, findings)
+            touched |= files
+            # File what could not be settled. A review finding lives nowhere
+            # but this run's memory until it does — segment 6 reads the
+            # ledger, so an unfiled one would drop out of the verdict that
+            # was supposed to judge it, and the next run would pay the full
+            # review price to rediscover it.
+            filed, unfiled = self._p35_file_unsettled(
+                work_dir, open_findings)
+            carried.extend(unfiled)
+            print(f"        {len(findings) - len(open_findings)} settled, "
+                  f"{len(open_findings)} unsettled ({filed} newly filed"
+                  + (f", {len(unfiled)} carried" if unfiled else "") + ")")
         else:
             print("  [4/6] Nothing to settle — skipped")
+
+        # Either settlement segment writes to the ledger or its resolution
+        # sidecar — a `fixed` row, a release, or a filed finding — even when
+        # it patched no primary at all.
+        wrote_ledger = bool(debts) or bool(findings)
 
         # ---- Segment 5: re-project derived artifacts ----
         # Segments 2 and 4 patch primaries (stage_events, digest_summary,
@@ -3730,9 +3805,17 @@ class ExtractionOrchestrator:
         report = run_consistency_check(
             self.project_root, work_id, char_ids, stage_ids,
             revalidate_schema=revalidate)
+        # Findings the ledger could not hold (no stage to file them under)
+        # join the verdict directly — the re-scan cannot rediscover them.
+        _merge_carried(report, carried)
 
         save_report(report, self.project_root, work_id)
-        self._commit_consistency_report(stage_ids, touched=bool(touched))
+        # The ledger and its resolution sidecar are tracked files too: a run
+        # that patched nothing can still have filed a finding or recorded a
+        # release, and an uncommitted one blocks ``checkout_main`` and misses
+        # the squash-merge.
+        self._commit_consistency_report(
+            stage_ids, touched=bool(touched) or wrote_ledger)
 
         print(f"  Results: {report.error_count} errors, "
               f"{report.warning_count} warnings, "
@@ -3741,6 +3824,19 @@ class ExtractionOrchestrator:
             flag = "  ⚠ SKIPS" if c.skipped else ""
             print(f"        [{c.layer}] {c.name}: checked={c.checked} "
                   f"hit={c.hit} skipped={c.skipped}{flag}")
+
+        # Released debts do not block, so they get their own block rather
+        # than a line in the warning count — "passed with 6 known defects"
+        # must not read the same as "passed clean".
+        given_up = [i for i in report.issues
+                    if i.severity == "warning" and i.layer == "L3"]
+        if given_up:
+            print(f"  [GIVEN UP] {len(given_up)} debt(s) released — they "
+                  f"need a human. Per-debt attempt counts are on each line "
+                  f"below; records in deferred_repairs/*.resolved.jsonl.")
+            for issue in given_up:
+                print(f"    [WARN] [{issue.layer}/{issue.category}] "
+                      f"{issue.location}: {issue.message}")
 
         if not report.passed:
             print("  [BLOCKED] Gate failed — Phase 4 blocked. "
@@ -3784,6 +3880,12 @@ class ExtractionOrchestrator:
         as it stands now instead of replaying the ledger's claim, which is
         what makes a settled debt disappear without anyone writing to the
         ledger.
+
+        Judged through ``length_tolerance_pass`` — the same question the fix
+        loop asks before it declares PASS (decision #48). A stricter opinion
+        here would be unanswerable rather than safer: the loop tolerates an
+        overrun inside the band and writes no resolution, so a strict gate
+        re-raises it every run and no amount of re-running can settle it.
         """
         entries = self._p35_repair_files(work_dir, stage_ids, char_ids)
 
@@ -3795,13 +3897,20 @@ class ExtractionOrchestrator:
                 return []
             entry.content = None  # force a re-read; the file may have changed
             issues = validate_only(files=[entry], run_semantic=False)
-            return [i.json_path for i in issues if i.severity == "error"]
+            errors = [i for i in issues if i.severity == "error"]
+            if length_tolerance_pass(errors, [entry]):
+                # Every error is a length bound inside the band. The judgement
+                # is all-or-nothing by construction: one issue of any other
+                # kind — including a checker layer JSON Schema cannot see —
+                # keeps the whole set strict.
+                return []
+            return [i.json_path for i in errors]
 
         return _revalidate
 
     def _p35_settle_debts(
         self, work_dir: Path, issues: list[ConsistencyIssue],
-    ) -> set[str]:
+    ) -> tuple[set[str], list[ConsistencyIssue]]:
         """Fix known issues in place, one repair transaction per file.
 
         Seeds ``repair.run`` with the issues instead of letting it rediscover
@@ -3810,22 +3919,49 @@ class ExtractionOrchestrator:
         after the seed — tier routing, scoped recheck, L3 gate, safety
         valves — is the standard loop, so a fix still has to prove it landed.
 
-        Returns the set of file paths that were actually modified.
+        One exception: a file carrying an unverified row runs **unseeded**.
+        That row says the review never completed, so there is nothing to seed
+        — Phase A's full-file scan *is* the re-verification, and whatever it
+        turns up arrives with a real ``json_path`` and gets fixed in the same
+        transaction.
+
+        Each file gets ``_P35_SETTLE_ATTEMPTS`` transactions. The second is
+        seeded from the first's residual rather than the original claim (the
+        residual is the current state, and its message says what the fix
+        failed on) and re-reads at the higher default effort — a verbatim
+        retry would just re-derive the same terminal.
+
+        Returns ``(modified file paths, issues still unsettled)``. An issue
+        that exhausted its attempts is recorded as given up before being
+        returned; one whose transaction *raised* is not — a crashed run has
+        not spent its attempts, and silently releasing it would turn an
+        outage into a permanent hole in the canon.
         """
         assert self.pipeline
         work_id = self.pipeline.work_id
         by_file: dict[str, list[ConsistencyIssue]] = {}
+        unsettled: list[ConsistencyIssue] = []
         for issue in issues:
+            if _p35_is_unverified(issue) and issue.file:
+                by_file.setdefault(issue.file, []).append(issue)
+                continue
             if not issue.file or not issue.json_path or issue.json_path == "$":
-                # A root-anchored or unlocatable finding has no field to
-                # patch; a fixer handed one rewrites the whole document,
-                # which is the full-file regeneration decision #62 removed.
-                logger.info("Phase 3.5: skipping unlocatable issue %s",
-                            issue.message[:80])
+                # A root-anchored finding has no field to patch; a fixer
+                # handed one rewrites the whole document, which is the
+                # full-file regeneration decision #62 removed. It cannot be
+                # attempted at all, so it is released with the reason on
+                # record instead of blocking every future run silently.
+                logger.warning(
+                    "Phase 3.5: unlocatable issue released — %s",
+                    issue.message[:120])
+                self._p35_give_up(
+                    work_dir, issue, attempts=0,
+                    last_error="unlocatable: no field to patch")
+                unsettled.append(issue)
                 continue
             by_file.setdefault(issue.file, []).append(issue)
         if not by_file:
-            return set()
+            return set(), unsettled
 
         ra_cfg = get_config().repair
         importance_map = load_importance_map(self.project_root, work_id)
@@ -3854,13 +3990,17 @@ class ExtractionOrchestrator:
             [b.stage_id for b in self.phase3.stages] if self.phase3 else [],
             self.pipeline.target_characters or [])
 
-        def _settle_one(fpath: str) -> tuple[str, bool, list[ConsistencyIssue]]:
+        def _settle_one(
+            fpath: str,
+        ) -> tuple[str, bool, list[ConsistencyIssue], str, bool]:
             entry = entries.get(fpath)
-            if entry is None:
-                logger.warning("Phase 3.5: no repair entry for %s", fpath)
-                return fpath, False, []
-            entry.content = None
             file_issues = by_file[fpath]
+            if entry is None:
+                # A debt on a file this phase does not govern is a wiring
+                # bug, not an exhausted repair. Raising routes it to the
+                # caller's fault path, which keeps the issues blocking
+                # instead of releasing them on a mistake.
+                raise ValueError(f"no repair entry for {fpath}")
             stage_id = (next((i.stage_id for i in file_issues if i.stage_id),
                              None)
                         or self._p35_stage_of(fpath) or "phase3.5")
@@ -3873,7 +4013,10 @@ class ExtractionOrchestrator:
                     self.project_root / "sources" / "works"
                     / work_id / "chapters"),
             )
-            seeds = [
+            # An unverified row means the review never ran; there is nothing
+            # to seed, and Phase A's own scan is what settles it.
+            unverified = any(_p35_is_unverified(i) for i in file_issues)
+            seeds: list[RepairIssue] | None = None if unverified else [
                 RepairIssue(
                     file=fpath,
                     json_path=i.json_path,
@@ -3888,32 +4031,75 @@ class ExtractionOrchestrator:
             ]
             rec_path = repair_logs_dir / (
                 f"phase3_5_{stage_id}_{_repair_slug(fpath)}.jsonl")
-            with RepairRecorder(rec_path) as recorder:
-                result = run_repair(
-                    files=[entry],
-                    config=RepairConfig(
-                        max_rounds=ra_cfg.total_round_limit,
-                        run_semantic=True,
-                        triage_enabled=False,
-                        semantic_timeout_s=ra_cfg.semantic_timeout_s,
-                        t1_timeout_s=ra_cfg.t1_timeout_s,
-                        t2_timeout_s=ra_cfg.t2_timeout_s,
-                        triage_timeout_s=ra_cfg.triage_timeout_s,
-                        recheck_effort=ra_cfg.recheck_effort,
-                        retry_policy=RetryPolicy(
-                            t0_max=ra_cfg.t0_retry,
-                            t1_max=ra_cfg.t1_retry,
-                            t2_max=ra_cfg.t2_retry,
-                            max_total_rounds=ra_cfg.total_round_limit,
+            last_error = ""
+            for attempt in range(1, _P35_SETTLE_ATTEMPTS + 1):
+                entry.content = None  # the file changed under the last try
+                with RepairRecorder(rec_path) as recorder:
+                    result = run_repair(
+                        files=[entry],
+                        config=RepairConfig(
+                            max_rounds=ra_cfg.total_round_limit,
+                            run_semantic=True,
+                            triage_enabled=False,
+                            semantic_timeout_s=ra_cfg.semantic_timeout_s,
+                            t1_timeout_s=ra_cfg.t1_timeout_s,
+                            t2_timeout_s=ra_cfg.t2_timeout_s,
+                            triage_timeout_s=ra_cfg.triage_timeout_s,
+                            recheck_effort=(
+                                ra_cfg.recheck_effort if attempt == 1
+                                else get_config().llm.effort),
+                            retry_policy=RetryPolicy(
+                                t0_max=ra_cfg.t0_retry,
+                                t1_max=ra_cfg.t1_retry,
+                                t2_max=ra_cfg.t2_retry,
+                                max_total_rounds=ra_cfg.total_round_limit,
+                            ),
                         ),
-                    ),
-                    source_context=source_ctx,
-                    llm_call=_llm_call,
-                    importance_map=importance_map,
-                    recorder=recorder,
-                    seed_issues=seeds,
-                )
-            return fpath, result.passed, file_issues
+                        source_context=source_ctx,
+                        llm_call=_llm_call,
+                        importance_map=importance_map,
+                        recorder=recorder,
+                        seed_issues=seeds,
+                    )
+                if result.passed:
+                    return fpath, True, file_issues, ""
+                residual = [i for i in result.issues if i.severity == "error"]
+                # A failed *review* is not a failed repair. The semantic
+                # checker converts a backend outage into a blocking issue
+                # rather than raising (so nothing passes unverified), which
+                # means the transaction returns FAIL and looks exactly like
+                # an exhausted one. Telling them apart is what keeps an
+                # outage from being recorded as "we gave up on this debt".
+                infra = [i for i in residual
+                         if i.rule in BACKEND_FAILURE_RULES]
+                last_error = "; ".join(
+                    f"{i.rule} at {i.json_path}" for i in residual[:3]
+                ) or "repair returned FAIL with no blocking issue"
+                logger.info(
+                    "Phase 3.5: attempt %d/%d did not settle %s (%s)",
+                    attempt, _P35_SETTLE_ATTEMPTS, fpath, last_error)
+                # Re-seed from where the file actually stands: the residual
+                # messages describe what the last fix failed on, which is
+                # strictly more than the original claim the first attempt
+                # already tried and lost against. Backend-failure issues are
+                # excluded — they carry no field to patch, and seeding one
+                # would REPLACE the real debts with a `$`-anchored issue no
+                # tier may touch, spending the second chance on nothing.
+                reseed = [i for i in residual if i not in infra]
+                if not unverified and reseed:
+                    seeds = [
+                        RepairIssue(
+                            file=i.file, json_path=i.json_path,
+                            category=i.category if i.category in (
+                                "semantic", "schema", "structural",
+                                "cross_file") else "semantic",
+                            severity=i.severity, rule=i.rule,
+                            message=(f"上一次结清尝试后此问题仍存在，"
+                                     f"请换一种修法：{i.message}"),
+                        )
+                        for i in reseed
+                    ]
+            return fpath, False, file_issues, last_error, bool(infra)
 
         modified: set[str] = set()
         concurrency = max(1, ra_cfg.repair_concurrency)
@@ -3921,18 +4107,35 @@ class ExtractionOrchestrator:
             futures = {pool.submit(_settle_one, p): p for p in by_file}
             for fut in as_completed(futures):
                 try:
-                    fpath, passed, settled = fut.result()
+                    fpath, passed, handled, last_error, infra = fut.result()
                 except RateLimitHardStop:
                     pool.shutdown(wait=False, cancel_futures=True)
                     raise
                 except Exception:  # noqa: BLE001
                     logger.exception("Phase 3.5 settle raised for %s",
                                      futures[fut])
+                    # Infrastructure fault, not an exhausted repair: keep the
+                    # issues blocking so the next run retries them.
+                    unsettled.extend(by_file[futures[fut]])
                     continue
                 modified.add(fpath)
                 if passed:
-                    self._p35_record_resolutions(work_dir, settled)
-        return modified
+                    self._p35_record_resolutions(work_dir, handled)
+                    continue
+                if infra:
+                    logger.warning(
+                        "Phase 3.5: %s ended on a failed review (%s) — "
+                        "keeping its %d debt(s) blocking rather than giving "
+                        "up on data nobody managed to check",
+                        fpath, last_error, len(handled))
+                    unsettled.extend(handled)
+                    continue
+                for issue in handled:
+                    self._p35_give_up(
+                        work_dir, issue,
+                        attempts=_P35_SETTLE_ATTEMPTS, last_error=last_error)
+                unsettled.extend(handled)
+        return modified, unsettled
 
     def _p35_record_resolutions(
         self, work_dir: Path, settled: list[ConsistencyIssue],
@@ -3954,7 +4157,8 @@ class ExtractionOrchestrator:
         debt with nowhere to record its resolution — permanently unsettled.
         """
         for issue in settled:
-            if issue.category in REVALIDATABLE_CATEGORIES:
+            if (issue.category in REVALIDATABLE_CATEGORIES
+                    and not _p35_is_unverified(issue)):
                 continue
             stage_id = issue.stage_id or self._p35_stage_of(issue.file)
             if not stage_id:
@@ -3967,8 +4171,80 @@ class ExtractionOrchestrator:
                 {"file": issue.file, "json_path": issue.json_path,
                  "rule": issue.rule},
                 resolved_by="phase3.5",
+                resolution=RESOLUTION_FIXED,
+                attempts=1,
                 note=issue.message[:200],
             )
+
+    def _p35_file_unsettled(
+        self, work_dir: Path, issues: list[ConsistencyIssue],
+    ) -> tuple[int, list[ConsistencyIssue]]:
+        """File unsettled findings into the deferred ledger.
+
+        Returns ``(rows added, findings that could not be filed)``.
+
+        This is what makes the ledger the input the verdict re-adjudicates: a
+        debt starts there, and a finding that could not be settled joins it,
+        so anything unfixed is judged the same way regardless of which
+        segment found it, and survives to the next run.
+
+        The ledger is filed per stage, so a finding with no stage has nowhere
+        to go — a whole review window that never returned, say. Those are
+        handed back rather than dropped: the caller carries them straight
+        into the verdict, because a finding that vanishes between the segment
+        that raised it and the gate that should judge it is precisely the
+        false pass this phase exists to prevent.
+        """
+        by_stage: dict[str, list[dict]] = {}
+        unfiled: list[ConsistencyIssue] = []
+        for issue in issues:
+            stage_id = issue.stage_id or self._p35_stage_of(issue.file)
+            if not stage_id:
+                logger.warning(
+                    "Phase 3.5: no stage for %r — carried into the verdict "
+                    "instead of the ledger", issue.message[:120])
+                unfiled.append(issue)
+                continue
+            by_stage.setdefault(stage_id, []).append({
+                "stage_id": stage_id,
+                "file": issue.file,
+                "json_path": issue.json_path,
+                "category": issue.category,
+                "severity": issue.severity,
+                "rule": issue.rule,
+                "message": issue.message,
+            })
+        filed = sum(append_deferred_repairs(work_dir, stage_id, rows)
+                    for stage_id, rows in by_stage.items())
+        return filed, unfiled
+
+    def _p35_give_up(
+        self, work_dir: Path, issue: ConsistencyIssue, *,
+        attempts: int, last_error: str,
+    ) -> None:
+        """Record that a debt was released after exhausting its attempts.
+
+        Written for every category, unlike a ``fixed`` row: it claims nothing
+        about the file, so it cannot suppress a real violation — it only
+        demotes the debt from blocking to reported. A schema debt whose file
+        is genuinely repaired later still disappears through re-validation.
+        """
+        stage_id = issue.stage_id or self._p35_stage_of(issue.file)
+        if not stage_id:
+            logger.warning(
+                "Phase 3.5: no stage for %s — give-up not recorded (the debt "
+                "keeps blocking)", issue.file)
+            return
+        append_resolution(
+            work_dir, stage_id,
+            {"file": issue.file, "json_path": issue.json_path,
+             "rule": issue.rule},
+            resolved_by="phase3.5",
+            resolution=RESOLUTION_GIVEN_UP,
+            attempts=attempts,
+            last_error=last_error[:200],
+            note=issue.message[:200],
+        )
 
     @staticmethod
     def _p35_stage_of(file_path: str) -> str | None:

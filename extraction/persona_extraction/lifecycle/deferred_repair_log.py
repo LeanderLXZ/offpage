@@ -37,10 +37,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
 
 # ``repair.protocol`` imports nothing from this package (stdlib only), so this
-# is safe at runtime — and reusing its predicate keeps the "what counts as a
-# coverage_shortage" judgement in one place, matching how ``route_tiers`` sees
-# it. The dataclasses below stay TYPE_CHECKING-only imports.
-from ...repair.protocol import is_coverage_shortage
+# is safe at runtime — and reusing its predicates keeps the "what counts as a
+# coverage_shortage" / "what counts as a failed review" judgements in one
+# place, matching how ``route_tiers`` sees them. The dataclasses below stay
+# TYPE_CHECKING-only imports.
+from ...repair.protocol import BACKEND_FAILURE_RULES, is_coverage_shortage
 
 if TYPE_CHECKING:  # avoid a runtime import cycle with the repair package
     from ...repair.protocol import Issue, RepairFileEntry, RepairResult
@@ -108,6 +109,23 @@ def deferrable_issues(
     return to_defer
 
 
+def is_unverified_row(record: dict[str, Any]) -> bool:
+    """True when a ledger row records a failed *review*, not a defect.
+
+    Judged on ``rule`` rather than ``category``: the checker files these
+    under ``semantic`` (they surface from the L3 semantic checker), and the
+    rows already on disk were written that way. Keying on the rule is what
+    lets an existing ledger be reclassified without rewriting it.
+
+    The distinction is load-bearing. A content debt is settled by patching a
+    field; a failed review is settled by *running the review again*. Treated
+    as a semantic content debt, such a row anchors at ``$`` with no field to
+    patch and no route to a resolution record — an unfalsifiable claim that
+    fails the gate forever.
+    """
+    return record.get("rule", "") in BACKEND_FAILURE_RULES
+
+
 def deferred_ledger_path(work_root: Path, stage_id: str) -> Path:
     """Path of the deferred-repair ledger for ``stage_id`` under a work."""
     return work_root / "analysis" / "deferred_repairs" / f"{stage_id}.jsonl"
@@ -144,6 +162,46 @@ def write_deferred_repairs(
     return path
 
 
+def append_deferred_repairs(
+    work_root: Path, stage_id: str, records: list[dict[str, Any]],
+) -> int:
+    """Append ledger rows that are not already filed. Returns rows written.
+
+    Separate from ``write_deferred_repairs`` because the two have opposite
+    contracts: a stage's own repair *replaces* its ledger (one repair run,
+    one statement of what it could not fix), whereas a later phase *adds* to
+    it without disturbing what is already there.
+
+    This is what keeps a finding from vanishing. A cross-stage review finding
+    that no fix could settle lives nowhere else — it is not in the ledger the
+    verdict reads, so it would silently drop out of the run it was found in
+    and have to be rediscovered (at full review cost) by the next one.
+
+    Rows are matched by ``issue_key``, so re-filing an already-recorded debt
+    is a no-op rather than a duplicate — within one call as well as against
+    what is already on disk.
+    """
+    path = deferred_ledger_path(work_root, stage_id)
+    existing = {issue_key(r) for r in _read_jsonl(path)}
+    fresh: list[dict[str, Any]] = []
+    for record in records:
+        key = issue_key(record)
+        if key in existing:
+            continue
+        existing.add(key)
+        fresh.append(record)
+    if not fresh:
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        for record in fresh:
+            fh.write(json.dumps(
+                {**record, "stage_id": stage_id}, ensure_ascii=False) + "\n")
+    logger.warning("Filed %d unsettled finding(s) for stage %s → %s",
+                   len(fresh), stage_id, path)
+    return len(fresh)
+
+
 # ---------------------------------------------------------------------------
 # Resolutions — the Phase 3.5 write-back side of the ledger
 # ---------------------------------------------------------------------------
@@ -154,7 +212,7 @@ def write_deferred_repairs(
 # "this one is now fixed" — otherwise a settled debt keeps failing the gate
 # forever.
 #
-# Two shapes of debt, two ways to clear:
+# Three shapes of debt, three ways to clear:
 #
 #   * schema-class debts are re-verifiable by code — Phase 3.5 simply
 #     re-validates the current file and the debt disappears on its own. No
@@ -163,9 +221,27 @@ def write_deferred_repairs(
 #     resolution record IS the evidence. It is written per issue the moment
 #     that issue is fixed, so an interrupted Phase 3.5 re-run skips what it
 #     already settled instead of re-paying it.
+#   * unverified rows (``is_unverified_row``) record that the review itself
+#     failed. They clear by running the review again — a resolution record
+#     stands for "the check ran this time", not for "a field was patched".
 #
 # Kept in a sidecar file rather than mutating the ledger so the original
 # statement stays intact and both files remain append-only.
+#
+# Two kinds of resolution, and they claim different things:
+#
+#   * ``fixed`` — "this is repaired". Written only for debts code cannot
+#     re-derive; writing one for a schema debt would suppress it forever
+#     even if the field broke again later.
+#   * ``given_up`` — "two attempts failed; recorded and released". It claims
+#     nothing about the file, so it is safe for every category: the debt
+#     stays visible (a schema one still fails re-validation), it is only
+#     demoted from blocking to reported. An infrastructure failure is never
+#     given up this way — a crashed run has not spent its attempts.
+
+RESOLUTION_FIXED = "fixed"
+RESOLUTION_GIVEN_UP = "given_up"
+
 
 def resolution_ledger_path(work_root: Path, stage_id: str) -> Path:
     """Path of the resolution sidecar for ``stage_id``'s deferred ledger."""
@@ -190,12 +266,22 @@ def read_deferred_ledger(work_root: Path, stage_id: str) -> list[dict]:
     return _read_jsonl(deferred_ledger_path(work_root, stage_id))
 
 
-def read_resolutions(work_root: Path, stage_id: str) -> set[str]:
-    """Return the ``issue_key`` set already recorded as resolved."""
-    return {
-        key for rec in _read_jsonl(resolution_ledger_path(work_root, stage_id))
-        if (key := rec.get("issue_key"))
-    }
+def read_resolutions(work_root: Path, stage_id: str) -> dict[str, dict]:
+    """Return ``issue_key -> resolution row`` for the stage.
+
+    A row written before ``resolution`` existed carries no kind; it dates
+    from when the only outcome was a fix, so it reads as ``fixed``. Later
+    rows win on a repeated key — a debt re-opened and then settled should
+    read as settled.
+    """
+    out: dict[str, dict] = {}
+    for rec in _read_jsonl(resolution_ledger_path(work_root, stage_id)):
+        key = rec.get("issue_key")
+        if not key:
+            continue
+        rec.setdefault("resolution", RESOLUTION_FIXED)
+        out[key] = rec
+    return out
 
 
 def append_resolution(
@@ -204,6 +290,9 @@ def append_resolution(
     record: dict[str, Any],
     *,
     resolved_by: str,
+    resolution: str = RESOLUTION_FIXED,
+    attempts: int = 0,
+    last_error: str = "",
     note: str = "",
 ) -> None:
     """Append one resolution row, flushed immediately.
@@ -211,16 +300,32 @@ def append_resolution(
     Written per issue rather than batched at the end of the pass: a crash
     mid-pass must not lose the record of work already done, otherwise the
     re-run pays for the same fixes again.
+
+    Re-recording a row identical to the last one for that key is skipped —
+    the read side dedupes anyway, and a sidecar that grows a row per re-run
+    makes the history unreadable. Anything that actually changed still
+    appends, including a new ``last_error``: freezing the first failure
+    reason would leave whoever picks the debt up chasing a stale cause.
     """
+    key = issue_key(record)
+    prior = read_resolutions(work_root, stage_id).get(key)
+    if prior is not None and all(
+            prior.get(k) == v for k, v in (
+                ("resolution", resolution), ("attempts", attempts),
+                ("last_error", last_error[:200]))):
+        return
     path = resolution_ledger_path(work_root, stage_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     row = {
-        "issue_key": issue_key(record),
+        "issue_key": key,
         "stage_id": stage_id,
         "file": record.get("file", ""),
         "json_path": record.get("json_path", ""),
         "rule": record.get("rule", ""),
+        "resolution": resolution,
         "resolved_by": resolved_by,
+        "attempts": attempts,
+        "last_error": last_error,
         "note": note,
     }
     with path.open("a", encoding="utf-8") as fh:

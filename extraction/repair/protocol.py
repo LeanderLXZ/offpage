@@ -342,6 +342,22 @@ COVERAGE_SHORTAGE_MAX_TIER = 2
 NO_FIX_TIER = -1
 
 
+# Rules that say the L3 *reviewer itself* failed — backend down, empty or
+# unparseable output. They are infrastructure faults, not content defects,
+# so no fixer can settle one: the answer is to run the check again.
+#
+# Public because three layers key on the same set and each would otherwise
+# invent its own copy: the semantic checker (which never lets a scoped
+# filter drop one), the deferred ledger (which classifies such a row as
+# unverified rather than as a semantic content debt), and Phase 3.5 (which
+# routes it to re-verification instead of a field patch).
+BACKEND_FAILURE_RULES: frozenset[str] = frozenset({
+    "semantic_unavailable",
+    "semantic_check_crashed",
+    "semantic_unparseable",
+})
+
+
 def is_root_anchored(issue: "Issue") -> bool:
     """True when an issue anchors at the whole document rather than a field.
 

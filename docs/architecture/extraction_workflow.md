@@ -539,9 +539,9 @@ Phase 3 记下的欠债是否已结清（决策 #72）。
 | 段 | 内容 | 成本 |
 |---|---|---|
 | 1 | 程序全扫 → 得到债务清单 | 0 token，秒级 |
-| 2 | 结清台账债务（定点 field patch） | LLM，`recheck_effort` |
+| 2 | 结清台账债务（定点 field patch，每文件两次机会） | LLM，`recheck_effort` → `[llm].effort` |
 | 3 | 跨阶段连贯审校 | LLM 冷读，`[llm].effort` |
-| 4 | 审校发现走同一套定点修复循环 | LLM，`recheck_effort` |
+| 4 | 审校发现走同一套定点修复循环，未结清的回写台账 | LLM，同段 2 |
 | 5 | 受影响 stage 重跑 post-processing | 0 token |
 | 6 | 复扫 + 门判 + 报告 | 0 token |
 
@@ -559,12 +559,25 @@ Phase 3 记下的欠债是否已结清（决策 #72）。
   `world_event_digest` 条目数与 `summary` 同 `stage_events[i]` 逐字相等。
   决策 #61 把 digest 移出 repair 后，**只有这一层能发现投影漂移**。
 - **L3 台账结清** — 读 `deferred_repairs/{stage_id}.jsonl`，但**不采信其
-  陈述**：schema / structural 类债对当前文件重新校验（修好的自动销账，
-  无需回写台账）；semantic 类无程序化复验途径，只能凭
-  `{stage_id}.resolved.jsonl` 的 resolution 记录结清。复验对某文件抛错时
-  该文件按「不可复验」标记，其每条债各自记 skipped 并报出——**不可复验
-  不等于已结清**。债的 stage 取自台账行本身而非文件名，故 work 级产物
-  （如 catalog）这类文件名不含 `S###` 的债同样能写出 resolution。
+  陈述**。门侧只有两条裁决动作（重校验 / 认 resolution 记录，都是 0 token），
+  三类债由此分出三条结清路线（决策 #74）：
+  - **schema / structural** — 对当前文件重新校验（修好的自动销账，无需
+    回写台账）。复校走 `repair.length_tolerance_pass`，与修复循环判 PASS
+    时问的是同一个问题（决策 #48）；门这边更严会造出无人能结清的债——
+    修复循环容忍带内的超限不写 resolution，严格的门每次重报。
+  - **semantic** — 无程序化复验途径，只能凭 `{stage_id}.resolved.jsonl`
+    的 resolution 记录结清。
+  - **unverified**（`rule ∈ protocol.BACKEND_FAILURE_RULES`：审校器自身
+    不可用 / 崩溃 / 输出不可解析）——**按 rule 判定而非 category**，故已
+    落盘的历史行无需改写即被正确归类。它记录的是「审校没跑成」而非内容
+    缺陷，门侧仍只认 resolution 记录；产出那条记录的动作在段 2/4：只要
+    某文件带有一条 unverified 行，该文件整份**不带 seed** 跑一次完整
+    repair 事务（Phase A 的全文审校本身就是复检，查出的问题自带真实
+    `json_path` 并在同一事务里被修），通过后落 `fixed` 记录销账。
+  复验对某文件抛错时该文件按「不可复验」标记，其每条债各自记 skipped 并
+  报出——**不可复验不等于已结清**。债的 stage 取自台账行本身而非文件名，
+  故 work 级产物（如 catalog）这类文件名不含 `S###` 的债同样能写出
+  resolution。
 
 **辅助检查**（计入判定）：快照字段完整性、关系连续性（相邻 stage 的
 attitude/trust/intimacy 变化是否有 driving_events）、target_map 样本数
@@ -587,6 +600,33 @@ attitude/trust/intimacy 变化是否有 driving_events）、target_map 样本数
 gate、安全阀全部照旧，修复仍须自证落地。**零文件重生成**：T3 已于决策
 #62 删除，`$` 根锚点永不升 LLM 层。
 
+**两次机会**：每个文件最多 `_P35_SETTLE_ATTEMPTS`（= 2）次事务，预算按
+**文件**而非按条计。第一次终止于某个安全阀（tier 封顶 / 语义层不收敛）
+后，第二次从**残留 issue** 重新 seed（残留描述的是文件当前状态与上一刀
+失败在哪，信息量严格大于原始陈述），并改用 `[llm].effort` 复读——逐字
+重试只会复现同一终止条件。残留为空、或残留只剩审校器失败类时不重建
+seed，沿用原 seed 再试一次。
+
+**两类失败不算用尽机会**：事务**抛异常**，以及残留里含审校器失败类规则
+（后者不抛异常——checker 把后端故障转成一条阻塞 issue，事务因此正常返回
+FAIL，与用尽长得一模一样）。两者都是基础设施故障，保持阻塞留给下次重试；
+把它们记成放弃，等于让一次中断在 canon 里变成永久缺口。
+
+**未结清项一律回写台账**：段 4 的审校发现在被结清之前只活在本次运行的
+内存里，而段 6 只裁决台账——不回写就会从「本该判它的那次判定」里掉出去，
+下次运行还要再付一次全量审校的钱。回写后台账成为判定的**唯一输入**：不论
+哪个段发现的问题，未修好就走同一套裁决。
+
+**记录并放弃**：两次机会都失败的债写 `resolution="given_up"`（含
+`attempts` / `last_error`），门里降级为 warning 不再阻断，但在 verdict 里
+**单独成段列出**——"带着 N 个已知缺陷通过"绝不能和"干净通过"长得一样。
+第二种来源是**根本无法尝试**的行（`$` 根锚点且非 unverified：没有字段可
+补，交给 fixer 就是全文重写），按 `attempts=0` 记录放弃并附原因，而不是
+静默跳过后永久阻塞。
+`given_up` 与 `fixed` 的区别是承重的：`fixed` 只写给非可复验类（给
+schema 债写 `fixed` 会永久压制它），`given_up` 对文件不作任何声称，只降
+严重度，故所有类别都能写——文件真被修好时 schema 复校仍会让债自然消失。
+
 **门判**：`passed = error_count == 0 AND skipped_total == 0`。**coverage
 账本**逐 check 记 `checked / skipped / hit`——此前文件读不到时静默
 `continue`，"检查通过"与"根本没检查"在报告里长得一模一样；现在跳过即
@@ -594,7 +634,7 @@ gate、安全阀全部照旧，修复仍须自证落地。**零文件重生成**
 
 **产出**：`works/{work_id}/analysis/consistency_report.json`（含 coverage
 账本）+ `deferred_repairs/{stage_id}.resolved.jsonl` resolution 记录
-（append-only、逐条即时落盘，故中途崩溃重跑天然幂等）。
+（append-only、逐条即时落盘，故中途崩溃重跑天然幂等）+ 段 4 回写的台账行。
 
 有 error 或 skipped 时阻断 Phase 4。
 

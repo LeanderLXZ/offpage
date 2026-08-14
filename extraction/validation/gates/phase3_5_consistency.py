@@ -20,7 +20,9 @@ Three layers, all zero-token and programmatic:
 * **L3 ledger settlement** — deferred debts are re-adjudicated rather than
   trusted: schema-class debts are re-validated against the current file (a
   settled one disappears on its own), semantic-class debts clear only via a
-  recorded resolution.
+  recorded resolution. A debt that survived two settlement attempts carries a
+  ``given_up`` resolution and is reported as a warning instead of blocking —
+  released, but never silently.
 
 Auxiliary checks (field completeness, relationship continuity, target-map
 example counts) run alongside and count toward the verdict.
@@ -54,6 +56,8 @@ from pathlib import Path
 from typing import Callable
 
 from ...persona_extraction.lifecycle.deferred_repair_log import (
+    RESOLUTION_GIVEN_UP,
+    is_unverified_row,
     issue_key,
     read_deferred_ledger,
     read_resolutions,
@@ -64,7 +68,10 @@ logger = logging.getLogger(__name__)
 
 # Debt categories that code can re-adjudicate on its own. Everything else
 # needs a recorded resolution — a semantic claim cannot be re-derived from
-# the file without the judgement that produced it.
+# the file without the judgement that produced it. A row whose rule marks a
+# failed review (``is_unverified_row``) is judged by its rule, not its
+# category, so it never takes the re-validation route regardless of how the
+# checker filed it.
 REVALIDATABLE_CATEGORIES = frozenset({"schema", "structural"})
 
 # Cache marker for "revalidation raised on this file". Distinct from an
@@ -228,9 +235,12 @@ def run_consistency_check(
         revalidate_schema: ``file_path -> [json_path, ...]`` returning the
             schema violations a file currently has. Supplied by the caller
             because schema binding lives with the orchestrator's file
-            wiring, not here. When ``None``, L3 cannot re-adjudicate
-            schema-class debts and keeps them open (fail-closed: an
-            unverifiable debt is not a settled one).
+            wiring, not here — and because it must apply the same length
+            tolerance the fix loop applies before declaring PASS, or an
+            overrun the repair side tolerates becomes a debt nothing can
+            settle. When ``None``, L3 cannot re-adjudicate schema-class
+            debts and keeps them open (fail-closed: an unverifiable debt is
+            not a settled one).
 
     Returns:
         ConsistencyReport with all issues and the coverage ledger.
@@ -492,11 +502,24 @@ def _check_deferred_ledgers(
     * **schema / structural** — re-validate the file. The debt is settled iff
       its ``json_path`` no longer appears in the violation set. This is why
       the ledger can self-heal without anyone writing to it.
-    * **semantic** — no programmatic re-derivation exists, so it clears only
-      against a recorded resolution (``{stage_id}.resolved.jsonl``).
+    * **semantic** (incl. a failed review) — no programmatic re-derivation
+      exists, so it clears only against a recorded resolution
+      (``{stage_id}.resolved.jsonl``).
 
     Without ``revalidate_schema`` the first route is unavailable; those debts
     stay open rather than being assumed settled.
+
+    A debt that survives both routes is reported. It blocks unless a
+    ``given_up`` resolution says the settlement attempts were already spent
+    on it, in which case it is reported as a warning: recorded, released, and
+    still fully visible in the report. Note that ``given_up`` demotes but
+    never settles — a schema debt whose file is genuinely repaired later
+    disappears through re-validation, not through the record.
+
+    One case ignores the release: a debt that could not be **adjudicated at
+    all** (no revalidator supplied, or revalidation raised on its file) still
+    counts as skipped and blocks. A release says "we could not fix this"; it
+    cannot also stand for "and we no longer need to know its state".
     """
     c = cov.check("deferred_ledgers", "L3")
     issues: list[ConsistencyIssue] = []
@@ -523,8 +546,12 @@ def _check_deferred_ledgers(
             category = row.get("category", "")
             rule = row.get("rule", "")
 
-            if category in REVALIDATABLE_CATEGORIES:
-                # No resolution shortcut here on purpose: for a debt code can
+            given_up = (resolved.get(issue_key(row), {}).get("resolution")
+                        == RESOLUTION_GIVEN_UP)
+
+            if category in REVALIDATABLE_CATEGORIES and not is_unverified_row(
+                    row):
+                # No ``fixed`` shortcut here on purpose: for a debt code can
                 # re-derive, the file is the truth. Honouring a stored
                 # resolution would permanently suppress the debt even if the
                 # field broke again later.
@@ -558,12 +585,23 @@ def _check_deferred_ledgers(
                     continue
                 if jpath not in violations:
                     continue  # settled — the file no longer violates it
-            elif issue_key(row) in resolved:
+            elif not given_up and issue_key(row) in resolved:
                 # Semantic debts have no programmatic re-derivation, so a
-                # recorded resolution is the only evidence they can offer.
+                # recorded resolution is the only evidence they can offer —
+                # and only a ``fixed`` one, which is what the key resolving
+                # to a non-``given_up`` row means here.
                 continue
 
             c.hit += 1
+            if given_up:
+                attempts = resolved[issue_key(row)].get("attempts", 0)
+                issues.append(ConsistencyIssue(
+                    "warning", category or "semantic", f"{stage_id}",
+                    f"given up after {attempts} attempt(s) — {rule} at "
+                    f"{jpath}: {row.get('message', '')}",
+                    layer="L3", file=fpath, json_path=jpath, rule=rule,
+                    stage_id=stage_id))
+                continue
             issues.append(ConsistencyIssue(
                 "error", category or "semantic", f"{stage_id}",
                 f"unsettled {rule} at {jpath}: {row.get('message', '')}",

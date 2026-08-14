@@ -1113,7 +1113,7 @@ N. <决策陈述>。
     (a) `semantic.py check_scoped` 返回值过滤为「在某 scoped path 上或其后代」的
     issue（`_path_in_scope` 后代匹配）；**后端失败类 issue**
     （`semantic_unavailable` / `semantic_check_crashed` / `semantic_unparseable`，
-    锚在 `$`，见 `_BACKEND_FAILURE_RULES`）**永不过滤**——否则复检没跑通却被静默
+    锚在 `$`，见 `protocol.BACKEND_FAILURE_RULES`）**永不过滤**——否则复检没跑通却被静默
     丢弃 = 假 PASS。(b) pipeline 新增 `run_semantic_scoped(files, paths)` 路由到
     L3 checker 的 `check_scoped`。(c) coordinator `_run_fixer_with_escalation`
     额外返回 `modified_paths: {file: {json_path}}`（从 `resolved_fingerprints` +
@@ -1139,7 +1139,7 @@ N. <决策陈述>。
     保证。与 #65（effort 分档）分两次落地保单变量归因（本轮未做基线对比，用户
     2026-07-17 拍板先落代码、接受归因缺口）。
     Plumbing → `extraction/repair/checkers/semantic.py`（`check_scoped` 过滤 +
-    `_path_in_scope` + `_BACKEND_FAILURE_RULES`）、
+    `_path_in_scope` + `protocol.BACKEND_FAILURE_RULES`）、
     `extraction/repair/checkers/__init__.py`（`run_semantic_scoped`）、
     `extraction/repair/coordinator.py`（`_run_fixer_with_escalation` 返回
     `modified_paths` + `_gate_scope` 纯函数 + 逐文件 gate 调用点）、
@@ -1407,6 +1407,8 @@ N. <决策陈述>。
     烧一次调用）；`$` 根锚点直接丢弃——把根路径交给 LLM 就是全文重写，
     即被 #62 删掉的 T3 换马甲。
 
+    结清回路（结清路线 / 重试预算 / 放弃语义）的当前形态见 #74。
+
     **coverage 账本 + 门判**：`passed = error_count == 0 AND
     skipped_total == 0`。旧版多处 `if snapshot is None: continue` 静默
     跳过，使"检查通过"与"根本没检查"在报告里无法区分——这比误报更危险。
@@ -1468,6 +1470,75 @@ N. <决策陈述>。
     **边界**：不改 `is_regression` 判据；不动 #48 容差门的触发条件；
     `minLength` 仍不由 T0 填充（补短是编造内容）。
     → logs/change_logs/2026-08-10_164040_phase35-rework-six-segment.md。
+
+74. **Phase 3.5 结清回路：不自造判定 + 未结清一律回台账 + 两次机会后记录
+    放弃。** #72 六段关卡首跑（53 stage / 33m11s / 159 次 LLM 调用）后残留
+    8 条债，逐条追因发现三条是结构性死结、另有一处会在台账清空后变成假
+    PASS。四处修法：
+
+    **(a) 长度容忍度对齐。** 修复循环用 #48 容差门（`min/maxLength` ±10%，
+    且必须整个错误集合都是长度类才放宽）判 `LENGTH_TOLERANCE_PASS`，而
+    Phase 3.5 的 schema 复校走严格 `validate_only`。实测两条债正好卡在
+    容忍带内（`maxLength 200` 的字段实为 208、`30` 的实为 33）：修复循环
+    判 PASS 且不写 resolution，门判 unsettled，**再跑多少次都不会变**。
+    长度容差判据提升为公开的 `length_tolerance_pass`，复校委托给它 ——
+    权威只有一个：门不能比修复循环更严，否则容忍带就是死结带。判据里
+    **必须**保留"整个错误集合都是长度类才放宽"这一半，且它被折进函数本体
+    而非留给调用方：宽松化的只是 JSON Schema，而 structural / cross_file
+    这些检查器根本不在 schema 里，少了这道守卫，一条 structural 债会被
+    "宽松校验通过"洗成已结清。
+
+    **(b) unverified 债独立成类。** `semantic_unavailable` /
+    `semantic_check_crashed` / `semantic_unparseable`（`protocol.
+    BACKEND_FAILURE_RULES`，由 `checkers/semantic.py` 与本回路共用）记录的
+    是**审校器自身失败**，不是内容缺陷。按 semantic 内容债处理时它锚在
+    `$` 上无字段可补，段 2 静默跳过、又永远等不到 resolution ——
+    不可证伪的债，永久挂账。改为：**按 rule 判定**（category 由 checker
+    填成 `semantic`，且已落盘的行不会重写，故只有 rule 能认出它），Phase
+    3.5 对该文件跑**不带 seed** 的完整 repair 事务 —— Phase A 的全文语义
+    审校本身就是重新检查，查出的问题自带真实 `json_path` 并在同一事务里
+    被修。不选「给它单独造一条复检路径」：那是把 Phase A 重写一遍。
+
+    **(c) 未结清项一律回写台账。** 段 4 有 2 条审校发现修不掉，既不进台账
+    也不进最终报告 —— 段 6 只裁决程序化层 + 台账债。本次因台账仍有 8 条而
+    照样 FAIL，但**台账一旦清空，审校发现修不掉也会判 PASS 放行**。新增
+    `append_deferred_repairs()`（按 `issue_key` 去重；不能复用截断语义的
+    `write_deferred_repairs` —— 那是「一次 repair 一份陈述」的替换契约）。
+    回写后台账成为判定的唯一输入：不论哪个段发现的问题，未修好就走同一套
+    裁决，且活到下一次运行（省掉重复支付段 3 的全量审校）。
+
+    **(d) 两次机会 + 记录放弃。** 每文件最多 2 次事务：第一次终止于安全阀
+    （tier 封顶 / `L3 gate reemerge`）后，第二次从**残留 issue** re-seed
+    （残留是文件当前状态 + 上一刀失败在哪，信息量严格大于原始陈述）并改用
+    `[llm].effort` 复读 —— 逐字重试只会复现同一终止条件。不设第三次：全价
+    重推同一个终止条件，而扛过两次知情尝试的债需要的是人不是又一轮。仍
+    失败写 `resolution="given_up"`（含 `attempts` / `last_error`），门里
+    降为 warning、不阻断 Phase 4，但 verdict 单独成段列出（用户 2026-08-14
+    拍板：放行但显著记录）。**`given_up` 与 `fixed` 的区别是承重的**：
+    `fixed` 声称「已修好」，故只写给非可复验类（给 schema 债写 `fixed` 会
+    永久压制它，即便字段后来又坏了）；`given_up` 对文件不作任何声称、只降
+    严重度，故所有类别都能写 —— 文件真被修好时 schema 复校仍让债自然消失。
+    **两类失败不算用尽机会**：事务抛异常，以及残留里含 `BACKEND_FAILURE_
+    RULES` 的规则 —— 后者**不抛异常**（checker 有意把后端故障转成一条阻塞
+    issue，好让它不被当成干净通过），事务因此正常返回 FAIL，与用尽在返回值
+    上无法区分，只能靠规则名认出。二者都是基础设施故障，静默放弃会把一次
+    中断变成 canon 里的永久缺口，故保持 error 留给下次；连带地第二次的
+    re-seed 也必须滤掉它们，否则原始债会被一条 `$` 锚点的 NO_FIX issue 整体
+    顶掉，第二次机会花在空转上。同理，`$` 根锚点且非 unverified 的行**无法
+    被尝试**，按 attempts=0 记录放弃并附原因，而不是静默跳过后永久阻塞。
+
+    **三个配套边界**：(i) 已 given up 的债不再进段 2 —— 段 2 的输入按
+    severity 过滤，否则每轮都为"已放弃"重付两次事务，止损止不住；(ii) 无
+    stage 可挂的发现（整窗口审校失败这类；台账按 stage 分文件，它无处归档）
+    既不写台账也不记放弃，直接并入段 6 报告计 error —— 发现它的段与本该判它
+    的门之间不能有缝隙；(iii) 台账与决议侧车都是 tracked 文件，故提交面判据
+    不只看"是否 patch 过 primary"，也看本轮是否写过台账，否则未提交的行会以
+    dirty 状态挡住 `checkout_main` 并被 squash-merge 漏掉。
+
+    **边界**：不动 #48 容差门本身的判据与数值；不动 `REVALIDATABLE_
+    CATEGORIES` 的成员；不新增可延后 category（unverified 是 rule 层判定，
+    不是第四个 category）；段 3 审校逻辑与投影不变。
+    → logs/change_logs/2026-08-14_181353_phase35-settlement-tolerance-and-giveup.md。
 
 ## Repository
 

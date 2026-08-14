@@ -2379,9 +2379,9 @@ Phase 3 全部 stage 提交后运行。stage 文件是整个系统最重要的�
 | 段 | 内容 | 成本 |
 |---|------|------|
 | 1 | 程序全扫，得到债务清单 | 0 token |
-| 2 | 结清台账债务（定点 field patch，按文件并行） | LLM |
+| 2 | 结清台账债务（定点 field patch，按文件并行，每文件两次机会） | LLM |
 | 3 | 跨阶段连贯审校（按投影窗口并行） | LLM 冷读 |
-| 4 | 审校发现走同一套定点修复循环 | LLM |
+| 4 | 审校发现走同一套定点修复循环，未结清的回写台账 | LLM |
 | 5 | 受影响 stage 重跑 post-processing 重投影 | 0 token |
 | 6 | 复扫 + 门判 + 报告 | 0 token |
 
@@ -2416,18 +2416,62 @@ driving_events 归因）、target_map 样本数（importance 阈值见 §11.4.3�
 #### L3 台账结清
 
 读 `deferred_repairs/{stage_id}.jsonl`，但**不采信台账的陈述**——台账记的是
-"repair 当时修不平"，此刻可能已结清，照搬会让门永远失败。按债的性质分两条
-结清路径：
+"repair 当时修不平"，此刻可能已结清，照搬会让门永远失败。门侧只有两条裁决
+动作（重校验 / 认 resolution 记录，均零 token），据此按债的性质分出三条结清
+路径（决策 #74）：
 
 - **schema / structural 类**：对当前文件重新校验，`json_path` 不再出现在
   违规集即为已结清。**这是台账自愈的机制**——修好的债自动消失，无需回写。
+  复校用 `repair.length_tolerance_pass`，即修复循环判 PASS 时用的同一个
+  长度容差判据（§11.4 决策 #48）；**门不得比修复循环更严**，否则容忍带内
+  的超限就成了修复循环判 PASS、门判未决的死结。
 - **semantic 类**：无程序化复验途径，只能凭
   `deferred_repairs/{stage_id}.resolved.jsonl` 的 resolution 记录结清。
   resolution 逐条即时落盘、append-only，故本阶段中途崩溃后重跑天然幂等。
+- **unverified 类**（`rule ∈ protocol.BACKEND_FAILURE_RULES`：审校器不可用
+  / 崩溃 / 输出不可解析）：记录的是"审校没跑成"而非内容缺陷，故结清方式是
+  **重新跑一次审校**——段 2/4 里只要某文件带一条 unverified 行，该文件整份
+  跑一次不带 seed 的完整 repair 事务，Phase A 的全文语义审校即复检，查出的
+  问题自带真实 `json_path` 并在同一事务里被修；通过后落一条 `fixed` 记录，
+  门据此销账（门自身不跑审校）。**按 rule 判定而非 category**：checker 把它
+  填成 `semantic`，已落盘的历史行也不会重写，只有 rule 能认出它。
 
 复验拿不到结论时（未注入 revalidator，或对某文件复验抛错）schema 类债
 **保持未决**，不假设已结清——复验失败标记按文件生效，该文件的每一条债都
 各自记为 skipped 并报出，不会因为共用一次失败的复验而互相顶替。
+
+#### 两次机会与"记录并放弃"
+
+每个文件最多 2 次结清事务——预算按**文件**而非按条计，一条修不掉会连同该
+文件其余债一起用尽。第一次终止于安全阀（tier 封顶 / 语义层不收敛）后，第二
+次从**残留 issue** 重新 seed（残留描述文件当前状态与上一刀失败在哪，信息量
+严格大于原始陈述）并改用 `[llm].effort` 复读——逐字重试只会复现同一终止
+条件；残留为空或只剩审校器失败类时沿用原 seed。
+
+**两类失败不计入机会**：事务抛异常，以及残留含审校器失败类规则——后者不
+抛异常（checker 把后端故障转成一条阻塞 issue，事务正常返回 FAIL，与用尽
+无法从返回值上区分），必须靠规则名认出来。二者都是基础设施故障，保持阻塞
+留待重试；静默放弃会把一次中断变成 canon 里的永久缺口。
+
+两次仍失败 → 写 `resolution="given_up"`（含 `attempts` / `last_error`）：
+门里降级为 warning、不阻断 Phase 4，但在 verdict 中**单独成段列出**。
+`given_up` 与 `fixed` 的语义差别是承重的——`fixed` 声称"已修好"，故只写给
+非可复验类；`given_up` 对文件不作任何声称，只降严重度，故所有类别都能写，
+文件真被修好时 schema 复校仍让债自然消失。`$` 根锚点且非 unverified 的行
+**无法被尝试**，按 `attempts=0` 记录放弃并附原因，不静默跳过——因此读到
+一条 `given_up` 时应看 `attempts` 才知道它是被试过还是从未可试。
+
+**无处归档的发现直接进判定**：台账按 stage 分文件，而整窗口审校失败这类
+发现没有 stage 可挂。它们不写台账也不记放弃，而是被原样并入段 6 的报告并
+计入 error——发现它的段与本该判它的门之间不能有缝隙。
+
+#### 未结清项回写台账
+
+段 4 的审校发现在结清前只活在本次运行的内存里，而段 6 只裁决台账。未结清
+的发现**必须回写台账**（`append_deferred_repairs`，按 `issue_key` 去重），
+否则会从本该判它的那次判定里掉出去，且下次运行要再付一次全量审校的钱。
+回写后台账是判定的**唯一输入**：不论哪个段发现的问题，未修好就走同一套
+裁决。
 
 #### 跨阶段连贯审校（段 3）
 
@@ -2466,8 +2510,9 @@ seed 之后的 tier 路由、scoped 复验、L3 gate、安全阀全部照旧，�
 
 - `works/{work_id}/analysis/consistency_report.json`（含 coverage 账本）
 - `works/{work_id}/analysis/deferred_repairs/{stage_id}.resolved.jsonl`
-- 控制台打印六段进度 + coverage 账本 + error 明细
-- error 或 skipped 非零时阻断 Phase 4
+- `works/{work_id}/analysis/deferred_repairs/{stage_id}.jsonl` 的回写行
+- 控制台打印六段进度 + coverage 账本 + error 明细 + 放弃清单单独成段
+- error 或 skipped 非零时阻断 Phase 4；`given_up` 的债记为 warning 不阻断
 
 #### Phase 3.5 产物提交契约
 

@@ -448,7 +448,8 @@ cross_file}`，或是 `coverage_shortage` 薄内容残留（`severity=warning` �
 提交、且不进台账，Phase 3.5 收尾 pass 永远不会知道它。
 台账由 Phase 3.5 的 L3 层消费并结清（不重跑 stage）：schema 类对当前文件
 重新校验、修好的自动销账；semantic 类凭 `{stage_id}.resolved.jsonl` 的
-resolution 记录结清。判据 + 读写：
+resolution 记录结清；unverified 类（审校器自身失败，按 rule 判定）靠重跑
+审校结清（决策 #74）。判据 + 读写：
 `persona_extraction/lifecycle/deferred_repair_log.py`。
 
 代码：`repair/`
@@ -545,14 +546,23 @@ Phase 3 全部 stage 提交后自动运行。这是 stage 文件经过的最后�
 
 **六段**（段间串行、段内并行）：①程序全扫（0 token）→ ②结清台账债
 （定点 patch，按文件并行）→ ③跨阶段连贯审校（按投影窗口并行，冷读）
-→ ④审校发现走同一套定点修复 → ⑤受影响 stage 重跑 post-processing
-重投影（0 token）→ ⑥复扫 + 门判 + 报告。
+→ ④审校发现走同一套定点修复、未结清的回写台账 → ⑤受影响 stage 重跑
+post-processing 重投影（0 token）→ ⑥复扫 + 门判 + 报告。
+
+段 2/4 里**每个文件**有两次机会：第二次从残留 issue 重新 seed + 改用
+`[llm].effort` 复读（逐字重试只会复现同一终止条件）；抛异常、以及残留
+含审校器失败类规则，都不计入机会（后者不抛异常，只能靠规则名认出）。
+仍失败写 `resolution="given_up"`，降为 warning 放行 Phase 4，并在 verdict
+单独成段列出；`$` 根锚点这类根本无法尝试的行按 `attempts=0` 记放弃
+（决策 #74）。
 
 **三层检查**（零 token）：L1 结构在位（stage 文件齐全 + `stage_id` 对齐）
 / L2 派生 1:1（`memory_digest.summary` ↔ timeline `digest_summary`、
 `world_event_digest.summary` ↔ world `stage_events[i]`、`memory_id`
 双向对应——决策 #61 后只有这层能发现投影漂移）/ L3 台账结清
-（schema 类重校验自愈、semantic 类凭 `{stage_id}.resolved.jsonl`）。
+（schema 类重校验自愈、走与修复循环同一个长度容差判据；semantic 与
+unverified 类凭 `{stage_id}.resolved.jsonl`——unverified 那条记录由段 2/4
+重跑审校产出，门自身不跑）。
 另有辅助检查：字段完整性、关系连续性、target_map 样本数
 （importance 阈值：主角 ≥5 / 重要配角 ≥3 / 其他 ≥1）。
 
@@ -564,7 +574,8 @@ Phase 3 全部 stage 提交后自动运行。这是 stage 文件经过的最后�
 
 **门判**：`error == 0 且 skipped == 0` 才过——coverage 账本逐 check 记
 `checked / skipped / hit`，读不到的文件计 skipped 并显式失败，不再静默
-跳过。有 error 或 skipped 时阻断 Phase 4。
+跳过。有 error 或 skipped 时阻断 Phase 4；`given_up` 的债计 warning，
+不阻断但显著列出。
 
 产出 `consistency_report.json`（含 coverage 账本）+ resolution 台账，
 在 extraction 分支上立即 commit；本阶段 patch 过文件时提交整个 work
