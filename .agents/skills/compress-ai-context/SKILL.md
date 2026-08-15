@@ -169,8 +169,9 @@ b. **Snapshot**: `take_snapshot(target_root, slug='compress-ai-context-migrate',
 
 c. **Migrate each fat entry** (coordinator-serial; one entry = one pair of Edits; process in file order):
    - **Move**: append the entry's full text **verbatim** to `docs/decisions.md`, under a theme section matching the entry's section in the index (create the `## <section>` header in the archive if absent, mirroring the index's section order; remove the archive's PROGRESSIVE `_(none yet — …)_` marker on first landing). Keep the entry's number unchanged.
-   - **Rewrite**: replace the index entry's body with the 1–2-line index form — decision statement distilled from the entry's first sentence(s) + `→ docs/decisions.md #N` pointer. No fact inversion, no dropped negation; boundaries / measurements / history stay in the archive text only.
-   - Entries already in index form (≤ 3 non-empty lines AND pointer present) are untouched even if they sit between fat ones.
+   - **Rewrite**: replace the index entry's body with the index form — decision statement distilled from the entry's first sentence(s) + `→ docs/decisions.md #N` pointer, **1–2 lines AND ≤ 200 characters total** (the §Format contract the Step 1 probe enforces). No fact inversion, no dropped negation; boundaries / measurements / history stay in the archive text only.
+   - **Over-long-but-already-pointered entries** (pointer present + an archive entry under the same `#N` already exists; flagged only for exceeding the character ceiling) take the **index-side-only** path: do NOT append to the archive again — that would duplicate `#N`. Instead, first fold any fact the index line carries but the archive entry lacks into the existing archive entry, then distil the index line in place.
+   - Entries within both bounds (≤ 3 non-empty lines AND ≤ 200 characters AND pointer present) are untouched even if they sit between fat ones.
 
 d. **Verify before proceeding** (hard gate; any failure → print the failure + jump to Step 8c's rollback ask, scoped to the `_compress-ai-context-migrate/` snapshot from 4.5b instead of the compress snapshot; on rollback, the run continues into Step 5 with the migration undone):
    - Numbering lockstep: the sorted `#N` set of index entries == the sorted `#N` set of archive entries (both from `^N. ` line-starts, HTML comments stripped).
