@@ -230,6 +230,7 @@ from ..repair import (
     SourceContext,
     length_tolerance_pass,
     run as run_repair,
+    sanitise_rule,
     validate_only,
 )
 from ..repair.checkers.phase2_baseline_refs import (
@@ -3711,9 +3712,10 @@ class ExtractionOrchestrator:
         as the audit of the semantic patches segment 2 just applied.
 
         Everything segments 2 and 4 fail to settle ends up in the deferred
-        ledger, which is the only input segment 6 judges — so a debt and a
-        review finding are judged the same way, and neither can vanish
-        between the segment that found it and the verdict.
+        ledger, which is what segment 6 re-adjudicates — so a debt and a
+        review finding are judged the same way. A finding with no stage to be
+        filed under is carried straight into the verdict instead, so neither
+        kind can vanish between the segment that found it and the verdict.
 
         Returns True when the gate passes (safe to proceed to Phase 4). A
         debt released after ``_P35_SETTLE_ATTEMPTS`` tries does not block,
@@ -3948,15 +3950,15 @@ class ExtractionOrchestrator:
             if not issue.file or not issue.json_path or issue.json_path == "$":
                 # A root-anchored finding has no field to patch; a fixer
                 # handed one rewrites the whole document, which is the
-                # full-file regeneration decision #62 removed. It cannot be
-                # attempted at all, so it is released with the reason on
-                # record instead of blocking every future run silently.
+                # full-file regeneration decision #62 removed.
+                #
+                # It stays blocking rather than being released: giving up is
+                # what a debt earns by surviving its attempts, and this one
+                # never got any. Releasing on zero attempts would hollow out
+                # the two-chance rule exactly where the debt is hardest.
                 logger.warning(
-                    "Phase 3.5: unlocatable issue released — %s",
+                    "Phase 3.5: unlocatable issue kept blocking — %s",
                     issue.message[:120])
-                self._p35_give_up(
-                    work_dir, issue, attempts=0,
-                    last_error="unlocatable: no field to patch")
                 unsettled.append(issue)
                 continue
             by_file.setdefault(issue.file, []).append(issue)
@@ -3997,10 +3999,13 @@ class ExtractionOrchestrator:
             file_issues = by_file[fpath]
             if entry is None:
                 # A debt on a file this phase does not govern is a wiring
-                # bug, not an exhausted repair. Raising routes it to the
-                # caller's fault path, which keeps the issues blocking
-                # instead of releasing them on a mistake.
-                raise ValueError(f"no repair entry for {fpath}")
+                # bug, not an exhausted repair — reported as a non-attempt so
+                # the issues keep blocking instead of being released on a
+                # mistake. Not raised: one mis-wired file should not take the
+                # whole phase down, and the caller's narrow error handler is
+                # reserved for programming faults.
+                logger.warning("Phase 3.5: no repair entry for %s", fpath)
+                return fpath, False, file_issues, "no repair entry for file", True
             stage_id = (next((i.stage_id for i in file_issues if i.stage_id),
                              None)
                         or self._p35_stage_of(fpath) or "phase3.5")
@@ -4062,7 +4067,7 @@ class ExtractionOrchestrator:
                         seed_issues=seeds,
                     )
                 if result.passed:
-                    return fpath, True, file_issues, ""
+                    return fpath, True, file_issues, "", False
                 residual = [i for i in result.issues if i.severity == "error"]
                 # A failed *review* is not a failed repair. The semantic
                 # checker converts a backend outage into a blocking issue
@@ -4107,7 +4112,7 @@ class ExtractionOrchestrator:
             futures = {pool.submit(_settle_one, p): p for p in by_file}
             for fut in as_completed(futures):
                 try:
-                    fpath, passed, handled, last_error, infra = fut.result()
+                    outcome = fut.result()
                 except RateLimitHardStop:
                     pool.shutdown(wait=False, cancel_futures=True)
                     raise
@@ -4118,15 +4123,27 @@ class ExtractionOrchestrator:
                     # issues blocking so the next run retries them.
                     unsettled.extend(by_file[futures[fut]])
                     continue
+                # Check the arity before unpacking. A mismatch is a bug in
+                # this function, and unpacking it inside the try above would
+                # raise ValueError there — landing in the infrastructure
+                # branch, where "the settlement path is broken" reads exactly
+                # like "the backend was down". Asserting the contract here
+                # keeps that one class loud without widening what the branch
+                # above swallows.
+                if not isinstance(outcome, tuple) or len(outcome) != 5:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    raise TypeError(
+                        f"_settle_one must return a 5-tuple, got {outcome!r}")
+                fpath, passed, handled, last_error, infra = outcome
                 modified.add(fpath)
                 if passed:
                     self._p35_record_resolutions(work_dir, handled)
                     continue
                 if infra:
                     logger.warning(
-                        "Phase 3.5: %s ended on a failed review (%s) — "
-                        "keeping its %d debt(s) blocking rather than giving "
-                        "up on data nobody managed to check",
+                        "Phase 3.5: %s ended without settling (%s) — keeping "
+                        "its %d debt(s) blocking rather than giving up on "
+                        "data nobody managed to check",
                         fpath, last_error, len(handled))
                     unsettled.extend(handled)
                     continue
@@ -4242,7 +4259,7 @@ class ExtractionOrchestrator:
             resolved_by="phase3.5",
             resolution=RESOLUTION_GIVEN_UP,
             attempts=attempts,
-            last_error=last_error[:200],
+            last_error=last_error,
             note=issue.message[:200],
         )
 
@@ -4405,7 +4422,7 @@ class ExtractionOrchestrator:
                 continue
             severity = ("warning" if str(row.get("severity")) == "warning"
                         else "error")
-            rule = str(row.get("rule", "")).strip() or "cross_stage_break"
+            rule = sanitise_rule(row.get("rule"), "cross_stage_break")
             out.append(ConsistencyIssue(
                 severity, "semantic", f"{doc.subject}/{stage_id}",
                 f"{rule}: {message}",

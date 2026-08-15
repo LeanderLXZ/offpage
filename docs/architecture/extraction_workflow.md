@@ -568,7 +568,7 @@ Phase 3 记下的欠债是否已结清（决策 #72）。
   - **semantic** — 无程序化复验途径，只能凭 `{stage_id}.resolved.jsonl`
     的 resolution 记录结清。
   - **unverified**（`rule ∈ protocol.BACKEND_FAILURE_RULES`：审校器自身
-    不可用 / 崩溃 / 输出不可解析）——**按 rule 判定而非 category**，故已
+    不可用 / 崩溃 / 输出不可解析，跨阶段审校的同类失败同属此集合）——**按 rule 判定而非 category**，故已
     落盘的历史行无需改写即被正确归类。它记录的是「审校没跑成」而非内容
     缺陷，门侧仍只认 resolution 记录；产出那条记录的动作在段 2/4：只要
     某文件带有一条 unverified 行，该文件整份**不带 seed** 跑一次完整
@@ -614,15 +614,18 @@ FAIL，与用尽长得一模一样）。两者都是基础设施故障，保持�
 
 **未结清项一律回写台账**：段 4 的审校发现在被结清之前只活在本次运行的
 内存里，而段 6 只裁决台账——不回写就会从「本该判它的那次判定」里掉出去，
-下次运行还要再付一次全量审校的钱。回写后台账成为判定的**唯一输入**：不论
-哪个段发现的问题，未修好就走同一套裁决。
+下次运行还要再付一次全量审校的钱。回写后台账承载绝大部分判定输入：不论哪个段
+发现的问题，未修好就走同一套裁决。**例外是没有 stage 可挂的发现**（整窗口
+审校失败这类）——台账按 stage 分文件，容不下它们，故它们绕过台账直接并入段 6
+的报告并计 error。
 
 **记录并放弃**：两次机会都失败的债写 `resolution="given_up"`（含
 `attempts` / `last_error`），门里降级为 warning 不再阻断，但在 verdict 里
 **单独成段列出**——"带着 N 个已知缺陷通过"绝不能和"干净通过"长得一样。
-第二种来源是**根本无法尝试**的行（`$` 根锚点且非 unverified：没有字段可
-补，交给 fixer 就是全文重写），按 `attempts=0` 记录放弃并附原因，而不是
-静默跳过后永久阻塞。
+**根本无法尝试**的行（`$` 根锚点且非 unverified：没有字段可补，交给
+fixer 就是全文重写）不走这条路——它保持 error 阻断，不写 `given_up`：
+放弃是债扛过两次尝试才挣来的资格，零次尝试就释放会把两次机会的规则
+恰好在最难的债上架空。
 `given_up` 与 `fixed` 的区别是承重的：`fixed` 只写给非可复验类（给
 schema 债写 `fixed` 会永久压制它），`given_up` 对文件不作任何声称，只降
 严重度，故所有类别都能写——文件真被修好时 schema 复校仍会让债自然消失。
@@ -639,11 +642,14 @@ schema 债写 `fixed` 会永久压制它），`given_up` 对文件不作任何�
 有 error 或 skipped 时阻断 Phase 4。
 
 **提交契约**：编排器在 `save_report` 之后、`_offer_squash_merge` 之前在
-extraction 分支上 commit，不分 pass/fail。本阶段若 patch 过文件，提交面
-是整个 work scope（修复后的 stage 文件 + resolution 台账 + 重投影的派生
-产物 + 报告）；未 patch 时仅提交报告。未提交的产物会以 dirty 状态挡住
+extraction 分支上 commit，不分 pass/fail。提交面判据是「本轮是否 patch 过 primary
+**或** 是否处理过债 / 发现」——台账与 resolution 侧车同样是 tracked 文件，
+一轮可以一个 primary 都没改却写下放弃记录。任一成立即提交整个 work scope
+（修复后的 stage 文件 + 台账与侧车 + 重投影的派生产物 + 报告），都不成立
+才仅提交报告。未提交的产物会以 dirty 状态挡住
 `checkout_main`，也会被 squash-merge 漏掉。检查器加载 JSON/JSONL 源文件
-**只读**——写盘只发生在段 2/4 的定点 patch 与段 5 的重投影里。
+**只读**——写盘只发生在段 2/4 的定点 patch、段 2/4 对台账与 resolution 侧车
+的记录、段 5 的重投影，以及段 6 的报告落盘。
 
 ### 8. 场景切分（Phase 4）
 

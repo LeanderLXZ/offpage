@@ -55,6 +55,7 @@ works/{work_id}/
     stage_plan.json
     candidate_characters.json
     consistency_report.json
+    deferred_repairs/{stage_id}{,.resolved}.jsonl   # 未决修复台账 + 结清侧车
     progress/
       pipeline.json
       phase0_summaries.json
@@ -209,6 +210,11 @@ works/{work_id}/
 - `candidate_characters.json` — Phase 1 候选角色（决策 #54：foundation
   由 phase 1 foundation lane 直接落 `world/foundation/foundation.json`）
 - `consistency_report.json` — Phase 3.5 一致性检查报告
+- `deferred_repairs/` — 未决修复台账（extraction 分支上 tracked）：
+  `{stage_id}.jsonl` 记录 repair 当时修不平的问题（该 stage 自己的 repair
+  **整体替换**它，Phase 3.5 只追加），`{stage_id}.resolved.jsonl` 是
+  append-only 侧车，记 Phase 3.5 的结清（`fixed`）与放弃（`given_up`）。
+  两者都是 Phase 3.5 门判的输入
 - `evidence/` — 证据引用材料（本地，未 tracked；.gitignore 屏蔽）
 - `conflicts/` — 矛盾与修订记录（本地，未 tracked；.gitignore 屏蔽；当前无 writer，预留给未来 phase 3.5 一致性检查的修订归档）
 

@@ -2429,7 +2429,7 @@ driving_events 归因）、target_map 样本数（importance 阈值见 §11.4.3�
   `deferred_repairs/{stage_id}.resolved.jsonl` 的 resolution 记录结清。
   resolution 逐条即时落盘、append-only，故本阶段中途崩溃后重跑天然幂等。
 - **unverified 类**（`rule ∈ protocol.BACKEND_FAILURE_RULES`：审校器不可用
-  / 崩溃 / 输出不可解析）：记录的是"审校没跑成"而非内容缺陷，故结清方式是
+  / 崩溃 / 输出不可解析，以及跨阶段审校的同类失败）：记录的是"审校没跑成"而非内容缺陷，故结清方式是
   **重新跑一次审校**——段 2/4 里只要某文件带一条 unverified 行，该文件整份
   跑一次不带 seed 的完整 repair 事务，Phase A 的全文语义审校即复检，查出的
   问题自带真实 `json_path` 并在同一事务里被修；通过后落一条 `fixed` 记录，
@@ -2458,8 +2458,9 @@ driving_events 归因）、target_map 样本数（importance 阈值见 §11.4.3�
 `given_up` 与 `fixed` 的语义差别是承重的——`fixed` 声称"已修好"，故只写给
 非可复验类；`given_up` 对文件不作任何声称，只降严重度，故所有类别都能写，
 文件真被修好时 schema 复校仍让债自然消失。`$` 根锚点且非 unverified 的行
-**无法被尝试**，按 `attempts=0` 记录放弃并附原因，不静默跳过——因此读到
-一条 `given_up` 时应看 `attempts` 才知道它是被试过还是从未可试。
+**无法被尝试**（没有字段可补，交给 fixer 就是全文重写），因此它**保持
+error 阻断**、不写 `given_up`：放弃是债扛过两次尝试才挣来的资格，而这类债
+一次都没跑过；零次尝试就释放会把两次机会的规则恰好在最难的债上架空。
 
 **无处归档的发现直接进判定**：台账按 stage 分文件，而整窗口审校失败这类
 发现没有 stage 可挂。它们不写台账也不记放弃，而是被原样并入段 6 的报告并
@@ -2470,8 +2471,8 @@ driving_events 归因）、target_map 样本数（importance 阈值见 §11.4.3�
 段 4 的审校发现在结清前只活在本次运行的内存里，而段 6 只裁决台账。未结清
 的发现**必须回写台账**（`append_deferred_repairs`，按 `issue_key` 去重），
 否则会从本该判它的那次判定里掉出去，且下次运行要再付一次全量审校的钱。
-回写后台账是判定的**唯一输入**：不论哪个段发现的问题，未修好就走同一套
-裁决。
+回写后台账承载绝大部分判定输入：不论哪个段发现的问题，未修好就走同一套
+裁决。**例外是没有 stage 可挂的发现**（见上），它们绕过台账直接并入报告。
 
 #### 跨阶段连贯审校（段 3）
 
@@ -2525,13 +2526,16 @@ seed 之后的 tier 路由、scoped 复验、L3 gate、安全阀全部照旧，�
    最终 squash-merge 的 commit（默认目标 `library`，由
    `[git].squash_merge_target` 配置）。
 
-提交面随本阶段是否改过文件而定：patch 过则提交整个 work scope（修复后的
-stage 文件 + resolution 台账 + 重投影的派生产物 + 报告）；未 patch 则仅
-提交报告。
+提交面判据是「本轮是否 patch 过 primary **或** 是否处理过债 / 发现」：
+二者任一成立即提交整个 work scope（修复后的 stage 文件 + 台账与 resolution
+侧车 + 重投影的派生产物 + 报告）；都不成立才仅提交报告。台账与侧车同样是
+tracked 文件 —— 一轮可以一个 primary 都没改却写下了放弃记录或回写了发现，
+漏提交会以 dirty 状态挡住 `checkout_main` 并被 squash-merge 漏掉。
 
 检查器加载 JSON / JSONL 源文件**只读**——不得顺带触发 L1 JSON 修复写盘。
-本阶段的写盘只发生在段 2/4 的定点 patch 与段 5 的重投影，二者都是显式
-动作，不是加载的副作用。
+本阶段的写盘只发生在段 2/4 的定点 patch、段 2/4 对台账与 resolution 侧车的
+记录、段 5 的重投影，以及段 6 的报告落盘；四者都是显式动作，不是加载的
+副作用。
 
 ### 11.11 场景切分（Phase 4）
 

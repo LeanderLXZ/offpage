@@ -496,15 +496,19 @@ def _check_deferred_ledgers(
 
     The ledger states what repair could not fix *at the time it ran*. By now
     a debt may have been settled, so replaying its claim verbatim would fail
-    the gate forever. Two settlement routes, matching what each debt class
-    can actually be proven by:
+    the gate forever. The gate itself performs two adjudication actions, both
+    zero-token — re-validate, or honour a recorded resolution — matching what
+    each debt class can actually be proven by:
 
     * **schema / structural** — re-validate the file. The debt is settled iff
       its ``json_path`` no longer appears in the violation set. This is why
       the ledger can self-heal without anyone writing to it.
     * **semantic** (incl. a failed review) — no programmatic re-derivation
       exists, so it clears only against a recorded resolution
-      (``{stage_id}.resolved.jsonl``).
+      (``{stage_id}.resolved.jsonl``). A failed review earns that record a
+      third way: Phase 3.5 re-runs the review itself (see the orchestrator's
+      settlement segments). The gate never runs one — it only reads the
+      record the re-run leaves behind.
 
     Without ``revalidate_schema`` the first route is unavailable; those debts
     stay open rather than being assumed settled.

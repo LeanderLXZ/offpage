@@ -26,6 +26,7 @@ from .protocol import (
     SourceEvidence,
     SourceNote,
     TriageVerdict,
+    sanitise_rule,
 )
 
 __all__ = [
@@ -43,5 +44,6 @@ __all__ = [
     "TriageVerdict",
     "length_tolerance_pass",
     "run",
+    "sanitise_rule",
     "validate_only",
 ]

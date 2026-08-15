@@ -355,7 +355,35 @@ BACKEND_FAILURE_RULES: frozenset[str] = frozenset({
     "semantic_unavailable",
     "semantic_check_crashed",
     "semantic_unparseable",
+    # Phase 3.5's cross-stage review, same meaning one layer up: the window
+    # was never reviewed. Kept in this set rather than left to an implicit
+    # "it has no file anchor so it falls through" — that only holds while
+    # nobody gives those findings a stage, and the moment someone does they
+    # would be filed as ordinary content debt and released without a review
+    # ever running.
+    "cross_stage_review_unavailable",
+    "cross_stage_review_unparseable",
 })
+
+
+def sanitise_rule(rule: Any, fallback: str) -> str:
+    """Keep a reviewer-supplied rule name out of the framework's control flow.
+
+    Rule names arrive as free text from the model, and layers above branch on
+    them: a name in ``BACKEND_FAILURE_RULES`` means "the review never ran",
+    which routes a debt to re-verification instead of a patch and exempts it
+    from the attempt budget. A model that echoes one of those names for an
+    ordinary content defect hands itself a debt that is never patched and can
+    still be recorded as settled. Reserved names are therefore rewritten
+    rather than trusted; a non-string or empty rule falls back the same way.
+
+    Every parser of model-authored findings must go through this — the
+    reserved set is one authority, and so is the decision to distrust it.
+    """
+    if not isinstance(rule, str) or not rule.strip():
+        return fallback
+    rule = rule.strip()
+    return fallback if rule in BACKEND_FAILURE_RULES else rule
 
 
 def is_root_anchored(issue: "Issue") -> bool:

@@ -553,8 +553,8 @@ post-processing 重投影（0 token）→ ⑥复扫 + 门判 + 报告。
 `[llm].effort` 复读（逐字重试只会复现同一终止条件）；抛异常、以及残留
 含审校器失败类规则，都不计入机会（后者不抛异常，只能靠规则名认出）。
 仍失败写 `resolution="given_up"`，降为 warning 放行 Phase 4，并在 verdict
-单独成段列出；`$` 根锚点这类根本无法尝试的行按 `attempts=0` 记放弃
-（决策 #74）。
+单独成段列出。`$` 根锚点这类根本无法尝试的行**不走这条路** —— 它保持
+error 阻断、不记放弃（放弃是扛过两次尝试才挣来的资格，决策 #74）。
 
 **三层检查**（零 token）：L1 结构在位（stage 文件齐全 + `stage_id` 对齐）
 / L2 派生 1:1（`memory_digest.summary` ↔ timeline `digest_summary`、
@@ -577,9 +577,10 @@ unverified 类凭 `{stage_id}.resolved.jsonl`——unverified 那条记录由段
 跳过。有 error 或 skipped 时阻断 Phase 4；`given_up` 的债计 warning，
 不阻断但显著列出。
 
-产出 `consistency_report.json`（含 coverage 账本）+ resolution 台账，
-在 extraction 分支上立即 commit；本阶段 patch 过文件时提交整个 work
-scope，未 patch 时仅提交报告。
+产出 `consistency_report.json`（含 coverage 账本）+ 台账与 resolution
+侧车，在 extraction 分支上立即 commit；本轮 patch 过 primary **或**处理过
+债 / 发现时提交整个 work scope，都没有才仅提交报告（侧车同样 tracked，
+漏提交会挡住 `checkout_main`）。
 
 代码：`extraction/validation/gates/phase3_5_consistency.py`（三层检查）、
 `persona_extraction/phases/cross_stage_projection.py`（瘦投影）、

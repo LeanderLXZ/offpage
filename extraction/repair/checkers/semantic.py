@@ -21,7 +21,7 @@ import logging
 from typing import Any, Callable
 
 from . import BaseChecker
-from ..protocol import BACKEND_FAILURE_RULES, FileEntry, Issue
+from ..protocol import BACKEND_FAILURE_RULES, FileEntry, Issue, sanitise_rule
 
 logger = logging.getLogger(__name__)
 
@@ -340,7 +340,7 @@ class SemanticChecker(BaseChecker):
                 json_path=item.get("json_path", "$"),
                 category="semantic",
                 severity=item.get("severity", "warning"),
-                rule=item.get("rule", "semantic_review"),
+                rule=sanitise_rule(item.get("rule"), "semantic_review"),
                 message=item.get("message", ""),
             ))
         return issues

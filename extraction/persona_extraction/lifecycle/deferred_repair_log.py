@@ -307,12 +307,13 @@ def append_resolution(
     appends, including a new ``last_error``: freezing the first failure
     reason would leave whoever picks the debt up chasing a stale cause.
     """
+    last_error = last_error[:200]
     key = issue_key(record)
     prior = read_resolutions(work_root, stage_id).get(key)
     if prior is not None and all(
             prior.get(k) == v for k, v in (
                 ("resolution", resolution), ("attempts", attempts),
-                ("last_error", last_error[:200]))):
+                ("last_error", last_error))):
         return
     path = resolution_ledger_path(work_root, stage_id)
     path.parent.mkdir(parents=True, exist_ok=True)
