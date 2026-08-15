@@ -26,7 +26,10 @@ Parse rule: the first token shaped like `{N}min` / `{N}s` / `{N}m` / plain numbe
 - A section lists a concrete path but the path does not exist → fail loudly: report the drift to a missing path and stop for the user to fix
 
 When subsequent steps reference "skills_config.md `## XX`" they refer back to this config. This skill uses:
-`## Background processes` (Step 2 process inventory), `## Timezone` (Step 3 per-round Timestamp).
+`## Background processes` (Step 2 process inventory), `## Timezone` (Step 3 per-round Timestamp),
+`## Language` (Step 3 per-round report + Step 5 final summary — read both axis values here).
+
+After reading, print one line **Language-axes anchor**: `Language axes: conversation_language=<value> · content_language=<value> (source: ai_context/skills_config.md §Language)`. Both axis values are echoed **verbatim** from the §Language section; the bracketed source path stays English; the natural-language prefix translates to `conversation_language`. `/monitor` is a **long-running loop** — each round tails English logs and reads English command lines / JSON progress files immediately before rendering, so this anchor is planted once here and re-anchored at every render surface (Step 3, Step 5). Carry the two axis values forward for the whole session; do not re-read the config each round.
 
 ## 1. Scenario registration
 
@@ -53,6 +56,12 @@ Inventory in the first round, then refresh each round:
 - User-specified custom paths take precedence
 
 ## 3. Per-round report contents — 7-aspect framework
+
+> **Language (re-anchor — the primary user surface of this skill, re-read this directive at the top of EVERY round before rendering)**: the report block is user-facing → **all descriptive text renders in `conversation_language`** per `ai_context/skills_config.md §Language`. Step 2 just tailed English logs, English command lines, and English JSON progress files; that content occupies recency and will pull the report into English unless this anchor is re-applied each round. Per-surface split:
+>
+> - **`conversation_language`** — the Diagnosis verdict sentence and its recommendation, Anomaly-bucket descriptions, ETA / "sample insufficient" framing, weighting call-outs, stage labels you author, and any prose explaining a delta or a cause. These free-text fields are where drift bites hardest.
+> - **English regardless** — aspect names (`Time` / `State` / `Progress` / `Errors & retries` / `External constraints` / `Artifacts` / `Diagnosis` / `Anomalies`), state-machine values (`pending` / `running` / `done` / `failed` / `paused` / `retrying` / `waiting-on-resource` / `awaiting-user`), severity prefixes (`✓` / `⚠` / `✗`), timestamps, numeric values and their deltas, units, PIDs, file paths, line numbers, repair-lifecycle tokens (`L1` / `L2` / `L3`, `open` / `closed` / `half-open`).
+> - **Verbatim, never translated** — quoted stdout / log lines / error messages copied out of a process or a file. Quote as-is, then explain in `conversation_language` if explanation is needed.
 
 Each round emits one report block organised by **aspects** (categories of information), not by fixed line-item fields. The aspect taxonomy is fixed; the layout (table vs list, grouping, column choice) is designed on the fly from the actual process structure in Round 1 and reused thereafter. **No round-0 layout confirmation** — print directly; if the user wants a different layout, they will say so.
 
@@ -101,6 +110,8 @@ The bucket expands into Diagnosis when it has content; when empty, collapse it o
 
 ## 4. Handling problems on discovery
 
+> **Language (re-anchor)**: diagnosis text, cause hypotheses, the "recommendation" line, and the high-priority alert body all render in `conversation_language`. Located log lines / error strings are quoted verbatim; the file paths, line numbers, and the `recommendation` / `executed` labels stay English.
+
 - **Do not edit files, do not kill processes, do not restart**
 - Locate first: log line number, related work directory, affected schema / prompt / code files
 - Provide **information + recommendations**: what the error is, possible causes, recommended next step (retry / tune / switch strategy / observe first), labelled "recommendation" not "executed"
@@ -108,6 +119,8 @@ The bucket expands into Diagnosis when it has content; when empty, collapse it o
 - Act only with explicit user approval; otherwise continue read-only monitoring
 
 ## 5. Loop cadence
+
+> **Language (re-anchor — the last user surface `/monitor` produces, and the one furthest from the Step 0 anchor in context)**: the "all processes finished" notice and the final summary (total runtime, final state, anomaly list observed this session) render in `conversation_language`. By this point the session has accumulated many rounds of English log output — re-read the §Language axis values before composing the summary. Structural tokens, timestamps, paths, and state-machine values stay English.
 
 - Run a report immediately on the first round
 - Then one round every N minutes; stay quiet between rounds, do not flood the chat

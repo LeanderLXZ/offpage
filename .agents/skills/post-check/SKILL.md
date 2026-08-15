@@ -142,6 +142,8 @@ After writing back, **immediately commit this log file** — do not leave it as 
 - commit message style follows existing precedent: `log({slug}): /post-check review writeback REVIEWED-PASS|PARTIAL|FAIL`
 - no push, no branch switch; immediately enter Step 6 after commit
 
+The writeback block above is a **disk summary only — it is NOT the report**. Step 6 must still print the full template (Track 1 item-by-item table + numbered Findings + Recommendations) into the conversation; a track-level count summary delivered to the user does not satisfy Step 6.
+
 When log is missing (no writeback), skip the commit.
 
 ## Step 6: Print full dual-track report in conversation
@@ -230,6 +232,8 @@ This round's alignment status across requirements / schema / code / README / arc
 ```
 
 ## Step 7: Handoff ask
+
+**Hard gate**: before calling <ask tool>, verify the conversation already contains the full Step 6 report — Track 1 item-by-item table + numbered Findings (`H*`/`M*`/`L*`) + Recommendations. A track-level count summary (the Step 5 writeback shape) does **not** qualify. If the full report is missing, print Step 6 in full first, then ask.
 
 After the full report prints, **do not write further summaries, do not commit further, do not list next steps in conversation text** — any prose tail pushes the dual-track report up. Do not enter `/go` on your own, do not modify code, do not modify schema / prompt / docs / ai_context.
 
