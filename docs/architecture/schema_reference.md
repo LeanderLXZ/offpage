@@ -18,6 +18,23 @@
 | `schemas/runtime/` | Context / Session / 请求载荷 / 场景归档条目 | 5 |
 | `schemas/shared/` | 跨域共享（extraction_notes 等） | 1 |
 
+## 边界的单一来源
+
+**边界只写在 schema。** 所有 `maxLength` / `minLength` / `maxItems` /
+`required` 都放在 `schemas/**.schema.json`，其他任何地方（prompt 模板、
+docs 散文、代码常量）都不留副本 —— 副本会静默漂移，改一处忘一处的
+不一致往往几个月后才以令人困惑的 bug 浮出。跨 schema 共享的边界用
+`$ref` 指向共享片段，片段就近放在它所服务的 schema 所在的领域目录里：
+例如 target 数组上限由 `target_baseline.targets` 与 stage_snapshot 的三个
+target 结构共享，两者都在 `schemas/character/`，故片段落在
+`schemas/character/targets_cap.schema.json`。调上限只动这一个文件。
+
+**边界是上限，不是目标。** 每个提取 prompt 模板必须显式告诉 LLM：
+`maxLength` / `maxItems` 是**硬上限，不是配额** —— 写原文里真实存在的
+内容，不要为凑满上限而填充 / 注水 / 编造条目。缺了这句话，模型会因为
+"schema 说 ≤N"而默认把每个数组正好写满 N 条，产出被稀释的样板内容。
+字段超出 `maxItems` 时的排序 + 截断规则见 `ai_context/decisions.md` #11e。
+
 ## Analysis 层（`schemas/analysis/`）
 
 ### analysis/chapter_summary_chunk.schema.json
@@ -110,6 +127,8 @@
 **title 派生（light_novel）**：`f"{volume_title or '第N卷'} {original_chapter_title or '第M章'} {original_sub_chapter_seq}"`，N = volume_seq、M = original_chapter_seq；缺失字段用占位字符串。
 
 **生成时机**：规范化阶段产出；后续 Phase 0/1/3/4 的 chapter 引用都以 chapter_id 为锚（profile 拆分不向下游传播）。
+
+**ID 位宽拆分理由**：`chapter_id` 用 4 位（`C####`）、`volume_id` 用 3 位（`V###`）不是随手取的宽度 —— 单部作品章节数可达数千，`≤ 9999` 足以覆盖；而卷数始终很小，`≤ 999` 已远超实际，3 位让卷 ID 保持紧凑且与章 ID 在视觉上不会混淆。两个宽度都由各自的 `pattern` 硬约束，改宽度须同步 §Identifier Renames 的四种扫描。
 
 ---
 

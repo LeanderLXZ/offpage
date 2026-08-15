@@ -63,10 +63,8 @@ MAINTENANCE — 编辑本文件前请先阅读。
 
 ## §3 三个深度扮演目标
 
-1. 结构化角色数据（identity 含 `core_wounds` +
-   `key_relationships` 作为角色级常量；每阶段 snapshot
-   含 personality、triggers、goals vs obsessions、relationships、
-   voice、boundaries、failure modes、`character_arc`）。
+1. 结构化角色数据（identity 为角色级常量，每阶段 snapshot 承载
+   演化状态；字段清单 → `docs/architecture/schema_reference.md`）。
 2. 角色视角记忆（主观，而非剧情摘要）。
 3. 按情绪 / 对象 / 情境保持稳定的 voice + 行为。
 - → `docs/requirements.md` §3。

@@ -110,10 +110,10 @@
 | `/go` 或 `/post-check` 运行 | `logs/change_logs/` PRE / POST / REVIEW 段齐全 |
 | skill 使用的项目专属锚点（后台进程、受保护分支前缀、main 分支策略、do-not-commit 路径、source / data-contract / example-artifact 目录、核心组件关键词、敏感内容规则、时区） | `ai_context/skills_config.md` 对应段 |
 | `structure_mode` | `schemas/{work/{work_manifest,works_manifest,chapter_index},analysis/stage_plan}.schema.json`、`extraction/ingestion/validator.py`、`extraction/persona_extraction/{cli,orchestrator,lifecycle/manifests,lifecycle/progress}.py`、`prompts/ingestion/原始资料规范化.md`、`docs/requirements.md` §8.4/§9.2、`docs/architecture/{schema_reference,extraction_workflow}.md`、`ai_context/{architecture,decisions}.md` |
-| `schemas/analysis/chapter_summary_chunk.schema.json`（chunk schema 字段/边界） | `extraction/persona_extraction/prompts/summarization.md`、`extraction/persona_extraction/prompts/analysis_{foundation,stage_plan,candidate_characters}.md`、`extraction/persona_extraction/prompts/baseline_{fixed_relationships,identity,target_baseline}.md`、`extraction/persona_extraction/prompt_builder.py` 的 `_project_chunk_for_*` 六个投影器（phase 1 三 + phase 2 三，决策 #52/#59）、`docs/architecture/{schema_reference,extraction_workflow}.md`、`ai_context/{architecture,decisions}.md` |
-| `schemas/world/foundation.schema.json`（phase 1 foundation lane 落盘 + phase 2 lane A `key_figures` 替换，决策 #54/#59） | `extraction/persona_extraction/prompts/analysis_foundation.md`、`extraction/persona_extraction/prompts/baseline_key_figures.md`、`extraction/persona_extraction/prompt_builder.py`（`build_foundation_prompt` / `build_key_figures_prompt`）、`extraction/persona_extraction/orchestrator.py`、`extraction/repair/checkers/phase2_baseline_refs.py`、`extraction/validation/gates/phase2_baseline.py`、`schemas/README.md` + `extraction/README.md`、`docs/architecture/{schema_reference,extraction_workflow}.md`、`ai_context/{architecture,decisions}.md` |
-| `deferred_repair_log.DEFERRABLE_CATEGORIES`（可延后类别集） | `phase3_5_consistency.REVALIDATABLE_CATEGORIES` —— 新增类别须同时决定 L3 如何结清它（程序复验 / 凭 resolution / 重跑审校，见决策 #74）；两侧常量名不同，grep 查不到对方 |
-| `schemas/character/stage_snapshot.schema.json` 顶层属性增删 / 重命名（含 `stage_delta` / `failure_modes` / `behavior_state` 子键） | `extraction/persona_extraction/phases/snapshot_merge.py::FIELD_ALLOCATION` + `SHARED_KEY_SUBKEYS` + `PROGRAM_INJECTED_FIELDS`（新增 / 改名属性必须挂到某 sub-lane 或程序注入集，否则 `_smoke_4_lane_merge_and_slice` 的 smoke 6 报错——merge gate 本身只比对 partial ⇄ 分配表，不看 schema）、`extraction/persona_extraction/prompts/character_snapshot_extraction.md` `{lane_scope}` 白名单段、`docs/architecture/extraction_workflow.md` §6.2、`ai_context/decisions.md` #55、`docs/requirements.md` §9.3 |
+| `schemas/analysis/chapter_summary_chunk.schema.json` | `extraction/persona_extraction/prompts/{summarization,analysis_{foundation,stage_plan,candidate_characters},baseline_{fixed_relationships,identity,target_baseline}}.md`、`extraction/persona_extraction/prompt_builder.py`、`docs/architecture/{schema_reference,extraction_workflow}.md`、`ai_context/{architecture,decisions}.md` |
+| `schemas/world/foundation.schema.json` | `extraction/persona_extraction/prompts/{analysis_foundation,baseline_key_figures}.md`、`extraction/persona_extraction/{prompt_builder,orchestrator}.py`、`extraction/repair/checkers/phase2_baseline_refs.py`、`extraction/validation/gates/phase2_baseline.py`、`{schemas,extraction}/README.md`、`docs/architecture/{schema_reference,extraction_workflow}.md`、`ai_context/{architecture,decisions}.md` |
+| `deferred_repair_log.DEFERRABLE_CATEGORIES` | `phase3_5_consistency.REVALIDATABLE_CATEGORIES`（新增类别须同时定 L3 结清方式，见决策 #74） |
+| `schemas/character/stage_snapshot.schema.json` 顶层属性增删 / 重命名 | `extraction/persona_extraction/phases/snapshot_merge.py` 的三张分配表、`extraction/persona_extraction/prompts/character_snapshot_extraction.md` `{lane_scope}` 白名单段、`docs/architecture/extraction_workflow.md` §6.2、`ai_context/decisions.md` #55、`docs/requirements.md` §9.3 |
 
 ## Single Source of Truth <!-- holo:heading -->
 
@@ -214,11 +214,9 @@
   在 `stage_plan.json` 和每个 `stage_catalog.json` 条目里
   与 `stage_id` 平级；bootstrap 阶段选择时展示的标签。
 - `chapter_id` = `C####`（4 位零填充），由
-  `schemas/work/chapter_index.schema.json` `pattern: "^C[0-9]{4}$"` 强制。
-  `volume_id`（可选，仅多卷来源）= `V###`
-  （3 位零填充）。宽度拆分理由：单部作品章节数可达数千
-  （≤ 9999 足以覆盖）；卷数保持很小
-  （≤ 999），因此 `V###` 让 ID 紧凑且无歧义。
+  `schemas/work/chapter_index.schema.json` `pattern: "^C[0-9]{4}$"` 强制；
+  `volume_id`（可选，仅多卷来源）= `V###`（3 位零填充）。位宽拆分理由
+  → `docs/architecture/schema_reference.md` §work/chapter_index.schema.json。
 - `ai_context/` 与 `docs/` 的书面语言跟随 `skills_config.md` §Language
   的 `content_language`（当前 zh）。JSON 字段名可以是英文；
   内容文本跟随作品语言。
@@ -226,11 +224,11 @@
 ## Data Separation <!-- holo:heading -->
 
 - 用户数据放在 `users/` 下；绝不从用户上下文写 canon。
-- `identity.json` + `target_baseline.json` 是角色级恒定基线（Phase 2 产出，Phase 3 起不可变）；voice / behavior / boundary / failure_modes 内联在 `stage_snapshot` 里并逐 stage 演化。Phase 3 stage_snapshot 三个结构（`voice_state.target_voice_map` / `behavior_state.target_behavior_map` / 顶层 `relationships`）的键必须与 `target_baseline.targets[].target_character_id` **集合相等**（双向跨文档硬失败；用内容空性表达三态 — 已出场 = 填写，曾出场 = 继承，从未出场 = 空条目；fixed_relationship 例外：被 `world/foundation/fixed_relationships.json` 绑定时可预填 relationships 条目的关系字段）。校验在 phase 3 单 stage validate 层运行（与 schema validate 平级），违规走文件级 repair 生命周期（L1/L2/L3）；phase 2 漏掉 target 时手工修基线并重跑受影响的 stage。
+- `identity.json` + `target_baseline.json` 是角色级恒定基线（Phase 2 产出，Phase 3 起不可变）；voice / behavior / boundary / failure_modes 内联在 `stage_snapshot` 里并逐 stage 演化。Phase 3 stage_snapshot 三个 target 结构的键必须与 `target_baseline.targets[].target_character_id` **集合相等**（双向硬失败，三态用内容空满表达）。→ `docs/decisions.md` #13 + `architecture.md` §自包含阶段快照。
 - Stage snapshot **自包含** — 运行时加载 identity + 当前 stage_snapshot；不做基线合并。
-- **边界只写在 schema。**所有 `maxLength` / `minLength` / `maxItems` / `required` 都放在 `schemas/**.schema.json`；其他任何地方不留副本。确切数值 → schema 文件。索引 → `docs/architecture/schema_reference.md`。单个边界的跨 schema 共享通过 `$ref` 指向共享片段实现，片段就近放在它所服务的 schema 所在的领域目录里（例如 target 数组上限由 `target_baseline.targets` + stage_snapshot 的三个 target 结构共享，两者都在 `schemas/character/`，所以片段作为 `schemas/character/targets_cap.schema.json` 放在那里）。仍是单一来源，无重复。
-- **边界是上限，不是目标。**每个提取 prompt 模板必须显式告诉 LLM：`maxLength` / `maxItems` 是**硬上限，不是配额** — 写原文里真实存在的内容，不要为凑满上限而填充 / 注水 / 编造条目。缺了这句，模型会因为"schema 说 ≤N"而默认每个数组正好写 N 条。
-- **maxItems 感知的截断。**字段超出 `maxItems` 上限时，由 LLM 在提取过程中排序 + 截断（而不是事后靠 schema 失败兜底）。优先级锚点：当前 stage 相关性 → identity 锚点关系 → 覆盖广度 → 跨 stage 稳定性（针对 `failure_modes` 这类全量演化字段）。子类独立计数 maxItems。→ `extraction/persona_extraction/prompts/character_snapshot_extraction.md` §maxItems 触顶时的裁剪规则。
+- **边界只写在 schema。**所有 `maxLength` / `minLength` / `maxItems` / `required` 都放在 `schemas/**.schema.json`，其他任何地方不留副本；跨 schema 共享的边界用 `$ref` 指向就近领域目录下的共享片段。→ `docs/architecture/schema_reference.md` §边界的单一来源。
+- **边界是上限，不是目标。**每个提取 prompt 模板必须显式告诉 LLM：`maxLength` / `maxItems` 是**硬上限，不是配额**，不要为凑满上限而填充 / 注水 / 编造条目。→ `docs/architecture/schema_reference.md` §边界的单一来源。
+- **maxItems 感知的截断。**字段超出 `maxItems` 上限时由 LLM 在提取过程中排序 + 截断，而非事后靠 schema 失败兜底；子类独立计数。优先级锚点见 `decisions.md` #11e。→ `extraction/persona_extraction/prompts/character_snapshot_extraction.md` §maxItems 触顶时的裁剪规则。
 - **snapshot 上不留章节锚点。**任何 schema（world / character / `stage_snapshot` / `memory_timeline`）都不携带 `evidence_refs` / `source_type` / `scene_refs`；`dialogue_examples` / `action_examples` 里没有逐条的 `evidence_ref`。锚定使用 `timeline_anchor`（world 另加 `location_anchor`）和 `memory_timeline`。
 - **`stage_catalog`** — world 目录表在 `schemas/world/world_stage_catalog.schema.json`；character 目录表在 `schemas/character/stage_catalog.schema.json`。两者都仅供 bootstrap，不做运行时加载；按 `stage_id` 字典序排序（无 `order` 字段）。`snapshot_path` 不同：character → `canon/stage_snapshots/{stage_id}.json`；world → `world/stage_snapshots/{stage_id}.json`。
 
@@ -248,9 +246,9 @@
 
 - 默认分支 = `main`。除非正在运行提取，否则待在 `main` 上。
 - 代码 / schema / prompt / docs / `ai_context/` / skill 的 commit 先进 `main`；extraction 和 library 分支通过 `git merge main` 同步。
-- `extraction/{work_id}` 只携带 stage 输出。**完成时 squash-merge 到 `library`**（永不进 main — main 必须保持无产物）。
-- **squash-merge 成功后，orchestrator 交互式询问（`[y/N]`，默认 N）是否删除来源 `extraction/{work_id}` 分支（`git branch -D`）并运行 `git gc --prune=now`**，让累积的 regen commit 变为不可达并被回收。删分支是破坏性操作 — 即便 `[git].auto_squash_merge=true`，该询问也总会运行。一旦用户选择删除，`library` 上的 squash 就是唯一保留的记录；`extraction/{work_id}` 是可丢弃的草稿区。
+- `extraction/{work_id}` 只携带 stage 输出。**完成时 squash-merge 到 `library`**（永不进 main — main 必须保持无产物）；squash 成功后 orchestrator 总会交互式询问（`[y/N]`，默认 N）是否删除源分支 + `git gc --prune=now`。
 - `library` 定期 `git merge main` 吸收框架更新；永不回流到 main。
+- 分支纪律的完整形态 → `architecture.md` §Git 分支模型 + `docs/architecture/extraction_workflow.md` §自动化编排。
 - 永不 commit：小说、数据库、embedding、缓存、真实用户包、`main` 上以真实 `work_id` 命名的 manifest。
 - 不要 amend 他人的 commit。
 
