@@ -156,3 +156,24 @@ Phase 3.5 结清回路补齐：容差判定统一到 `length_tolerance_pass`（�
 
 - **Status**: DONE
 - **Finished**: 2026-08-14 18:57:43 EDT
+
+<!-- /post-check writes -->
+
+## Review conclusion (full report in conversation)
+
+### Track 1 — requirement fulfillment
+- Fulfillment rate: 计划动作 11/11 落地（2 项 partial）；验证标准 6/6 通过
+- 但验证标准**覆盖不足**：6 条无一条走到 `_settle_one` 的成功路径，H1 因此漏网
+- Missed updates: 4 items（见对话）
+
+### Track 2 — impact spread
+- Findings: High=1 / Medium=5 / Low=7
+- Open Questions: 2 items（见对话）
+
+## Review state
+- **Reviewed**: 2026-08-15 02:30:35 EDT
+- **Status**: REVIEWED-FAIL
+  - H1：`_settle_one` 成功路径返回 4 元组、调用方解包 5 元组 —— 每一次成功
+    结清都抛 `ValueError` 被 `except Exception` 当基础设施故障吞掉，`fixed`
+    决议永不落盘、重投影被跳过。本轮四项修法中「结清成功」这条主路径实际不通。
+- **Conversation ref**: /post-check output in this session
