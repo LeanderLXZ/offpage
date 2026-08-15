@@ -111,7 +111,7 @@ PRE 计划 7 项 main 改动（含 8 类 data clean 在 Step 9 后做）；实�
 - [x] `extraction_logs` / `repair_logs` 引用 10 处分布合理（process_guard / orchestrator / handoff / README × 2 / extraction_workflow / requirements）
 - [x] `grep "Phase 0 chunk + Phase 4 scene_archive 不达新 schema" ai_context/handoff.md` = 0
 - [x] diffstat 6 文件 + 1 docstring + 1 log = 8 文件改动总计
-- [x] `git grep '我和<character>'` = 0（无真实书名残留）
+- [x] `git grep '<work_id>'` = 0（无真实书名残留）
 - [ ] data clean 后磁盘验证（待 Step 9 后做）
 
 ## Completed

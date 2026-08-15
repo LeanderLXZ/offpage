@@ -106,7 +106,7 @@ PRE 计划的 6 个改动焦点均已落地。额外多出一个 todo_list 条�
   world_stage_snapshot.schema.json）
 - [x] grep "stage_events" 复查无 legacy / 已废弃 / 原为 / formerly /
   renamed from 字样残留
-- [x] grep 真实书 / 角色 / 剧情名 = 0（无 我和<character> / 九世 / 帝姬 / 渡劫
+- [x] grep 真实书 / 角色 / 剧情名 = 0（无 <work_id> / 九世 / 帝姬 / 渡劫
   泄漏；world_extraction.md 中"渡劫 / 战争 / 结丹"是 importance 关键词
   示例，属仙侠题材通用词，按现有约定保留）
 - [x] 三层（schema / prompt / architecture docs）边界规则文字一致：

@@ -112,7 +112,7 @@
   - candidate_characters candidates 30 项 → array too big
 - [x] `git grep key_events_expected -- ':!logs/'` = 0
 - [x] 13 处新 bound 数字 grep 验证全到位（49 / 100 / 19 / 29 / 14 / 99）
-- [x] `git grep '我和<character>' -- ':!logs/' ':!.git*'` = 0
+- [x] `git grep '<work_id>' -- ':!logs/' ':!.git*'` = 0
 
 ## Completed
 

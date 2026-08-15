@@ -105,7 +105,7 @@
 - [ ] `git grep -nE '\bT-PHASE1-OUTPUT-SCHEMAS\b'` 仅 logs/ 残留（todo 已删）
 - [ ] decisions.md 新增 #27i 段落含 "schema-gate-as-retry-trigger" 关键字
 - [ ] automation/README.md 含 Phase 0/4 schema gate 段落
-- [ ] 文档不出现真实书名 / 角色名（`git grep '我和<character>' -- ':!logs/' ':!.git*'` = 0）
+- [ ] 文档不出现真实书名 / 角色名（`git grep '<work_id>' -- ':!logs/' ':!.git*'` = 0）
 - [ ] commit message 风格对齐 `git log --oneline -10`
 
 ## 执行偏差
@@ -158,7 +158,7 @@
 - [x] `git grep T-PHASE1-OUTPUT-SCHEMAS -- ':!logs/'` = 0（仅 logs/ 历史保留，正常）
 - [x] decisions.md 含 #27i 段落，关键字 "schema-gate-as-retry-trigger" 命中
 - [x] automation/README.md 含 Phase 0 / Phase 1 / Phase 4 schema gate 三表
-- [x] `git grep '我和<character>'` = 0
+- [x] `git grep '<work_id>'` = 0
 
 ## Completed
 

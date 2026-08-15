@@ -102,7 +102,7 @@
 - [x] `git grep potential_boundary|boundary_hint -- ':!logs/'` 仅 ai_context/handoff.md 一处保留（caveat 段落正当引用，非残留）
 - [x] schemas/README.md `analysis/` 行 vs schema_reference.md 的 schemas/analysis/ 子目录段同步
 - [x] prompt bound 文字（"50-100 字" / "<20" / "<50" / "最多 5 条"）与 schema 数字一致
-- [x] 文档无真实书名 / 角色 / 地名残留（`git grep '我和<character>'` = 0）
+- [x] 文档无真实书名 / 角色 / 地名残留（`git grep '<work_id>'` = 0）
 
 ## Completed
 

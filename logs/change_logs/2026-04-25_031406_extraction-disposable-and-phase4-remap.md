@@ -85,7 +85,7 @@
 - [x] `decisions.md` #26 / `conventions.md` §Git / `architecture.md` §Git Branch Model 之间无矛盾（核对完，全部说"squash → 删分支 → gc"，没有任何一处说"保留分支"）
 - [x] Phase 4 remap 描述兼容原 §Retrieval #39（#39 描述 retrieval artifacts 不入 git；新增的 remap 性质独立，不冲突）；§Automated Extraction Pipeline → Phase 4 内无重复
 - [x] `docs/todo_list.md` 新增两条 todo 字段齐全（上下文 / 改动清单 / 验证 / 完成标准 / 预估 / 依赖）；位置在"下一步"段、与既有条目格式一致
-- [x] `git grep '我和<character>' -- ':!logs/'` = 0 命中，文档无真实书名泄漏
+- [x] `git grep '<work_id>' -- ':!logs/'` = 0 命中，文档无真实书名泄漏
 
 ## Completed
 
