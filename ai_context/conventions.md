@@ -199,11 +199,20 @@
   而非真名）。
 - "真实名称"在本项目指真实书名 / 角色 / 地点 / 情节名称；示例占位符
   如 `<character_id>`、`S001`。
-- 残留扫描范围 = 上述全部路径（**含 `.py`**），不只是 `docs/`。
+- **判据是"是否被 `main` 跟踪"，不是"是否属于历史类内容"。** `main` 会
+  推送到公开远端（§Git），因此凡在 `main` 上被跟踪的文件与落在 `main`
+  历史里的 commit 消息，一律使用占位符 —— 包括上方 canonical 段列为
+  历史类例外的 `logs/change_logs/`、`logs/review_reports/`、
+  `docs/todo_list_archived.md`、`ai_context/decisions.md`、
+  `docs/decisions.md` 与 git commit 消息。历史类例外仅在从不推送的
+  分支上成立（`extraction/{work_id}`）。
+- 仍然豁免（`main` 不跟踪它们）：`works/*/` 提取产物（`main` 只跟踪
+  `works/README.md`）、`sources/`（源文本包本身即真实内容，输入层天然
+  携带真实名称）、`users/` 真实用户包。
+- 残留扫描范围 = 上述全部路径（**含 `.py`**）+ `logs/` + 本次改动的
+  commit 消息，不只是 `docs/`。写日志与 commit 消息时当场用占位符，
+  不要事后补扫 —— commit 消息一旦推送，修正需要重写历史。
 - Schema `description` 示例保持结构性、非叙事性（或直接省略）。
-- 额外例外：`docs/todo_list_archived.md`、`ai_context/decisions.md`、
-  `works/*/` 样例输出、`sources/`（源文本包本身即真实内容，输入层
-  天然携带真实名称）。
 
 ## Naming and Identifiers <!-- holo:heading -->
 
