@@ -936,7 +936,9 @@ N. <决策陈述>。
     + `sub_lane_regen`（#55）+ `lane_regen`（#59），全 phase），**单轮** Phase A→B→C
     （删 lifecycle 2 / `max_lifecycles_per_file` / `T3_TRIGGERED` / `T3_EXHAUSTED` /
     `prior_attempt_context`）。**按 rule（回退 category）路由** `(start_tier, max_tier)`
-    ——机械类 起 T0 封顶 T1；判断类无源（enum）起 T1 封顶 T1；语义 / cross_file /
+    ——机械类（`json_parse` / schema `type`·`minLength`-`maxLength`·
+    `additionalProperties`·`required` / id-format / `stage_id_alignment`）
+    起 T0 封顶 T1；判断类无源（enum）起 T1 封顶 T1；语义 / cross_file /
     需原文 起 T2 封顶 T2；`coverage_shortage` → T2 + 0-token SourceNote 接受，不进
     fixer padding（砍 min_examples↔semantic 打地鼠源头）。**每 tier ≤2 次**，第 2
     次只针对即时复验仍未过的字段。**T1 即时复验**：apply patch 后立即 scoped
@@ -1339,7 +1341,8 @@ N. <决策陈述>。
     Phase 0 summarize、Phase 1/2 lane 靠 `lane` 本身（`world` / `char_snapshot` /
     `char_support`）已可区分，**不给它们编造二级标签**。
     **设计要点**：`_review_file` 被 `check` 与 `check_scoped` 共用，是一个调用点
-    服务两种类型。让两个 public 方法各自在内部定死自己的 `call_type`，而非让
+    服务两种类型。让 `SemanticChecker` 的两个 public 方法各自在内部定死自己的
+    `call_type`，而非让
     coordinator 传入——"全量检查还是定点复检"是方法身份自带的信息，让调用方重复
     声明只会制造第二处可漂移的真相。副作用：`coordinator.py` 不进改动集。
     **边界**：本条只装尺子，不据此做任何优化决策；不动任何超时 / effort 值；

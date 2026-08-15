@@ -2,7 +2,7 @@
 <!--
 MAINTENANCE — 编辑本文件前请先阅读。
 本文件是决策的索引（INDEX），不是决策本身。
-1. 每条 entry 1–2 行：一行决策陈述 + `→ docs/decisions.md #N`。完整条目（理据 / 边界 / 指针）放在 `docs/decisions.md` 同编号下。
+1. 每条 entry 1–2 行、且总长 ≤ 200 字符：一行决策陈述 + `→ docs/decisions.md #N`。完整条目（理据 / 边界 / 指针）放在 `docs/decisions.md` 同编号下。
 2. 准入判据：只记录当时确有争议的决策 —— 存在像样的备选方案、且未来可能被重新提出。显然的 / 无争议的选择不立条目。
 3. 优先就地替换 / 删除而非新增；新增前先检查是否能并入已有条目。
 4. 只描述当前设计 —— 不写"legacy / deprecated / formerly / renamed from"。
@@ -26,7 +26,8 @@ MAINTENANCE — 编辑本文件前请先阅读。
 ## 格式 <!-- holo:heading -->
 
 <!-- holo:section start -->
-每条 entry 是一个 1–2 行的编号块：
+每条 entry 是一个 1–2 行的编号块，**总长 ≤ 200 字符**（陈述 + 指针，
+含空白）：
 
 ```
 N. <决策陈述，一行>。
@@ -36,6 +37,11 @@ N. <决策陈述，一行>。
 只看决策陈述就应能知道"什么已有定论"；为什么放在归档条目里。
 当某句理据是承重的（会改变读者的下一步动作）时，可以并入首行 ——
 但边界、实测数据、历史沿革永远不放这里。
+
+**起约束作用的是字符上限，不是行数**：一行写任意长也满足"1–2 行"，
+索引于是退化回它本要替代的归档。超过 200 字符意味着超出部分属于
+`docs/decisions.md` 条目 —— 在这里蒸馏，把细节挪过去。
+`/holo:update` 的 `decisions_fat_format` 检查按同一个数字判定。
 
 **准入判据：** 只在"当时存在像样的备选方案、且未来读者可能重新
 提出它"时才立条目。试金石：没有这条 entry，一个不知情但有能力的
@@ -140,13 +146,13 @@ N. <决策陈述，一行>。
 12. stage（抽取）= stage（runtime），1:1。按自然故事边界 （目标 10，最少 8，最多 15）。累积 1..N。
     → docs/decisions.md #12。
 
-13. Phase 2 从全书上下文产出世界 foundation + per-character `identity.json` + per-character `target_baseline.json` 草稿 （没有独立的 voice / behavior / boundary / failure_modes baseline 文件 —— 那些住在 `stage_snapshot` 里）。
+13. Phase 2 从全书上下文产出世界 foundation + per-character `identity.json` + `target_baseline.json` 草稿；voice / behavior / boundary / failure_modes 无独立 baseline，住在 `stage_snapshot`。
     → docs/decisions.md #13。
 
 14. 没有 per-stage 报告文件；进度就地记录。
     → docs/decisions.md #14。
 
-15. `target_voice_map` / `target_behavior_map` 条目全部以 `target_character_id` 为 key（与 `baseline.targets[].target_character_id` 集合相等，见 #13）；详略随 `tier` 变化 —— 核心 / 重要目标 ≥3–5 个示例，次要 / 普通目标保持简短，从未出场的 baseline 目标保留空 entry（D4 状态 3）以维持跨文档 集合相等。
+15. `target_voice_map` / `target_behavior_map` 全部以 `target_character_id` 为 key（与 baseline 集合相等，见 #13）；详略随 `tier` 变化，从未出场的目标保留空 entry。
     → docs/decisions.md #15。
 
 ## User Model
@@ -181,7 +187,7 @@ N. <决策陈述，一行>。
 24. 抽取 prompt 不读 `memory_digest.jsonl`、`world_event_digest.jsonl`、`stage_catalog.json`。自包含的 snapshot 契约内嵌在 prompt 中；digest / catalog 由 `post_processing.py` 程序化维护（0 token，幂等）。
     → docs/decisions.md #24。
 
-25. Per-stage 质量门 = `repair`（统一的 check + fix + verify）。Checker L0–L3 × fixer T0–T2，正交；field-level json_path patch。（经 #62 收紧：fixer 收为 T0–T2、删 T3 全文重跑 + `max_lifecycles` + `T3_EXHAUSTED`、单轮 Phase A→B→C；含子条目 25a，细节见归档）
+25. Per-stage 质量门 = `repair`（统一 check + fix + verify）：checker L0–L3 × fixer T0–T2 正交，field-level json_path patch（经 #62 收紧；含子条目 25a，细节见归档）。
     → docs/decisions.md #25。
 
 26. 抽取跑在 `extraction/{work_id}` 分支上。每个通过的 stage 都提交。回滚 = `git reset`。
@@ -240,7 +246,7 @@ N. <决策陈述，一行>。
 45. 单源 TOML 配置在 `extraction/config.toml`（loader `extraction/persona_extraction/core/config.py`）。
     → docs/decisions.md #45。
 
-46. Token 限额自动暂停（订阅模型，§11.13）—— `RateLimitController` 解析 DST 感知的 reset，写 flock 合并的 `rate_limit_pause.json`，在预启动 + 每次 `run_with_retry` 处阻塞，reset 后重跑失败的 prompt 且不消耗重试槽。ISO 分支必须校验解析结果在未来才采信（它不以 `reset` 关键字锚定，会命中日志前缀 / 请求时间戳；`resume_at` 落在过去 → `wait_s<=0` → `attempt -= 1` 重发 → 零间隔热循环无退避）。
+46. Token 限额自动暂停（订阅模型）：`RateLimitController` 解析 reset、写 `rate_limit_pause.json`、阻塞并在 reset 后免费重跑；ISO 分支须校验解析值在未来才采信。
     → docs/decisions.md #46。
 
 47. Phase 0 摘要子进程超时 = `[phase0].summarize_timeout_s`（默认 1800s），而不是与 phase 4 场景切分共用一个 600s 预算。
@@ -249,7 +255,7 @@ N. <决策陈述，一行>。
 48. **长度 bound 容差门（B 方案）。**
     → docs/decisions.md #48。
 
-49. **Phase 0 降档 effort 的恢复扫尾（per-chunk 定向救火）。** 高 effort 档在 phase 0 的多字段 chunk 综合（读 `chunk_size` 章 → 写 N× per-summary + 5 个 chunk 级二级聚合）上随机触发超出 1800s 子进程 wall 预算的服务端超长 thinking；与其整体降档，不如让失败 chunk 用 `[phase0].recovery_effort`（默认 `high`）单次 sweep 救火。
+49. **Phase 0 降档 effort 的恢复扫尾（per-chunk 定向救火）。** 超时 chunk 用 `[phase0].recovery_effort` 单次 sweep 重跑，不把 phase 0 整体降档。
     → docs/decisions.md #49。
 
 50. **Post-processing 对 derived digests 永远走 replace-slice 语义。**
@@ -276,50 +282,50 @@ N. <决策陈述，一行>。
 58. **Foundation schema 收紧（核心字段 required）+ `key_figures` required allow-empty + Phase 2 不再让 LLM 写空 stage_catalog。**
     → docs/decisions.md #58。
 
-59. **Phase 2 baseline 拆 2+2N lane 并行 + per-lane repair 缩水版接入。** lane A `key_figures` 先行串行，fixed_relationships + 每角色 identity / target_baseline 两 lane 并行（输入按 lane 投影裁剪）；repair 只开 T0/T1 + 程序 checker（`source_context=None`，L3/T2/triage 不开），无全文重跑（#62 起 T3/`lane_regen` 已删），终点 `validate_baseline` 保留为最后安全阀。
+59. **Phase 2 baseline 拆 2+2N lane 并行 + per-lane repair 缩水版接入。** lane A `key_figures` 先行串行；repair 只开 T0/T1 + 程序 checker，终点 `validate_baseline` 留作安全阀。
     → docs/decisions.md #59。
 
-60. **未决 repair 问题 record-and-continue，不再停机。** `[repair].defer_unresolved_semantic`（代码默认 false，本项目 true）：某 stage repair 收尾后**每个失败文件**残留的问题都可延后时——`error` 的 `category` ∈ {semantic, schema, structural, cross_file}，或 `coverage_shortage` 残留（severity=warning 但仍阻塞）——写台账 `deferred_repairs/{stage}.jsonl`（随 stage commit）并当 PASS 继续，不判 ERROR；残留含 `json_syntax`（文件不可解析）或 worker 崩溃仍硬 ERROR。**逐文件判定**，不摊平 issue 池——崩溃的合成结果 `issues=[]` 对摊平集合无贡献，会搭兄弟文件的顺风车提交且不进台账。台账留待未来 Phase 3.5 收尾修复 pass 逐条精准修（不重跑 stage）。可 defer 类别经 #62 从"仅 semantic"扩到四类 + coverage_shortage。
+60. **未决 repair 问题 record-and-continue，不再停机。** 可延后类别的残留写 `deferred_repairs/{stage}.jsonl` 台账后当 PASS 继续，逐文件判定；`json_syntax` 与 worker 崩溃仍硬 ERROR。
     → docs/decisions.md #60。
 
-61. **primary / derived 二分：派生文件永不进 repair。** repair 只作用于 primary（LLM 产出的 world / character stage_snapshots + memory_timeline）；派生文件 `world_event_digest.jsonl` / `memory_digest.jsonl` 是 primary 的 1:1 代码投影，移出 repair 文件集（`_collect_stage_files`），不经 L0–L3/T0–T2、尤其不被 LLM 整文件重写。正确性由确定性幂等重投影（生成器按 `event_id`/`memory_id` 全量去重，自愈历史重复）+ 现有 `phase3_5_consistency` §32/§33 门保证；语义错误归属 primary。消除了 repair 改写 digest 与 §32/§33「digest.summary 逐字==源」的自相矛盾（旧路径曾把 S001 事件 LLM 重写重复 13 次）。`involved_characters` 归一到 canonical_name。
+61. **primary / derived 二分：派生文件永不进 repair。** digest 是 primary 的 1:1 代码投影，正确性由确定性幂等重投影保证；语义错误一律归属 primary。
     → docs/decisions.md #61。
 
-62. **repair 去掉全文重跑（T3）+ 按 rule 分层路由 + 每 tier 封顶 + defer 扩展。** repair 只剩 3 层就地修复：T0（程序，0 token）→ T1（`local_patch`，LLM，**不载 source**）→ T2（`source_patch`，LLM，载章节原文）。**删除 T3 `file_regen` 全文重生成**（含 `sub_lane_regen` / `lane_regen`，全 phase），删 `file_regen.py`；**单轮** Phase A→B→C（去掉 lifecycle 2 / `max_lifecycles_per_file` / `T3_TRIGGERED` / `T3_EXHAUSTED`）。issue 按 **rule（回退 category）** 路由到 `(start_tier, max_tier)`：机械类（json_parse / schema type·min-maxLength·additionalProperties·required / id-format / stage_id_alignment）起 T0 封顶 T1；判断类无源（enum）起 T1 封顶 T1；语义 / cross_file / 需原文 起 T2 封顶 T2；`coverage_shortage`（min_examples 薄内容）→ T2 + 0-token SourceNote 接受（不进 padding，砍打地鼠）。**`$` 根锚点 issue 永不升 LLM 层**（`max_tier` 钳到 T0；本就起步 LLM 层的 → `NO_FIX_TIER` 直接 defer）——把根路径交给 T1/T2 就是让模型重写整个文件，即被删的 T3 换马甲；T0 仍允许（它打 `$.field` 子路径 + 确定性默认值，不动根本身，故「缺顶层 required」仍机械可修）。落 NO_FIX 的实际是 `targets_baseline_missing` / `semantic_unavailable`·`_crashed`·`_unparseable` / LLM 漏写 json_path 的兜底；`json_syntax` 豁免（T0 在原始文本上修、且不可 defer）。另有根替换类型守卫。每 tier ≤2 次，第 2 次只针对即时复验仍未过的字段。**T1 与 T2** apply patch 后都立即 scoped L0–L2 复验，过了才算 resolved（止 self-report-resolved spin）+ 同文件多 issue 批量单次 call。**L3 gate 覆盖本轮全部被改文件**——不能只取"Phase A 报过语义问题"的文件：checker 对有 L0–L2 error 的文件跳过 L3，据此建集会让 T0 刚修完 schema 错的文件整轮零语义复审仍报 PASS。修不平的残留按 #60 defer，不再靠 T3 硬扛。decision #48 长度容差门保留，改在封顶后触发。
+62. **repair 去掉全文重跑（T3）+ 按 rule 分层路由 + 每 tier 封顶 + defer 扩展。** 只剩 T0/T1/T2 就地修复、单轮 Phase A→B→C；`$` 根锚点 issue 永不升 LLM 层。
     → docs/decisions.md #62。
 
-63. **LLM 子进程起在独立进程组，超时杀整棵树。** `Popen(start_new_session=True)` + 超时 `killpg`（而非只 `proc.kill()` 直接子进程）；收尾 `communicate()` 另带有限 timeout 兜底。代价：子进程不再收终端 Ctrl+C（有意取舍，换无人值守不死锁）。**三件配套，缺一即退化**：无 `start_new_session` 时子进程与 orchestrator 同组、killpg 会自杀（helper 有守卫拒绝）；信号 handler 必须经 `terminate_all_children()` 在**放锁前**杀掉在飞子进程，否则停机要空转到子进程超时（≤3600s）而 PID 锁已谎称无人在跑。
+63. **LLM 子进程起在独立进程组，超时杀整棵树。** `start_new_session=True` + `killpg`；停机须经 `terminate_all_children()` 在放锁前杀在飞子进程。代价：子进程不再收 Ctrl+C。
     → docs/decisions.md #63。
-64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 900s）—— 值的权威位置是 `config.toml`，`repair/` 不再硬编码。** `checkers/semantic.py` 原写死 `timeout=600` 覆盖注入的默认值，使 config 层完全失效（`orchestrator` 的 `default_timeout` 是死代码）。900 = 实测未删失尾部 743s 的 1.2×，既容跑次间波动，又足够紧让卡死调用及时释放并发槽位。传递形态见 #68。
+64. **L3 语义审校超时 = `[repair].semantic_timeout_s`（默认 900s）**；值的权威位置是 `config.toml`，`repair/` 不再硬编码。传递形态见 #68。
     → docs/decisions.md #64。
 
-65. **effort 分档 + 默认模型 opus-4-8 + effort 由调用点传（方案 A）。** 默认 effort = `xhigh`（`max` 会随机触发服务端超长 thinking 的双峰，与 #49 在 phase 0 上的诊断同构；官方亦称 `xhigh` 是 coding/agentic 最佳档、`max` 收益递减）；默认 model = `claude-opus-4-8`。两者的权威位置是 `[llm]` 段（#69）。repair 的 `_llm_call` 增 `effort` 参数透传 `run_with_retry`，**由各调用点自己传**（与现存 `timeout` 形态一致，非闭包捕获单值）。按「冷读 vs 复读」分档：**冷读**（Phase A 全量语义检查）不传、吃 backend 默认（= `[llm].effort`）；**复读**（L3 gate 复检、Phase C fallback L3）+ T1 / T2 / triage 传 `[repair].recheck_effort`（默认 `medium`）。
+65. **effort 分档 + 默认模型 opus-4-8 + effort 由调用点传（方案 A）。** 默认 effort `xhigh`；冷读吃 `[llm].effort`，复读与 T1 / T2 / triage 传 `[repair].recheck_effort`。
     → docs/decisions.md #65。
 
-66. **L3 gate 复检改定点：per-file 只复检「本轮改过的 json_path ∪ 本轮携带的未修语义 issue path」，且代码层过滤返回值。** Phase A 全文审计一次即够；gate 职责是「这一刀改对了吗 + 已知的问题还在不在」而非重审全书。旧 gate 走 `run_layer(layer=3)` 全文复检，LLM 非确定每轮换目标 → 新指纹算 `introduced` → 打地鼠跑满 round cap，`resolved=N/introduced=N/persisting=0` 从两安全阀中间穿过。新走 `check_scoped(paths=该文件的 scope)`，返回值按后代匹配过滤（程序保证，非 focus 软提示）；后端失败类 issue（`$` 锚）永不过滤。**scope 必须携带未修语义 issue 的 path**——否则未修好的 issue 因其 path 没被碰过而不进 gate 结果，被 round-diff 判成 resolved = 假 PASS（复审实测到的回归）；**逐文件**算 scope，避免跨文件同名 path 放行抖动。tracker 数学不变、`introduced` 语义变正确。有意取舍：放弃跨-path「修 A 是否搞坏 B」复检（Phase A 已覆盖）。边界：Phase C fallback L3 保持全文。与 #65 分两次落地保单变量。
+66. **L3 gate 复检改定点。** per-file 只复检「本轮改过的 json_path ∪ 本轮携带的未修语义 issue path」，代码层过滤返回值；scope 缺后半段即造成假 PASS。
     → docs/decisions.md #66。
 
-67. **本轮未被 gate 的文件，其未修语义 issue 原样携带进 blocking 集（fail-closed）。** #66 定点化后遗留的假 PASS：`gate_targets` 的 `& modified_files` 门控把「本轮零 patch 的文件」整体排除，其语义 issue 在 `combined_blocking` 里没有任何来源能重现（L0–L2 复检看不见语义）→ 被 diff 判 resolved → Phase C 走 reuse 分支只 extend gate 结果 → 对带已知事实错误的文件报 PASS（pre-existing，旧全文 gate 同样门控）。改为在 `combined_blocking` 处携带它们（没复检 = 状态未知 = 保持原样）；gate **实际判决过**的文件不携带（`_gate_scope` 已覆盖，重复计数）——判据用「真的跑过 gate 的文件集」`gated_files` 而非无条件构建的 `gate_scopes`，否则 gate 关闭时会重开本洞；携带集按 `accepted_fps` 过滤。新增 `outstanding_semantic`（gate 结果 + 携带集，在安全阀 break 前赋值以跨 break 存活）供 Phase C 使用，替代并删除 `last_gate_issues`。不选「只改 Phase C 兜底」（轮内 diff / 安全阀 / 日志仍错、仍可能提前 break）与「把未改动文件也纳入 gate_targets」（每轮每文件多烧 LLM 调用复 confirm 一个没人能修的问题）。边界：不动 `& modified_files` 门控本身，#66 的定点化收益保住。
+67. **本轮未被 gate 的文件，其未修语义 issue 原样携带进 blocking 集（fail-closed）。** 判据用真的跑过 gate 的 `gated_files`；携带集按 `accepted_fps` 过滤。
     → docs/decisions.md #67。
 
-68. **repair 四类 LLM 调用的 timeout 全部由调用点显式传出，注入方不留兜底 default。** `RepairConfig` 携带 `semantic_timeout_s` 900 / `t1_timeout_s` 600 / `t2_timeout_s` 600 / `triage_timeout_s` 300，四个 `_llm_call` 调用点各传各的；`orchestrator` 两个包装器里的 `default_timeout` / `default_review_timeout` 一并删除（后者本就是死代码）。与 #65 的 effort 归属（方案 A）同构 —— 同一函数上两个参数一套哲学；`repair/` 仍不读 config.toml，只消费注入方填好的 `RepairConfig`。不选「注入方按调用类型分派 default」：那是把策略搬进包装器，且四类预算差异会被一个 default 抹平。附带确立 phase 4 场景切分超时归 `[phase4].scene_split_timeout_s`。纯 refactor，四个值不变。
+68. **repair 四类 LLM 调用的 timeout 全部由调用点显式传出，注入方不留兜底 default。** `RepairConfig` 携带四个值；`repair/` 仍不读 config.toml。纯 refactor，值不变。
     → docs/decisions.md #68。
 
-69. **模型与推理档位的全局默认收进 `[llm]` 段；per-phase override 留在各自段内，靠段注释做索引。** `--model` / `--effort` 原本敲死在 argparse（同块的 `--backend` / `--max-turns` 却读 config），`config.local.toml` 因此覆盖不了它们；repair 的复读档另有 5 处 `"medium"` 字面量，一并收进 `[repair].recheck_effort`。落地后 effort 被 3 个键穷尽：`[llm].effort`（冷读 / 全部抽取 lane）、`[phase0].recovery_effort`、`[repair].recheck_effort`。不选「全集中」：那需要给键加 `phase0_` / `repair_` 前缀，而需要用段名做前缀通常说明键本该待在那个段里。段名不用 `tier`（与 repair 的 T0/T1/T2 撞车）。边界：`[runtime].default_backend` 不搬入（backend 是传输层选择，非推理档位）；无 per-phase 抽取 effort 键。**`codex` backend 忽略 effort**，是唯一「配了不生效且无提示」处，已写进段注释。
+69. **模型与推理档位的全局默认收进 `[llm]` 段；per-phase override 留在各自段内。** effort 由 3 个键穷尽；`codex` backend 忽略 effort，已写进段注释。
     → docs/decisions.md #69。
 
-70. **L3 语义审校的输入永不截断，且这不是配置项。** Phase A 是整条 repair 生命周期中唯一一次全文语义审校（T1/T2 只收 `extract_subtree` 的子树，gate 只判决 Phase A 报出的问题），因此 Phase A 没看到的内容下游再无环节会看到 —— 裁剪输入不是省成本，是削减找问题的能力；而"多少字符算该丢"没有可辩护的答案，故不留配置键。超出 context window 时 LLM 调用失败转成阻塞 `semantic_unavailable`，响亮失败优于静默半审报 PASS。边界：gate 复检的 prompt 输入**不**做 scope 化、Phase A **不**降 effort、**不**按 importance 分级跳审。
+70. **L3 语义审校的输入永不截断，且这不是配置项。** Phase A 是唯一一次全文语义审校，裁剪输入即削减找问题的能力；超窗转阻塞 `semantic_unavailable`，响亮失败优于静默半审。
     → docs/decisions.md #70。
 
-71. **Run ledger 的 `call_type` 标签由调用点显式给出，不在事后从日志推断。** `lane=repair` 无法回答"检查 vs 修复各花多少"（`T-SEMANTIC-FULLFILE-COST` 卡在这），而只有 `repair/` 自己知道一次调用的性质。闭集 5 值：`check_full` / `check_scoped` / `fix_t1` / `fix_t2` / `triage`；非 repair 调用写 `null`（提取 lane 靠 `lane` 已可区分，不编造二级标签）。`check_full` / `check_scoped` 由 `SemanticChecker` 的两个 public 方法各自内部定死——"全量还是定点"是方法身份自带的，不该让 coordinator 重复声明。
+71. **Run ledger 的 `call_type` 标签由调用点显式给出，不在事后从日志推断。** 闭集 5 值 `check_full` / `check_scoped` / `fix_t1` / `fix_t2` / `triage`；非 repair 调用写 `null`。
     → docs/decisions.md #71。
-72. **Phase 3.5 重做为六段最终关卡：跨阶段审校 + 台账结清，全定点修复。** 实测旧版在 53 stage 上 0.26s 跑完却只报出 40 条 alias 误报（规则前提错：`identity.aliases` 收专有称号、`active_names` 收关系性称呼），38 条台账债一条不在检查面上、台账零消费方。重做为三层（L1 结构 / L2 派生 1:1 / L3 台账结清）+ 六段流程（程序全扫 → 结清债 → 跨阶段审校 → 定点修 → 重投影 → 复扫门判），段间串行段内并行。L3 **不采信台账陈述**：schema 类重校验自愈、semantic 类凭 append-only resolution 结清。段 3 是全流水线唯一多阶段并列视图（Phase A 一次只看一个文件），吃瘦投影而非全文。coverage 账本使 `passed = error==0 && skipped==0`，静默跳过变显式失败。结清回路的当前形态见 #74。
+72. **Phase 3.5 重做为六段最终关卡：跨阶段审校 + 台账结清，全定点修复。** 三层 L1 结构 / L2 派生 1:1 / L3 台账结清，段间串行段内并行；门判 `error==0 && skipped==0`。回路见 #74。
     → docs/decisions.md #72。
 
-73. **length 债的制造机是 repair 轮循环自身：T2 改写散文后超 `maxLength` 被判 `introduced` → 回归阀停轮 → 债入台账。** 17 条 length 债里 16 条如此（repair_logs 逐条比对）。修法：轮内 scoped recheck 后、算 diff 前，把**本轮自造**的纯长度类超限（新指纹 + 路径本轮被 patch 过）先交 T0 就地修，不让它触发回归阀；预存在的长度问题保持原路由与 #48 容差门不变。附带 T0 截断改为句读边界收口（这些字段是 200+ 字散文，硬砍留断句残文）+ 新增 index-keyed dict → array 转换。
+73. **length 债的制造机是 repair 轮循环自身：** T2 改写散文后超 `maxLength` 被判 `introduced` → 回归阀停轮 → 债入台账。修法：本轮自造的纯长度超限先交 T0 就地修。
     → docs/decisions.md #73。
 
-74. **Phase 3.5 结清回路：不自造判定 + 未结清一律回台账 + 两次机会后记录放弃。** 长度复校委托 `repair.length_tolerance_pass`（门比修复循环严 = 造出无人能结清的债）；`rule ∈ BACKEND_FAILURE_RULES` 的行归 unverified，走不带 seed 的完整 repair 事务（审校没跑成，重跑审校才是结清方式），不走打补丁；段 4 未结清的审校发现回写台账，使台账成为判定唯一输入；每文件两次机会（第二次从残留 re-seed + 改用 `[llm].effort`），仍失败写 `resolution="given_up"` 降为 warning 放行 Phase 4 并在 verdict 单独成段列出。抛异常与残留含审校器失败类都不算用尽机会；无 stage 可挂的发现（整窗口审校失败）直接并入判定。
+74. **Phase 3.5 结清回路：不自造判定 + 未结清一律回台账 + 两次机会后记录放弃。** 长度复校委托 `repair.length_tolerance_pass`；unverified 类走不带 seed 的完整 repair 事务。
     → docs/decisions.md #74。
 
 
